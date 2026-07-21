@@ -5430,7 +5430,7 @@ export default function ExplorePreview() {
     ? "clamp(170px, 25dvh, 220px)"
     : "clamp(180px, 25dvh, 230px)";
   const collapsedMapClass =
-    "mx-0 mt-0 bg-[#17110d] md:mt-4 md:ring-1 md:ring-orange-200/16";
+    "mx-0 mt-0 bg-[var(--bg-surface)] md:mt-4 md:ring-1 md:ring-[color:var(--border-subtle)]";
   const railSectionClass = isHighActivity
     ? "pl-4 pr-0 pt-1 pb-4"
     : "pl-4 pr-0 pt-2 pb-4 sm:pl-5";
@@ -5527,15 +5527,10 @@ export default function ExplorePreview() {
         description="Discover food trucks, restaurants, dishes, events, and local food deals near you with MealScout."
       />
 
-      {/* Scout uses a warm night canvas so food photography and live map state
-          stay visually primary without reverting to an analytics dashboard. */}
       <div
         aria-hidden="true"
-        className="pointer-events-none fixed inset-0 -z-20 bg-[#1c140f]"
-        style={{
-          backgroundImage:
-            "radial-gradient(90% 46% at 50% -8%, rgba(255,116,62,0.16) 0%, rgba(28,20,15,0) 64%), linear-gradient(180deg, #25170f 0%, #1d1510 52%, #17120f 100%)",
-        }}
+        className="pointer-events-none fixed inset-0 -z-20"
+        style={{ background: "var(--bg-layered)" }}
       />
 
       <main
@@ -5556,7 +5551,7 @@ export default function ExplorePreview() {
             data-scout-mobile-thirds-map="true"
             className={`relative overflow-hidden ${
               sheetState === "fullMap"
-                ? "w-full bg-[#17110d]"
+                ? "w-full bg-[var(--bg-surface)]"
                 : collapsedMapClass
             }`}
             style={{
@@ -5773,8 +5768,8 @@ export default function ExplorePreview() {
               <>
                 {/* Map context, not a duplicate app header. */}
                 <div className="absolute left-3 top-3 z-20 flex items-center gap-2">
-                  <span className="inline-flex max-w-[15rem] items-center gap-1.5 rounded-full bg-[#100c0a]/84 px-2.5 py-1.5 text-[11px] font-black text-white/88 ring-1 ring-orange-200/24 backdrop-blur-xl shadow-[0_8px_20px_rgba(0,0,0,0.38)]">
-                    <MapPin className="h-3.5 w-3.5 shrink-0 text-orange-300" aria-hidden="true" />
+                  <span className="inline-flex max-w-[15rem] items-center gap-1.5 rounded-full bg-[var(--bg-popup)] px-2.5 py-1.5 text-[11px] font-black text-[color:var(--text-primary)] ring-1 ring-[color:var(--border-subtle)] backdrop-blur-xl shadow-[0_8px_20px_rgba(0,0,0,0.14)]">
+                    <MapPin className="h-3.5 w-3.5 shrink-0 text-[color:var(--action-primary)]" aria-hidden="true" />
                     <span className="truncate">{compactMapMarketHint}</span>
                   </span>
                 </div>
@@ -5789,23 +5784,13 @@ export default function ExplorePreview() {
                     }
                   }}
                   aria-label="Recenter map"
-                  className="absolute right-3 top-3 z-20 inline-flex h-9 w-9 items-center justify-center rounded-full bg-[#100c0a]/84 ring-1 ring-orange-200/24 backdrop-blur-xl shadow-[0_8px_20px_rgba(0,0,0,0.38)]"
+                  className="absolute right-3 top-3 z-20 inline-flex h-9 w-9 items-center justify-center rounded-full bg-[var(--bg-popup)] ring-1 ring-[color:var(--border-subtle)] backdrop-blur-xl shadow-[0_8px_20px_rgba(0,0,0,0.14)]"
                 >
                   <Navigation2
-                    className="h-4 w-4 text-white"
+                    className="h-4 w-4 text-[color:var(--text-primary)]"
                     aria-hidden="true"
                   />
                 </button>
-
-                {/* Bottom gradient */}
-                <div
-                  aria-hidden="true"
-                  className="pointer-events-none absolute inset-x-0 bottom-0 h-[52%]"
-                  style={{
-                    background:
-                      "linear-gradient(180deg, rgba(8,5,2,0) 0%, rgba(8,5,2,0.10) 60%, rgba(8,5,2,0.32) 100%)",
-                  }}
-                />
 
                 <SpatialDecisionRail
                   decisions={spatialDecisionItems}
@@ -6002,13 +5987,13 @@ function SectionHeader({
 }) {
   const showLink = itemCount === undefined || itemCount > 1;
   const seeAllClassName =
-    "inline-flex w-fit shrink-0 items-center gap-1 rounded-full bg-orange-300/10 px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.08em] text-orange-200 ring-1 ring-orange-200/22 transition-colors hover:bg-orange-300/16 sm:text-sm sm:normal-case sm:tracking-normal";
+    "inline-flex w-fit shrink-0 items-center gap-1 rounded-full bg-[color:var(--action-primary)]/10 px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.08em] text-[color:var(--action-primary)] ring-1 ring-[color:var(--action-primary)]/22 transition-colors hover:bg-[color:var(--action-primary)]/16 sm:text-sm sm:normal-case sm:tracking-normal";
 
   return (
     <div className="mb-2.5 pr-4">
       <div className="flex items-end justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="font-sans text-[17px] font-bold normal-case tracking-tight text-orange-50 sm:text-xl">
+          <h2 className="font-sans text-[17px] font-bold normal-case tracking-tight text-[color:var(--text-primary)] sm:text-xl">
             {title}
           </h2>
         </div>
@@ -6029,7 +6014,7 @@ function SectionHeader({
         ) : null}
       </div>
       {subtitle ? (
-        <p className="mt-1 max-w-[34rem] text-xs font-medium leading-snug text-orange-50/58 sm:text-sm">
+        <p className="mt-1 max-w-[34rem] text-xs font-medium leading-snug text-[color:var(--text-secondary)] sm:text-sm">
           {subtitle}
         </p>
       ) : null}
@@ -6608,8 +6593,8 @@ function ScoutFallbackMarketNotice({
       className="px-4 pt-2 sm:h-full sm:px-0 sm:pt-3"
       data-testid="scout-fallback-market-notice"
     >
-      <div className="h-full rounded-[1.1rem] border border-orange-300/32 bg-[linear-gradient(145deg,#4a2a17_0%,#321b10_58%,#28150d_100%)] px-4 py-3 shadow-[0_12px_28px_rgba(38,18,8,0.24)]">
-        <p className="text-[10px] font-black uppercase tracking-[0.13em] text-orange-300">
+      <div className="h-full rounded-[1.1rem] border border-[color:var(--border-subtle)] bg-[var(--bg-card)] px-4 py-3 shadow-[0_8px_20px_rgba(0,0,0,0.06)]">
+        <p className="text-[10px] font-black uppercase tracking-[0.13em] text-[color:var(--action-primary)]">
           {normalizedQuery
             ? "Nothing matched nearby"
             : hasOneNearbyResult
@@ -6618,7 +6603,7 @@ function ScoutFallbackMarketNotice({
         </p>
         <div className="mt-1 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
           <div className="min-w-0">
-            <p className="text-sm font-black text-white">
+            <p className="text-sm font-black text-[color:var(--text-primary)]">
               {hasOneNearbyResult
                 ? "More happening across MealScout"
                 : hasResults
@@ -6627,7 +6612,7 @@ function ScoutFallbackMarketNotice({
                   : "Showing popular picks from active areas"
                 : `No related “${normalizedQuery}” picks are active right now`}
             </p>
-            <p className="mt-0.5 text-xs font-semibold leading-relaxed text-orange-100/65">
+            <p className="mt-0.5 text-xs font-semibold leading-relaxed text-[color:var(--text-secondary)]">
               {hasOneNearbyResult
                 ? "Your nearby result stays first. The picks below are popular in other active MealScout areas."
                 : hasResults
@@ -6640,7 +6625,7 @@ function ScoutFallbackMarketNotice({
           <button
             type="button"
             onClick={onRequestPlace}
-            className="inline-flex w-fit shrink-0 items-center justify-center gap-1.5 rounded-full bg-[#ff6b35] px-3.5 py-2 text-[11px] font-black text-white shadow-sm ring-1 ring-orange-300/30"
+            className="inline-flex w-fit shrink-0 items-center justify-center gap-1.5 rounded-full bg-[color:var(--action-primary)] px-3.5 py-2 text-[11px] font-black text-[color:var(--action-primary-text)] shadow-sm"
           >
             <Plus className="h-3.5 w-3.5" aria-hidden="true" />
             Request your favorite place
@@ -6688,7 +6673,7 @@ function ScoutFirstScreenDecisionStack({
     >
       <div className="h-full">
         <div className="mb-1.5 min-w-0 px-0.5">
-          <p className="text-[11px] font-black uppercase tracking-[0.12em] text-orange-300">
+          <p className="text-[11px] font-black uppercase tracking-[0.12em] text-[color:var(--action-primary)]">
             {primary.sectionLabel}
           </p>
           <span className="sr-only">{primary.summary}</span>
@@ -6696,14 +6681,14 @@ function ScoutFirstScreenDecisionStack({
         <ScoutImmediateCompactCard item={primary} />
         {thinMarket ? (
           <div
-            className="mt-2.5 rounded-2xl bg-orange-300/8 px-3 py-3 ring-1 ring-orange-200/16"
+            className="mt-2.5 rounded-2xl bg-[color:var(--action-primary)]/6 px-3 py-3 ring-1 ring-[color:var(--action-primary)]/18"
             data-testid="scout-thin-market-state"
           >
-            <p className="text-sm font-black text-orange-50">
+            <p className="text-sm font-black text-[color:var(--text-primary)]">
               Local food coverage is still growing, so the closest real place
               stays first.
             </p>
-            <p className="mt-1 text-xs font-semibold leading-relaxed text-orange-50/58">
+            <p className="mt-1 text-xs font-semibold leading-relaxed text-[color:var(--text-secondary)]">
               Explore the map or try another craving.
             </p>
             <ScoutRecoveryActions className="mt-3" />
@@ -6719,13 +6704,13 @@ function ScoutRecoveryActions({ className = "" }: { className?: string }) {
     <div className={`flex flex-wrap gap-2 ${className}`.trim()}>
       <Link
         href="/search"
-        className="rounded-full bg-[#ff7945] px-3 py-1.5 text-[11px] font-black text-white ring-1 ring-white/20"
+        className="rounded-full bg-[color:var(--action-primary)] px-3 py-1.5 text-[11px] font-black text-[color:var(--action-primary-text)]"
       >
         Browse food
       </Link>
       <Link
         href="/search"
-        className="rounded-full bg-white/8 px-3 py-1.5 text-[11px] font-black text-orange-50/82 ring-1 ring-white/12"
+        className="rounded-full bg-[color:var(--bg-surface-muted)] px-3 py-1.5 text-[11px] font-black text-[color:var(--text-primary)] ring-1 ring-[color:var(--border-subtle)]"
       >
         Search
       </Link>
@@ -7041,16 +7026,16 @@ function CompactDecisionCardShell({
   const showImage = Boolean(imageUrl) && !imageFailed;
   const shellClass =
     variant === "dish"
-      ? "bg-[#332016] ring-orange-200/20"
+      ? "bg-[var(--bg-card)] ring-orange-300/40"
       : variant === "truck"
-        ? "bg-[#2c1a12] ring-orange-200/22"
+        ? "bg-[var(--bg-card)] ring-orange-300/45"
         : variant === "deal"
-          ? "bg-[#1f2718] ring-lime-200/22"
+          ? "bg-[var(--bg-card)] ring-lime-400/45"
           : variant === "event"
-            ? "bg-[#17232c] ring-sky-200/22"
+            ? "bg-[var(--bg-card)] ring-sky-400/45"
             : variant === "host"
-              ? "bg-[#302416] ring-amber-200/22"
-              : "bg-[#2a1b14] ring-orange-200/20";
+              ? "bg-[var(--bg-card)] ring-amber-400/45"
+              : "bg-[var(--bg-card)] ring-orange-300/40";
   const thumbClass =
     variant === "dish"
       ? "rounded-full bg-black/18 ring-orange-200/18"
@@ -7114,10 +7099,10 @@ function CompactDecisionCardShell({
         )}
       </div>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-[15px] font-black leading-tight text-orange-50">
+        <p className="truncate text-[15px] font-black leading-tight text-[color:var(--text-primary)]">
           {title}
         </p>
-        <p className="mt-1 truncate text-xs font-semibold text-orange-50/58">
+        <p className="mt-1 truncate text-xs font-semibold text-[color:var(--text-secondary)]">
           {meta}
         </p>
         <div className="mt-2 flex items-center gap-2">
@@ -7132,7 +7117,7 @@ function CompactDecisionCardShell({
               href={directionsUrl}
               target="_blank"
               rel="noreferrer"
-              className="rounded-full bg-white/8 px-3 py-1.5 text-[11px] font-black text-orange-50/82 ring-1 ring-white/12"
+              className="rounded-full bg-[color:var(--bg-surface-muted)] px-3 py-1.5 text-[11px] font-black text-[color:var(--text-primary)] ring-1 ring-[color:var(--border-subtle)]"
             >
               Directions
             </a>
@@ -10681,8 +10666,8 @@ function NearbyRestaurantCard({
     }),
   ];
   const cardShellClass = isFoodTruckEntity
-    ? "group relative block overflow-hidden rounded-2xl bg-[#2a1b14] ring-1 ring-orange-200/18 transition duration-200 hover:-translate-y-0.5 hover:ring-orange-200/34 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
-    : "group block overflow-hidden rounded-2xl bg-[#261b15] ring-1 ring-orange-100/14 transition duration-200 hover:-translate-y-0.5 hover:ring-orange-200/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70";
+    ? "group relative block overflow-hidden rounded-2xl bg-[var(--bg-card)] ring-1 ring-[color:var(--border-subtle)] transition duration-200 hover:-translate-y-0.5 hover:ring-orange-300/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
+    : "group block overflow-hidden rounded-2xl bg-[var(--bg-card)] ring-1 ring-[color:var(--border-subtle)] transition duration-200 hover:-translate-y-0.5 hover:ring-orange-300/35 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70";
   const labelPillClass = isFoodTruckEntity
     ? "bg-[#120805]/72 text-orange-100 ring-orange-200/20"
     : "bg-[#1b0e08]/76 text-orange-50 ring-orange-200/24";
@@ -10900,7 +10885,7 @@ function NearbyRestaurantCard({
         }
       >
         <div className="flex items-start justify-between gap-2">
-          <p className="min-w-0 line-clamp-2 min-h-[2.25rem] text-sm font-bold leading-tight text-orange-50">
+          <p className="min-w-0 line-clamp-2 min-h-[2.25rem] text-sm font-bold leading-tight text-[color:var(--text-primary)]">
             {name}
           </p>
           {statusLabels.length > 0 && (
@@ -10923,29 +10908,29 @@ function NearbyRestaurantCard({
         <div className="mt-1 flex items-center gap-1.5 overflow-hidden text-[11px]">
           {cuisine && (
             <span
-              className="truncate text-orange-200/82"
+              className="truncate text-[color:var(--action-primary)]"
             >
               {cuisine}
             </span>
           )}
           {cuisine && (location || distLabel) && (
-            <span className="text-white/24 text-[11px]">·</span>
+            <span className="text-[color:var(--border-subtle)] text-[11px]">·</span>
           )}
           {location && (
-            <span className="truncate text-orange-50/55">
+            <span className="truncate text-[color:var(--text-secondary)]">
               {location}
             </span>
           )}
           {distLabel && (
             <>
-              <span className="text-white/24 text-[11px]">·</span>
-              <span className="shrink-0 text-orange-50/48">{distLabel}</span>
+              <span className="text-[color:var(--border-subtle)] text-[11px]">·</span>
+              <span className="shrink-0 text-[color:var(--text-secondary)]">{distLabel}</span>
             </>
           )}
         </div>
         {menuPreview.length > 0 && (
           <div
-            className="mt-2 flex items-center gap-2 rounded-xl bg-black/16 p-1.5 ring-1 ring-white/8"
+            className="mt-2 flex items-center gap-2 rounded-xl bg-[color:var(--bg-surface-muted)] p-1.5 ring-1 ring-[color:var(--border-subtle)]"
             data-testid="scout-menu-preview"
           >
             <div className="relative h-8 w-8 shrink-0 overflow-hidden rounded-md">
@@ -10966,12 +10951,12 @@ function NearbyRestaurantCard({
               />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-[11px] font-semibold text-orange-50/80">
+              <p className="truncate text-[11px] font-semibold text-[color:var(--text-primary)]">
                 {menuPreview[0].name}
               </p>
             </div>
             {formatPrice(menuPreview[0].priceCents) && (
-              <span className="shrink-0 text-[11px] font-semibold text-orange-200/84">
+              <span className="shrink-0 text-[11px] font-semibold text-[color:var(--action-primary)]">
                 {formatPrice(menuPreview[0].priceCents)}
               </span>
             )}
@@ -10984,13 +10969,13 @@ function NearbyRestaurantCard({
             aria-hidden={communityUpdates.length === 0}
           >
             {favoriteCount > 0 && (
-              <span className="inline-flex items-center gap-1 text-[10px] font-mono text-orange-50/42">
+              <span className="inline-flex items-center gap-1 text-[10px] font-mono text-[color:var(--text-secondary)]">
                 <Bookmark className="h-2.5 w-2.5" aria-hidden="true" />
                 {favoriteCount}
               </span>
             )}
             {followCount > 0 && (
-              <span className="inline-flex items-center gap-1 text-[10px] font-mono text-orange-50/42">
+              <span className="inline-flex items-center gap-1 text-[10px] font-mono text-[color:var(--text-secondary)]">
                 <Heart className="h-2.5 w-2.5" aria-hidden="true" />
                 {followCount}
               </span>
@@ -11009,7 +10994,7 @@ function NearbyRestaurantCard({
               className={`inline-flex h-7 w-7 items-center justify-center rounded-full transition ${
                 isRecommended
                   ? "bg-orange-300 text-[#1a0d08]"
-                  : "bg-white/8 text-orange-50/70 hover:bg-white/12"
+                  : "bg-[color:var(--bg-surface-muted)] text-[color:var(--text-secondary)] hover:bg-[color:var(--border-subtle)]"
               }`}
               aria-pressed={isRecommended}
               aria-label={
@@ -11045,7 +11030,7 @@ function NearbyRestaurantCard({
               setRestaurantRecommendComment(event.target.value)
             }
             placeholder="What makes this place worth it? (optional)"
-            className="min-h-[72px] w-full rounded border border-[color:var(--border-subtle)] bg-black/20 px-2 py-1.5 text-sm"
+            className="min-h-[72px] w-full rounded border border-[color:var(--border-subtle)] bg-[color:var(--bg-surface-muted)] px-2 py-1.5 text-sm"
           />
           <input
             type="file"

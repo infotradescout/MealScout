@@ -593,9 +593,6 @@ export function ThemedScoutMapV2({
       </div>
 
       <style>{`
-        .msm-map-canvas .maplibregl-canvas {
-          filter: brightness(0.48) saturate(0.72) sepia(0.18) contrast(1.12);
-        }
 
         /* ── No-tiles fallback pins (positioned by lat/lng ratio, not MapLibre) ──
            Compound selectors so these win over the base .msm-map-pin /
