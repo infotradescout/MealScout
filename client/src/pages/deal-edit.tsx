@@ -29,6 +29,7 @@ import { isBarBusinessType, isTruckBusinessType } from "@shared/businessTypes";
 import { buildPublicProfilePath } from "@/lib/public-profile-path";
 import {
   getScopedBusinessPermissions,
+  isScopedBusinessOwner,
   type BusinessAccessContext,
 } from "@/lib/business-access";
 
@@ -395,34 +396,35 @@ export default function DealEdit() {
     image: selectedImage,
     isActive: form.watch("isActive"),
   };
-  const isOwnerRole =
-    user?.userType === "restaurant_owner" ||
-    user?.userType === "food_truck" ||
-    user?.userType === "admin" ||
-    user?.userType === "duper_admin" ||
-    user?.userType === "super_admin" ||
-    user?.userType === "staff";
-  const canManageDeals =
-    isOwnerRole ||
-    getScopedBusinessPermissions(businessAccess, selectedBusiness.id)
-      .manageDeals;
   const scopedBusinessPermissions = getScopedBusinessPermissions(
     businessAccess,
     selectedBusiness.id,
   );
+  const ownsSelectedBusiness = isScopedBusinessOwner(
+    businessAccess,
+    selectedBusiness.id,
+  );
+  const hasFullBusinessControl =
+    user?.userType === "admin" ||
+    user?.userType === "duper_admin" ||
+    user?.userType === "super_admin" ||
+    user?.userType === "staff" ||
+    ownsSelectedBusiness;
+  const canManageDeals =
+    hasFullBusinessControl || scopedBusinessPermissions.manageDeals;
   const workspaceCapabilities = {
-    overview: isOwnerRole || scopedBusinessPermissions.manageProfile,
-    profile: isOwnerRole || scopedBusinessPermissions.manageProfile,
-    menu: isOwnerRole || scopedBusinessPermissions.manageProfile,
+    overview: hasFullBusinessControl || scopedBusinessPermissions.manageProfile,
+    profile: hasFullBusinessControl || scopedBusinessPermissions.manageProfile,
+    menu: hasFullBusinessControl || scopedBusinessPermissions.manageProfile,
     availability:
-      isOwnerRole || scopedBusinessPermissions.manageParkingPass,
-    media: isOwnerRole || scopedBusinessPermissions.manageProfile,
+      hasFullBusinessControl || scopedBusinessPermissions.manageParkingPass,
+    media: hasFullBusinessControl || scopedBusinessPermissions.manageProfile,
     deals: canManageDeals,
-    work: isOwnerRole || scopedBusinessPermissions.manageParkingPass,
-    audience: isOwnerRole || scopedBusinessPermissions.viewAnalytics,
-    team: isOwnerRole,
-    payments: isOwnerRole,
-    settings: isOwnerRole || scopedBusinessPermissions.manageProfile,
+    work: hasFullBusinessControl || scopedBusinessPermissions.manageParkingPass,
+    audience: hasFullBusinessControl || scopedBusinessPermissions.viewAnalytics,
+    team: hasFullBusinessControl,
+    payments: hasFullBusinessControl,
+    settings: hasFullBusinessControl || scopedBusinessPermissions.manageProfile,
   };
   const publicEntityType =
     selectedBusiness.isFoodTruck ||
@@ -1003,6 +1005,5 @@ export default function DealEdit() {
     </BusinessWorkspaceShell>
   );
 }
-
 
 

@@ -118,6 +118,7 @@ import {
 import LongPressHelp from "@/components/long-press-help";
 import {
   getScopedBusinessPermissions,
+  isScopedBusinessOwner,
   type BusinessAccessContext,
 } from "@/lib/business-access";
 
@@ -258,29 +259,29 @@ export default function RestaurantOwnerDashboard() {
     businessAccess,
     selectedRestaurant,
   );
+  const ownsSelectedBusiness = isScopedBusinessOwner(
+    businessAccess,
+    selectedRestaurant,
+  );
   const canManageDeals =
     isAdmin ||
     isStaff ||
-    isRestaurantOwner ||
-    isFoodTruck ||
+    ownsSelectedBusiness ||
     scopedBusinessPermissions.manageDeals;
   const canManageParkingPass =
     isAdmin ||
     isStaff ||
-    isRestaurantOwner ||
-    isFoodTruck ||
+    ownsSelectedBusiness ||
     scopedBusinessPermissions.manageParkingPass;
   const canViewAnalytics =
     isAdmin ||
     isStaff ||
-    isRestaurantOwner ||
-    isFoodTruck ||
+    ownsSelectedBusiness ||
     scopedBusinessPermissions.viewAnalytics;
   const canManageProfile =
     isAdmin ||
     isStaff ||
-    isRestaurantOwner ||
-    isFoodTruck ||
+    ownsSelectedBusiness ||
     scopedBusinessPermissions.manageProfile;
 
   useEffect(() => {
@@ -345,8 +346,7 @@ export default function RestaurantOwnerDashboard() {
   // The routed Audience workspace owns served analytics. Keep the legacy query
   // definitions inert until their hidden JSX is removed in the cleanup pass.
   const legacyAnalyticsEnabled = false;
-  const canManageBilling =
-    isAdmin || isStaff || isRestaurantOwner || isFoodTruck;
+  const canManageBilling = isAdmin || isStaff || ownsSelectedBusiness;
 
   // Fetch favorites analytics for paid users
   const { data: favoritesAnalytics, isLoading: loadingFavorites } =

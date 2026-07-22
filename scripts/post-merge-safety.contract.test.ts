@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 import { isMealScoutProductionUrl } from "./productionTargetSafety";
-import { getScopedBusinessPermissions } from "../client/src/lib/business-access";
+import {
+  getScopedBusinessPermissions,
+  isScopedBusinessOwner,
+} from "../client/src/lib/business-access";
 
 for (const productionUrl of [
   "https://mealscout.us",
@@ -41,6 +44,7 @@ const accessContext = {
   restaurants: [
     {
       id: "deals-only",
+      isOwner: false,
       permissions: {
         manageDeals: true,
         manageParkingPass: false,
@@ -50,10 +54,21 @@ const accessContext = {
     },
     {
       id: "profile-only",
+      isOwner: false,
       permissions: {
         manageDeals: false,
         manageParkingPass: false,
         viewAnalytics: false,
+        manageProfile: true,
+      },
+    },
+    {
+      id: "owned-business",
+      isOwner: true,
+      permissions: {
+        manageDeals: true,
+        manageParkingPass: true,
+        viewAnalytics: true,
         manageProfile: true,
       },
     },
@@ -71,6 +86,27 @@ assert.equal(
   false,
   "aggregate permissions must not leak to an unrelated selected business",
 );
+assert.equal(isScopedBusinessOwner(accessContext, "owned-business"), true);
+assert.equal(
+  isScopedBusinessOwner(accessContext, "deals-only"),
+  false,
+  "owning one business must not grant owner control over a collaborator business",
+);
+assert.equal(isScopedBusinessOwner(accessContext, "missing"), false);
+
+for (const pagePath of [
+  "client/src/pages/restaurant-owner-dashboard.tsx",
+  "client/src/pages/deal-creation.tsx",
+  "client/src/pages/deal-edit.tsx",
+  "client/src/pages/menu-builder.tsx",
+]) {
+  const page = readFileSync(pagePath, "utf8");
+  assert.match(
+    page,
+    /isScopedBusinessOwner/,
+    `${pagePath} must derive owner control from the selected business`,
+  );
+}
 
 const picker = readFileSync(
   "client/src/components/maps/GoogleMapPicker.tsx",

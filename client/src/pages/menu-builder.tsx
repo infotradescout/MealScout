@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import BusinessWorkspaceShell from "@/components/business-workspace-shell";
 import {
   getScopedBusinessPermissions,
+  isScopedBusinessOwner,
   type BusinessAccessContext,
 } from "@/lib/business-access";
 import { Button } from "@/components/ui/button";
@@ -235,9 +236,7 @@ export default function MenuBuilderPage() {
   });
   const currentBusiness =
     businesses.find((business) => business.id === restaurantId) || null;
-  const isOwnerRole =
-    user?.userType === "restaurant_owner" ||
-    user?.userType === "food_truck" ||
+  const isElevated =
     user?.userType === "admin" ||
     user?.userType === "duper_admin" ||
     user?.userType === "super_admin" ||
@@ -246,20 +245,25 @@ export default function MenuBuilderPage() {
     businessAccess,
     restaurantId,
   );
+  const ownsSelectedBusiness = isScopedBusinessOwner(
+    businessAccess,
+    restaurantId,
+  );
+  const hasFullBusinessControl = isElevated || ownsSelectedBusiness;
   const canManageProfile =
-    isOwnerRole || scopedBusinessPermissions.manageProfile;
+    hasFullBusinessControl || scopedBusinessPermissions.manageProfile;
   const workspaceCapabilities = {
     overview: canManageProfile,
     profile: canManageProfile,
     menu: canManageProfile,
     availability:
-      isOwnerRole || scopedBusinessPermissions.manageParkingPass,
+      hasFullBusinessControl || scopedBusinessPermissions.manageParkingPass,
     media: canManageProfile,
-    deals: isOwnerRole || scopedBusinessPermissions.manageDeals,
-    work: isOwnerRole || scopedBusinessPermissions.manageParkingPass,
-    audience: isOwnerRole || scopedBusinessPermissions.viewAnalytics,
-    team: isOwnerRole,
-    payments: isOwnerRole,
+    deals: hasFullBusinessControl || scopedBusinessPermissions.manageDeals,
+    work: hasFullBusinessControl || scopedBusinessPermissions.manageParkingPass,
+    audience: hasFullBusinessControl || scopedBusinessPermissions.viewAnalytics,
+    team: hasFullBusinessControl,
+    payments: hasFullBusinessControl,
     settings: canManageProfile,
   };
   const currentEntityType =

@@ -33,3 +33,17 @@ export function getScopedBusinessPermissions(
   );
   return scoped?.permissions || NO_BUSINESS_PERMISSIONS;
 }
+
+export function isScopedBusinessOwner(
+  context: BusinessAccessContext | null | undefined,
+  restaurantId: string | null | undefined,
+): boolean {
+  const safeId = String(restaurantId || "").trim();
+  if (!safeId) return false;
+  return (
+    context?.restaurants?.some(
+      (restaurant) =>
+        String(restaurant.id) === safeId && restaurant.isOwner === true,
+    ) === true
+  );
+}

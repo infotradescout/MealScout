@@ -50,6 +50,7 @@ import { isBarBusinessType, isTruckBusinessType } from "@shared/businessTypes";
 import { buildPublicProfilePath } from "@/lib/public-profile-path";
 import {
   getScopedBusinessPermissions,
+  isScopedBusinessOwner,
   type BusinessAccessContext,
 } from "@/lib/business-access";
 
@@ -571,33 +572,32 @@ export default function DealCreation() {
     businessAccess,
     selectedBusiness.id,
   );
+  const ownsSelectedBusiness = isScopedBusinessOwner(
+    businessAccess,
+    selectedBusiness.id,
+  );
   const canManageDeals =
     Boolean(isAdminOrStaff) ||
-    user?.userType === "restaurant_owner" ||
-    user?.userType === "food_truck" ||
+    ownsSelectedBusiness ||
     scopedBusinessPermissions.manageDeals;
   const canManageBusinessProfile =
     Boolean(isAdminOrStaff) ||
-    user?.userType === "restaurant_owner" ||
-    user?.userType === "food_truck" ||
+    ownsSelectedBusiness ||
     scopedBusinessPermissions.manageProfile;
-  const isOwnerRole =
-    Boolean(isAdminOrStaff) ||
-    user?.userType === "restaurant_owner" ||
-    user?.userType === "food_truck";
+  const hasFullBusinessControl = Boolean(isAdminOrStaff) || ownsSelectedBusiness;
   const workspaceCapabilities = {
     overview: canManageBusinessProfile,
     profile: canManageBusinessProfile,
     menu: canManageBusinessProfile,
     availability:
-      isOwnerRole || scopedBusinessPermissions.manageParkingPass,
+      hasFullBusinessControl || scopedBusinessPermissions.manageParkingPass,
     media: canManageBusinessProfile,
     deals: canManageDeals,
     audience:
-      isOwnerRole || scopedBusinessPermissions.viewAnalytics,
-    work: isOwnerRole || scopedBusinessPermissions.manageParkingPass,
-    team: isOwnerRole,
-    payments: isOwnerRole,
+      hasFullBusinessControl || scopedBusinessPermissions.viewAnalytics,
+    work: hasFullBusinessControl || scopedBusinessPermissions.manageParkingPass,
+    team: hasFullBusinessControl,
+    payments: hasFullBusinessControl,
     settings: canManageBusinessProfile,
   };
   if (!canManageDeals) {
