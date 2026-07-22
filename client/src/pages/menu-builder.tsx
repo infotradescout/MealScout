@@ -7,8 +7,12 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
-import Navigation from "@/components/navigation";
 import BusinessWorkspaceShell from "@/components/business-workspace-shell";
+import {
+  getScopedBusinessPermissions,
+  isScopedBusinessOwner,
+  type BusinessAccessContext,
+} from "@/lib/business-access";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -224,13 +228,7 @@ export default function MenuBuilderPage() {
     queryKey: ["/api/restaurants/my-restaurants"],
     enabled: !!user,
   });
-  const { data: businessAccess } = useQuery<{
-    hasAnyAccess: boolean;
-    permissions: {
-      manageDeals: boolean;
-      viewAnalytics: boolean;
-    };
-  }>({
+  const { data: businessAccess } = useQuery<BusinessAccessContext>({
     queryKey: ["/api/business-access/me"],
     enabled: !!user,
     retry: false,
@@ -238,13 +236,36 @@ export default function MenuBuilderPage() {
   });
   const currentBusiness =
     businesses.find((business) => business.id === restaurantId) || null;
-  const isOwnerRole =
-    user?.userType === "restaurant_owner" ||
-    user?.userType === "food_truck" ||
+  const isElevated =
     user?.userType === "admin" ||
     user?.userType === "duper_admin" ||
     user?.userType === "super_admin" ||
     user?.userType === "staff";
+  const scopedBusinessPermissions = getScopedBusinessPermissions(
+    businessAccess,
+    restaurantId,
+  );
+  const ownsSelectedBusiness = isScopedBusinessOwner(
+    businessAccess,
+    restaurantId,
+  );
+  const hasFullBusinessControl = isElevated || ownsSelectedBusiness;
+  const canManageProfile =
+    hasFullBusinessControl || scopedBusinessPermissions.manageProfile;
+  const workspaceCapabilities = {
+    overview: canManageProfile,
+    profile: canManageProfile,
+    menu: canManageProfile,
+    availability:
+      hasFullBusinessControl || scopedBusinessPermissions.manageParkingPass,
+    media: canManageProfile,
+    deals: hasFullBusinessControl || scopedBusinessPermissions.manageDeals,
+    work: hasFullBusinessControl || scopedBusinessPermissions.manageParkingPass,
+    audience: hasFullBusinessControl || scopedBusinessPermissions.viewAnalytics,
+    team: hasFullBusinessControl,
+    payments: hasFullBusinessControl,
+    settings: canManageProfile,
+  };
   const currentEntityType =
     currentBusiness?.isFoodTruck ||
     isTruckBusinessType(currentBusiness?.businessType)
@@ -500,7 +521,6 @@ export default function MenuBuilderPage() {
   if (!restaurantId) {
     return (
       <div className="min-h-screen">
-        <Navigation />
         <div className="flex items-center justify-center h-64">
           <p className="text-muted-foreground">
             No restaurant linked to your account.
@@ -536,6 +556,32 @@ export default function MenuBuilderPage() {
     );
   }
 
+  if (!canManageProfile) {
+    return (
+      <BusinessWorkspaceShell
+        activeModule="menu"
+        business={currentBusiness}
+        businesses={businesses}
+        onBusinessChange={handleWorkspaceBusinessChange}
+        publicProfileHref={publicProfileHref}
+        capabilities={workspaceCapabilities}
+      >
+        <div className="mx-auto flex min-h-[70vh] max-w-lg items-center px-4 py-10">
+          <Card className="w-full border-amber-200 bg-amber-50">
+            <CardContent className="p-6 text-center">
+              <h2 className="text-lg font-bold text-amber-950">
+                Permission required
+              </h2>
+              <p className="mt-2 text-sm text-amber-900/80">
+                Ask the business owner to grant profile management access.
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      </BusinessWorkspaceShell>
+    );
+  }
+
   const selectedMenu = normalizeFullMenu(fullMenuQuery.data);
 
   return (
@@ -545,13 +591,7 @@ export default function MenuBuilderPage() {
       businesses={businesses}
       onBusinessChange={handleWorkspaceBusinessChange}
       publicProfileHref={publicProfileHref}
-      capabilities={{
-        deals: isOwnerRole || businessAccess?.permissions?.manageDeals === true,
-        audience:
-          isOwnerRole || businessAccess?.permissions?.viewAnalytics === true,
-        team: isOwnerRole,
-        payments: isOwnerRole,
-      }}
+      capabilities={workspaceCapabilities}
       headerActions={
         <Button size="sm" onClick={() => setShowNewMenuDialog(true)}>
           <Plus className="mr-1.5 h-4 w-4" />

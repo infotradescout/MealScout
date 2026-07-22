@@ -48,6 +48,11 @@ import { authUrl } from "@/lib/api";
 import type { Restaurant } from "@shared/schema";
 import { isBarBusinessType, isTruckBusinessType } from "@shared/businessTypes";
 import { buildPublicProfilePath } from "@/lib/public-profile-path";
+import {
+  getScopedBusinessPermissions,
+  isScopedBusinessOwner,
+  type BusinessAccessContext,
+} from "@/lib/business-access";
 
 const dealSchema = z
   .object({
@@ -190,14 +195,7 @@ export default function DealCreation() {
     };
   }, [selectedBusiness]);
 
-  const { data: businessAccess } = useQuery<{
-    hasAnyAccess: boolean;
-    permissions: {
-      manageDeals: boolean;
-      manageProfile?: boolean;
-      viewAnalytics?: boolean;
-    };
-  }>({
+  const { data: businessAccess } = useQuery<BusinessAccessContext>({
     queryKey: ["/api/business-access/me"],
     enabled: isAuthenticated,
     retry: false,
@@ -570,26 +568,37 @@ export default function DealCreation() {
       user.userType === "duper_admin" ||
       user.userType === "super_admin" ||
       user.userType === "staff");
+  const scopedBusinessPermissions = getScopedBusinessPermissions(
+    businessAccess,
+    selectedBusiness.id,
+  );
+  const ownsSelectedBusiness = isScopedBusinessOwner(
+    businessAccess,
+    selectedBusiness.id,
+  );
   const canManageDeals =
     Boolean(isAdminOrStaff) ||
-    user?.userType === "restaurant_owner" ||
-    user?.userType === "food_truck" ||
-    businessAccess?.permissions?.manageDeals === true;
+    ownsSelectedBusiness ||
+    scopedBusinessPermissions.manageDeals;
   const canManageBusinessProfile =
     Boolean(isAdminOrStaff) ||
-    user?.userType === "restaurant_owner" ||
-    user?.userType === "food_truck" ||
-    businessAccess?.permissions?.manageProfile === true;
-  const isOwnerRole =
-    Boolean(isAdminOrStaff) ||
-    user?.userType === "restaurant_owner" ||
-    user?.userType === "food_truck";
+    ownsSelectedBusiness ||
+    scopedBusinessPermissions.manageProfile;
+  const hasFullBusinessControl = Boolean(isAdminOrStaff) || ownsSelectedBusiness;
   const workspaceCapabilities = {
+    overview: canManageBusinessProfile,
+    profile: canManageBusinessProfile,
+    menu: canManageBusinessProfile,
+    availability:
+      hasFullBusinessControl || scopedBusinessPermissions.manageParkingPass,
+    media: canManageBusinessProfile,
     deals: canManageDeals,
     audience:
-      isOwnerRole || businessAccess?.permissions?.viewAnalytics === true,
-    team: isOwnerRole,
-    payments: isOwnerRole,
+      hasFullBusinessControl || scopedBusinessPermissions.viewAnalytics,
+    work: hasFullBusinessControl || scopedBusinessPermissions.manageParkingPass,
+    team: hasFullBusinessControl,
+    payments: hasFullBusinessControl,
+    settings: canManageBusinessProfile,
   };
   if (!canManageDeals) {
     return (

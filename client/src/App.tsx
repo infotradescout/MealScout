@@ -5,7 +5,9 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/useAuth";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
-import Navigation from "@/components/navigation";
+import Navigation, {
+  GlobalNavigationOwnerProvider,
+} from "@/components/navigation";
 import { ScoutNavSearchProvider } from "@/components/scout/ScoutNavSearchContext";
 import { apiUrl } from "@/lib/api";
 import { TimeOfDayBackground } from "@/components/TimeOfDayBackground";
@@ -657,12 +659,14 @@ function App() {
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
           <ScoutNavSearchProvider>
-            <TimeOfDayBackground appearance="day" />
-            <div className="app-background app-content min-h-screen pb-[calc(var(--scout-nav-height,58px)+env(safe-area-inset-bottom,0px))] lg:pb-0 lg:pt-16 relative z-10">
-              <Toaster />
-              <NotFound />
-              <Navigation scope="global" />
-            </div>
+            <GlobalNavigationOwnerProvider>
+              <TimeOfDayBackground appearance="day" />
+              <div className="app-background app-content min-h-screen pb-[calc(var(--scout-nav-height,58px)+env(safe-area-inset-bottom,0px))] lg:pb-0 lg:pt-16 relative z-10">
+                <Toaster />
+                <NotFound />
+                <Navigation scope="global" />
+              </div>
+            </GlobalNavigationOwnerProvider>
           </ScoutNavSearchProvider>
         </TooltipProvider>
       </QueryClientProvider>
@@ -689,17 +693,19 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <ScoutNavSearchProvider>
-          <TimeOfDayBackground
-            appearance={usesCinematicBackground ? "night" : "day"}
-          />
-          <div
-            data-app-surface={usesCinematicBackground ? "cinematic" : "day"}
-            className={`app-background app-content min-h-screen pb-[calc(var(--scout-nav-height,58px)+env(safe-area-inset-bottom,0px))] lg:pb-0 relative z-10 ${usesBusinessWorkspace ? "lg:pt-0" : "lg:pt-16"}`}
-          >
-            <Toaster />
-            <Router />
-            <Navigation scope="global" />
-          </div>
+          <GlobalNavigationOwnerProvider>
+            <TimeOfDayBackground
+              appearance={usesCinematicBackground ? "night" : "day"}
+            />
+            <div
+              data-app-surface={usesCinematicBackground ? "cinematic" : "day"}
+              className={`app-background app-content min-h-screen pb-[calc(var(--scout-nav-height,58px)+env(safe-area-inset-bottom,0px))] lg:pb-0 relative z-10 ${usesBusinessWorkspace ? "lg:pt-0" : "lg:pt-16"}`}
+            >
+              <Toaster />
+              <Router />
+              <Navigation scope="global" />
+            </div>
+          </GlobalNavigationOwnerProvider>
         </ScoutNavSearchProvider>
       </TooltipProvider>
     </QueryClientProvider>

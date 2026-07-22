@@ -1,8 +1,21 @@
 # 3D Eats & Tea Existing Account Enrichment
 
-Status: `EVIDENCE_CAPTURED_APPEND_ONLY`
+Status: `PARTIAL_PUBLICATION_OWNER_APPROVAL_REQUIRED`
 
 GitHub tracker: issue `#113`
+
+## Current checkpoint (2026-07-22)
+
+- The FRUI-TEA BBQ sauce classification and description are recorded on the
+  public profile through merged PR `#253`.
+- The evidence packet contains a full extracted menu candidate, general-hours
+  candidate, service area, contact/social candidates, a cover image, and logo
+  evidence.
+- These candidates are not owner approval. Do not publish the full menu,
+  schedule, static address as a live location, conflicting YouTube identity,
+  or a replacement logo until the owner/admin approval is recorded.
+- Missing approvals remain: current full menu, owner-approved logo, active
+  operating schedule/location, static address handling, and YouTube identity.
 
 ## Operating rule
 

@@ -186,6 +186,9 @@ export async function mirrorInfinitySelectiveInheritance(input: {
   const candidates = input.candidates.filter((candidate) =>
     allowedFields.has(candidate.field),
   );
+  const overrides = (input.overrides || []).filter((override) =>
+    allowedFields.has(override.field),
+  );
 
   return post("/v1/selective-inheritance/evaluations", {
     evaluationId: input.evaluationId,
@@ -197,7 +200,7 @@ export async function mirrorInfinitySelectiveInheritance(input: {
     targetVersion: input.targetVersion,
     policy,
     candidates,
-    overrides: input.overrides || [],
+    overrides,
     evaluatedAt: new Date().toISOString(),
   });
 }

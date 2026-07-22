@@ -560,7 +560,13 @@ export function ThemedScoutMapV2({
           // but keep every pin clickable instead of leaving a dead rectangle.
           <div
             className="absolute inset-0 h-full w-full min-h-full"
-            style={{ backgroundColor: "#211710" }}
+            data-testid="scout-map-tile-fallback"
+            style={{
+              backgroundColor: "#f5f3ee",
+              backgroundImage:
+                "linear-gradient(rgba(120,113,108,0.10) 1px, transparent 1px), linear-gradient(90deg, rgba(120,113,108,0.10) 1px, transparent 1px)",
+              backgroundSize: "28px 28px",
+            }}
           >
             {showUserLocation && (
               <span

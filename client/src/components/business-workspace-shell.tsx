@@ -54,10 +54,17 @@ export type BusinessWorkspaceIdentity = {
 };
 
 type WorkspaceCapabilities = {
+  overview?: boolean;
+  profile?: boolean;
+  menu?: boolean;
+  availability?: boolean;
+  media?: boolean;
   deals?: boolean;
+  work?: boolean;
   audience?: boolean;
   team?: boolean;
   payments?: boolean;
+  settings?: boolean;
 };
 
 type BusinessWorkspaceShellProps = {
@@ -139,7 +146,7 @@ export default function BusinessWorkspaceShell({
       description: "What needs attention now",
       href: buildWorkspaceHref("/restaurant-owner-dashboard", business.id),
       icon: LayoutDashboard,
-      visible: true,
+      visible: capabilities.overview !== false,
     },
     {
       id: "profile",
@@ -149,7 +156,7 @@ export default function BusinessWorkspaceShell({
         setup: "profile",
       }),
       icon: Store,
-      visible: true,
+      visible: capabilities.profile !== false,
     },
     {
       id: "menu",
@@ -157,7 +164,7 @@ export default function BusinessWorkspaceShell({
       description: "Menus, items, and availability",
       href: buildWorkspaceHref("/menu-builder", business.id),
       icon: UtensilsCrossed,
-      visible: true,
+      visible: capabilities.menu !== false,
     },
     {
       id: "availability",
@@ -168,7 +175,7 @@ export default function BusinessWorkspaceShell({
         ...(isFoodTruck ? { truck: "1" } : {}),
       }),
       icon: isFoodTruck ? Radio : Clock3,
-      visible: true,
+      visible: capabilities.availability !== false,
     },
     {
       id: "media",
@@ -178,7 +185,7 @@ export default function BusinessWorkspaceShell({
         setup: "profile-media",
       }),
       icon: Image,
-      visible: true,
+      visible: capabilities.media !== false,
     },
     {
       id: "deals",
@@ -196,7 +203,7 @@ export default function BusinessWorkspaceShell({
       description: "Orders that need attention",
       href: buildWorkspaceHref("/orders", business.id),
       icon: ShoppingBag,
-      visible: true,
+      visible: capabilities.work !== false,
     },
     {
       id: "audience",
@@ -230,7 +237,7 @@ export default function BusinessWorkspaceShell({
       description: "Account access, visibility, and help",
       href: buildWorkspaceHref("/profile/settings", business.id),
       icon: Settings,
-      visible: true,
+      visible: capabilities.settings !== false,
     },
   ];
   const modules = allModules.filter((module) => module.visible);

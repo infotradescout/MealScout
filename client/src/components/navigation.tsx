@@ -1,4 +1,12 @@
-import { useState, useEffect, useRef, type ComponentType } from "react";
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useRef,
+  type ComponentType,
+  type PropsWithChildren,
+} from "react";
 import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -73,11 +81,21 @@ const NAV_HELP: Record<string, string> = {
     "Use admin tools to manage users, businesses, and platform operations.",
 };
 
-let hasGlobalNavigation = false;
+const GlobalNavigationOwnerContext = createContext(false);
+
+export function GlobalNavigationOwnerProvider({
+  children,
+}: PropsWithChildren) {
+  return (
+    <GlobalNavigationOwnerContext.Provider value>
+      {children}
+    </GlobalNavigationOwnerContext.Provider>
+  );
+}
 
 export default function Navigation({ scope = "local" }: NavigationProps) {
   const isGlobalScope = scope === "global";
-  const [showLocalNav, setShowLocalNav] = useState(true);
+  const hasGlobalNavigationOwner = useContext(GlobalNavigationOwnerContext);
   const [moreOpen, setMoreOpen] = useState(false);
   const [location] = useLocation();
   const currentPath = location.split("?")[0];
@@ -95,24 +113,6 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
     setQuery: setScoutSearchQuery,
     setActiveFilter: setScoutSearchFilter,
   } = useScoutNavSearch();
-
-  useEffect(() => {
-    if (isGlobalScope) {
-      hasGlobalNavigation = true;
-      return () => {
-        hasGlobalNavigation = false;
-      };
-    }
-    if (hasGlobalNavigation) {
-      setShowLocalNav(false);
-    }
-  }, [isGlobalScope]);
-
-  useEffect(() => {
-    if (!isGlobalScope && hasGlobalNavigation) {
-      setShowLocalNav(false);
-    }
-  });
 
   useEffect(() => {
     setMoreOpen(false);
@@ -248,7 +248,9 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
 
   if (isGlobalScope && !user && currentPath === "/") return null;
   if (isWheelPage || isDocFullscreen || isScoutMapFullscreen) return null;
-  if (!isGlobalScope && !showLocalNav) return null;
+  // App.tsx explicitly owns navigation on shell routes. Self-contained
+  // consumer routes omit the provider and keep their page-local nav.
+  if (!isGlobalScope && hasGlobalNavigationOwner) return null;
 
   const dashboardPath = "/dashboard";
   const isScoutRoute =

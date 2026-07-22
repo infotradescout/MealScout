@@ -448,17 +448,19 @@ export function assignScoutBusinessCardsBySection<T>(
     SCOUT_PRIMARY_SECTION_PRIORITY.map((sectionId, index) => [sectionId, index]),
   );
   const assigned: Partial<Record<ScoutPrimarySectionId, T[]>> = {};
+  const claimedBusinessKeys = new Set<string>();
 
   for (const section of [...sections].sort(
     (a, b) => (priority.get(a.id) ?? 999) - (priority.get(b.id) ?? 999),
   )) {
-    // Keep one card per business inside a category. The same business may
-    // legitimately appear in another category (for example, a restaurant
-    // with both a popular dish and an active deal).
+    // Business-profile rows are mutually exclusive across the first-screen
+    // discovery categories. Content entities such as a dish, deal, or event
+    // are assigned separately and may still point back to a business already
+    // shown here.
     assigned[section.id] = filterUniqueScoutBusinessCards(
       section.items,
       section.getBusinessKey,
-      new Set<string>(),
+      claimedBusinessKeys,
     );
   }
 

@@ -84,8 +84,8 @@ assert.deepEqual(
 );
 assert.deepEqual(
   sectionAssignments.worth_discovering?.map((item) => item.id),
-  ["garden-table"],
-  "A good business may appear in a different category when it genuinely belongs there.",
+  [],
+  "A business profile must not dominate Scout by repeating across categories.",
 );
 
 const requiredKinds = [

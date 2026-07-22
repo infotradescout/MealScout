@@ -392,7 +392,14 @@ Submit a community builder application (user action).
 
 ---
 
-### 11. GET_COUNTY_TRANSPARENCY
+## Unavailable Actions
+
+The following county actions are reserved contract names, not supported
+runtime actions. MealScout returns HTTP `501` with
+`code: "ACTION_NOT_IMPLEMENTED"` for each one. Clients must not present them
+as available capabilities.
+
+### GET_COUNTY_TRANSPARENCY — unavailable
 
 Get transparency data for a specific county.
 
@@ -411,7 +418,7 @@ Get transparency data for a specific county.
 
 ---
 
-### 12. GET_COUNTY_LEDGER
+### GET_COUNTY_LEDGER — unavailable
 
 Get redemption ledger for a county.
 
@@ -431,7 +438,7 @@ Get redemption ledger for a county.
 
 ---
 
-### 13. GET_COUNTY_VAULT
+### GET_COUNTY_VAULT — unavailable
 
 Get county vault status and financial information.
 

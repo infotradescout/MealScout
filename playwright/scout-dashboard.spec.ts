@@ -253,12 +253,11 @@ test.describe("Scout local dashboard", () => {
   test("restaurant with menu items shows menu preview", async ({ page }) => {
     await page.goto(`${FRONTEND}/scout`, { waitUntil: "domcontentloaded" });
 
-    // Second Spot / Third Spot each surface in multiple Scout lanes (Places
-    // to Try, Worth a Look, ...), so scope to one lane's list rather than
-    // using an unscoped .first() across every duplicate.
-    const placesToTry = page.getByRole("list", { name: "Places to Try" });
-    await expect(placesToTry.getByTestId("scout-menu-preview").first()).toBeVisible();
-    await expect(placesToTry.getByText("Brisket Tacos").first()).toBeVisible();
+    // Business cards are claimed once across all Scout rails. The exact rail
+    // is ranking-dependent, so assert the menu micro-card on its one assigned
+    // business card instead of requiring a duplicate in Places to Try.
+    await expect(page.getByTestId("scout-menu-preview").first()).toBeVisible();
+    await expect(page.getByText("Brisket Tacos").first()).toBeVisible();
   });
 
   test("regular customer navigation does not link to standalone map", async ({ page }) => {
@@ -268,23 +267,7 @@ test.describe("Scout local dashboard", () => {
     await expect(page.locator('a[href="/map"], a[href$="/map"]')).toHaveCount(0);
   });
 
-  // The button this test drove ("Expand map to fullscreen") was renamed to
-  // "Expand map" and now lives inside the spatial-decision rail, which only
-  // renders once `spatialDecisionItems` is non-empty — and that requires a
-  // marker from `sceneFilteredMapMarkers`, which in the default (non-fullMap)
-  // sheet state never populates under any mock data this suite can supply
-  // (verified empirically: adding multiple nearby restaurants still leaves
-  // the rail and its button entirely absent from the DOM). The page also
-  // defines pull-to-expand drag handlers (handleSheetTouchStart/Move/End,
-  // handleSheetMouseDown/Move/Up in explore-preview-v2.tsx) that read as the
-  // intended fallback entry point, but they are never attached to any
-  // element via onTouchStart/onMouseDown — dead code. As it stands there may
-  // be no way to reach fullMap from the default Scout view without an
-  // already-populated decision rail. That's either a real gap or a gesture
-  // wiring regression, not something this test suite should decide or mask.
-  test.fixme(
-    "Scout map expand stays on Scout",
-    async ({ page }) => {
+  test("Scout map expand stays on Scout", async ({ page }) => {
       await page.setViewportSize({ width: 430, height: 932 });
       await page.goto(`${FRONTEND}/scout`, { waitUntil: "domcontentloaded" });
 
@@ -296,8 +279,7 @@ test.describe("Scout local dashboard", () => {
       await expect(page).toHaveURL(/\/scout(?:[?#].*)?$/);
       await expect(page.getByRole("button", { name: /collapse/i })).toBeVisible();
       await expect(page.getByTestId("scout-interactive-map")).toBeVisible();
-    },
-  );
+  });
 
   test("Parking Pass route owns the parking map experience", async ({ page }) => {
     await page.goto(`${FRONTEND}/parking-pass`, { waitUntil: "domcontentloaded" });

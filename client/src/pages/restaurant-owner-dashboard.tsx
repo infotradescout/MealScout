@@ -116,6 +116,11 @@ import {
   type OwnerValueAttributionResponse,
 } from "@/lib/owner-value-attribution-client";
 import LongPressHelp from "@/components/long-press-help";
+import {
+  getScopedBusinessPermissions,
+  isScopedBusinessOwner,
+  type BusinessAccessContext,
+} from "@/lib/business-access";
 
 interface DashboardStats {
   totalDeals: number;
@@ -244,38 +249,40 @@ export default function RestaurantOwnerDashboard() {
     user?.userType === "duper_admin" ||
     user?.userType === "super_admin";
   const isStaff = user?.userType === "staff";
-  const { data: businessAccess } = useQuery<{
-    hasAnyAccess: boolean;
-    permissions: {
-      manageDeals: boolean;
-      manageParkingPass: boolean;
-      viewAnalytics: boolean;
-      manageProfile: boolean;
-    };
-  }>({
+  const { data: businessAccess } = useQuery<BusinessAccessContext>({
     queryKey: ["/api/business-access/me"],
     enabled: !!user,
     retry: false,
     refetchOnWindowFocus: false,
   });
+  const scopedBusinessPermissions = getScopedBusinessPermissions(
+    businessAccess,
+    selectedRestaurant,
+  );
+  const ownsSelectedBusiness = isScopedBusinessOwner(
+    businessAccess,
+    selectedRestaurant,
+  );
   const canManageDeals =
     isAdmin ||
     isStaff ||
-    isRestaurantOwner ||
-    isFoodTruck ||
-    businessAccess?.permissions?.manageDeals === true;
+    ownsSelectedBusiness ||
+    scopedBusinessPermissions.manageDeals;
   const canManageParkingPass =
     isAdmin ||
     isStaff ||
-    isRestaurantOwner ||
-    isFoodTruck ||
-    businessAccess?.permissions?.manageParkingPass === true;
+    ownsSelectedBusiness ||
+    scopedBusinessPermissions.manageParkingPass;
   const canViewAnalytics =
     isAdmin ||
     isStaff ||
-    isRestaurantOwner ||
-    isFoodTruck ||
-    businessAccess?.permissions?.viewAnalytics === true;
+    ownsSelectedBusiness ||
+    scopedBusinessPermissions.viewAnalytics;
+  const canManageProfile =
+    isAdmin ||
+    isStaff ||
+    ownsSelectedBusiness ||
+    scopedBusinessPermissions.manageProfile;
 
   useEffect(() => {
     if (!user) return;
@@ -339,8 +346,7 @@ export default function RestaurantOwnerDashboard() {
   // The routed Audience workspace owns served analytics. Keep the legacy query
   // definitions inert until their hidden JSX is removed in the cleanup pass.
   const legacyAnalyticsEnabled = false;
-  const canManageBilling =
-    isAdmin || isStaff || isRestaurantOwner || isFoodTruck;
+  const canManageBilling = isAdmin || isStaff || ownsSelectedBusiness;
 
   // Fetch favorites analytics for paid users
   const { data: favoritesAnalytics, isLoading: loadingFavorites } =
@@ -409,7 +415,9 @@ export default function RestaurantOwnerDashboard() {
   // Fetch dashboard stats
   const { data: stats } = useQuery<DashboardStats>({
     queryKey: [`/api/restaurants/${selectedRestaurant}/stats`],
-    enabled: !!selectedRestaurant,
+    enabled:
+      !!selectedRestaurant &&
+      (canManageDeals || canViewAnalytics || canManageProfile),
   });
 
   // Fetch advanced analytics
@@ -673,6 +681,21 @@ export default function RestaurantOwnerDashboard() {
               : workspaceMode === "audience" || setupMode === "analytics"
                 ? "audience"
                 : "overview";
+  const workspaceCapabilities = {
+    overview: canManageProfile,
+    profile: canManageProfile,
+    menu: canManageProfile,
+    availability: canManageParkingPass,
+    media: canManageProfile,
+    deals: canManageDeals,
+    work: canManageParkingPass,
+    audience: canViewAnalytics,
+    team: canManageBilling,
+    payments: canManageBilling,
+    settings: canManageProfile,
+  };
+  const canOpenActiveWorkspaceModule =
+    workspaceCapabilities[activeWorkspaceModule] !== false;
   const currentMenuApproval = (currentRestaurant as any)?.menuApproval || null;
   const menuApprovalRequired = Boolean(
     currentMenuApproval?.ownerApprovalRequired && currentIsTruckBusiness,
@@ -2055,6 +2078,32 @@ export default function RestaurantOwnerDashboard() {
     </div>
   );
 
+  if (currentRestaurant && !canOpenActiveWorkspaceModule) {
+    return (
+      <BusinessWorkspaceShell
+        activeModule={activeWorkspaceModule}
+        business={currentRestaurant}
+        businesses={restaurants}
+        onBusinessChange={handleWorkspaceBusinessChange}
+        publicProfileHref={currentPublicProfileHref}
+        capabilities={workspaceCapabilities}
+      >
+        <div className="mx-auto flex min-h-[70vh] max-w-lg items-center px-4 py-10">
+          <Card className="w-full border-amber-200 bg-amber-50">
+            <CardContent className="p-6 text-center">
+              <h2 className="text-lg font-bold text-amber-950">
+                Permission required
+              </h2>
+              <p className="mt-2 text-sm text-amber-900/80">
+                Ask the business owner to grant access to this workspace area.
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      </BusinessWorkspaceShell>
+    );
+  }
+
   if (loadingRestaurants) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-[var(--bg-layered)]">
@@ -2097,12 +2146,7 @@ export default function RestaurantOwnerDashboard() {
       businesses={restaurants}
       onBusinessChange={handleWorkspaceBusinessChange}
       publicProfileHref={currentPublicProfileHref}
-      capabilities={{
-        deals: canManageDeals,
-        audience: canViewAnalytics,
-        team: canManageBilling,
-        payments: canManageBilling,
-      }}
+      capabilities={workspaceCapabilities}
       headerActions={ownerHeaderActions}
     >
       <div className="mx-auto min-h-screen max-w-7xl px-4 py-6 lg:px-6 lg:py-8">
