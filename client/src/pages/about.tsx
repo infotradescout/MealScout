@@ -7,7 +7,7 @@ const schemaData = {
   "@type": "AboutPage",
   name: "About MealScout",
   description:
-    "A complete guide to MealScout: local food discovery, business profiles, menus, schedules, deals, events, ordering, recommendations, and Parking Pass.",
+    "The complete guide to MealScout: profile-first local food discovery, menus, schedules, pickup ordering, business tools, Parking Pass, events, food work, suppliers, sharing, and recommendations.",
   url: "https://www.mealscout.us/about",
   isPartOf: {
     "@type": "WebSite",
@@ -27,8 +27,8 @@ export default function About() {
   return (
     <>
       <SEOHead
-        title="About MealScout | The Complete Guide to Local Food Discovery"
-        description="Learn how MealScout connects diners, food businesses, mobile vendors, hosts, and event organizers through one accurate business profile and Scout discovery."
+        title="What Is MealScout? | The Complete Product Guide"
+        description="Understand the complete MealScout system in one page: Scout discovery, food business profiles, menus, schedules, pickup ordering, Parking Pass, events, food work, suppliers, sharing, and trust."
         canonicalUrl="https://www.mealscout.us/about"
         ogImage="/atmospheric/foodpark-night-hero.jpg"
         schemaData={schemaData}

@@ -1,440 +1,663 @@
-type ReferenceGroup = {
-  title: string;
-  summary: string;
-  items: string[];
+import { useEffect } from "react";
+import { Link } from "wouter";
+import type { LucideIcon } from "lucide-react";
+import {
+  ArrowRight,
+  BadgeCheck,
+  BriefcaseBusiness,
+  Building2,
+  CalendarDays,
+  Camera,
+  ChefHat,
+  ChevronDown,
+  Clock3,
+  Compass,
+  CreditCard,
+  ExternalLink,
+  Globe2,
+  Heart,
+  LayoutDashboard,
+  MapPin,
+  MenuSquare,
+  Package,
+  PlaySquare,
+  Route,
+  Search,
+  Share2,
+  ShieldCheck,
+  ShoppingBag,
+  Smartphone,
+  Store,
+  Tag,
+  Truck,
+  UserRound,
+  UsersRound,
+  UtensilsCrossed,
+} from "lucide-react";
+
+import {
+  aboutAudiences,
+  aboutFaqs,
+  aboutFeatureGroups,
+  aboutGlossary,
+  aboutStatusLabels,
+  businessWorkspaceModules,
+  type AboutStatus,
+} from "./mealscout-about-content";
+
+const iconMap: Record<string, LucideIcon> = {
+  search: Search,
+  store: Store,
+  truck: Truck,
+  building: Building2,
+  calendar: CalendarDays,
+  package: Package,
+  compass: Compass,
+  utensils: UtensilsCrossed,
+  clock: Clock3,
+  briefcase: BriefcaseBusiness,
+  share: Share2,
+  chef: ChefHat,
+  video: PlaySquare,
+  user: UserRound,
+  phone: Smartphone,
+  shield: ShieldCheck,
 };
 
-const coreIdeas = [
-  {
-    number: "01",
-    title: "The profile is the source",
-    text: "A food business maintains one profile for its identity, menu, hours, schedule, location, photos, deals, and available ways to order.",
-  },
-  {
-    number: "02",
-    title: "Scout turns facts into discovery",
-    text: "Scout helps people search by craving, dish, business, category, or place and then opens the source profile for the full story.",
-  },
-  {
-    number: "03",
-    title: "Mobile food needs live context",
-    text: "A truck can be real and still not be serving at its usual address. MealScout treats schedules, stops, and current location as first-class information.",
-  },
-  {
-    number: "04",
-    title: "Useful proof beats rating theater",
-    text: "Recommendations can carry context and photo evidence. Missing or unapproved facts stay missing instead of being filled with guesses.",
-  },
-  {
-    number: "05",
-    title: "Businesses control their operation",
-    text: "Owners and approved teammates manage the profile and the tools they have permission to use. MealScout does not become another feed to update by hand.",
-  },
+const profileOutputs = [
+  { icon: Search, label: "Scout discovery", copy: "Cravings, dishes, categories, and places" },
+  { icon: MenuSquare, label: "Menus", copy: "Items, prices, photos, options, and availability" },
+  { icon: Clock3, label: "Place + time", copy: "Hours, schedules, stops, and live context" },
+  { icon: ShoppingBag, label: "Ordering", copy: "Pickup and outside paths when enabled" },
+  { icon: CalendarDays, label: "Events + deals", copy: "What is happening and what is special" },
+  { icon: Share2, label: "Sharing", copy: "Links, QR assets, and referral attribution" },
+  { icon: Heart, label: "Customer memory", copy: "Saves, recommendations, and return visits" },
+  { icon: LayoutDashboard, label: "Business control", copy: "One workspace behind the public profile" },
 ];
 
-const referenceGroups: ReferenceGroup[] = [
-  {
-    title: "Discover food",
-    summary: "Public tools for deciding what to eat and where to find it.",
-    items: [
-      "Scout search and discovery by craving, dish, category, business, and place",
-      "Compact and expanded map views supported by a readable list experience",
-      "Public restaurant, food truck, bar, and other supported food-business profiles",
-      "Menus, item details, photos, hours, schedules, locations, and service context when published",
-      "Local events, deals, and available ordering paths",
-    ],
-  },
-  {
-    title: "Remember and recommend",
-    summary: "Customer tools that turn browsing into a useful personal food record.",
-    items: [
-      "Favorites and saved places for signed-in customers",
-      "Recommendations with written context instead of a one-number verdict",
-      "Photo-supported recommendations when a customer wants to show what they experienced",
-      "Directions, shares, and return paths to the business profile",
-      "Order and activity history where the related service is available",
-    ],
-  },
-  {
-    title: "Run a food business",
-    summary: "A profile-first workspace for owners and approved collaborators.",
-    items: [
-      "Business overview and profile management",
-      "Menu building, item availability, and kitchen or order workflows",
-      "Hours, schedules, mobile stops, and Parking Pass bookings",
-      "Photos, video, deals, events, audience tools, and sharing",
-      "Team permissions, payments, subscriptions, reporting, and settings where enabled",
-    ],
-  },
-  {
-    title: "Operate mobile food",
-    summary: "Tools for the moving parts that ordinary restaurant directories miss.",
-    items: [
-      "Food-truck identity, public menu, operating schedule, and current stop context",
-      "Bookable Parking Pass host locations with the published dates, terms, and pricing",
-      "Trip planning between a start and destination",
-      "Discovery of hosts and useful operator stops along a route",
-      "Booking and schedule records that feed the truck's operating workflow",
-    ],
-  },
-  {
-    title: "Host and organize",
-    summary: "Ways for places and organizers to connect with food businesses.",
-    items: [
-      "Parking Pass listings for approved host spaces",
-      "Availability, capacity, booking terms, and location management",
-      "Public events and event detail pages",
-      "Event opportunities and business participation workflows where offered",
-      "Demand and booking context for operating decisions",
-    ],
-  },
-  {
-    title: "Protect the truth",
-    summary: "The rules that keep the system useful when information is incomplete.",
-    items: [
-      "The business profile remains the primary published source",
-      "Conflicting identity, menu, schedule, or location changes require review or approval",
-      "Business-specific teammate permissions limit access to the assigned work",
-      "Unavailable features and missing information should be shown plainly",
-      "Prices, fees, and booking terms are presented before a paid confirmation",
-    ],
-  },
+const dinerJourney = [
+  { step: "01", title: "Start with the appetite", copy: "Search a craving, dish, cuisine, business, category, or area." },
+  { step: "02", title: "Compare useful context", copy: "See food, distance, schedules, events, deals, and map context." },
+  { step: "03", title: "Open the source profile", copy: "Confirm the menu, place, time, photos, and available actions." },
+  { step: "04", title: "Act and remember", copy: "Get directions, order, save, recommend, share, or come back later." },
 ];
 
-const statusColumns = [
-  {
-    label: "Available now",
-    tone: "ready",
-    text: "Scout, public profiles, menus, schedules, events, deals, recommendations, customer saves, business workspaces, and Parking Pass are active MealScout surfaces.",
-  },
-  {
-    label: "Business supplied",
-    tone: "depends",
-    text: "Menu depth, prices, hours, live stops, ordering, deals, and media vary by business. MealScout shows what has actually been published.",
-  },
-  {
-    label: "Still expanding",
-    tone: "growing",
-    text: "Business and city coverage, profile completeness, operator connections, and this future help library will continue to grow without pretending unfinished work is complete.",
-  },
+const businessJourney = [
+  { step: "01", title: "Create, import, or claim", copy: "Establish the business and the owner allowed to control it." },
+  { step: "02", title: "Build one complete profile", copy: "Add the food, story, media, hours, schedule, location, and actions." },
+  { step: "03", title: "Let the profile travel", copy: "Scout, menus, maps, deals, events, links, and QR paths use that source." },
+  { step: "04", title: "Run the work behind it", copy: "Use the business workspace for operations, team access, and enabled services." },
 ];
 
 function ArrowIcon() {
-  return <span aria-hidden="true">↗</span>;
+  return <ArrowRight aria-hidden="true" />;
 }
 
-function CheckIcon() {
-  return <span className="ms-about-check" aria-hidden="true">✓</span>;
+function StatusPill({ status }: { status: AboutStatus }) {
+  return (
+    <span className="ms-about-status-pill" data-status={status}>
+      {aboutStatusLabels[status]}
+    </span>
+  );
+}
+
+function MappedIcon({ name }: { name: string }) {
+  const Icon = iconMap[name] || Compass;
+  return <Icon aria-hidden="true" />;
+}
+
+function SectionHeading({
+  id,
+  eyebrow,
+  title,
+  copy,
+  inverse = false,
+}: {
+  id?: string;
+  eyebrow: string;
+  title: string;
+  copy?: string;
+  inverse?: boolean;
+}) {
+  return (
+    <div className={`ms-about-section-heading${inverse ? " ms-about-section-heading-inverse" : ""}`}>
+      <p className="ms-about-eyebrow">{eyebrow}</p>
+      <h2 id={id}>{title}</h2>
+      {copy ? <p>{copy}</p> : null}
+    </div>
+  );
 }
 
 export function MealScoutAboutExplainer() {
+  useEffect(() => {
+    const revealLinkedChapter = () => {
+      const fragment = window.location.hash.slice(1);
+      if (!fragment) return;
+
+      const target = document.getElementById(decodeURIComponent(fragment));
+      if (!target || !target.closest(".ms-about")) return;
+
+      if (target instanceof HTMLDetailsElement) {
+        target.open = true;
+      }
+
+      window.requestAnimationFrame(() => {
+        target.scrollIntoView({ block: "start" });
+        if (target instanceof HTMLDetailsElement) {
+          target.querySelector<HTMLElement>("summary")?.focus({ preventScroll: true });
+        }
+      });
+    };
+
+    revealLinkedChapter();
+    window.addEventListener("hashchange", revealLinkedChapter);
+    return () => window.removeEventListener("hashchange", revealLinkedChapter);
+  }, []);
+
   return (
-    <main className="ms-about">
-      <section className="ms-about-hero" id="top">
+    <main className="ms-about" id="top">
+      <nav className="ms-about-jumpbar" aria-label="MealScout guide chapters">
+        <span>MealScout guide</span>
+        <div>
+          <a href="#overview">Overview</a>
+          <a href="#people">Who it serves</a>
+          <a href="#profiles">Profiles</a>
+          <a href="#business">Business tools</a>
+          <a href="#mobile-food">Mobile food</a>
+          <a href="#complete-guide">Complete guide</a>
+          <a href="#answers">Answers</a>
+        </div>
+      </nav>
+
+      <section className="ms-about-hero" aria-labelledby="about-hero-title">
         <div className="ms-about-hero-copy">
-          <p className="ms-about-eyebrow">MealScout, explained</p>
-          <h1>One food profile.<br />Everywhere people discover it.</h1>
+          <p className="ms-about-brand-line">Follow the Flavor</p>
+          <h1 id="about-hero-title">
+            Local food, easier to find.
+            <span>Easier to run.</span>
+          </h1>
           <p className="ms-about-lead">
-            MealScout helps people decide what to eat and helps food businesses
-            keep that decision grounded in current information. A business
-            maintains one profile. Scout turns the profile into local discovery.
+            MealScout connects the decision people make—<strong>what sounds good right now?</strong>—to
+            the one food profile a business maintains. Menus, schedules, locations, deals, ordering,
+            events, recommendations, and operating tools stay connected instead of becoming another pile
+            of pages to update.
           </p>
           <div className="ms-about-actions">
-            <a className="ms-about-button ms-about-button-primary" href="/scout">
+            <Link className="ms-about-button ms-about-button-primary" href="/scout">
               Find food with Scout <ArrowIcon />
-            </a>
-            <a className="ms-about-button ms-about-button-secondary" href="/restaurant-signup">
-              Create or claim a business
-            </a>
+            </Link>
+            <Link className="ms-about-button ms-about-button-secondary" href="/profile-setup">
+              See MealScout Profiles
+            </Link>
           </div>
-          <p className="ms-about-quiet-note">
-            No account is needed to start exploring public discovery and profiles.
-          </p>
+          <div className="ms-about-hero-facts" role="group" aria-label="MealScout at a glance">
+            <span><BadgeCheck aria-hidden="true" /> Public discovery starts without an account</span>
+            <span><BadgeCheck aria-hidden="true" /> Standard business profiles are free</span>
+            <span><BadgeCheck aria-hidden="true" /> No pay-to-play organic ranking</span>
+          </div>
         </div>
 
-        <div className="ms-about-hero-visual" aria-label="A collection of food and food truck scenes">
-          <figure className="ms-about-photo ms-about-photo-wide">
-            <img src="/backgrounds/food-truck-day.jpg" alt="A food truck serving customers outdoors" />
-            <figcaption><span>Live context</span> Where food is serving today</figcaption>
+        <div className="ms-about-hero-visual" role="group" aria-label="Food discovery connected to a business profile">
+          <figure className="ms-about-hero-photo ms-about-hero-photo-main">
+            <img
+              src="/backgrounds/food-truck-day.jpg"
+              alt="Customers ordering from a local food truck"
+              fetchPriority="high"
+            />
           </figure>
-          <figure className="ms-about-photo">
-            <img src="/atmospheric/craving-tacos.jpg" alt="Fresh tacos ready to serve" />
-            <figcaption><span>Cravings</span> Search the food, not just the name</figcaption>
+          <figure className="ms-about-hero-photo ms-about-hero-photo-food">
+            <img src="/atmospheric/craving-bbq.jpg" alt="Barbecue meal ready to serve" />
           </figure>
-          <div className="ms-about-hero-card">
-            <span className="ms-about-hero-card-mark">M</span>
-            <strong>Profile first</strong>
-            <p>Menu, schedule, location, media, deals, and ordering flow from one managed source.</p>
+          <figure className="ms-about-hero-photo ms-about-hero-photo-detail">
+            <img src="/atmospheric/craving-seafood.jpg" alt="Colorful seafood dish" />
+          </figure>
+          <div className="ms-about-example-search">
+            <span>Example discovery path</span>
+            <strong><Search aria-hidden="true" /> “Barbecue near me”</strong>
+            <p>Dish → current context → source profile → action</p>
+          </div>
+          <div className="ms-about-profile-source-card">
+            <img src="/brand/mealscout-logo-pin.png" alt="" />
+            <div>
+              <small>One managed source</small>
+              <strong>The MealScout Profile</strong>
+            </div>
           </div>
         </div>
       </section>
 
-      <section className="ms-about-intro" aria-labelledby="plain-language-title">
-        <p className="ms-about-kicker">The plain-language version</p>
-        <h2 id="plain-language-title">
-          MealScout is a local food discovery and business information system.
-        </h2>
+      <section className="ms-about-overview" id="overview" aria-labelledby="overview-title">
+        <div className="ms-about-overview-number" aria-hidden="true">01</div>
+        <div>
+          <p className="ms-about-eyebrow">MealScout in one sentence</p>
+          <h2 id="overview-title">
+            A profile-first local food system for discovery, decisions, and the work behind them.
+          </h2>
+        </div>
         <p>
-          It is built for the question people actually ask—“What sounds good,
-          and where can I get it?”—and for the businesses that need menus,
-          schedules, locations, and opportunities to stay connected behind that answer.
+          Customers should not need to know a business name before they can find dinner. Businesses
+          should not need to republish the same menu, hours, schedule, and specials everywhere. MealScout
+          joins those two problems at the profile.
         </p>
       </section>
 
-      <section className="ms-about-principles" aria-label="Five things to remember">
-        <div className="ms-about-section-heading">
-          <p className="ms-about-kicker">If you remember five things</p>
-          <h2>This is the MealScout model.</h2>
+      <section className="ms-about-system" aria-labelledby="system-title">
+        <div className="ms-about-system-inner">
+          <SectionHeading
+            id="system-title"
+            inverse
+            eyebrow="How it connects"
+            title="One source. Every customer-facing surface."
+            copy="The profile is not one more listing in the stack. It is the maintained source that powers discovery and keeps the operating tools connected to what customers see."
+          />
+
+          <div className="ms-about-system-map" role="group" aria-label="MealScout profile connection map">
+            <div className="ms-about-system-core">
+              <img src="/brand/mealscout-logo-pin.png" alt="" />
+              <span>Business-managed source</span>
+              <strong>MealScout Profile</strong>
+              <p>Identity · food · place · time · action</p>
+            </div>
+            <div className="ms-about-output-grid">
+              {profileOutputs.map(({ icon: Icon, label, copy }) => (
+                <article key={label}>
+                  <Icon aria-hidden="true" />
+                  <div><strong>{label}</strong><span>{copy}</span></div>
+                </article>
+              ))}
+            </div>
+          </div>
+
+          <div className="ms-about-system-rule">
+            <div><span>1</span><strong>The business updates the source</strong></div>
+            <ArrowRight aria-hidden="true" />
+            <div><span>2</span><strong>MealScout carries it into discovery</strong></div>
+            <ArrowRight aria-hidden="true" />
+            <div><span>3</span><strong>The customer acts on the profile</strong></div>
+          </div>
         </div>
-        <div className="ms-about-principle-grid">
-          {coreIdeas.map((idea) => (
-            <article className="ms-about-principle" key={idea.number}>
-              <span>{idea.number}</span>
-              <h3>{idea.title}</h3>
-              <p>{idea.text}</p>
+      </section>
+
+      <section className="ms-about-people" id="people" aria-labelledby="people-title">
+        <SectionHeading
+          id="people-title"
+          eyebrow="Who MealScout is for"
+          title="One food network. Different jobs."
+          copy="MealScout changes its tools to match what someone is trying to do, while keeping the public food information connected."
+        />
+
+        <div className="ms-about-audience-grid">
+          {aboutAudiences.map((audience) => (
+            <article className="ms-about-audience-card" key={audience.title} data-icon={audience.icon}>
+              <div className="ms-about-audience-top">
+                <span className="ms-about-icon-box"><MappedIcon name={audience.icon} /></span>
+                <StatusPill status={audience.status} />
+              </div>
+              <p className="ms-about-card-eyebrow">{audience.eyebrow}</p>
+              <h3>{audience.title}</h3>
+              <p>{audience.summary}</p>
+              <ul>
+                {audience.bullets.map((bullet) => <li key={bullet}><BadgeCheck aria-hidden="true" /> {bullet}</li>)}
+              </ul>
+              <Link href={audience.href}>{audience.cta} <ArrowIcon /></Link>
             </article>
           ))}
         </div>
       </section>
 
-      <section className="ms-about-flow" id="how-it-works" aria-labelledby="flow-title">
-        <div className="ms-about-section-heading ms-about-section-heading-light">
-          <p className="ms-about-kicker">How the system works</p>
-          <h2 id="flow-title">Two sides, one shared source of truth.</h2>
-          <p>Diners get a simpler answer. Businesses keep control of the information behind it.</p>
+      <section className="ms-about-journeys" aria-labelledby="journeys-title">
+        <div className="ms-about-journeys-head">
+          <SectionHeading
+            id="journeys-title"
+            inverse
+            eyebrow="The two core journeys"
+            title="The customer gets an answer. The business keeps control."
+            copy="These journeys meet at the same profile, so the public experience and the operating truth do not drift apart."
+          />
         </div>
-        <div className="ms-about-flow-grid">
-          <article className="ms-about-path ms-about-path-diner">
-            <div className="ms-about-path-label">For someone looking for food</div>
+        <div className="ms-about-journey-grid">
+          <article className="ms-about-journey ms-about-journey-customer">
+            <div className="ms-about-journey-label"><Search aria-hidden="true" /> For someone looking for food</div>
             <ol>
-              <li><span>1</span><div><strong>Open Scout</strong><p>Start with a craving, dish, business, category, or area.</p></div></li>
-              <li><span>2</span><div><strong>Compare useful context</strong><p>See relevant profiles, menu highlights, schedules, events, deals, and map context.</p></div></li>
-              <li><span>3</span><div><strong>Open the profile</strong><p>Check the full menu, published hours or stop, photos, service details, and available actions.</p></div></li>
-              <li><span>4</span><div><strong>Act when ready</strong><p>Get directions, save, recommend, share, or order when that option is available.</p></div></li>
+              {dinerJourney.map((item) => (
+                <li key={item.step}><span>{item.step}</span><div><strong>{item.title}</strong><p>{item.copy}</p></div></li>
+              ))}
             </ol>
-            <a href="/scout">Try Scout <ArrowIcon /></a>
+            <Link href="/scout">Try the customer journey <ArrowIcon /></Link>
           </article>
-
-          <article className="ms-about-path ms-about-path-business">
-            <div className="ms-about-path-label">For a food business</div>
+          <article className="ms-about-journey ms-about-journey-business">
+            <div className="ms-about-journey-label"><Store aria-hidden="true" /> For a food business</div>
             <ol>
-              <li><span>1</span><div><strong>Create or claim the profile</strong><p>Establish the business identity and the people allowed to manage it.</p></div></li>
-              <li><span>2</span><div><strong>Maintain the operation</strong><p>Publish menu details, hours, stops, media, deals, events, and ordering availability.</p></div></li>
-              <li><span>3</span><div><strong>Let information flow outward</strong><p>The profile supplies public discovery instead of creating separate facts for every surface.</p></div></li>
-              <li><span>4</span><div><strong>Manage the work</strong><p>Use the workspace for orders, audience, team permissions, payments, reports, and settings as enabled.</p></div></li>
+              {businessJourney.map((item) => (
+                <li key={item.step}><span>{item.step}</span><div><strong>{item.title}</strong><p>{item.copy}</p></div></li>
+              ))}
             </ol>
-            <a href="/restaurant-signup">Create or claim a business <ArrowIcon /></a>
+            <Link href="/profile-setup">See the business journey <ArrowIcon /></Link>
           </article>
         </div>
       </section>
 
-      <section className="ms-about-chapter ms-about-scout" id="scout" aria-labelledby="scout-title">
-        <div className="ms-about-chapter-copy">
-          <p className="ms-about-chapter-number">Chapter 01</p>
-          <p className="ms-about-kicker">Scout discovery</p>
-          <h2 id="scout-title">Start with what sounds good.</h2>
+      <section className="ms-about-profile-section" id="profiles" aria-labelledby="profiles-title">
+        <div className="ms-about-profile-copy">
+          <p className="ms-about-chapter-number">Chapter 02 · The profile</p>
+          <p className="ms-about-eyebrow">The product everything else starts from</p>
+          <h2 id="profiles-title">More useful than a stale food website. More alive than a directory listing.</h2>
           <p>
-            Scout is MealScout’s discovery surface. It is search and exploration,
-            not a chatbot. It brings together current profile information so a
-            customer can move from an idea—tacos, coffee, late-night, a truck
-            nearby—to a business that may satisfy it.
+            A MealScout Profile is designed to be the one public food surface a business actively
+            maintains. It can still connect an existing domain, social account, or ordering provider,
+            but the menu, media, schedule, location, specials, and customer paths no longer need to live
+            in separate places with separate upkeep.
           </p>
-          <ul className="ms-about-check-list">
-            <li><CheckIcon /> Search by dish, craving, business, category, or place</li>
-            <li><CheckIcon /> Browse food-led discovery without knowing a business name</li>
-            <li><CheckIcon /> Use the map or readable result lists for location context</li>
-            <li><CheckIcon /> Open the public profile before making a decision</li>
-          </ul>
-          <a className="ms-about-text-link" href="/scout">Explore Scout <ArrowIcon /></a>
+          <div className="ms-about-profile-capabilities">
+            <div><Store aria-hidden="true" /><strong>Identity</strong><span>Name, story, type, contact, and service context</span></div>
+            <div><UtensilsCrossed aria-hidden="true" /><strong>Food</strong><span>Menus, products, categories, prices, photos, and options</span></div>
+            <div><MapPin aria-hidden="true" /><strong>Place + time</strong><span>Address, hours, schedule, stops, and service area</span></div>
+            <div><Camera aria-hidden="true" /><strong>Media</strong><span>Food, business, location, and approved video content</span></div>
+            <div><Tag aria-hidden="true" /><strong>Activity</strong><span>Deals, events, featured items, and current opportunities</span></div>
+            <div><ExternalLink aria-hidden="true" /><strong>Actions</strong><span>Directions, ordering, saving, sharing, QR, and recommendations</span></div>
+          </div>
+          <div className="ms-about-profile-states" role="group" aria-label="MealScout Profile source states">
+            <article><span>Business managed</span><p>An owner or authorized team controls the published source.</p></article>
+            <article><span>Imported or unclaimed</span><p>Public evidence may exist before an owner takes control; claim and confirmation paths remain visible.</p></article>
+            <article><span>Incomplete or needs confirmation</span><p>Missing and conflicting details stay qualified until the responsible source supplies or approves them.</p></article>
+          </div>
+          <div className="ms-about-inline-links">
+            <Link className="ms-about-text-link" href="/profile-setup">See the complete profile offer <ArrowIcon /></Link>
+            <Link className="ms-about-text-link" href="/claim-business">Claim an existing food truck <ArrowIcon /></Link>
+          </div>
         </div>
-        <div className="ms-about-scout-demo" aria-label="Example of a MealScout discovery path">
-          <div className="ms-about-search-pill"><span>⌕</span> What are you craving?</div>
-          <div className="ms-about-demo-chips"><span>Tacos</span><span>Food trucks</span><span>Open now</span></div>
+
+        <div className="ms-about-profile-offer" role="group" aria-label="MealScout Profile options">
+          <div className="ms-about-offer-intro">
+            <img src="/brand/mealscout-logo-pin.png" alt="" />
+            <div><small>MealScout Profile</small><strong>One public home for the whole food business</strong></div>
+          </div>
           <article>
-            <img src="/atmospheric/craving-bbq.jpg" alt="Barbecue platter" />
-            <div><small>Menu match</small><strong>Start with the dish</strong><p>Then check the profile for today’s details.</p></div>
+            <span>Self-managed</span>
+            <h3>Standard profile</h3>
+            <strong className="ms-about-price">Free</strong>
+            <p>Build and maintain the profile with the available MealScout tools.</p>
           </article>
-          <p className="ms-about-demo-footnote">A discovery result is a doorway, not a replacement for the source profile.</p>
+          <article className="ms-about-offer-featured">
+            <span>Done for you</span>
+            <h3>Profile setup</h3>
+            <strong className="ms-about-price">Most are $100</strong>
+            <p>Menu organization, copy cleanup, photo placement, mobile polish, and link or domain help.</p>
+          </article>
+          <article>
+            <span>Complex operation</span>
+            <h3>Custom build</h3>
+            <strong className="ms-about-price">Custom quote</strong>
+            <p>Large menus, multiple locations, heavy content, advanced branding, or ongoing management.</p>
+          </article>
         </div>
       </section>
 
-      <section className="ms-about-chapter ms-about-profile" id="profiles" aria-labelledby="profile-title">
-        <div className="ms-about-profile-board">
-          <div className="ms-about-profile-photo">
-            <img src="/atmospheric/craving-seafood.jpg" alt="A colorful seafood dish" />
-            <span>Food-led, not form-led</span>
-          </div>
-          <div className="ms-about-profile-card">
-            <div className="ms-about-profile-brand-row">
-              <img src="/brand/mealscout-logo-pin.png" alt="" />
-              <div><small>Business profile</small><strong>One maintained identity</strong></div>
-            </div>
-            <div className="ms-about-profile-lines"><span></span><span></span><span></span></div>
-            <div className="ms-about-profile-tags"><span>Menu</span><span>Schedule</span><span>Deals</span><span>Photos</span></div>
-          </div>
+      <section className="ms-about-menu-orders" aria-labelledby="menu-orders-title">
+        <div className="ms-about-menu-image">
+          <img loading="lazy" src="/atmospheric/craving-wings.jpg" alt="Prepared wings and sides" />
+          <div><span>Customer decision</span><strong>See the food. Know the price. Order when available.</strong></div>
         </div>
-        <div className="ms-about-chapter-copy">
-          <p className="ms-about-chapter-number">Chapter 02</p>
-          <p className="ms-about-kicker">The business profile</p>
-          <h2 id="profile-title">The page people see is also the system businesses maintain.</h2>
+        <div className="ms-about-menu-copy">
+          <p className="ms-about-chapter-number">Chapter 03 · Menu to kitchen</p>
+          <p className="ms-about-eyebrow">A complete operating path</p>
+          <h2 id="menu-orders-title">The menu is not a PDF buried in a link.</h2>
           <p>
-            A MealScout profile is more than a listing. It is the published home
-            for a restaurant, food truck, bar, or other supported food business.
-            The profile can hold the practical details a customer needs and supply
-            those details to discovery elsewhere in MealScout.
+            Businesses can structure categories, items, descriptions, prices, photos, options, and
+            availability. Customers can move from the profile to a public menu and, when the business
+            enables MealScout ordering, through pickup checkout and confirmation.
           </p>
-          <div className="ms-about-mini-grid">
-            <div><strong>Identity</strong><span>Name, type, story, contact, and service context</span></div>
-            <div><strong>Food</strong><span>Menus, items, prices, descriptions, and photos</span></div>
-            <div><strong>Place & time</strong><span>Address, hours, schedule, stops, and service area</span></div>
-            <div><strong>Ways to act</strong><span>Directions, deals, ordering, saving, sharing, and recommending</span></div>
+          <div className="ms-about-order-flow" role="group" aria-label="Menu and pickup order flow">
+            <div><MenuSquare aria-hidden="true" /><span>Business builds the menu</span></div>
+            <ArrowRight aria-hidden="true" />
+            <div><ShoppingBag aria-hidden="true" /><span>Customer checks out</span></div>
+            <ArrowRight aria-hidden="true" />
+            <div><ChefHat aria-hidden="true" /><span>Kitchen manages the order</span></div>
           </div>
+          <ul className="ms-about-direct-list">
+            <li><BadgeCheck aria-hidden="true" /> Item availability keeps unavailable food from looking orderable</li>
+            <li><BadgeCheck aria-hidden="true" /> Order status connects customer confirmation to the owner and kitchen flow</li>
+            <li><BadgeCheck aria-hidden="true" /> Outside ordering paths can remain connected when MealScout checkout is not enabled</li>
+          </ul>
+          <StatusPill status="where-enabled" />
         </div>
       </section>
 
-      <section className="ms-about-chapter ms-about-business" id="businesses" aria-labelledby="business-title">
-        <div className="ms-about-chapter-copy">
-          <p className="ms-about-chapter-number">Chapter 03</p>
-          <p className="ms-about-kicker">The business workspace</p>
-          <h2 id="business-title">Manage the operation behind the profile.</h2>
+      <section className="ms-about-business" id="business" aria-labelledby="business-title">
+        <div className="ms-about-business-intro">
+          <SectionHeading
+            id="business-title"
+            eyebrow="The business workspace"
+            title="Everything behind the profile, organized by the job."
+            copy="Owners and approved teammates work inside the selected business. Access to one business or module does not silently grant access to every other business or financial surface."
+          />
+          <div className="ms-about-business-rule">
+            <ShieldCheck aria-hidden="true" />
+            <div><strong>Business-specific permission</strong><span>Each collaborator sees the work that business authorized.</span></div>
+          </div>
+        </div>
+        <div className="ms-about-module-grid">
+          {businessWorkspaceModules.map((module, index) => (
+            <article key={module.title}>
+              <span>{String(index + 1).padStart(2, "0")}</span>
+              <h3>{module.title}</h3>
+              <p>{module.text}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="ms-about-mobile-food" id="mobile-food" aria-labelledby="mobile-food-title">
+        <div className="ms-about-mobile-food-copy">
+          <p className="ms-about-chapter-number">Chapter 05 · Mobile food</p>
+          <p className="ms-about-eyebrow">Profiles that understand movement</p>
+          <h2 id="mobile-food-title">A food truck is not its mailing address.</h2>
           <p>
-            Owners and approved collaborators work from a business-specific
-            workspace. The exact modules depend on the business type, enabled
-            services, and each teammate’s permissions.
+            Truck discovery needs the menu, schedule, current stop, booked stops, and freshness of that
+            information. MealScout treats those as operating facts, then connects them to host and event
+            opportunities through Parking Pass.
           </p>
-          <div className="ms-about-workspace-list">
-            <span>Overview</span><span>Profile</span><span>Menu</span><span>Schedule</span>
-            <span>Media</span><span>Deals</span><span>Orders</span><span>Audience</span>
-            <span>Team</span><span>Payments</span><span>Reports</span><span>Settings</span>
+          <div className="ms-about-mobile-facts">
+            <div><Clock3 aria-hidden="true" /><strong>Operating schedule</strong><span>Recurring windows, dated stops, and confirmed plans</span></div>
+            <div><MapPin aria-hidden="true" /><strong>Current context</strong><span>Live or manual location only when the operator supplies it</span></div>
+            <div><Share2 aria-hidden="true" /><strong>Schedule sharing</strong><span>Public paths that keep customers connected to the profile</span></div>
+            <div><BadgeCheck aria-hidden="true" /><strong>Freshness matters</strong><span>Stale or missing context should not pretend to be live</span></div>
           </div>
-          <p className="ms-about-callout">
-            <strong>Permission rule:</strong> being allowed to help with one
-            business or one kind of work does not grant control over every business module.
-          </p>
         </div>
-        <div className="ms-about-workspace-visual" aria-label="Business workspace concept">
-          <div className="ms-about-workspace-top"><span></span><strong>Business workspace</strong><em>Published</em></div>
-          <div className="ms-about-workspace-body">
-            <aside><span className="active"></span><span></span><span></span><span></span><span></span></aside>
-            <div className="ms-about-workspace-content">
-              <small>Profile completeness</small>
-              <strong>Keep the source current</strong>
-              <div className="ms-about-progress"><i></i></div>
-              <div className="ms-about-workspace-cards"><span></span><span></span><span></span></div>
-            </div>
-          </div>
+        <div className="ms-about-mobile-photo">
+          <img loading="lazy" src="/backgrounds/food-truck-day.jpg" alt="A food truck open for service" />
+          <div><Truck aria-hidden="true" /><span>Profile + menu + schedule + current stop</span></div>
         </div>
       </section>
 
-      <section className="ms-about-parking" id="parking" aria-labelledby="parking-title">
-        <div className="ms-about-parking-image">
-          <img src="/backgrounds/food-truck-night.png" alt="Food trucks serving at an evening gathering" />
+      <section className="ms-about-parking" aria-labelledby="parking-title">
+        <div className="ms-about-parking-head">
+          <SectionHeading
+            id="parking-title"
+            inverse
+            eyebrow="Parking Pass"
+            title="Find a place to serve. Know the terms. Plan the route."
+            copy="Parking Pass is MealScout's mobile-food operating subsystem—not a generic pin marketplace. It connects a published host opportunity to truck planning, eligibility, payment, booking, and schedule records."
+          />
+          <Link className="ms-about-button ms-about-button-light" href="/parking-pass">Explore Parking Pass <ArrowIcon /></Link>
         </div>
-        <div className="ms-about-parking-copy">
-          <p className="ms-about-chapter-number">Chapter 04</p>
-          <p className="ms-about-kicker">Mobile food & Parking Pass</p>
-          <h2 id="parking-title">Food trucks need more than a pin on a map.</h2>
-          <p>
-            Parking Pass connects mobile food businesses with published host
-            opportunities. Hosts can offer spaces with dates, availability,
-            capacity, terms, and pricing. Trucks can explore, plan, and book the
-            opportunities that fit their operation.
-          </p>
-          <div className="ms-about-parking-steps">
-            <div><span>Host</span><p>Publishes an available place and its terms.</p></div>
-            <div><span>Truck</span><p>Compares the real opportunity and plans the route.</p></div>
-            <div><span>Booking</span><p>Records the confirmed stop in the operating workflow.</p></div>
-          </div>
-          <p className="ms-about-fine-print">
-            MealScout does not replace permits, property rules, health requirements,
-            or the operator’s responsibility to confirm that a stop is lawful and suitable.
-          </p>
-          <a className="ms-about-button ms-about-button-cream" href="/parking-pass">Explore Parking Pass <ArrowIcon /></a>
+        <div className="ms-about-parking-grid">
+          <article><Building2 aria-hidden="true" /><span>Host publishes</span><h3>The actual opportunity</h3><p>Location, dates, slots, capacity, amenities, photos, blackouts, terms, and pricing.</p></article>
+          <article><Search aria-hidden="true" /><span>Truck compares</span><h3>Fit before commitment</h3><p>Map and list discovery, availability, cost, route context, and business needs.</p></article>
+          <article><Route aria-hidden="true" /><span>Route planning</span><h3>The trip around the stop</h3><p>Start, destination, host opportunities, and useful travel-support stops along the corridor.</p></article>
+          <article><CreditCard aria-hidden="true" /><span>Booking</span><h3>A confirmed operating record</h3><p>Eligibility, insurance, payment, booking status, schedule connection, and host payout state.</p></article>
+        </div>
+        <p className="ms-about-parking-limit">
+          <ShieldCheck aria-hidden="true" /> Parking Pass does not replace permits, health rules,
+          property restrictions, suitability checks, or the operator's responsibility to serve lawfully.
+        </p>
+      </section>
+
+      <section className="ms-about-ecosystem" aria-labelledby="ecosystem-title">
+        <SectionHeading
+          id="ecosystem-title"
+          eyebrow="Beyond the first food decision"
+          title="The rest of the local food operation stays connected."
+          copy="MealScout includes more than discovery and profiles. These working lanes support the people, places, content, supply, and repeat activity around local food."
+        />
+        <div className="ms-about-ecosystem-grid">
+          <article className="ms-about-ecosystem-events">
+            <CalendarDays aria-hidden="true" />
+            <p>Hosts + events</p>
+            <h3>Publish the place or occasion.</h3>
+            <span>Availability, recurring windows, event pages, capacity, truck interest, and participation flows.</span>
+            <Link href="/for-events">See event tools <ArrowIcon /></Link>
+          </article>
+          <article className="ms-about-ecosystem-work">
+            <BriefcaseBusiness aria-hidden="true" />
+            <p>Food work</p>
+            <h3>Jobs, open resumes, and private-chef requests.</h3>
+            <span>Businesses post roles, workers publish availability, and customers can request eligible chefs.</span>
+            <Link href="/hiring">Explore food work <ArrowIcon /></Link>
+          </article>
+          <article className="ms-about-ecosystem-supply">
+            <Package aria-hidden="true" />
+            <p>Suppliers</p>
+            <h3>Catalogs, requests, orders, and supply intelligence.</h3>
+            <span>Available where the supplier marketplace and related business tools are enabled.</span>
+            <Link href="/suppliers">Browse suppliers <ArrowIcon /></Link>
+          </article>
+          <article className="ms-about-ecosystem-media">
+            <PlaySquare aria-hidden="true" />
+            <p>Food stories + sharing</p>
+            <h3>Show the food and connect it back to the source.</h3>
+            <span>Video recommendations, profile-native sharing, QR assets, saved places, and tracked referral paths.</span>
+            <Link href="/video">Watch food videos <ArrowIcon /></Link>
+          </article>
         </div>
       </section>
 
-      <section className="ms-about-trust" id="trust" aria-labelledby="trust-title">
-        <div className="ms-about-section-heading">
-          <p className="ms-about-kicker">Trust without theater</p>
+      <section className="ms-about-trust" aria-labelledby="trust-title">
+        <div>
+          <p className="ms-about-eyebrow">Trust without rating theater</p>
           <h2 id="trust-title">Useful evidence. Clear limits. No invented certainty.</h2>
           <p>
-            Food information changes. Businesses move, menus sell out, hours shift,
-            and old data can look current when it is not. MealScout is designed to
-            expose those limits instead of hiding them behind a score.
+            Food information changes fast. A useful product admits that instead of turning old or
+            incomplete data into a confident-looking score.
           </p>
         </div>
         <div className="ms-about-trust-grid">
-          <article><span>01</span><h3>Recommendations need context</h3><p>People can explain what they recommend and add photo evidence when useful.</p></article>
-          <article><span>02</span><h3>Missing means missing</h3><p>If a menu, price, schedule, or location has not been published, MealScout should not guess it.</p></article>
-          <article><span>03</span><h3>Conflicts require judgment</h3><p>High-impact identity and operating changes can be held for owner or administrative approval.</p></article>
-          <article><span>04</span><h3>The business remains accountable</h3><p>Owners control their published profile, while customers still decide what evidence is useful to them.</p></article>
+          <article><BadgeCheck aria-hidden="true" /><h3>Recommendations carry context</h3><p>People can explain what they recommend and add photo evidence when useful.</p></article>
+          <article><Clock3 aria-hidden="true" /><h3>Freshness stays visible</h3><p>Schedules, locations, menus, and availability need a real source and time context.</p></article>
+          <article><ShieldCheck aria-hidden="true" /><h3>Important conflicts can pause</h3><p>Identity, menu, location, and media changes can require owner or administrative approval.</p></article>
+          <article><UsersRound aria-hidden="true" /><h3>Authority stays scoped</h3><p>Customers contribute experience; businesses control their records; teammates receive limited access.</p></article>
         </div>
-        <div className="ms-about-not-grid">
-          <strong>MealScout is not…</strong>
+        <div className="ms-about-not-list">
+          <strong>MealScout is not</strong>
           <span>a chatbot</span>
           <span>a star-rating leaderboard</span>
-          <span>a substitute for official safety or permit checks</span>
+          <span>a pay-to-play organic rank</span>
           <span>a promise that every profile is complete</span>
+          <span>a substitute for official rules or permits</span>
         </div>
       </section>
 
-      <section className="ms-about-status" aria-labelledby="status-title">
-        <div className="ms-about-section-heading">
-          <p className="ms-about-kicker">What to expect today</p>
-          <h2 id="status-title">A live product, with honest boundaries.</h2>
-        </div>
-        <div className="ms-about-status-grid">
-          {statusColumns.map((column) => (
-            <article key={column.label} className={`ms-about-status-${column.tone}`}>
-              <span>{column.label}</span>
-              <p>{column.text}</p>
-            </article>
-          ))}
-        </div>
-      </section>
-
-      <section className="ms-about-reference" id="reference" aria-labelledby="reference-title">
-        <div className="ms-about-reference-intro">
-          <p className="ms-about-kicker">Complete feature reference</p>
-          <h2 id="reference-title">The whole system, grouped by the job it does.</h2>
+      <section className="ms-about-guide" id="complete-guide" aria-labelledby="guide-title">
+        <div className="ms-about-guide-intro">
+          <p className="ms-about-eyebrow">Complete product guide</p>
+          <h2 id="guide-title">Every major MealScout lane, grouped for future help.</h2>
           <p>
-            This reference is the foundation for MealScout’s future help section.
-            Open any group for the practical capabilities behind it.
+            Each chapter names the people it serves, what the capability does, and whether it is
+            broadly available, powered by business data, conditional, or still expanding.
           </p>
+          <div className="ms-about-status-legend" role="group" aria-label="Feature status legend">
+            <StatusPill status="available" />
+            <StatusPill status="business-supplied" />
+            <StatusPill status="where-enabled" />
+            <StatusPill status="expanding" />
+          </div>
         </div>
-        <div className="ms-about-reference-list">
-          {referenceGroups.map((group, index) => (
-            <details key={group.title} open={index === 0}>
+
+        <div className="ms-about-guide-list">
+          {aboutFeatureGroups.map((group, index) => (
+            <details id={group.id} key={group.id} open={index < 2}>
               <summary>
-                <span>{String(index + 1).padStart(2, "0")}</span>
-                <div><strong>{group.title}</strong><small>{group.summary}</small></div>
-                <i aria-hidden="true">+</i>
+                <span className="ms-about-guide-number">{group.number}</span>
+                <span className="ms-about-guide-icon"><MappedIcon name={group.icon} /></span>
+                <span className="ms-about-guide-title"><strong>{group.title}</strong><small>{group.summary}</small></span>
+                <StatusPill status={group.status} />
+                <ChevronDown className="ms-about-guide-chevron" aria-hidden="true" />
               </summary>
-              <ul>{group.items.map((item) => <li key={item}><CheckIcon /> {item}</li>)}</ul>
+              <div className="ms-about-guide-body">
+                <div className="ms-about-role-list" role="group" aria-label={`People served by ${group.title}`}>
+                  <strong>For</strong>{group.roles.map((role) => <span key={role}>{role}</span>)}
+                </div>
+                <ul>
+                  {group.items.map((item) => <li key={item}><BadgeCheck aria-hidden="true" /><span>{item}</span></li>)}
+                </ul>
+                {group.limitation ? <p className="ms-about-limitation"><ShieldCheck aria-hidden="true" /> {group.limitation}</p> : null}
+                {group.href && group.cta ? <Link className="ms-about-guide-link" href={group.href}>{group.cta} <ArrowIcon /></Link> : null}
+              </div>
             </details>
           ))}
         </div>
       </section>
 
-      <section className="ms-about-start" id="start" aria-labelledby="start-title">
+      <section className="ms-about-answers" id="answers" aria-labelledby="answers-title">
+        <div className="ms-about-glossary">
+          <p className="ms-about-eyebrow">Plain-language glossary</p>
+          <h2>Know the system words.</h2>
+          <dl>
+            {aboutGlossary.map((item) => (
+              <div key={item.term}><dt>{item.term}</dt><dd>{item.definition}</dd></div>
+            ))}
+          </dl>
+        </div>
+        <div className="ms-about-faq">
+          <p className="ms-about-eyebrow">Common questions</p>
+          <h2 id="answers-title">The answers a first-time visitor needs.</h2>
+          <div>
+            {aboutFaqs.map((item, index) => (
+              <details key={item.question} open={index === 0}>
+                <summary><strong>{item.question}</strong><ChevronDown aria-hidden="true" /></summary>
+                <p>{item.answer}</p>
+              </details>
+            ))}
+          </div>
+          <Link className="ms-about-text-link" href="/contact">Still need an answer? Contact MealScout <ArrowIcon /></Link>
+        </div>
+      </section>
+
+      <section className="ms-about-status" aria-labelledby="today-title">
+        <div>
+          <p className="ms-about-eyebrow">What to expect today</p>
+          <h2 id="today-title">A real product with visible boundaries.</h2>
+        </div>
+        <article data-status="available"><BadgeCheck aria-hidden="true" /><span>Available now</span><p>Core public discovery, profiles, business workspaces, events, food work, video, and Parking Pass have active product surfaces.</p></article>
+        <article data-status="business-supplied"><Store aria-hidden="true" /><span>Business supplied</span><p>Menus, prices, hours, schedules, live stops, deals, media, and ordering depth depend on what the business has published.</p></article>
+        <article data-status="where-enabled"><LayoutDashboard aria-hidden="true" /><span>Where enabled</span><p>Pickup ordering, supplier tools, payments, subscriptions, referrals, and some operating connections depend on the account, market, and active service.</p></article>
+        <article data-status="expanding"><Globe2 aria-hidden="true" /><span>Still expanding</span><p>Coverage, profile completeness, mobile-store readiness, supplier reach, connections, and this help foundation continue to grow.</p></article>
+      </section>
+
+      <section className="ms-about-start" aria-labelledby="start-title">
         <img src="/brand/mealscout-logo-pin.png" alt="" />
-        <p className="ms-about-kicker">Choose your next step</p>
-        <h2 id="start-title">Find food, run your profile, or put a place to work.</h2>
+        <p className="ms-about-brand-line">Follow the Flavor</p>
+        <h2 id="start-title">Start with the part of MealScout you need.</h2>
         <div className="ms-about-start-grid">
-          <a href="/scout"><span>For diners</span><strong>Open Scout</strong><ArrowIcon /></a>
-          <a href="/restaurant-signup"><span>For food businesses</span><strong>Create or claim a profile</strong><ArrowIcon /></a>
-          <a href="/parking-pass"><span>For trucks and hosts</span><strong>Explore Parking Pass</strong><ArrowIcon /></a>
-          <a href="/events"><span>For local activity</span><strong>Browse events</strong><ArrowIcon /></a>
+          <Link href="/scout"><Search aria-hidden="true" /><span>For hungry people</span><strong>Open Scout</strong><ArrowIcon /></Link>
+          <Link href="/profile-setup"><Store aria-hidden="true" /><span>For food businesses</span><strong>Build your profile</strong><ArrowIcon /></Link>
+          <Link href="/parking-pass"><Truck aria-hidden="true" /><span>For trucks + hosts</span><strong>Open Parking Pass</strong><ArrowIcon /></Link>
+          <Link href="/for-events"><CalendarDays aria-hidden="true" /><span>For the local scene</span><strong>See event tools</strong><ArrowIcon /></Link>
         </div>
       </section>
 
       <footer className="ms-about-footer">
-        <a className="ms-about-brand" href="/">
+        <Link className="ms-about-footer-brand" href="/">
           <img src="/brand/mealscout-logo-pin.png" alt="" />
           <span>MealScout</span>
-        </a>
+        </Link>
         <p>Local food discovery built from the profile outward.</p>
-        <div><a href="/contact">Contact</a><a href="/faq">FAQ</a><a href="/privacy-policy">Privacy</a><a href="#top">Back to top ↑</a></div>
+        <nav aria-label="About footer">
+          <Link href="/contact">Contact</Link>
+          <a href="#answers">Answers</a>
+          <Link href="/privacy-policy">Privacy</Link>
+          <a href="#top">Back to top ↑</a>
+        </nav>
       </footer>
     </main>
   );
