@@ -3,7 +3,7 @@ import { and, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { isAuthenticated, isStaffOrAdmin } from "../../unifiedAuth";
 import { db } from "../../db";
 import { storage } from "../../storage";
-import { randomUUID } from "crypto";
+import { createHash, randomUUID } from "crypto";
 import {
   isCloudinaryConfigured,
   upload,
@@ -23,6 +23,10 @@ import {
   truckImportListings,
   truckManualSchedules,
 } from "@shared/schema";
+import {
+  buildProfileAssetEvidence,
+  type ProfileAssetType,
+} from "@shared/profileAssetEvidence";
 
 type RequireAdminUser = (req: any, res: any) => boolean;
 type EnsureTruckImportTables = () => Promise<void>;
@@ -518,8 +522,10 @@ export function registerTruckImportAdminRoutes(
               .filter(Boolean)
           : [];
         const rawSource = requestBody?.rawSource;
-        const evidence = Array.isArray(requestBody?.evidence)
-          ? requestBody.evidence
+        const declaredEvidence = Array.isArray(requestBody?.evidence)
+          ? requestBody.evidence.filter(
+              (item: unknown) => item && typeof item === "object",
+            )
           : [];
         const evidenceFieldProposals = Array.isArray(
           requestBody?.evidenceFieldProposals,
@@ -568,6 +574,9 @@ export function registerTruckImportAdminRoutes(
             : {};
         const allowMenuOverwrite = Boolean(approvals?.menuOverwrite);
         const allowLogoReplace = Boolean(approvals?.logoOverwrite);
+        const allowEvidencePublication = Boolean(
+          approvals?.evidencePublication,
+        );
 
         const fileMap =
           req.files && typeof req.files === "object"
@@ -639,6 +648,57 @@ export function registerTruckImportAdminRoutes(
         const matchInstagram = normalizeUrlIdentity(
           match.instagram || fillIfBlank.instagram || fillIfBlank.instagramUrl,
         );
+        const explicitProfileId = String(
+          requestBody?.existingProfileId || match.profileId || match.id || "",
+        ).trim();
+        const expectedOwnerUserId = String(
+          requestBody?.expectedOwnerUserId || requestBody?.ownerUserId || "",
+        ).trim();
+        const manualDeclaredEvidence = declaredEvidence.filter(
+          (item: any) => item?.source === "manual_codex_intake",
+        ) as any[];
+        if (manualDeclaredEvidence.length > 0) {
+          const uploadedRequestFiles = Object.values(fileMap).flat();
+          const failManifest = (reason: string) =>
+            res.status(400).json({
+              message: "Manual evidence manifest does not match uploaded binaries",
+              code: "manual_evidence_manifest_mismatch",
+              reason,
+            });
+          if (uploadedRequestFiles.length !== manualDeclaredEvidence.length) {
+            return failManifest("file_count_mismatch");
+          }
+          for (const declared of manualDeclaredEvidence) {
+            const normalizedFilename = String(
+              declared?.normalizedFilename || "",
+            ).trim();
+            const matches = uploadedRequestFiles.filter(
+              (file) => file.originalname === normalizedFilename,
+            );
+            if (!normalizedFilename || matches.length !== 1) {
+              return failManifest("filename_mismatch");
+            }
+            const actualHash = createHash("sha256")
+              .update(matches[0].buffer)
+              .digest("hex");
+            if (actualHash !== String(declared?.sha256 || "").toLowerCase()) {
+              return failManifest("checksum_mismatch");
+            }
+            if (
+              Number(declared?.sizeBytes) !== matches[0].size ||
+              String(declared?.profileId || "") !== explicitProfileId ||
+              String(declared?.applyMode || "") !== "append_only_enrichment"
+            ) {
+              return failManifest("metadata_mismatch");
+            }
+            if (
+              expectedOwnerUserId &&
+              String(declared?.ownerUserId || "") !== expectedOwnerUserId
+            ) {
+              return failManifest("owner_mismatch");
+            }
+          }
+        }
         const normalizedMatchName = normalizeName(matchName);
         const identitySignals = {
           phone: Boolean(matchPhone),
@@ -696,6 +756,31 @@ export function registerTruckImportAdminRoutes(
               : whyUnknownReasons,
         });
 
+        let explicitRestaurant: any = null;
+        if (explicitProfileId) {
+          const [profile] = await db
+            .select()
+            .from(restaurants)
+            .where(eq(restaurants.id, explicitProfileId))
+            .limit(1);
+          if (!profile) {
+            return res.status(404).json({
+              message: "Existing profile not found",
+              code: "existing_profile_not_found",
+            });
+          }
+          if (
+            expectedOwnerUserId &&
+            String(profile.ownerId || "") !== expectedOwnerUserId
+          ) {
+            return res.status(409).json({
+              message: "Existing profile owner does not match intake manifest",
+              code: "existing_profile_owner_mismatch",
+            });
+          }
+          explicitRestaurant = profile;
+        }
+
         const restaurantWhere = or(
           matchPhone
             ? eq(
@@ -725,11 +810,13 @@ export function registerTruckImportAdminRoutes(
             : sql`false`,
         );
 
-        const restaurantCandidates = await db
-          .select()
-          .from(restaurants)
-          .where(restaurantWhere)
-          .limit(10);
+        const restaurantCandidates = explicitRestaurant
+          ? []
+          : await db
+              .select()
+              .from(restaurants)
+              .where(restaurantWhere)
+              .limit(10);
 
         const scoredRestaurants = restaurantCandidates
           .map((row: any) => {
@@ -793,16 +880,24 @@ export function registerTruckImportAdminRoutes(
           .filter((row: any) => row.score >= 3)
           .sort((a: any, b: any) => b.score - a.score);
 
-        let matchedRestaurant = scoredRestaurants[0]?.row || null;
-        let matchedBy = scoredRestaurants[0]?.matchedBy || [];
+        let matchedRestaurant =
+          explicitRestaurant || scoredRestaurants[0]?.row || null;
+        let matchedBy = explicitRestaurant
+          ? ["profile_id_exact"]
+          : scoredRestaurants[0]?.matchedBy || [];
         let matchStrength: "strongest" | "strong" | "medium" | "weak" | "none" =
-          "none";
-        const topRestaurantScore = Number(scoredRestaurants[0]?.score || 0);
-        if (topRestaurantScore >= 12) matchStrength = "strongest";
-        else if (topRestaurantScore >= 9) matchStrength = "strong";
-        else if (topRestaurantScore >= 5) matchStrength = "medium";
-        else if (topRestaurantScore >= 3) matchStrength = "weak";
+          explicitRestaurant ? "strongest" : "none";
+        const topRestaurantScore = explicitRestaurant
+          ? 100
+          : Number(scoredRestaurants[0]?.score || 0);
+        if (!explicitRestaurant) {
+          if (topRestaurantScore >= 12) matchStrength = "strongest";
+          else if (topRestaurantScore >= 9) matchStrength = "strong";
+          else if (topRestaurantScore >= 5) matchStrength = "medium";
+          else if (topRestaurantScore >= 3) matchStrength = "weak";
+        }
         const multipleRestaurantStrongMatches =
+          !explicitRestaurant &&
           scoredRestaurants.length > 1 &&
           scoredRestaurants[0].score === scoredRestaurants[1].score &&
           scoredRestaurants[0].score >= 9;
@@ -1141,6 +1236,50 @@ export function registerTruckImportAdminRoutes(
         const listingUpdates: Record<string, unknown> = {};
         const restaurantUpdates: Record<string, unknown> = {};
         const evidenceUploadsSummary: Array<Record<string, unknown>> = [];
+
+        const summarizeUploadedEvidence = (input: {
+          file: Express.Multer.File;
+          assetType: ProfileAssetType;
+          remoteUrl: string;
+          imageUploadId: string | null;
+          reviewStatus: "pending_review" | "approved";
+        }) => {
+          const declared = declaredEvidence.find((item: any) => {
+            const normalizedFilename = String(
+              item?.normalizedFilename || item?.targetName || "",
+            ).trim();
+            return normalizedFilename === input.file.originalname;
+          }) as any;
+          const sha256 = createHash("sha256")
+            .update(input.file.buffer)
+            .digest("hex");
+          const normalized = buildProfileAssetEvidence({
+            source:
+              declared?.source === "manual_codex_intake"
+                ? "manual_codex_intake"
+                : "admin_user_upload",
+            originalFilename: String(
+              declared?.originalFilename || input.file.originalname,
+            ),
+            normalizedFilename: input.file.originalname,
+            normalizedPath: String(declared?.normalizedPath || input.remoteUrl),
+            sha256,
+            assetType: input.assetType,
+            profileSlug: declared?.profileSlug
+              ? String(declared.profileSlug)
+              : requestBody?.profileSlug
+                ? String(requestBody.profileSlug)
+                : null,
+            profileId: String(matchedRestaurant?.id || explicitProfileId),
+            ownerUserId: expectedOwnerUserId || matchedRestaurant?.ownerId || null,
+            intakeAt: declared?.intakeAt || new Date().toISOString(),
+            applyMode: "append_only_enrichment",
+            mimeType: input.file.mimetype,
+            sizeBytes: input.file.size,
+            reviewStatus: input.reviewStatus,
+          });
+          return { ...normalized, imageUploadId: input.imageUploadId };
+        };
 
         const isProtectedField = (field: string) =>
           [
@@ -1560,6 +1699,15 @@ export function registerTruckImportAdminRoutes(
                 uploadedAt: new Date().toISOString(),
                 lastVerifiedAt: new Date().toISOString(),
               });
+              evidenceUploadsSummary.push(
+                summarizeUploadedEvidence({
+                  file: firstImageFile,
+                  assetType: "logo",
+                  remoteUrl: uploadResult.secureUrl,
+                  imageUploadId: insertedUploads?.[0]?.id || null,
+                  reviewStatus: "approved",
+                }),
+              );
 
               restaurantUpdates.logoUrl = uploadResult.secureUrl;
               restaurantUpdates.socialAutopostSettings = {
@@ -1589,6 +1737,7 @@ export function registerTruckImportAdminRoutes(
               imageType: string;
               galleryCategory: string;
               evidenceType: string;
+              assetType: ProfileAssetType;
             },
           ) => {
             if (!files.length) return;
@@ -1639,14 +1788,23 @@ export function registerTruckImportAdminRoutes(
                 url: uploadResult.secureUrl,
                 source: "admin_evidence",
                 category: options.galleryCategory,
-                publicApproved: true,
+                publicApproved: allowEvidencePublication,
                 uploadedAt: new Date().toISOString(),
-                lastVerifiedAt: new Date().toISOString(),
+                lastVerifiedAt: allowEvidencePublication
+                  ? new Date().toISOString()
+                  : null,
               });
               evidenceUploadsSummary.push({
+                ...summarizeUploadedEvidence({
+                  file,
+                  assetType: options.assetType,
+                  remoteUrl: uploadResult.secureUrl,
+                  imageUploadId: uploadRow?.id || null,
+                  reviewStatus: allowEvidencePublication
+                    ? "approved"
+                    : "pending_review",
+                }),
                 evidenceType: options.evidenceType,
-                fileName: file.originalname,
-                imageUploadId: uploadRow?.id || null,
                 entityType: "restaurant",
                 entityId: matchedRestaurant.id,
               });
@@ -1666,24 +1824,28 @@ export function registerTruckImportAdminRoutes(
               imageType: "restaurant_gallery_truck",
               galleryCategory: "truck",
               evidenceType: "profile_media",
+              assetType: "profile_media",
             });
             await uploadEvidenceFiles(menuEvidenceFiles, {
               cloudinaryFolder: "restaurant-gallery",
               imageType: "restaurant_gallery_menu",
               galleryCategory: "menu",
               evidenceType: "menu_evidence",
+              assetType: "menu",
             });
             await uploadEvidenceFiles(hoursEvidenceFiles, {
               cloudinaryFolder: "restaurant-gallery",
               imageType: "restaurant_gallery_hours",
               galleryCategory: "other",
               evidenceType: "hours_evidence",
+              assetType: "hours",
             });
             await uploadEvidenceFiles(contactEvidenceFiles, {
               cloudinaryFolder: "restaurant-gallery",
               imageType: "restaurant_gallery_contact",
               galleryCategory: "other",
               evidenceType: "contact_evidence",
+              assetType: "contact",
             });
             evidenceStatus =
               evidenceUploadsSummary.length > 0 ? "attached" : "none";
@@ -1695,6 +1857,20 @@ export function registerTruckImportAdminRoutes(
             if (menuEvidenceFiles.length > 0) {
               menuEvidenceStatus = "queued_review";
             }
+          }
+
+          if (hasEvidenceFiles && !allowEvidencePublication) {
+            reviewQueueItems.push({
+              type: "asset_evidence_review",
+              reason: "manual_or_admin_evidence_requires_publication_approval",
+              queuedAt: new Date().toISOString(),
+              assetCount:
+                profileEvidenceFiles.length +
+                menuEvidenceFiles.length +
+                hoursEvidenceFiles.length +
+                contactEvidenceFiles.length,
+              approvedPublication: false,
+            });
           }
 
           if (hoursEvidenceFiles.length > 0) {
@@ -1724,7 +1900,7 @@ export function registerTruckImportAdminRoutes(
           });
         }
 
-        if (reviewQueueItems.length > 0) {
+        if (reviewQueueItems.length > 0 || evidenceUploadsSummary.length > 0) {
           if (matchedImportListing) {
             listingUpdates.rawData = {
               ...((listingUpdates.rawData as Record<string, unknown>) || {}),

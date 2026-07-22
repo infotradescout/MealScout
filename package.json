@@ -25,6 +25,8 @@
     "start": "node dist/server/index.js",
     "start:local": "cross-env NODE_ENV=production PUBLIC_BASE_URL=http://127.0.0.1:5200 INCIDENT_SIGNATURE_SECRET=local-dev node dist/server/index.js",
     "check": "tsc",
+    "intake:manual-assets": "tsx scripts/manualProfileAssetIntake.ts",
+    "test:manual-asset-intake": "npx --yes tsx scripts/manual-profile-asset-intake.contract.test.ts",
     "test:public-data-boundary": "npx --yes tsx scripts/mealscout-public-data-boundary.contract.test.ts",
     "test:frozen-cleanup-safety": "npx --yes tsx scripts/frozen-cleanup-safety.contract.test.ts",
     "test:consumer-entity-foundation": "npx --yes tsx scripts/mealscout-consumer-entity-foundation.contract.test.ts",
