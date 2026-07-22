@@ -145,7 +145,6 @@ const PickupCheckoutPage = lazy(() => import("@/pages/pickup-checkout"));
 const OrderConfirmationPage = lazy(() => import("@/pages/order-confirmation"));
 const ScoutPage = lazy(() => import("@/pages/explore-preview"));
 const ScoutPageV2 = lazy(() => import("@/pages/explore-preview-v2"));
-const ScoutPrototype = lazy(() => import("@/pages/scout-prototype"));
 const FoodTruckRush = lazy(() => import("@/pages/food-truck-rush"));
 const HiringPage = lazy(() => import("@/pages/hiring"));
 const ForRestaurants = lazy(() => import("@/pages/for-restaurants"));
@@ -486,7 +485,7 @@ function Router() {
             <Route path="/scout/:refTag" component={ScoutPageV2} />
             <Route path="/directory" component={ScoutPageV2} />
             <Route path="/directory/:refTag" component={ScoutPageV2} />
-            <Route path="/scout-prototype" component={ScoutPrototype} />
+            <Route path="/scout-prototype" component={RedirectToScout} />
             <Route path="/scout-v2" component={ScoutPageV2} />
             <Route path="/food-truck-rush" component={FoodTruckRush} />
             <Route path="/login" component={Login} />
@@ -517,7 +516,7 @@ function Router() {
             <Route path="/scout/:refTag" component={ScoutPageV2} />
             <Route path="/directory" component={ScoutPageV2} />
             <Route path="/directory/:refTag" component={ScoutPageV2} />
-            <Route path="/scout-prototype" component={ScoutPrototype} />
+            <Route path="/scout-prototype" component={RedirectToScout} />
             <Route path="/scout-v2" component={ScoutPageV2} />
             <Route path="/food-truck-rush" component={FoodTruckRush} />
             <Route path="/login" component={Login} />

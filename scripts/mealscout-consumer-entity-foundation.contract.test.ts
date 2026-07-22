@@ -290,17 +290,6 @@ assert.doesNotMatch(
   "Deal cards must not show Live now from mobileOnline alone",
 );
 
-const scoutPrototypeSource = readFileSync(
-  resolve(process.cwd(), "client/src/pages/scout-prototype.tsx"),
-  "utf8",
-);
-assert.match(scoutPrototypeSource, /deriveTruckPresence\(/);
-assert.doesNotMatch(
-  scoutPrototypeSource,
-  /truck\.mobileOnline === true && Number\.isFinite\(liveUntilMs\)/,
-  "The routed Scout prototype must use canonical broadcast presence",
-);
-
 const scoutSource = readFileSync(
   resolve(process.cwd(), "client/src/pages/explore-preview-v2.tsx"),
   "utf8",

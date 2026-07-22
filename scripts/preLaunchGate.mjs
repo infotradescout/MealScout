@@ -100,7 +100,7 @@ if (!serverMapsKey) {
   pass("GOOGLE_MAPS_API_KEY is set.");
 }
 if (!webMapsKey) {
-  warn("VITE_GOOGLE_MAPS_WEB_API_KEY is not set — all in-app maps will fall back to Leaflet/OpenStreetMap.");
+  warn("VITE_GOOGLE_MAPS_WEB_API_KEY is not set — interactive Google map surfaces will be unavailable while list-based discovery remains usable.");
 } else {
   pass("VITE_GOOGLE_MAPS_WEB_API_KEY is set.");
 }
