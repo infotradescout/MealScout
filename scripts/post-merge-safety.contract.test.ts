@@ -6,6 +6,7 @@ import {
   getScopedBusinessPermissions,
   isScopedBusinessOwner,
 } from "../client/src/lib/business-access";
+import { createGoogleMapWithRasterFallback } from "../client/src/lib/google-map-runtime";
 
 for (const productionUrl of [
   "https://mealscout.us",
@@ -93,6 +94,24 @@ assert.equal(
   "owning one business must not grant owner control over a collaborator business",
 );
 assert.equal(isScopedBusinessOwner(accessContext, "missing"), false);
+
+const mapConstructionCalls: Array<Record<string, unknown>> = [];
+class VectorRejectingMap {
+  constructor(_container: unknown, options: Record<string, unknown>) {
+    mapConstructionCalls.push(options);
+    if (options.mapId) throw new Error("vector rendering unavailable");
+  }
+}
+const rasterRecovery = createGoogleMapWithRasterFallback({
+  MapConstructor: VectorRejectingMap,
+  container: {},
+  options: { center: { lat: 30.4, lng: -87.2 }, zoom: 10 },
+  mapId: "configured-vector-map",
+});
+assert.equal(rasterRecovery.mapIdApplied, false);
+assert.equal(mapConstructionCalls.length, 2);
+assert.equal(mapConstructionCalls[0].mapId, "configured-vector-map");
+assert.equal(mapConstructionCalls[1].mapId, undefined);
 
 for (const pagePath of [
   "client/src/pages/restaurant-owner-dashboard.tsx",
