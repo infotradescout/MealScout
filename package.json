@@ -35,6 +35,7 @@
     "test:scout-result-view-model": "npx --yes tsx scripts/mealscout-scout-result-view-model.contract.test.ts",
     "test:map-truth": "npx --yes tsx scripts/mealscout-map-truth.contract.test.ts",
     "test:leaflet-removal": "npx --yes tsx scripts/mealscout-leaflet-removal.contract.test.ts",
+    "test:event-date-normalization": "npx --yes tsx scripts/event-coordinator-date-normalization.contract.test.ts",
     "test:profile-action-policy": "npx --yes tsx scripts/mealscout-profile-action-policy.contract.test.ts",
     "test:business-type-taxonomy": "npx --yes tsx scripts/mealscout-business-type-taxonomy.contract.test.ts",
     "test:quick-review-score-validation": "npx --yes tsx scripts/quick-review-score-validation.contract.test.ts",
