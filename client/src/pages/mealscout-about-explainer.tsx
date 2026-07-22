@@ -130,21 +130,6 @@ function CheckIcon() {
 export function MealScoutAboutExplainer() {
   return (
     <main className="ms-about">
-      <header className="ms-about-header">
-        <a className="ms-about-brand" href="/" aria-label="MealScout home">
-          <img src="/brand/mealscout-logo-pin.png" alt="" />
-          <span>MealScout</span>
-        </a>
-        <nav aria-label="About page navigation">
-          <a href="#how-it-works">How it works</a>
-          <a href="#businesses">For businesses</a>
-          <a href="#reference">Feature guide</a>
-        </nav>
-        <a className="ms-about-header-cta" href="/scout">
-          Open Scout <ArrowIcon />
-        </a>
-      </header>
-
       <section className="ms-about-hero" id="top">
         <div className="ms-about-hero-copy">
           <p className="ms-about-eyebrow">MealScout, explained</p>
