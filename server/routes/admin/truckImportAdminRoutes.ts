@@ -7,6 +7,7 @@ import { createHash, randomUUID } from "crypto";
 import {
   isCloudinaryConfigured,
   upload,
+  uploadPrivateEvidenceToCloudinary,
   uploadToCloudinary,
 } from "../../imageUpload";
 import { sendAccountSetupInvite } from "../../utils/accountSetup";
@@ -29,6 +30,9 @@ import {
 } from "@shared/profileAssetEvidence";
 import {
   appendProfileEvidenceReviewProposals,
+  bindProfileEvidenceProposalImageReferences,
+  compactProfileEvidenceIntakeRequests,
+  countActiveProfileEvidenceIntakeRequests,
   createProfileEvidenceIntakeRequestFingerprint,
   mergeProfileEvidenceApplySettings,
   mergeProfileEvidenceQueueContainer,
@@ -705,6 +709,8 @@ export function registerTruckImportAdminRoutes(
                 (proposal: any) => proposal.field && proposal.proposedValue,
               )
           : [];
+        let ownerReviewEvidenceFieldProposals: unknown[] =
+          evidenceFieldProposals;
         const ocrTextCandidates = [
           String(
             requestBody?.ocrTextSnippet ||
@@ -818,6 +824,14 @@ export function registerTruckImportAdminRoutes(
             code: "owner_review_requires_explicit_profile_id",
             message:
               "Owner review requires an explicit existingProfileId; heuristic matching is not allowed.",
+          });
+        }
+        if (queuesOwnerReview && !expectedOwnerUserId) {
+          return res.status(400).json({
+            status: "needs_review",
+            code: "owner_review_requires_expected_owner_id",
+            message:
+              "Owner review requires the exact owner returned by a fresh dry run.",
           });
         }
         if (mode === "apply" && !explicitProfileId) {
@@ -1470,6 +1484,11 @@ export function registerTruckImportAdminRoutes(
               .limit(1)
               .for("update");
             if (!freshRestaurant) return { status: "missing" as const };
+            if (
+              String(freshRestaurant.ownerId || "") !== expectedOwnerUserId
+            ) {
+              return { status: "owner_changed" as const };
+            }
             const freshSettings =
               freshRestaurant.socialAutopostSettings &&
               typeof freshRestaurant.socialAutopostSettings === "object"
@@ -1483,12 +1502,9 @@ export function registerTruckImportAdminRoutes(
               typeof freshSettings.evidenceApply === "object"
                 ? (freshSettings.evidenceApply as Record<string, unknown>)
                 : {};
-            const intakeRequests =
-              evidenceApply.intakeRequests &&
-              typeof evidenceApply.intakeRequests === "object" &&
-              !Array.isArray(evidenceApply.intakeRequests)
-                ? (evidenceApply.intakeRequests as Record<string, any>)
-                : {};
+            const intakeRequests = compactProfileEvidenceIntakeRequests(
+              evidenceApply.intakeRequests,
+            ) as Record<string, any>;
             const existingRequest = intakeRequests[intakeRequestId];
             if (existingRequest) {
               if (
@@ -1515,7 +1531,10 @@ export function registerTruckImportAdminRoutes(
               ) {
                 return { status: "in_progress" as const };
               }
-            } else if (Object.keys(intakeRequests).length >= 100) {
+            } else if (
+              countActiveProfileEvidenceIntakeRequests(intakeRequests) >=
+              PROFILE_EVIDENCE_REVIEW_LIMITS.activeIntakeRequests
+            ) {
               return { status: "capacity" as const };
             }
             const nextSettings = {
@@ -1543,6 +1562,13 @@ export function registerTruckImportAdminRoutes(
             return res.status(409).json({
               code: "owner_review_profile_missing",
               message: "Profile disappeared before intake could be reserved.",
+            });
+          }
+          if (reservation.status === "owner_changed") {
+            return res.status(409).json({
+              code: "existing_profile_owner_mismatch",
+              message:
+                "The profile owner changed after the dry run. Run a new dry check before queueing evidence.",
             });
           }
           if (reservation.status === "conflict") {
@@ -1638,8 +1664,9 @@ export function registerTruckImportAdminRoutes(
         const summarizeUploadedEvidence = (input: {
           file: Express.Multer.File;
           assetType: ProfileAssetType;
-          remoteUrl: string;
+          remoteUrl: string | null;
           imageUploadId: string | null;
+          deliveryType: "authenticated" | "upload";
           reviewStatus: "pending_review" | "approved";
         }) => {
           const declared = declaredEvidence.find((item: any) => {
@@ -1660,7 +1687,10 @@ export function registerTruckImportAdminRoutes(
               declared?.originalFilename || input.file.originalname,
             ),
             normalizedFilename: input.file.originalname,
-            normalizedPath: String(declared?.normalizedPath || input.remoteUrl),
+            normalizedPath:
+              input.deliveryType === "authenticated"
+                ? `image-upload:${input.imageUploadId || "unavailable"}`
+                : String(declared?.normalizedPath || input.remoteUrl || ""),
             sha256,
             assetType: input.assetType,
             profileSlug: declared?.profileSlug
@@ -1676,7 +1706,11 @@ export function registerTruckImportAdminRoutes(
             sizeBytes: input.file.size,
             reviewStatus: input.reviewStatus,
           });
-          return { ...normalized, imageUploadId: input.imageUploadId };
+          return {
+            ...normalized,
+            imageUploadId: input.imageUploadId,
+            deliveryType: input.deliveryType,
+          };
         };
 
         const isProtectedField = (field: string) =>
@@ -1900,7 +1934,7 @@ export function registerTruckImportAdminRoutes(
             ledgerOptions,
           );
           const proposalBatch = normalizeProfileEvidenceProposalBatch(
-            rawEvidenceFieldProposals,
+            ownerReviewEvidenceFieldProposals,
             ledgerOptions,
           );
           const appendedOwnerReview = appendProfileEvidenceReviewProposals(
@@ -2189,6 +2223,7 @@ export function registerTruckImportAdminRoutes(
                   assetType: "logo",
                   remoteUrl: uploadResult.secureUrl,
                   imageUploadId: insertedUploads?.[0]?.id || null,
+                  deliveryType: "upload",
                   reviewStatus: "approved",
                 }),
               );
@@ -2263,6 +2298,7 @@ export function registerTruckImportAdminRoutes(
                             imageUploads.cloudinaryPublicId,
                             deterministicCloudinaryPublicId,
                           ),
+                          sql`${imageUploads.cloudinaryUrl} like ${"%/image/authenticated/%"}`,
                         ),
                       )
                       .limit(1)
@@ -2280,13 +2316,28 @@ export function registerTruckImportAdminRoutes(
                     },
                   };
                 }
-                const uploadResult = await uploadToCloudinary(
-                  file.buffer,
-                  options.cloudinaryFolder,
-                  queuesOwnerReview
-                    ? deterministicPublicId
-                    : `restaurant-${matchedRestaurant.id}-${options.evidenceType}-${Date.now()}`,
-                );
+                const uploadResult = queuesOwnerReview
+                  ? await uploadPrivateEvidenceToCloudinary(
+                      file.buffer,
+                      options.cloudinaryFolder,
+                      deterministicPublicId,
+                    )
+                  : await uploadToCloudinary(
+                      file.buffer,
+                      options.cloudinaryFolder,
+                      `restaurant-${matchedRestaurant.id}-${options.evidenceType}-${Date.now()}`,
+                    );
+                const storedMimeType =
+                  ({
+                    jpg: "image/jpeg",
+                    jpeg: "image/jpeg",
+                    png: "image/png",
+                    webp: "image/webp",
+                    gif: "image/gif",
+                    avif: "image/avif",
+                  } as Record<string, string>)[
+                    String(uploadResult.format || "").toLowerCase()
+                  ] || file.mimetype;
                 const insertedUploads = await executor
                   .insert(imageUploads)
                   .values({
@@ -2300,7 +2351,7 @@ export function registerTruckImportAdminRoutes(
                     width: uploadResult.width,
                     height: uploadResult.height,
                     fileSize: uploadResult.bytes,
-                    mimeType: file.mimetype,
+                    mimeType: storedMimeType,
                   })
                   .returning();
                 return {
@@ -2316,26 +2367,34 @@ export function registerTruckImportAdminRoutes(
                     return ensureEvidenceUpload(tx);
                   })
                 : await ensureEvidenceUpload(db);
+              if (!uploadRow?.id) {
+                throw new Error("Evidence upload row was not created");
+              }
 
-              const galleryEntry = {
-                id: uploadRow?.id || randomUUID(),
-                url: uploadResult.secureUrl,
-                source: "admin_evidence",
-                category: options.galleryCategory,
-                publicApproved: allowEvidencePublication,
-                uploadedAt: new Date().toISOString(),
-                lastVerifiedAt: allowEvidencePublication
-                  ? new Date().toISOString()
-                  : null,
-              };
-              existingGallery.push(galleryEntry);
-              queuedGalleryEntries.push(galleryEntry);
+              if (allowEvidencePublication) {
+                const galleryEntry = {
+                  id: uploadRow.id,
+                  url: uploadResult.secureUrl,
+                  source: "admin_evidence",
+                  category: options.galleryCategory,
+                  publicApproved: true,
+                  uploadedAt: new Date().toISOString(),
+                  lastVerifiedAt: new Date().toISOString(),
+                };
+                existingGallery.push(galleryEntry);
+                queuedGalleryEntries.push(galleryEntry);
+              }
               evidenceUploadsSummary.push({
                 ...summarizeUploadedEvidence({
                   file,
                   assetType: options.assetType,
-                  remoteUrl: uploadResult.secureUrl,
-                  imageUploadId: uploadRow?.id || null,
+                  remoteUrl: queuesOwnerReview
+                    ? null
+                    : uploadResult.secureUrl,
+                  imageUploadId: uploadRow.id,
+                  deliveryType: queuesOwnerReview
+                    ? "authenticated"
+                    : "upload",
                   reviewStatus: allowEvidencePublication
                     ? "approved"
                     : "pending_review",
@@ -2393,6 +2452,14 @@ export function registerTruckImportAdminRoutes(
             if (menuEvidenceFiles.length > 0) {
               menuEvidenceStatus = "queued_review";
             }
+          }
+
+          if (queuesOwnerReview) {
+            ownerReviewEvidenceFieldProposals =
+              bindProfileEvidenceProposalImageReferences(
+                evidenceFieldProposals,
+                evidenceUploadsSummary,
+              );
           }
 
           if (hasEvidenceFiles && !allowEvidencePublication) {
@@ -2519,6 +2586,14 @@ export function registerTruckImportAdminRoutes(
                 code: "owner_review_profile_missing",
               });
             }
+            if (
+              String(freshRestaurant.ownerId || "") !== expectedOwnerUserId
+            ) {
+              throw Object.assign(
+                new Error("Profile owner changed during evidence intake"),
+                { code: "existing_profile_owner_mismatch" },
+              );
+            }
             matchedRestaurant = freshRestaurant;
             const freshSettings =
               freshRestaurant.socialAutopostSettings &&
@@ -2635,53 +2710,48 @@ export function registerTruckImportAdminRoutes(
                 ? (queueMerge.container.evidenceApply as Record<string, any>)
                 : {};
             const completedIntakeRequests =
-              completedEvidenceApply.intakeRequests &&
-              typeof completedEvidenceApply.intakeRequests === "object" &&
-              !Array.isArray(completedEvidenceApply.intakeRequests)
-                ? (completedEvidenceApply.intakeRequests as Record<string, any>)
-                : {};
+              compactProfileEvidenceIntakeRequests(
+                completedEvidenceApply.intakeRequests,
+              ) as Record<string, any>;
+            const nextIntakeRequests = compactProfileEvidenceIntakeRequests({
+              ...completedIntakeRequests,
+              [intakeRequestId]: {
+                fingerprint: queueRequestFingerprint,
+                status: "completed",
+                startedAt:
+                  completedIntakeRequests[intakeRequestId]?.startedAt ||
+                  new Date().toISOString(),
+                completedAt: new Date().toISOString(),
+                requestedByUserId: String(req.user?.id || "").slice(0, 200),
+                result: {
+                  acceptedCount: queueAcceptedCount,
+                  ownerReviewAcceptedCount:
+                    ownerReviewProposalResult.acceptedIds.length,
+                  evidenceBacklogAcceptedCount: Math.max(
+                    0,
+                    queueAcceptedCount -
+                      ownerReviewProposalResult.acceptedIds.length,
+                  ),
+                  proposalAcceptedCount:
+                    ownerReviewProposalResult.acceptedIds.length,
+                  menuAcceptedCount: queuedMenuItemResult.acceptedIds.length,
+                  scheduleAcceptedCount:
+                    queuedScheduleItemResult.acceptedIds.length,
+                  sourceNoteAcceptedCount: sourceNoteResult.acceptedIds.length,
+                  missingInfoAcceptedCount: missingInfoResult.acceptedIds.length,
+                  reviewQueueAcceptedCount: reviewQueueResult.acceptedIds.length,
+                  uploadedEvidenceAcceptedCount:
+                    uploadedEvidenceResult.acceptedIds.length,
+                  galleryEntryAcceptedCount:
+                    galleryEntryResult.acceptedIds.length,
+                },
+              },
+            });
             const completedSettings = {
               ...queueMerge.container,
               evidenceApply: {
                 ...completedEvidenceApply,
-                intakeRequests: {
-                  ...completedIntakeRequests,
-                  [intakeRequestId]: {
-                    fingerprint: queueRequestFingerprint,
-                    status: "completed",
-                    startedAt:
-                      completedIntakeRequests[intakeRequestId]?.startedAt ||
-                      new Date().toISOString(),
-                    completedAt: new Date().toISOString(),
-                    requestedByUserId: String(req.user?.id || "").slice(0, 200),
-                    result: {
-                      acceptedCount: queueAcceptedCount,
-                      ownerReviewAcceptedCount:
-                        ownerReviewProposalResult.acceptedIds.length,
-                      evidenceBacklogAcceptedCount: Math.max(
-                        0,
-                        queueAcceptedCount -
-                          ownerReviewProposalResult.acceptedIds.length,
-                      ),
-                      proposalAcceptedCount:
-                        ownerReviewProposalResult.acceptedIds.length,
-                      menuAcceptedCount:
-                        queuedMenuItemResult.acceptedIds.length,
-                      scheduleAcceptedCount:
-                        queuedScheduleItemResult.acceptedIds.length,
-                      sourceNoteAcceptedCount:
-                        sourceNoteResult.acceptedIds.length,
-                      missingInfoAcceptedCount:
-                        missingInfoResult.acceptedIds.length,
-                      reviewQueueAcceptedCount:
-                        reviewQueueResult.acceptedIds.length,
-                      uploadedEvidenceAcceptedCount:
-                        uploadedEvidenceResult.acceptedIds.length,
-                      galleryEntryAcceptedCount:
-                        galleryEntryResult.acceptedIds.length,
-                    },
-                  },
-                },
+                intakeRequests: nextIntakeRequests,
               },
             };
             await tx
@@ -2911,6 +2981,19 @@ export function registerTruckImportAdminRoutes(
           existingTruckId: matchedRestaurant?.id || "",
           matchedRestaurantId: matchedRestaurant?.id || "",
           matchedImportListingId: matchedImportListing?.id || "",
+          targetProfile: matchedRestaurant
+            ? {
+                id: String(matchedRestaurant.id),
+                name: String(matchedRestaurant.name || ""),
+                ownerUserId: String(matchedRestaurant.ownerId || ""),
+                businessType: String(
+                  matchedRestaurant.businessType ||
+                    (matchedRestaurant.isFoodTruck
+                      ? "food_truck"
+                      : "restaurant"),
+                ),
+              }
+            : null,
           ...(queuesOwnerReview
             ? { intakeRequestId, idempotentReplay: false }
             : {}),
@@ -3117,12 +3200,9 @@ export function registerTruckImportAdminRoutes(
                 typeof settings.evidenceApply === "object"
                   ? (settings.evidenceApply as Record<string, any>)
                   : {};
-              const intakeRequests =
-                evidenceApply.intakeRequests &&
-                typeof evidenceApply.intakeRequests === "object" &&
-                !Array.isArray(evidenceApply.intakeRequests)
-                  ? (evidenceApply.intakeRequests as Record<string, any>)
-                  : {};
+              const intakeRequests = compactProfileEvidenceIntakeRequests(
+                evidenceApply.intakeRequests,
+              ) as Record<string, any>;
               const current = intakeRequests[reservedQueueRequest!.intakeRequestId];
               if (
                 current?.status !== "in_progress" ||
@@ -3137,14 +3217,14 @@ export function registerTruckImportAdminRoutes(
                     ...settings,
                     evidenceApply: {
                       ...evidenceApply,
-                      intakeRequests: {
+                      intakeRequests: compactProfileEvidenceIntakeRequests({
                         ...intakeRequests,
                         [reservedQueueRequest!.intakeRequestId]: {
                           ...current,
                           status: "failed",
                           failedAt: new Date().toISOString(),
                         },
-                      },
+                      }),
                     },
                   },
                 } as any)
@@ -3169,12 +3249,17 @@ export function registerTruckImportAdminRoutes(
           requestProfileId,
           requestUserId: String(req.user?.id || "").slice(0, 200),
         });
-        res.status(safeErrorCode === "owner_review_profile_missing" ? 409 : 500).json({
-          message: "Failed to apply profile evidence",
-          code:
-            safeErrorCode === "owner_review_profile_missing"
-              ? safeErrorCode
-              : "profile_evidence_write_failed",
+        const isProfileConflict =
+          safeErrorCode === "owner_review_profile_missing" ||
+          safeErrorCode === "existing_profile_owner_mismatch";
+        res.status(isProfileConflict ? 409 : 500).json({
+          message:
+            safeErrorCode === "existing_profile_owner_mismatch"
+              ? "The profile owner changed during intake. Run a new dry check before queueing evidence."
+              : "Failed to apply profile evidence",
+          code: isProfileConflict
+            ? safeErrorCode
+            : "profile_evidence_write_failed",
         });
       }
     },

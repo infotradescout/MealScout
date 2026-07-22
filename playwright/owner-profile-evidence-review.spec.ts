@@ -112,7 +112,9 @@ const json = (route: Route, body: unknown, status = 200) =>
 async function installOwnerApi(page: Page) {
   let proposals = [...initialProposals];
   let staleDeclineReturned = false;
+  let currentDescription = "Current owner-written description.";
   const decisions: Array<Record<string, unknown>> = [];
+  const profileWrites: Array<Record<string, unknown>> = [];
 
   await page.route(
     "https://owner-review.example/evidence-visible.png",
@@ -175,7 +177,7 @@ async function installOwnerApi(page: Page) {
           businessType: "food_truck",
           isFoodTruck: true,
           isActive: true,
-          description: "Current owner-written description.",
+          description: currentDescription,
           cuisineType: "Street food",
           city: "Pensacola",
           state: "FL",
@@ -243,8 +245,28 @@ async function installOwnerApi(page: Page) {
           409,
         );
       }
+      const decidedProposal = proposals.find(
+        (proposal) => proposal.id === proposalId,
+      );
+      if (decidedProposal?.field === "description") {
+        if (body.action === "correct") {
+          currentDescription = String(body.correctedValue || "");
+        } else if (body.action === "confirm") {
+          currentDescription = decidedProposal.proposedValue;
+        }
+      }
       proposals = proposals.filter((proposal) => proposal.id !== proposalId);
       return json(route, { ok: true, proposalId, action: body.action });
+    }
+
+    if (
+      path === `/api/restaurants/${RESTAURANT_ID}/profile-basics` &&
+      request.method() === "PATCH"
+    ) {
+      const body = request.postDataJSON() as Record<string, unknown>;
+      profileWrites.push(body);
+      currentDescription = String(body.description || "");
+      return json(route, { success: true });
     }
 
     if (path.startsWith("/api/public/profiles/")) {
@@ -266,7 +288,10 @@ async function installOwnerApi(page: Page) {
     return json(route, request.method() === "GET" ? {} : { ok: true });
   });
 
-  return { decisions: () => decisions };
+  return {
+    decisions: () => decisions,
+    profileWrites: () => profileWrites,
+  };
 }
 
 async function dismissBetaDialog(page: Page) {
@@ -319,6 +344,9 @@ test("owner reviews bounded profile evidence without stale or mobile drift", asy
   await expect(page.getByTestId("button-correct-evidence-phone")).toBeDisabled();
   await expect(page.getByTestId("button-decline-evidence-phone")).toBeEnabled();
 
+  await page
+    .getByLabel("Cuisine or food type")
+    .fill("Owner unsaved fusion cuisine");
   await page.getByTestId("button-correct-evidence-description").click();
   await page
     .getByLabel("Correct value for About your business")
@@ -326,8 +354,17 @@ test("owner reviews bounded profile evidence without stale or mobile drift", asy
   await page.getByTestId("button-save-evidence-correction-description").click();
   await expect(page.getByText("About your business updated.")).toBeVisible();
   await expect(page.getByLabel("About your business")).toHaveValue(
-    "Current owner-written description.",
+    "Owner-corrected public description.",
   );
+  await expect(page.getByLabel("Cuisine or food type")).toHaveValue(
+    "Owner unsaved fusion cuisine",
+  );
+  await page.getByTestId("button-save-profile").click();
+  await expect.poll(() => api.profileWrites().length).toBe(1);
+  expect(api.profileWrites()[0]).toMatchObject({
+    description: "Owner-corrected public description.",
+    cuisineType: "Owner unsaved fusion cuisine",
+  });
 
   await page.getByTestId("button-decline-evidence-websiteUrl").click();
   await expect(

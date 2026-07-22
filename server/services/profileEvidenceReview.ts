@@ -114,6 +114,13 @@ export type ProfileEvidenceQueueMergeItemResult = {
   droppedIds: string[];
 };
 
+export type ProfileEvidenceUploadReference = {
+  imageUploadId?: unknown;
+  sha256?: unknown;
+  normalizedFilename?: unknown;
+  originalFilename?: unknown;
+};
+
 export type MergeProfileEvidenceQueueContainerResult = {
   container: Record<string, unknown>;
   results: {
@@ -227,6 +234,124 @@ export function createProfileEvidenceIntakeRequestFingerprint(input: {
 
 const isSha256 = (value: unknown) => /^[a-f0-9]{64}$/.test(String(value || ""));
 
+const isImageUploadId = (value: unknown) =>
+  /^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(
+    String(value || "").trim(),
+  );
+
+export const isImmutableProfileEvidenceImageReference = (value: unknown) =>
+  isImageUploadId(value) || isSha256(String(value || "").trim().toLowerCase());
+
+/**
+ * Filename references are accepted only as an intake convenience and are
+ * immediately resolved against the binaries uploaded in that same request.
+ * The persisted proposal contains only immutable upload ids/hashes, so a later
+ * upload reusing the same filename cannot change what an owner reviews.
+ */
+export function bindProfileEvidenceProposalImageReferences(
+  rawValue: unknown,
+  uploads: readonly ProfileEvidenceUploadReference[],
+): unknown[] {
+  const proposals = Array.isArray(rawValue) ? rawValue : [];
+  const immutableIdsByReference = new Map<string, Set<string>>();
+  const addReference = (reference: unknown, imageUploadId: string) => {
+    const key = String(reference || "").trim();
+    if (!key) return;
+    const existing = immutableIdsByReference.get(key) || new Set<string>();
+    existing.add(imageUploadId);
+    immutableIdsByReference.set(key, existing);
+  };
+  for (const upload of uploads) {
+    const imageUploadId = String(upload.imageUploadId || "").trim();
+    if (!isImageUploadId(imageUploadId)) continue;
+    addReference(imageUploadId, imageUploadId);
+    addReference(String(upload.sha256 || "").trim().toLowerCase(), imageUploadId);
+    addReference(upload.normalizedFilename, imageUploadId);
+    addReference(upload.originalFilename, imageUploadId);
+  }
+
+  const resolveReference = (reference: unknown): string | null => {
+    const value = String(reference || "").trim();
+    if (!value) return null;
+    const matches = immutableIdsByReference.get(value);
+    if (matches?.size === 1) return Array.from(matches)[0];
+    if (isImageUploadId(value)) return value.toLowerCase();
+    const normalizedHash = value.toLowerCase();
+    return isSha256(normalizedHash) ? normalizedHash : null;
+  };
+
+  return proposals.map((candidate) => {
+    if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) {
+      return candidate;
+    }
+    const raw = candidate as AnyRecord;
+    const submittedReferences = [
+      ...(Array.isArray(raw.imageEvidenceIds) ? raw.imageEvidenceIds : []),
+      raw.imageRef,
+    ].filter((value) => value !== null && value !== undefined && value !== "");
+    if (submittedReferences.length === 0) return candidate;
+    const imageEvidenceIds = Array.from(
+      new Set(
+        submittedReferences
+          .map(resolveReference)
+          .filter((value): value is string => Boolean(value)),
+      ),
+    ).slice(0, PROFILE_EVIDENCE_REVIEW_LIMITS.imageEvidenceIds);
+    const { imageRef: _legacyImageRef, ...withoutLegacyReference } = raw;
+    return { ...withoutLegacyReference, imageEvidenceIds };
+  });
+}
+
+const intakeRequestStatus = (value: unknown) =>
+  String(asRecord(value).status || "").trim().toLowerCase();
+
+const isActiveIntakeRequest = (value: unknown) =>
+  intakeRequestStatus(value) === "in_progress";
+
+const isTerminalIntakeRequest = (value: unknown) => {
+  const status = intakeRequestStatus(value);
+  return status === "completed" || status === "failed";
+};
+
+const intakeRequestTimestamp = (value: unknown) => {
+  const request = asRecord(value);
+  for (const candidate of [
+    request.completedAt,
+    request.failedAt,
+    request.startedAt,
+  ]) {
+    const parsed = Date.parse(String(candidate || ""));
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return 0;
+};
+
+export function compactProfileEvidenceIntakeRequests(
+  rawValue: unknown,
+): Record<string, unknown> {
+  const entries = Object.entries(asRecord(rawValue));
+  const terminalIds = new Set(
+    entries
+      .filter(([, request]) => isTerminalIntakeRequest(request))
+      .sort((left, right) => {
+        const timestampDelta =
+          intakeRequestTimestamp(right[1]) - intakeRequestTimestamp(left[1]);
+        return timestampDelta || left[0].localeCompare(right[0]);
+      })
+      .slice(0, PROFILE_EVIDENCE_REVIEW_LIMITS.terminalIntakeHistory)
+      .map(([requestId]) => requestId),
+  );
+  return Object.fromEntries(
+    entries.filter(
+      ([requestId, request]) =>
+        isActiveIntakeRequest(request) || terminalIds.has(requestId),
+    ),
+  );
+}
+
+export const countActiveProfileEvidenceIntakeRequests = (rawValue: unknown) =>
+  Object.values(asRecord(rawValue)).filter(isActiveIntakeRequest).length;
+
 const normalizeIso = (value: unknown, fallback: string) => {
   const parsed = Date.parse(String(value || ""));
   return Number.isFinite(parsed) ? new Date(parsed).toISOString() : fallback;
@@ -289,8 +414,10 @@ const sanitizeImageEvidenceIds = (value: unknown): string[] => {
       candidate,
       PROFILE_EVIDENCE_REVIEW_LIMITS.imageEvidenceId,
     );
-    if (!normalized || !/^[a-zA-Z0-9._:-]+$/.test(normalized)) continue;
-    unique.add(normalized);
+    if (!normalized || !isImmutableProfileEvidenceImageReference(normalized)) {
+      continue;
+    }
+    unique.add(isImageUploadId(normalized) ? normalized.toLowerCase() : normalized);
     if (unique.size >= PROFILE_EVIDENCE_REVIEW_LIMITS.imageEvidenceIds) break;
   }
   return Array.from(unique);
@@ -883,6 +1010,54 @@ const normalizeDecision = (
   };
 };
 
+const compactNormalizedProfileEvidenceReviewLedger = (
+  ledger: ProfileEvidenceReviewLedger,
+): ProfileEvidenceReviewLedger => {
+  const pendingIds = new Set(
+    ledger.proposals
+      .filter((proposal) => !ledger.decisions[proposal.id])
+      .slice(0, PROFILE_EVIDENCE_REVIEW_LIMITS.ledgerProposals)
+      .map((proposal) => proposal.id),
+  );
+  const terminalIds = new Set(
+    ledger.proposals
+      .filter((proposal) => Boolean(ledger.decisions[proposal.id]))
+      .sort((left, right) => {
+        const leftTime = Date.parse(
+          String(ledger.decisions[left.id]?.decidedAt || ""),
+        );
+        const rightTime = Date.parse(
+          String(ledger.decisions[right.id]?.decidedAt || ""),
+        );
+        const safeLeft = Number.isFinite(leftTime) ? leftTime : 0;
+        const safeRight = Number.isFinite(rightTime) ? rightTime : 0;
+        return safeRight - safeLeft || left.id.localeCompare(right.id);
+      })
+      .slice(0, PROFILE_EVIDENCE_REVIEW_LIMITS.terminalDecisionHistory)
+      .map((proposal) => proposal.id),
+  );
+  const proposals = ledger.proposals.filter(
+    (proposal) => pendingIds.has(proposal.id) || terminalIds.has(proposal.id),
+  );
+  const retainedIds = new Set(proposals.map((proposal) => proposal.id));
+  const decisions = Object.fromEntries(
+    Object.entries(ledger.decisions).filter(([proposalId]) =>
+      retainedIds.has(proposalId),
+    ),
+  );
+  return {
+    schemaVersion: PROFILE_EVIDENCE_REVIEW_SCHEMA_VERSION,
+    proposals,
+    decisions,
+  };
+};
+
+export function compactProfileEvidenceReviewLedger(
+  ledger: ProfileEvidenceReviewLedger,
+): ProfileEvidenceReviewLedger {
+  return compactNormalizedProfileEvidenceReviewLedger(ledger);
+}
+
 export function normalizeProfileEvidenceReviewLedger(
   rawValue: unknown,
   options: NormalizeProfileEvidenceLedgerOptions,
@@ -898,8 +1073,11 @@ export function normalizeProfileEvidenceReviewLedger(
   const proposals = new Map<string, ProfileEvidenceReviewProposal>();
   const rawIdToCanonicalId = new Map<string, string>();
 
+  const storageProposalLimit =
+    PROFILE_EVIDENCE_REVIEW_LIMITS.ledgerProposals +
+    PROFILE_EVIDENCE_REVIEW_LIMITS.terminalDecisionHistory;
   const canonicalCandidates = Array.isArray(canonical.proposals)
-    ? canonical.proposals.slice(0, PROFILE_EVIDENCE_REVIEW_LIMITS.ledgerProposals)
+    ? canonical.proposals.slice(0, storageProposalLimit)
     : [];
   for (const candidate of canonicalCandidates) {
     const normalized = normalizeProposal(candidate, {
@@ -919,7 +1097,7 @@ export function normalizeProfileEvidenceReviewLedger(
     { ...options, fallbackReceivedAt },
   );
   for (const proposal of legacyProposals) {
-    if (proposals.size >= PROFILE_EVIDENCE_REVIEW_LIMITS.ledgerProposals) break;
+    if (proposals.size >= storageProposalLimit) break;
     if (!proposals.has(proposal.id)) proposals.set(proposal.id, proposal);
   }
 
@@ -940,11 +1118,11 @@ export function normalizeProfileEvidenceReviewLedger(
     if (decision) decisions[proposal.id] = decision;
   }
 
-  return {
+  return compactNormalizedProfileEvidenceReviewLedger({
     schemaVersion: PROFILE_EVIDENCE_REVIEW_SCHEMA_VERSION,
     proposals: Array.from(proposals.values()),
     decisions,
-  };
+  });
 }
 
 export function appendProfileEvidenceReviewProposals(
@@ -956,6 +1134,9 @@ export function appendProfileEvidenceReviewProposals(
   const proposals = new Map(
     normalizedLedger.proposals.map((proposal) => [proposal.id, proposal]),
   );
+  let pendingCount = normalizedLedger.proposals.filter(
+    (proposal) => !normalizedLedger.decisions[proposal.id],
+  ).length;
   const addedIds: string[] = [];
   const duplicateIds: string[] = [];
   const droppedIds: string[] = [];
@@ -971,20 +1152,21 @@ export function appendProfileEvidenceReviewProposals(
       duplicateIds.push(normalized.id);
       continue;
     }
-    if (proposals.size >= PROFILE_EVIDENCE_REVIEW_LIMITS.ledgerProposals) {
+    if (pendingCount >= PROFILE_EVIDENCE_REVIEW_LIMITS.ledgerProposals) {
       droppedIds.push(normalized.id);
       continue;
     }
     proposals.set(normalized.id, normalized);
+    pendingCount += 1;
     addedIds.push(normalized.id);
   }
 
   return {
-    ledger: {
+    ledger: compactNormalizedProfileEvidenceReviewLedger({
       schemaVersion: PROFILE_EVIDENCE_REVIEW_SCHEMA_VERSION,
       proposals: Array.from(proposals.values()),
       decisions: { ...normalizedLedger.decisions },
-    },
+    }),
     addedIds,
     duplicateIds,
     droppedIds,
@@ -1123,38 +1305,59 @@ const mergeGalleryPreservingPublicEntries = (
 const mergeOwnerReviewRecords = (freshValue: unknown, queuedValue: unknown) => {
   const fresh = asRecord(freshValue);
   const queued = asRecord(queuedValue);
-  const proposals = mergeJsonRecords(
-    fresh.proposals,
-    Array.isArray(queued.proposals)
-      ? queued.proposals.filter(
-          (item): item is Record<string, unknown> =>
-            Boolean(item) && typeof item === "object" && !Array.isArray(item),
-        )
-      : [],
-    PROFILE_EVIDENCE_REVIEW_LIMITS.ledgerProposals,
-    "owner-review-proposal",
-  ).items;
   const freshDecisions = asRecord(fresh.decisions);
   const queuedDecisions = asRecord(queued.decisions);
-  const proposalIds = new Set(proposals.map((proposal) => String(proposal.id || "")));
   const decisions: Record<string, unknown> = {};
-  for (const [proposalId, decision] of Object.entries(freshDecisions)) {
-    if (proposalIds.has(proposalId)) decisions[proposalId] = decision;
-  }
-  for (const [proposalId, decision] of Object.entries(queuedDecisions)) {
-    if (!proposalIds.has(proposalId) || decisions[proposalId]) continue;
-    if (
-      Object.keys(decisions).length >=
-      PROFILE_EVIDENCE_REVIEW_LIMITS.ledgerDecisions
-    ) {
-      break;
+  for (const source of [freshDecisions, queuedDecisions]) {
+    for (const [proposalId, decision] of Object.entries(source)) {
+      if (!decisions[proposalId]) decisions[proposalId] = decision;
     }
-    decisions[proposalId] = decision;
   }
+
+  const proposalsById = new Map<string, Record<string, unknown>>();
+  for (const source of [fresh.proposals, queued.proposals]) {
+    for (const proposal of Array.isArray(source) ? source : []) {
+      if (!proposal || typeof proposal !== "object" || Array.isArray(proposal)) {
+        continue;
+      }
+      const record = proposal as Record<string, unknown>;
+      const proposalId = String(record.id || "").trim();
+      if (proposalId && !proposalsById.has(proposalId)) {
+        proposalsById.set(proposalId, record);
+      }
+    }
+  }
+  const allProposals = Array.from(proposalsById.values());
+  const pending = allProposals
+    .filter((proposal) => !decisions[String(proposal.id || "")])
+    .slice(0, PROFILE_EVIDENCE_REVIEW_LIMITS.ledgerProposals);
+  const terminal = allProposals
+    .filter((proposal) => Boolean(decisions[String(proposal.id || "")]))
+    .sort((left, right) => {
+      const decidedAt = (proposal: Record<string, unknown>) => {
+        const decision = asRecord(decisions[String(proposal.id || "")]);
+        const timestamp = Date.parse(String(decision.decidedAt || ""));
+        return Number.isFinite(timestamp) ? timestamp : 0;
+      };
+      return (
+        decidedAt(right) - decidedAt(left) ||
+        String(left.id || "").localeCompare(String(right.id || ""))
+      );
+    })
+    .slice(0, PROFILE_EVIDENCE_REVIEW_LIMITS.terminalDecisionHistory);
+  const proposals = [...pending, ...terminal];
+  const retainedProposalIds = new Set(
+    proposals.map((proposal) => String(proposal.id || "")),
+  );
+  const retainedDecisions = Object.fromEntries(
+    Object.entries(decisions).filter(([proposalId]) =>
+      retainedProposalIds.has(proposalId),
+    ),
+  );
   return {
     schemaVersion: PROFILE_EVIDENCE_REVIEW_SCHEMA_VERSION,
     proposals,
-    decisions,
+    decisions: retainedDecisions,
   };
 };
 
@@ -1565,14 +1768,15 @@ export function planProfileEvidenceReviewDecision(
     clientRequestId,
     requestFingerprint,
   };
-  const nextLedger: ProfileEvidenceReviewLedger = {
-    schemaVersion: PROFILE_EVIDENCE_REVIEW_SCHEMA_VERSION,
-    proposals: [...input.ledger.proposals],
-    decisions: {
-      ...input.ledger.decisions,
-      [proposal.id]: decision,
-    },
-  };
+  const nextLedger: ProfileEvidenceReviewLedger =
+    compactNormalizedProfileEvidenceReviewLedger({
+      schemaVersion: PROFILE_EVIDENCE_REVIEW_SCHEMA_VERSION,
+      proposals: [...input.ledger.proposals],
+      decisions: {
+        ...input.ledger.decisions,
+        [proposal.id]: decision,
+      },
+    });
   const currentComparable = normalizeCurrentValueForDisplay(input.currentValue);
   const mutation =
     appliedValue === null || appliedValue === currentComparable

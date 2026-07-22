@@ -1,5 +1,5 @@
 import type { Express } from "express";
-import { and, eq, getTableColumns, sql } from "drizzle-orm";
+import { and, eq, getTableColumns, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import {
@@ -9,10 +9,19 @@ import {
 } from "@shared/profileEvidenceReview";
 import {
   businessStaffMemberships,
+  imageUploads,
   restaurants,
 } from "@shared/schema";
 import { db } from "../db";
-import { hasProfileEvidenceReviewAccess } from "../services/profileEvidenceReviewAccess";
+import {
+  createAuthenticatedEvidenceReviewUrl,
+  isAuthenticatedCloudinaryDeliveryUrl,
+} from "../imageUpload";
+import {
+  hasProfileEvidenceReviewAccess,
+  hasProfileEvidenceReviewDecisionAccess,
+} from "../services/profileEvidenceReviewAccess";
+import { reconcileOwnerConfirmedEvidenceQuarantine } from "../services/profileEvidenceQuarantine";
 import {
   buildProfileEvidenceOwnerReviewDto,
   isProfileEvidenceDecisionSourceInspectable,
@@ -27,12 +36,6 @@ const asRecord = (value: unknown): Record<string, any> =>
   value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, any>)
     : {};
-
-const isStaffOrAdmin = (userType?: string | null) =>
-  userType === "staff" ||
-  userType === "admin" ||
-  userType === "duper_admin" ||
-  userType === "super_admin";
 
 const currentProfileEvidenceValues = (
   restaurant: Record<string, any>,
@@ -63,70 +66,96 @@ const fallbackEvidenceTimestamp = (restaurant: Record<string, any>) => {
   );
 };
 
-const safeOwnerEvidenceImageUrl = (value: unknown) => {
-  const text = String(value || "").trim();
-  if (!text || text.length > 1000) return null;
-  try {
-    const parsed = new URL(text);
-    if (!["http:", "https:"].includes(parsed.protocol)) return null;
-    if (parsed.username || parsed.password) return null;
-    return parsed.toString();
-  } catch {
-    return null;
-  }
-};
+const PRIVATE_EVIDENCE_IMAGE_TYPES = new Set([
+  "restaurant_gallery_truck",
+  "restaurant_gallery_menu",
+  "restaurant_gallery_hours",
+  "restaurant_gallery_contact",
+]);
 
-const ownerEvidenceImagesById = (
+const ownerEvidenceImagesById = async (
   restaurant: Record<string, any>,
-): ProfileEvidenceOwnerImageLookup => {
+  ledger: ReturnType<typeof normalizeProfileEvidenceReviewLedger>,
+  executor: any = db,
+  lockRows = false,
+): Promise<ProfileEvidenceOwnerImageLookup> => {
   const settings = asRecord(restaurant.socialAutopostSettings);
-  const gallery = Array.isArray(settings.publicGalleryImages)
-    ? settings.publicGalleryImages
-    : [];
-  const images: Record<string, string> = {};
-  for (const rawEntry of gallery.slice(0, 500)) {
-    const entry = asRecord(rawEntry);
-    const id = String(entry.id || "").trim();
-    const url = safeOwnerEvidenceImageUrl(
-      entry.thumbnailUrl || entry.url || entry.imageUrl,
-    );
-    if (!id || id.length > 200 || !/^[a-zA-Z0-9._:-]+$/.test(id) || !url) {
-      continue;
-    }
-    images[id] = url;
-  }
   const evidenceApply = asRecord(settings.evidenceApply);
   const uploadedEvidence = Array.isArray(evidenceApply.uploadedEvidence)
     ? evidenceApply.uploadedEvidence
     : [];
+  const eligibleUploadIds = new Set<string>();
   for (const rawEvidence of uploadedEvidence.slice(0, 500)) {
     const evidence = asRecord(rawEvidence);
-    if (String(evidence.profileId || "").trim() !== String(restaurant.id)) {
+    const uploadId = String(evidence.imageUploadId || "").trim().toLowerCase();
+    if (
+      String(evidence.profileId || "").trim() !== String(restaurant.id) ||
+      String(evidence.reviewStatus || "").trim() !== "pending_review" ||
+      String(evidence.deliveryType || "").trim() !== "authenticated" ||
+      !/^[a-f0-9-]{36}$/.test(uploadId)
+    ) {
       continue;
     }
-    const uploadId = String(evidence.imageUploadId || "").trim();
-    const url = images[uploadId];
-    if (!url) continue;
-    for (const rawAlias of [
-      uploadId,
-      evidence.normalizedFilename,
-      evidence.originalFilename,
-      evidence.sha256,
-    ]) {
-      const alias = String(rawAlias || "").trim();
-      if (
-        alias &&
-        alias.length <= 200 &&
-        /^[a-zA-Z0-9._:-]+$/.test(alias)
-      ) {
-        images[alias] = url;
-      }
+    eligibleUploadIds.add(uploadId);
+  }
+
+  const referencedUploadIds = Array.from(
+    new Set(
+      ledger.proposals.flatMap((proposal) =>
+        proposal.imageEvidenceIds
+          .map((id) => String(id || "").trim().toLowerCase())
+          .filter((id) => eligibleUploadIds.has(id)),
+      ),
+    ),
+  ).slice(0, 500);
+  if (!referencedUploadIds.length) return {};
+
+  let query = executor
+    .select({
+      id: imageUploads.id,
+      entityId: imageUploads.entityId,
+      entityType: imageUploads.entityType,
+      imageType: imageUploads.imageType,
+      cloudinaryPublicId: imageUploads.cloudinaryPublicId,
+      cloudinaryUrl: imageUploads.cloudinaryUrl,
+      mimeType: imageUploads.mimeType,
+    })
+    .from(imageUploads)
+    .where(
+      and(
+        inArray(imageUploads.id, referencedUploadIds),
+        eq(imageUploads.entityId, String(restaurant.id)),
+        eq(imageUploads.entityType, "restaurant"),
+      ),
+    );
+  if (lockRows) query = query.for("share");
+  const rows = await query;
+  const images: Record<string, string> = {};
+  const nowMs = Date.now();
+  for (const row of rows) {
+    const id = String(row.id || "").trim().toLowerCase();
+    if (
+      !eligibleUploadIds.has(id) ||
+      !PRIVATE_EVIDENCE_IMAGE_TYPES.has(String(row.imageType || "")) ||
+      !isAuthenticatedCloudinaryDeliveryUrl(row.cloudinaryUrl)
+    ) {
+      continue;
     }
+    const url = createAuthenticatedEvidenceReviewUrl(
+      String(row.cloudinaryPublicId || ""),
+      String(row.mimeType || ""),
+      nowMs,
+    );
+    if (url) images[id] = url;
   }
   return images;
 };
 
-const buildReviewDto = (restaurant: Record<string, any>) => {
+const buildReviewDto = async (
+  restaurant: Record<string, any>,
+  executor: any = db,
+  lockEvidenceRows = false,
+) => {
   const evidenceApply = asRecord(
     asRecord(restaurant.socialAutopostSettings).evidenceApply,
   );
@@ -143,7 +172,12 @@ const buildReviewDto = (restaurant: Record<string, any>) => {
       restaurantId: String(restaurant.id),
       ledger,
       currentValues,
-      evidenceImagesById: ownerEvidenceImagesById(restaurant),
+      evidenceImagesById: await ownerEvidenceImagesById(
+        restaurant,
+        ledger,
+        executor,
+        lockEvidenceRows,
+      ),
     }),
   };
 };
@@ -180,40 +214,38 @@ const decisionSchema = z
     }
   });
 
-async function canManageProfile(
+async function canDecideProfileEvidence(
   userId: string,
   restaurantId: string,
   userType?: string | null,
 ) {
-  if (isStaffOrAdmin(userType)) return true;
-  const [restaurant] = await db
-    .select({ ownerId: restaurants.ownerId })
-    .from(restaurants)
-    .where(eq(restaurants.id, restaurantId))
-    .limit(1);
-  if (restaurant?.ownerId === userId) return true;
-  const [membership] = await db
+  const [authorizedRow] = await db
     .select({
-      restaurantId: businessStaffMemberships.restaurantId,
-      userId: businessStaffMemberships.userId,
-      permissions: businessStaffMemberships.permissions,
-      status: businessStaffMemberships.status,
+      ownerId: restaurants.ownerId,
+      membership: {
+        restaurantId: businessStaffMemberships.restaurantId,
+        userId: businessStaffMemberships.userId,
+        permissions: businessStaffMemberships.permissions,
+        status: businessStaffMemberships.status,
+      },
     })
-    .from(businessStaffMemberships)
-    .where(
+    .from(restaurants)
+    .leftJoin(
+      businessStaffMemberships,
       and(
-        eq(businessStaffMemberships.restaurantId, restaurantId),
+        eq(businessStaffMemberships.restaurantId, restaurants.id),
         eq(businessStaffMemberships.userId, userId),
         eq(businessStaffMemberships.status, "active"),
       ),
     )
+    .where(eq(restaurants.id, restaurantId))
     .limit(1);
-  return hasProfileEvidenceReviewAccess({
+  return hasProfileEvidenceReviewDecisionAccess({
     userId,
     userType,
     restaurantId,
-    ownerId: restaurant?.ownerId,
-    membership,
+    ownerId: authorizedRow?.ownerId,
+    membership: authorizedRow?.membership,
   });
 }
 
@@ -261,7 +293,9 @@ export function registerProfileEvidenceReviewRoutes(app: Express) {
         });
         if (!allowed) return res.status(403).json({ message: "Forbidden" });
         const restaurant = authorizedRow.restaurant;
-        return res.json(buildReviewDto(restaurant).dto);
+        const review = await buildReviewDto(restaurant);
+        res.set("Cache-Control", "private, no-store");
+        return res.json(review.dto);
       } catch (error) {
         console.error("Error loading profile evidence review:", error);
         return res
@@ -289,7 +323,7 @@ export function registerProfileEvidenceReviewRoutes(app: Express) {
       const restaurantId = String(req.params.restaurantId || "").trim();
       const proposalId = String(req.params.proposalId || "").trim();
       try {
-        const allowed = await canManageProfile(
+        const allowed = await canDecideProfileEvidence(
           String(req.user.id),
           restaurantId,
           req.user?.userType,
@@ -308,10 +342,14 @@ export function registerProfileEvidenceReviewRoutes(app: Express) {
             .for("update");
           if (!restaurant) return { status: "not_found" as const };
 
-          if (!isStaffOrAdmin(req.user?.userType)) {
-            const ownsRestaurant = String(restaurant.ownerId) === String(req.user.id);
-            let hasScopedPermission = ownsRestaurant;
-            if (!ownsRestaurant) {
+          const directDecisionAccess = hasProfileEvidenceReviewDecisionAccess({
+            userId: req.user.id,
+            userType: req.user?.userType,
+            restaurantId,
+            ownerId: restaurant.ownerId,
+          });
+          let hasScopedPermission = directDecisionAccess;
+          if (!directDecisionAccess && req.user?.userType !== "staff") {
               const [membership] = await tx
                 .select({
                   restaurantId: businessStaffMemberships.restaurantId,
@@ -329,24 +367,24 @@ export function registerProfileEvidenceReviewRoutes(app: Express) {
                 )
                 .limit(1)
                 .for("share");
-              hasScopedPermission = hasProfileEvidenceReviewAccess({
+              hasScopedPermission = hasProfileEvidenceReviewDecisionAccess({
                 userId: req.user.id,
                 userType: req.user?.userType,
                 restaurantId,
                 ownerId: restaurant.ownerId,
                 membership,
               });
-            }
-            if (!hasScopedPermission) return { status: "forbidden" as const };
           }
+          if (!hasScopedPermission) return { status: "forbidden" as const };
 
-          const review = buildReviewDto(restaurant);
+          const review = await buildReviewDto(restaurant, tx, true);
           const proposal = review.ledger.proposals.find(
             (item) => item.id === proposalId,
           );
           const currentValue = proposal
             ? review.currentValues[proposal.field]
             : undefined;
+          const decidedAt = new Date().toISOString();
           const plan = planProfileEvidenceReviewDecision({
             ledger: review.ledger,
             proposalId,
@@ -357,7 +395,7 @@ export function registerProfileEvidenceReviewRoutes(app: Express) {
               parsed.data.expectedCurrentValueFingerprint,
             actorUserId: String(req.user.id),
             clientRequestId: parsed.data.clientRequestId,
-            decidedAt: new Date().toISOString(),
+            decidedAt,
           });
           const proposalDto = review.dto.proposals.find(
             (item) => item.id === proposalId,
@@ -403,7 +441,18 @@ export function registerProfileEvidenceReviewRoutes(app: Express) {
             };
           }
           updates.socialAutopostSettings = nextSettings;
-          if (plan.mutation) updates.updatedAt = new Date();
+          if (proposal && plan.decision.action !== "declined") {
+            const reconciledRawData =
+              reconcileOwnerConfirmedEvidenceQuarantine({
+                rawData: restaurant.rawData,
+                field: proposal.field,
+                proposalId,
+                actorUserId: String(req.user.id),
+                decidedAt,
+              });
+            if (reconciledRawData) updates.rawData = reconciledRawData;
+          }
+          updates.updatedAt = new Date();
           await tx
             .update(restaurants)
             .set(updates as any)

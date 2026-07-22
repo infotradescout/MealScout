@@ -17,6 +17,7 @@ import {
   toSlug,
 } from "./publicProfileUtils";
 import { shouldExposeStaticTruckProfileLocation } from "../utils/truckLocationSemantics";
+import { deriveProfileEvidenceQuarantineVisibility } from "../services/profileEvidenceQuarantine";
 
 const OPERATING_HOUR_DAYS = [
   ["mon", "Mon"],
@@ -94,155 +95,18 @@ export function toPublicRestaurantProfile(input: {
   showContact?: boolean;
 }): PublicRestaurantProfile {
   const row = input.row || {};
-  const normalizeLoose = (value: unknown) =>
-    String(value || "")
-      .toLowerCase()
-      .replace(/[^a-z0-9\s]/g, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-  const tokens = (value: unknown) =>
-    normalizeLoose(value)
-      .split(" ")
-      .map((token) => token.trim())
-      .filter((token) => token.length >= 3);
-  const overlapRatio = (left: unknown, right: unknown) => {
-    const leftTokens = new Set(tokens(left));
-    const rightTokens = new Set(tokens(right));
-    if (leftTokens.size === 0 || rightTokens.size === 0) return 0;
-    let shared = 0;
-    leftTokens.forEach((token) => {
-      if (rightTokens.has(token)) shared += 1;
-    });
-    return shared / Math.max(leftTokens.size, rightTokens.size);
-  };
-  const normalizePhone = (value: unknown) =>
-    String(value || "").replace(/[^\d]/g, "");
-  const normalizeDomain = (value: unknown) => {
-    const raw = String(value || "")
-      .trim()
-      .toLowerCase();
-    if (!raw) return "";
-    return raw
-      .replace(/^https?:\/\//, "")
-      .replace(/^www\./, "")
-      .split("/")[0]
-      .trim();
-  };
-  const normalizedAddressLabel = (value: unknown) => normalizeLoose(value);
   const rawData =
     row && typeof row.rawData === "object" && row.rawData
       ? (row.rawData as Record<string, any>)
       : {};
-  const evidenceIngest =
-    rawData &&
-    typeof rawData.evidenceIngest === "object" &&
-    rawData.evidenceIngest
-      ? (rawData.evidenceIngest as Record<string, any>)
-      : {};
-  const quarantineConfig =
-    rawData &&
-    typeof rawData.evidenceQuarantine === "object" &&
-    rawData.evidenceQuarantine
-      ? (rawData.evidenceQuarantine as Record<string, any>)
-      : evidenceIngest &&
-          typeof evidenceIngest.quarantine === "object" &&
-          evidenceIngest.quarantine
-        ? (evidenceIngest.quarantine as Record<string, any>)
-        : {};
-  const extractedEvidence =
-    evidenceIngest &&
-    typeof evidenceIngest.extracted === "object" &&
-    evidenceIngest.extracted
-      ? (evidenceIngest.extracted as Record<string, any>)
-      : {};
-  const evidenceExternalBusinessName =
-    String(
-      extractedEvidence.business_name ||
-        extractedEvidence.name ||
-        evidenceIngest.businessName ||
-        evidenceIngest.sourceBusinessName ||
-        evidenceIngest.googleBusinessName ||
-        "",
-    ).trim() || null;
-  const hardIdentityPhoneMatch =
-    normalizePhone(row.phone) &&
-    normalizePhone(extractedEvidence.phone) &&
-    normalizePhone(row.phone) === normalizePhone(extractedEvidence.phone);
-  const hardIdentityEmailMatch =
-    String(row.email || "")
-      .trim()
-      .toLowerCase() &&
-    String(extractedEvidence.email || "")
-      .trim()
-      .toLowerCase() &&
-    String(row.email || "")
-      .trim()
-      .toLowerCase() ===
-      String(extractedEvidence.email || "")
-        .trim()
-        .toLowerCase();
-  const hardIdentityWebsiteMatch =
-    normalizeDomain(row.websiteUrl) &&
-    normalizeDomain(
-      extractedEvidence.website || extractedEvidence.websiteUrl,
-    ) &&
-    normalizeDomain(row.websiteUrl) ===
-      normalizeDomain(
-        extractedEvidence.website || extractedEvidence.websiteUrl,
-      );
-  const hardIdentityAddressMatch =
-    normalizedAddressLabel(
-      joinedAddressLabel(row.address, row.city, row.state),
-    ) &&
-    normalizedAddressLabel(
-      extractedEvidence.address || extractedEvidence.location_text,
-    ) &&
-    normalizedAddressLabel(
-      joinedAddressLabel(row.address, row.city, row.state),
-    ) ===
-      normalizedAddressLabel(
-        extractedEvidence.address || extractedEvidence.location_text,
-      );
-  const hasHardIdentityAnchor = Boolean(
-    hardIdentityPhoneMatch ||
-    hardIdentityEmailMatch ||
-    hardIdentityWebsiteMatch ||
-    hardIdentityAddressMatch,
-  );
-  const externalNameMismatch =
-    Boolean(evidenceExternalBusinessName) &&
-    Boolean(String(row.name || "").trim()) &&
-    overlapRatio(row.name, evidenceExternalBusinessName) < 0.6;
-  const quarantineByRule = externalNameMismatch && !hasHardIdentityAnchor;
-  const isQuarantined = Boolean(
-    quarantineConfig.active === true ||
-    String(quarantineConfig.status || "")
-      .trim()
-      .toLowerCase() === "quarantined" ||
-    quarantineByRule,
-  );
-  const quarantineDecisions =
-    quarantineConfig &&
-    typeof quarantineConfig.decisions === "object" &&
-    quarantineConfig.decisions
-      ? (quarantineConfig.decisions as Record<string, any>)
-      : {};
-  const decisionStatus = (evidenceId: string) =>
-    String(
-      (quarantineDecisions[evidenceId] as any)?.status ||
-        (quarantineDecisions[evidenceId.replace(/-/g, "_")] as any)?.status ||
-        "",
-    )
-      .trim()
-      .toLowerCase();
-  const isAccepted = (evidenceId: string) =>
-    decisionStatus(evidenceId) === "accepted";
-  const isRejected = (evidenceId: string) =>
-    decisionStatus(evidenceId) === "rejected";
-  const hidePublicTrustFields =
-    isQuarantined && quarantineConfig.allowPublicTrustFields !== true;
-  const hideMedia =
-    hidePublicTrustFields && quarantineConfig.hideMedia !== false;
+  const {
+    hidePublicTrustFields,
+    hideMedia,
+    isAccepted,
+    isRejected,
+    isAcceptedWithLegacyFallback,
+    isRejectedWithLegacyFallback,
+  } = deriveProfileEvidenceQuarantineVisibility(row);
   const publicActionLinks =
     row &&
     typeof row.socialAutopostSettings === "object" &&
@@ -369,18 +233,21 @@ export function toPublicRestaurantProfile(input: {
         "",
     ).trim() || null;
   const instagramUrl =
-    isRejected("social_links") ||
-    (hidePublicTrustFields && !isAccepted("social_links"))
+    isRejectedWithLegacyFallback("social_instagram", "social_links") ||
+    (hidePublicTrustFields &&
+      !isAcceptedWithLegacyFallback("social_instagram", "social_links"))
       ? null
       : String(row.instagramUrl || "").trim() || null;
   const facebookPageUrl =
-    isRejected("social_links") ||
-    (hidePublicTrustFields && !isAccepted("social_links"))
+    isRejectedWithLegacyFallback("social_facebook", "social_links") ||
+    (hidePublicTrustFields &&
+      !isAcceptedWithLegacyFallback("social_facebook", "social_links"))
       ? null
       : String(row.facebookPageUrl || "").trim() || null;
   const xUrl =
-    isRejected("social_links") ||
-    (hidePublicTrustFields && !isAccepted("social_links"))
+    isRejectedWithLegacyFallback("social_x", "social_links") ||
+    (hidePublicTrustFields &&
+      !isAcceptedWithLegacyFallback("social_x", "social_links"))
       ? null
       : String(row.xUrl || "").trim() || null;
   const hasCanonicalOperatingHours =

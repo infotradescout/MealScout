@@ -171,7 +171,9 @@ try {
     "buildProfileAssetEvidence",
     "manual_evidence_manifest_mismatch",
     "allowEvidencePublication",
-    "publicApproved: allowEvidencePublication",
+    "if (allowEvidencePublication)",
+    "publicApproved: true",
+    'deliveryType: queuesOwnerReview',
   ]) {
     assert.ok(routeSource.includes(required), `admin evidence route is missing ${required}`);
   }

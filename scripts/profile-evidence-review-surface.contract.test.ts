@@ -20,6 +20,13 @@ const required = [
   "Direct publication is disabled.",
   "Queue for Owner Review",
   "This intake never creates a new truck draft.",
+  "Dry-run target verified",
+  "profile-evidence-validated-target",
+  "confirm-profile-evidence-target",
+  "target.id === String(parsed.existingProfileId || \"\").trim()",
+  "expectedOwnerUserId: validatedTarget?.profile.ownerUserId",
+  "submissionRevision !== intakeRevisionRef.current",
+  "invalidateDryRun();",
 ];
 
 for (const snippet of required) {

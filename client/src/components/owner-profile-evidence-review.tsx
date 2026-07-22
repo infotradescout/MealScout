@@ -16,7 +16,6 @@ import type {
   ProfileEvidenceOwnerReviewDto,
 } from "@shared/profileEvidenceReview";
 import { apiUrl } from "@/lib/api";
-import { queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -29,6 +28,9 @@ type OwnerProfileEvidenceReviewProps = {
   isError: boolean;
   errorMessage?: string;
   onRefresh: () => Promise<unknown>;
+  onProfileRefresh: (
+    field: ProfileEvidenceOwnerProposalDto["field"],
+  ) => Promise<unknown>;
 };
 
 type DecisionAction = "confirm" | "correct" | "decline";
@@ -163,6 +165,7 @@ export default function OwnerProfileEvidenceReview({
   isError,
   errorMessage,
   onRefresh,
+  onProfileRefresh,
 }: OwnerProfileEvidenceReviewProps) {
   const [correctingProposalId, setCorrectingProposalId] = useState<
     string | null
@@ -223,12 +226,22 @@ export default function OwnerProfileEvidenceReview({
             ? `${proposal.label} suggestion declined.`
             : `${proposal.label} updated.`,
       });
-      await Promise.all([
-        onRefresh(),
-        queryClient.invalidateQueries({
-          queryKey: ["/api/restaurants/my-restaurants"],
-        }),
-      ]);
+      try {
+        await Promise.all([
+          onRefresh(),
+          ...(action === "decline"
+            ? []
+            : [onProfileRefresh(proposal.field)]),
+        ]);
+      } catch {
+        setFeedback({
+          kind: "error",
+          message:
+            action === "decline"
+              ? "Your decision was saved, but the suggestion list could not refresh. Reload this page before continuing."
+              : `${proposal.label} was updated, but the editable profile could not refresh. Reload this page before saving the profile form.`,
+        });
+      }
     },
     onError: async (error) => {
       if (error.status === 409) {

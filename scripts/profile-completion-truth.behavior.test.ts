@@ -138,6 +138,81 @@ assert.equal(isSafePublicMediaUrl("/placeholder.png"), false);
   assert.equal(invalidMedia.truth.coreContentComplete, false);
 }
 
+// Media hidden by the public quarantine policy cannot satisfy completion truth.
+{
+  const quarantinedRestaurant = truck({
+    logoUrl: "https://cdn.example/quarantined-logo.png",
+    coverImageUrl: "https://cdn.example/quarantined-cover.png",
+    rawData: {
+      ownerMenuApproval: {
+        status: "approved",
+        ownerApproved: true,
+        approvedMenuRevision: MENU_REVISION,
+      },
+      evidenceQuarantine: {
+        status: "quarantined",
+        decisions: {},
+      },
+    },
+    socialAutopostSettings: {
+      publicGalleryImages: [
+        {
+          url: "https://cdn.example/quarantined-gallery.png",
+          publicApproved: true,
+        },
+      ],
+    },
+  });
+  const quarantinedEvidence = assembleProfileCompletionEvidence({
+    restaurant: quarantinedRestaurant,
+    menuRevisionEvidence: {
+      revision: MENU_REVISION,
+      publicItemCount: 1,
+    },
+    truckOperatingPlan: validPlan,
+    now,
+  });
+  const quarantinedPublicProfile = toPublicRestaurantProfile({
+    row: quarantinedRestaurant,
+    baseUrl: "https://www.mealscout.us",
+  });
+  assert.equal(quarantinedPublicProfile.logoUrl, null);
+  assert.equal(quarantinedPublicProfile.coverImageUrl, null);
+  assert.equal(quarantinedPublicProfile.galleryImages.length, 0);
+  assert.equal(quarantinedEvidence.truth.mediaState, "missing");
+  assert.equal(quarantinedEvidence.truth.coreContentComplete, false);
+
+  const acceptedLogoRestaurant = {
+    ...quarantinedRestaurant,
+    rawData: {
+      ...(quarantinedRestaurant.rawData as Record<string, unknown>),
+      evidenceQuarantine: {
+        status: "quarantined",
+        decisions: { media_logo: { status: "accepted" } },
+      },
+    },
+  };
+  const acceptedLogoEvidence = assembleProfileCompletionEvidence({
+    restaurant: acceptedLogoRestaurant,
+    menuRevisionEvidence: {
+      revision: MENU_REVISION,
+      publicItemCount: 1,
+    },
+    truckOperatingPlan: validPlan,
+    now,
+  });
+  const acceptedLogoPublicProfile = toPublicRestaurantProfile({
+    row: acceptedLogoRestaurant,
+    baseUrl: "https://www.mealscout.us",
+  });
+  assert.equal(
+    acceptedLogoPublicProfile.logoUrl,
+    "https://cdn.example/quarantined-logo.png",
+  );
+  assert.equal(acceptedLogoEvidence.truth.mediaState, "ready");
+  assert.equal(acceptedLogoEvidence.truth.coreContentComplete, true);
+}
+
 // Fixed weekly hours are not a dated food-truck stop.
 {
   const evidence = assembleProfileCompletionEvidence({

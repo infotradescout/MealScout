@@ -11,7 +11,10 @@ import {
 } from "../shared/profileEvidenceReview";
 import {
   appendProfileEvidenceReviewProposals,
+  bindProfileEvidenceProposalImageReferences,
   buildProfileEvidenceOwnerReviewDto,
+  compactProfileEvidenceIntakeRequests,
+  countActiveProfileEvidenceIntakeRequests,
   createProfileEvidenceIntakeRequestFingerprint,
   createProfileEvidenceProposalId,
   createProfileEvidenceValueFingerprint,
@@ -29,13 +32,20 @@ import {
   parseDirectApplyMenuPriceCents,
   planProfileEvidenceReviewDecision,
 } from "../server/services/profileEvidenceReview";
-import { hasProfileEvidenceReviewAccess } from "../server/services/profileEvidenceReviewAccess";
+import {
+  hasProfileEvidenceReviewAccess,
+  hasProfileEvidenceReviewDecisionAccess,
+} from "../server/services/profileEvidenceReviewAccess";
 
 const RESTAURANT_ID = "restaurant-1";
 const ACTOR_ID = "owner-1";
 const RECEIVED_AT = "2026-07-22T12:00:00.000Z";
 const DECIDED_AT = "2026-07-22T13:00:00.000Z";
 const REQUEST_ID = "11111111-1111-4111-8111-111111111111";
+const IMAGE_UPLOAD_ID_A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+const IMAGE_UPLOAD_ID_B = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+const IMAGE_UPLOAD_ID_C = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+const MISSING_IMAGE_UPLOAD_ID = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
 
 assert.equal(isDirectProfileEvidenceApplyDisabledMode("apply"), true);
 assert.equal(isDirectProfileEvidenceApplyDisabledMode(" APPLY "), true);
@@ -53,6 +63,26 @@ assert.equal(
     ownerId: "owner-1",
   }),
   true,
+);
+assert.equal(
+  hasProfileEvidenceReviewDecisionAccess({
+    userId: "staff-1",
+    userType: "staff",
+    restaurantId: "restaurant-2",
+    ownerId: "owner-2",
+  }),
+  false,
+  "staff may inspect evidence but must not publish a decision",
+);
+assert.equal(
+  hasProfileEvidenceReviewDecisionAccess({
+    userId: "admin-1",
+    userType: "admin",
+    restaurantId: "restaurant-2",
+    ownerId: "owner-2",
+  }),
+  true,
+  "true admins may make a profile evidence decision",
 );
 assert.equal(
   hasProfileEvidenceReviewAccess({
@@ -284,8 +314,62 @@ const normalizedLegacy = normalizeLegacyProfileEvidenceProposals(
 assert.equal(normalizedLegacy.length, 1);
 assert.equal(normalizedLegacy[0].field, "phone");
 assert.equal(normalizedLegacy[0].sourceKind, "screenshot");
-assert.deepEqual(normalizedLegacy[0].imageEvidenceIds, ["contact-card-1"]);
+assert.deepEqual(
+  normalizedLegacy[0].imageEvidenceIds,
+  [],
+  "legacy filename aliases must not survive normalization",
+);
 assert.equal(normalizedLegacy[0].currentValueAtIntake, null);
+
+const boundFilenameProposal = bindProfileEvidenceProposalImageReferences(
+  [
+    {
+      field: "phone",
+      proposedValue: "850-555-0100",
+      imageRef: "contact-card.png",
+    },
+  ],
+  [
+    {
+      imageUploadId: IMAGE_UPLOAD_ID_A,
+      sha256: "a".repeat(64),
+      normalizedFilename: "contact-card.png",
+      originalFilename: "contact-card.png",
+    },
+  ],
+);
+assert.deepEqual((boundFilenameProposal[0] as any).imageEvidenceIds, [
+  IMAGE_UPLOAD_ID_A,
+]);
+assert.equal("imageRef" in (boundFilenameProposal[0] as any), false);
+const reboundAfterFilenameReuse = bindProfileEvidenceProposalImageReferences(
+  boundFilenameProposal,
+  [
+    {
+      imageUploadId: IMAGE_UPLOAD_ID_B,
+      sha256: "b".repeat(64),
+      normalizedFilename: "contact-card.png",
+      originalFilename: "contact-card.png",
+    },
+  ],
+);
+assert.deepEqual(
+  (reboundAfterFilenameReuse[0] as any).imageEvidenceIds,
+  [IMAGE_UPLOAD_ID_A],
+  "a later upload reusing the filename must not rebind persisted evidence",
+);
+const ambiguousFilenameProposal = bindProfileEvidenceProposalImageReferences(
+  [{ field: "phone", proposedValue: "850-555-0100", imageRef: "same.png" }],
+  [
+    { imageUploadId: IMAGE_UPLOAD_ID_A, normalizedFilename: "same.png" },
+    { imageUploadId: IMAGE_UPLOAD_ID_B, normalizedFilename: "same.png" },
+  ],
+);
+assert.deepEqual(
+  (ambiguousFilenameProposal[0] as any).imageEvidenceIds,
+  [],
+  "ambiguous filename aliases must fail closed",
+);
 
 const canonicalIntakeValue = normalizeLegacyProfileEvidenceProposals(
   [
@@ -448,7 +532,7 @@ const screenshotProposal = normalizeLegacyProfileEvidenceProposals(
       proposedValue: "850-555-0199",
       sourceKind: "screenshot",
       sourceLabel: "Owner-provided contact card",
-      imageEvidenceIds: ["image-upload-1"],
+      imageEvidenceIds: [IMAGE_UPLOAD_ID_A],
     },
   ],
   { ...normalizationOptions, defaultBatchId: "screenshot-batch" },
@@ -460,21 +544,21 @@ const screenshotIdentityVariants = [
       proposedValue: "850-555-0199",
       sourceKind: "screenshot",
       sourceUrl: "https://business.example/contact",
-      imageEvidenceIds: ["image-b", "image-a"],
+      imageEvidenceIds: [IMAGE_UPLOAD_ID_B, IMAGE_UPLOAD_ID_A],
     },
     {
       field: "phone",
       proposedValue: "850-555-0199",
       sourceKind: "screenshot",
       sourceUrl: "https://business.example/contact",
-      imageEvidenceIds: ["image-a", "image-b"],
+      imageEvidenceIds: [IMAGE_UPLOAD_ID_A, IMAGE_UPLOAD_ID_B],
     },
     {
       field: "phone",
       proposedValue: "850-555-0199",
       sourceKind: "screenshot",
       sourceUrl: "https://business.example/contact",
-      imageEvidenceIds: ["image-c"],
+      imageEvidenceIds: [IMAGE_UPLOAD_ID_C],
     },
   ].map(
     (proposal) =>
@@ -499,13 +583,13 @@ const visibleScreenshotDto = buildProfileEvidenceOwnerReviewDto({
   ledger: screenshotLedger,
   currentValues: { phone: null },
   evidenceImagesById: {
-    "image-upload-1": "https://cdn.example/evidence/contact-card.jpg",
+    [IMAGE_UPLOAD_ID_A]: "https://cdn.example/evidence/contact-card.jpg",
   },
 });
 assert.equal(visibleScreenshotDto.proposals[0].source.reviewable, true);
 assert.deepEqual(visibleScreenshotDto.proposals[0].source.images, [
   {
-    id: "image-upload-1",
+    id: IMAGE_UPLOAD_ID_A,
     url: "https://cdn.example/evidence/contact-card.jpg",
   },
 ]);
@@ -519,7 +603,7 @@ const opaqueScreenshotDto = buildProfileEvidenceOwnerReviewDto({
   ledger: screenshotLedger,
   currentValues: { phone: null },
   evidenceImagesById: {
-    "image-upload-1": "javascript:alert(1)",
+    [IMAGE_UPLOAD_ID_A]: "javascript:alert(1)",
   },
 });
 assert.equal(opaqueScreenshotDto.proposals[0].source.reviewable, false);
@@ -538,7 +622,7 @@ const unresolvedScreenshotWithText = normalizeLegacyProfileEvidenceProposals(
       sourceLabel: "Unresolved contact screenshot",
       sourceUrl: "https://business.example/contact",
       evidenceExcerpt: "Call 850-555-0198",
-      imageEvidenceIds: ["missing-image-upload"],
+      imageEvidenceIds: [MISSING_IMAGE_UPLOAD_ID],
     },
   ],
   { ...normalizationOptions, defaultBatchId: "unresolved-screenshot-batch" },
@@ -1162,5 +1246,75 @@ const capacityAttempt = appendProfileEvidenceReviewProposals(
 );
 assert.equal(capacityAttempt.addedIds.length, 0);
 assert.deepEqual(capacityAttempt.droppedIds, [descriptionProposal.id]);
+
+const decidedProposals = saturatedLedger.proposals;
+const terminalLedger: ProfileEvidenceReviewLedger = {
+  schemaVersion: 2,
+  proposals: decidedProposals,
+  decisions: Object.fromEntries(
+    decidedProposals.map((proposal, index) => [
+      proposal.id,
+      {
+        action: "declined" as const,
+        appliedValue: null,
+        previousValue: null,
+        previousValueFingerprint: createProfileEvidenceValueFingerprint(
+          proposal.field,
+          null,
+        ),
+        decidedAt: new Date(
+          Date.parse("2026-01-01T00:00:00.000Z") + index * 1_000,
+        ).toISOString(),
+        decidedByUserId: ACTOR_ID,
+        clientRequestId: REQUEST_ID,
+      },
+    ]),
+  ),
+};
+const terminalCapacityAttempt = appendProfileEvidenceReviewProposals(
+  terminalLedger,
+  [descriptionProposal],
+  normalizationOptions,
+);
+assert.deepEqual(terminalCapacityAttempt.addedIds, [descriptionProposal.id]);
+assert.equal(
+  terminalCapacityAttempt.ledger.proposals.filter(
+    (proposal) => !terminalCapacityAttempt.ledger.decisions[proposal.id],
+  ).length,
+  1,
+  "decided history must not consume active proposal capacity",
+);
+assert.equal(
+  Object.keys(terminalCapacityAttempt.ledger.decisions).length,
+  PROFILE_EVIDENCE_REVIEW_LIMITS.terminalDecisionHistory,
+);
+
+const historicalIntakeRequests = Object.fromEntries([
+  ...Array.from({ length: 120 }, (_, index) => [
+    `completed-${index}`,
+    {
+      status: "completed",
+      completedAt: new Date(
+        Date.parse("2026-01-01T00:00:00.000Z") + index * 1_000,
+      ).toISOString(),
+    },
+  ]),
+  ...Array.from({ length: 3 }, (_, index) => [
+    `active-${index}`,
+    { status: "in_progress", startedAt: RECEIVED_AT },
+  ]),
+  ["malformed-status", { status: "unknown" }],
+]);
+const compactedIntakeRequests = compactProfileEvidenceIntakeRequests(
+  historicalIntakeRequests,
+);
+assert.equal(
+  Object.keys(compactedIntakeRequests).length,
+  PROFILE_EVIDENCE_REVIEW_LIMITS.terminalIntakeHistory + 3,
+);
+assert.equal(countActiveProfileEvidenceIntakeRequests(compactedIntakeRequests), 3);
+assert.equal("malformed-status" in compactedIntakeRequests, false);
+assert.equal("completed-119" in compactedIntakeRequests, true);
+assert.equal("completed-0" in compactedIntakeRequests, false);
 
 console.log("profile-evidence-owner-review.behavior: PASS");

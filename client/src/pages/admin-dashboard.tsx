@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useMemo } from "react";
+﻿import { useState, useEffect, useMemo, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { apiUrl } from "@/lib/api";
@@ -1520,6 +1520,22 @@ function ProfileEvidenceApplyPanel({ enabled }: { enabled: boolean }) {
   const [intakeRequestId, setIntakeRequestId] = useState(() =>
     createProfileEvidenceIntakeRequestId(),
   );
+  const intakeRevisionRef = useRef(0);
+  const [validatedTarget, setValidatedTarget] = useState<{
+    revision: number;
+    profile: {
+      id: string;
+      name: string;
+      ownerUserId: string;
+      businessType: string;
+    };
+  } | null>(null);
+  const [targetConfirmed, setTargetConfirmed] = useState(false);
+  const invalidateDryRun = () => {
+    intakeRevisionRef.current += 1;
+    setValidatedTarget(null);
+    setTargetConfirmed(false);
+  };
   const parsedPayload = (() => {
     try {
       return JSON.parse(payloadText);
@@ -1542,12 +1558,34 @@ function ProfileEvidenceApplyPanel({ enabled }: { enabled: boolean }) {
       return;
     }
 
+    if (
+      targetMode === "queue_owner_review" &&
+      (!validatedTarget ||
+        validatedTarget.revision !== intakeRevisionRef.current ||
+        !targetConfirmed)
+    ) {
+      toast({
+        title: "Fresh target confirmation required",
+        description:
+          "Run Dry Run for the current JSON and files, then confirm the returned business before queueing.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const submissionRevision = intakeRevisionRef.current;
     setIsSubmitting(true);
     try {
       const bodyPayload = {
         ...parsed,
         mode: targetMode,
-        ...(targetMode === "queue_owner_review" ? { intakeRequestId } : {}),
+        ...(targetMode === "queue_owner_review"
+          ? {
+              intakeRequestId,
+              existingProfileId: validatedTarget?.profile.id,
+              expectedOwnerUserId: validatedTarget?.profile.ownerUserId,
+            }
+          : {}),
       };
 
       const formData = new FormData();
@@ -1575,11 +1613,48 @@ function ProfileEvidenceApplyPanel({ enabled }: { enabled: boolean }) {
       if (!res.ok) {
         throw new Error(data?.message || "Failed to apply profile evidence.");
       }
+      if (submissionRevision !== intakeRevisionRef.current) {
+        toast({
+          title: "Stale intake result discarded",
+          description:
+            "The JSON or selected files changed while this request was running. Run Dry Run again.",
+          variant: "destructive",
+        });
+        return;
+      }
       setResult(data);
-      if (targetMode === "queue_owner_review") {
+      if (targetMode === "dry_run") {
+        const targetProfile = data?.targetProfile;
+        const target = {
+          id: String(targetProfile?.id || "").trim(),
+          name: String(targetProfile?.name || "").trim(),
+          ownerUserId: String(targetProfile?.ownerUserId || "").trim(),
+          businessType: String(targetProfile?.businessType || "").trim(),
+        };
+        if (
+          target.id &&
+          target.name &&
+          target.ownerUserId &&
+          target.businessType &&
+          target.id === String(parsed.existingProfileId || "").trim()
+        ) {
+          setValidatedTarget({ revision: submissionRevision, profile: target });
+          setTargetConfirmed(false);
+        } else {
+          setValidatedTarget(null);
+          setTargetConfirmed(false);
+          toast({
+            title: "Dry run did not verify an exact target",
+            description:
+              "The server must return the same profile ID plus its name, owner, and business type before queueing is allowed.",
+            variant: "destructive",
+          });
+        }
+      } else {
         // Preserve this key through failures so a response-loss retry replays
         // safely. Rotate only after the server confirms completion/replay.
         setIntakeRequestId(createProfileEvidenceIntakeRequestId());
+        invalidateDryRun();
       }
       toast({
         title:
@@ -1631,50 +1706,66 @@ function ProfileEvidenceApplyPanel({ enabled }: { enabled: boolean }) {
         <textarea
           className="w-full min-h-[260px] rounded-md border p-3 font-mono text-xs"
           value={payloadText}
-          onChange={(event) => setPayloadText(event.target.value)}
+          disabled={isSubmitting}
+          onChange={(event) => {
+            setPayloadText(event.target.value);
+            invalidateDryRun();
+          }}
         />
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <input
             type="file"
             accept="image/*"
             aria-label="Logo evidence image"
-            onChange={(event) => setLogoFile(event.target.files?.[0] || null)}
+            disabled={isSubmitting}
+            onChange={(event) => {
+              setLogoFile(event.target.files?.[0] || null);
+              invalidateDryRun();
+            }}
           />
           <input
             type="file"
             accept="image/*"
             multiple
             aria-label="Profile evidence images"
-            onChange={(event) =>
-              setProfileEvidenceFiles(Array.from(event.target.files || []))
-            }
+            disabled={isSubmitting}
+            onChange={(event) => {
+              setProfileEvidenceFiles(Array.from(event.target.files || []));
+              invalidateDryRun();
+            }}
           />
           <input
             type="file"
             accept="image/*"
             multiple
             aria-label="Menu evidence images"
-            onChange={(event) =>
-              setMenuEvidenceFiles(Array.from(event.target.files || []))
-            }
+            disabled={isSubmitting}
+            onChange={(event) => {
+              setMenuEvidenceFiles(Array.from(event.target.files || []));
+              invalidateDryRun();
+            }}
           />
           <input
             type="file"
             accept="image/*"
             multiple
             aria-label="Hours evidence images"
-            onChange={(event) =>
-              setHoursEvidenceFiles(Array.from(event.target.files || []))
-            }
+            disabled={isSubmitting}
+            onChange={(event) => {
+              setHoursEvidenceFiles(Array.from(event.target.files || []));
+              invalidateDryRun();
+            }}
           />
           <input
             type="file"
             accept="image/*"
             multiple
             aria-label="Contact evidence images"
-            onChange={(event) =>
-              setContactEvidenceFiles(Array.from(event.target.files || []))
-            }
+            disabled={isSubmitting}
+            onChange={(event) => {
+              setContactEvidenceFiles(Array.from(event.target.files || []));
+              invalidateDryRun();
+            }}
           />
           <div className="flex gap-2">
             <Button
@@ -1685,7 +1776,12 @@ function ProfileEvidenceApplyPanel({ enabled }: { enabled: boolean }) {
               {isSubmitting ? "Working..." : "Dry Run"}
             </Button>
             <Button
-              disabled={isSubmitting}
+              disabled={
+                isSubmitting ||
+                !validatedTarget ||
+                validatedTarget.revision !== intakeRevisionRef.current ||
+                !targetConfirmed
+              }
               onClick={() => submit("queue_owner_review")}
               data-testid="queue-owner-review"
             >
@@ -1693,6 +1789,56 @@ function ProfileEvidenceApplyPanel({ enabled }: { enabled: boolean }) {
             </Button>
           </div>
         </div>
+
+        {validatedTarget ? (
+          <div
+            className="rounded-md border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-950"
+            data-testid="profile-evidence-validated-target"
+          >
+            <p className="font-semibold">Dry-run target verified</p>
+            <dl className="mt-2 grid gap-1 sm:grid-cols-2">
+              <div>
+                <dt className="text-xs text-emerald-800">Business</dt>
+                <dd>{validatedTarget.profile.name}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-emerald-800">Business type</dt>
+                <dd>{validatedTarget.profile.businessType}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-emerald-800">Profile ID</dt>
+                <dd className="break-all font-mono text-xs">
+                  {validatedTarget.profile.id}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs text-emerald-800">Owner user ID</dt>
+                <dd className="break-all font-mono text-xs">
+                  {validatedTarget.profile.ownerUserId}
+                </dd>
+              </div>
+            </dl>
+            <label className="mt-3 flex items-start gap-2 font-medium">
+              <input
+                type="checkbox"
+                className="mt-1"
+                checked={targetConfirmed}
+                disabled={isSubmitting}
+                onChange={(event) => setTargetConfirmed(event.target.checked)}
+                data-testid="confirm-profile-evidence-target"
+              />
+              <span>
+                I confirm this evidence belongs to the exact business shown
+                above.
+              </span>
+            </label>
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground">
+            Queueing stays locked until the current JSON and file selection
+            completes a dry run with an exact target profile summary.
+          </p>
+        )}
 
         {result && (
           <div className="rounded-md border bg-muted/40 p-3 text-sm space-y-1">

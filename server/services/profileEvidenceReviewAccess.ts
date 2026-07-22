@@ -11,6 +11,11 @@ const isStaffOrAdmin = (userType?: string | null) =>
   userType === "duper_admin" ||
   userType === "super_admin";
 
+const isWriteAdmin = (userType?: string | null) =>
+  userType === "admin" ||
+  userType === "duper_admin" ||
+  userType === "super_admin";
+
 /**
  * Exact resource authorization for owner evidence review. Account-wide business
  * roles never grant access to a different selected restaurant.
@@ -40,4 +45,22 @@ export function hasProfileEvidenceReviewAccess(input: {
       String(membership.status || "").trim() === "active" &&
       permissions.manageProfile === true,
   );
+}
+
+/**
+ * Write authorization for evidence decisions. Staff may inspect the review
+ * queue, but MealScout's staff role is intentionally read-only and cannot
+ * publish owner/profile changes. Owners and explicitly permitted business
+ * collaborators retain the same selected-business scope as review access.
+ */
+export function hasProfileEvidenceReviewDecisionAccess(input: {
+  userId: unknown;
+  userType?: string | null;
+  restaurantId: unknown;
+  ownerId?: unknown;
+  membership?: ProfileEvidenceMembershipEvidence;
+}): boolean {
+  if (input.userType === "staff") return false;
+  if (isWriteAdmin(input.userType)) return true;
+  return hasProfileEvidenceReviewAccess(input);
 }
