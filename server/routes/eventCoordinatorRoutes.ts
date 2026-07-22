@@ -18,6 +18,10 @@ import {
   shouldBlockAcceptance,
   buildCapacityFullError,
 } from "../services/interestDecision";
+import {
+  eventDateInputSchema,
+  formatEventDateOnly,
+} from "../utils/eventDateInput";
 
 type EventCoordinatorRouteDependencies = {
   hasBusinessDistributionAccess: (userId: string) => Promise<boolean>;
@@ -393,7 +397,7 @@ export function registerEventCoordinatorRoutes(
           contactPhone: z.string().min(1),
           name: z.string().min(1),
           description: z.string().optional(),
-          date: z.string().min(1),
+          date: eventDateInputSchema,
           startTime: z
             .string()
             .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Start time must be in HH:MM format"),
@@ -431,7 +435,7 @@ export function registerEventCoordinatorRoutes(
           requiresPayment: false,
         });
 
-        const eventDate = new Date(eventPayload.date);
+        const eventDate = eventPayload.date;
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         if (eventDate < today) {
@@ -462,7 +466,7 @@ export function registerEventCoordinatorRoutes(
           .values({
             platform: "facebook",
             target: null,
-            message: `🍔 New food truck event in ${parsed.city}, ${parsed.state}: "${parsed.name}" on ${parsed.date} from ${parsed.startTime} to ${parsed.endTime}. Up to ${parsed.maxTrucks} trucks welcome!`,
+            message: `🍔 New food truck event in ${parsed.city}, ${parsed.state}: "${parsed.name}" on ${formatEventDateOnly(parsed.date)} from ${parsed.startTime} to ${parsed.endTime}. Up to ${parsed.maxTrucks} trucks welcome!`,
             link: null,
             status: "pending",
             errorMessage: null,
@@ -517,7 +521,7 @@ export function registerEventCoordinatorRoutes(
         const schema = z.object({
           name: z.string().min(1).optional(),
           description: z.string().optional(),
-          date: z.string().optional(),
+          date: eventDateInputSchema.optional(),
           startTime: z.string().optional(),
           endTime: z.string().optional(),
           maxTrucks: z.number().int().min(1).max(50).optional(),
