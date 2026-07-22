@@ -29,6 +29,25 @@ for (const snippet of requiredRouteSnippets) {
   }
 }
 
+const handoffStart = adminRoutes.indexOf("const handoffReady = Boolean(");
+const handoffEnd = adminRoutes.indexOf("const adminFixableItems", handoffStart);
+const handoffRule = adminRoutes.slice(handoffStart, handoffEnd);
+for (const requiredVerdict of [
+  "publicReady",
+  "basicsReady",
+  "contactReady",
+  "menuReady",
+  "photoReady",
+  "scheduleReady",
+  "qrReady",
+]) {
+  if (!handoffRule.includes(requiredVerdict)) {
+    throw new Error(
+      `PCE2 handoff contract must include required verdict: ${requiredVerdict}`,
+    );
+  }
+}
+
 const requiredUiSnippets = [
   "Next 20 actionable",
   "Public-ready",

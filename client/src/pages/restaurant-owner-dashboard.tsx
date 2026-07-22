@@ -4,10 +4,6 @@ import {
   isTruckBusinessType,
   resolveStoredFoodBusinessType,
 } from "@shared/businessTypes";
-import {
-  DEFAULT_TRUCK_BROADCAST_FRESHNESS_MS,
-  deriveTruckPresence,
-} from "@shared/consumerEntity";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import {
   Card,
@@ -90,6 +86,7 @@ import OwnerProfileWorkspace, {
   type OwnerProfileDraft,
   type OwnerProfileMediaItem,
 } from "@/components/owner-profile-workspace";
+import OwnerProfileEvidenceReview from "@/components/owner-profile-evidence-review";
 import OwnerDealsWorkspace from "@/components/owner-deals-workspace";
 import OwnerAudienceWorkspace from "@/components/owner-audience-workspace";
 import { format, subDays, startOfMonth, endOfMonth } from "date-fns";
@@ -111,7 +108,8 @@ import {
 import { z } from "zod";
 import type { Restaurant } from "@shared/schema";
 import type { PublicRestaurantProfile } from "@shared/publicProfiles";
-import { computeProfileCompletionStatus } from "@shared/profileCompletionStatus";
+import type { ProfileEvidenceOwnerReviewDto } from "@shared/profileEvidenceReview";
+import type { ProfileCompletionTruth } from "@shared/profileCompletionStatus";
 import { SEOHead } from "@/components/seo-head";
 import { buildPublicProfilePath } from "@/lib/public-profile-path";
 import {
@@ -700,6 +698,33 @@ export default function RestaurantOwnerDashboard() {
   };
   const canOpenActiveWorkspaceModule =
     workspaceCapabilities[activeWorkspaceModule] !== false;
+  const {
+    data: profileEvidenceReview,
+    isLoading: loadingProfileEvidenceReview,
+    isFetching: refreshingProfileEvidenceReview,
+    isError: profileEvidenceReviewError,
+    error: profileEvidenceReviewErrorDetail,
+    refetch: refetchProfileEvidenceReview,
+  } = useQuery<ProfileEvidenceOwnerReviewDto>({
+    queryKey: [
+      "/api/restaurants",
+      selectedRestaurant,
+      "profile-evidence-review",
+    ],
+    enabled: Boolean(
+      selectedRestaurant &&
+        canManageProfile &&
+        (activeWorkspaceModule === "overview" || setupMode === "profile"),
+    ),
+    queryFn: async () => {
+      const response = await apiRequest(
+        "GET",
+        `/api/restaurants/${encodeURIComponent(String(selectedRestaurant))}/profile-evidence-review`,
+      );
+      return (await response.json()) as ProfileEvidenceOwnerReviewDto;
+    },
+    staleTime: 30_000,
+  });
   const currentMenuApproval = (currentRestaurant as any)?.menuApproval || null;
   const menuApprovalRequired = Boolean(
     currentMenuApproval?.ownerApprovalRequired && currentIsTruckBusiness,
@@ -2170,27 +2195,22 @@ export default function RestaurantOwnerDashboard() {
             // "Profile value" analytics. Owners were landing here with no
             // first-screen signal of what's missing before they go live, so
             // this gives a compact summary up top that links straight to it.
-            const topCompletionStatus = computeProfileCompletionStatus(
-              currentRestaurant as any,
-              {
-                hasActiveDeal: Number(stats?.activeDeals || 0) > 0,
-              },
-            );
-            const topCompletionKeys = [
-              "menu",
-              "photos",
-              "hours",
-              "service-area",
-              "contact",
-              "social",
-              "catering-events",
-              "deal",
-            ] as const;
-            const topCompletionDoneCount = topCompletionKeys.filter((key) =>
-              Boolean((topCompletionStatus as any)[key]),
-            ).length;
-            const topCompletionTotal = topCompletionKeys.length;
-            const isComplete = topCompletionDoneCount === topCompletionTotal;
+            const topCompletionTruth = (currentRestaurant as any)
+              .profileCompletionTruth as ProfileCompletionTruth | null;
+            const topCompletionChecks = [
+              topCompletionTruth?.menuState === "approved_current",
+              topCompletionTruth?.mediaState === "ready",
+              topCompletionTruth?.availabilityReady === true,
+              topCompletionTruth?.publicRouteState === "published",
+            ];
+            const topCompletionDoneCount = topCompletionChecks.filter(Boolean).length;
+            const topCompletionTotal = topCompletionChecks.length;
+            const isComplete = topCompletionTruth?.publicProfileReady === true;
+            const pendingEvidenceCount =
+              profileEvidenceReview?.restaurantId ===
+              String(selectedRestaurant)
+                ? profileEvidenceReview.pendingCount
+                : 0;
 
             return (
               <Card
@@ -2203,7 +2223,7 @@ export default function RestaurantOwnerDashboard() {
                       className={`text-sm font-semibold ${isComplete ? "text-[color:var(--status-success)]" : "text-amber-900"}`}
                     >
                       {isComplete
-                        ? "Your profile is ready to go live"
+                        ? "Your public profile is ready"
                         : `Profile setup: ${topCompletionDoneCount}/${topCompletionTotal} complete`}
                     </p>
                     <p
@@ -2211,18 +2231,35 @@ export default function RestaurantOwnerDashboard() {
                     >
                       {isComplete
                         ? "Keep details current as your business changes."
-                        : "Missing menu, photos, hours, or contact info means customers see an incomplete profile. See what's left below."}
+                        : "Complete the required menu, approved media, availability, and publication steps below."}
                     </p>
                   </div>
-                  {!isComplete && (
-                    <a
-                      href="#profile-completion-details"
-                      className="rounded-md border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100"
-                      data-testid="link-jump-to-completion-details"
-                    >
-                      See what's missing
-                    </a>
-                  )}
+                  <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap">
+                    {pendingEvidenceCount > 0 ? (
+                      <Link
+                        href={`${buildOwnerSetupHref("profile")}#owner-profile-evidence-review`}
+                      >
+                        <div
+                          className="flex min-h-10 items-center justify-center rounded-md border border-orange-400 bg-orange-600 px-3 py-1.5 text-center text-xs font-semibold text-white hover:bg-orange-700"
+                          data-testid="link-review-profile-evidence"
+                        >
+                          Review {pendingEvidenceCount} profile{" "}
+                          {pendingEvidenceCount === 1
+                            ? "suggestion"
+                            : "suggestions"}
+                        </div>
+                      </Link>
+                    ) : null}
+                    {!isComplete && (
+                      <a
+                        href="#profile-completion-details"
+                        className="rounded-md border border-amber-300 bg-white px-3 py-1.5 text-center text-xs font-semibold text-amber-900 hover:bg-amber-100"
+                        data-testid="link-jump-to-completion-details"
+                      >
+                        See what's missing
+                      </a>
+                    )}
+                  </div>
                 </CardContent>
               </Card>
             );
@@ -2393,6 +2430,24 @@ export default function RestaurantOwnerDashboard() {
 
             {setupMode === "profile" || setupMode === "profile-media" ? (
               <div ref={setupPanelRef} className="scroll-mt-24">
+                {setupMode === "profile" ? (
+                  <OwnerProfileEvidenceReview
+                    key={String(selectedRestaurant)}
+                    restaurantId={String(selectedRestaurant)}
+                    review={profileEvidenceReview}
+                    isLoading={loadingProfileEvidenceReview}
+                    isRefreshing={refreshingProfileEvidenceReview}
+                    isError={profileEvidenceReviewError}
+                    errorMessage={
+                      profileEvidenceReviewErrorDetail instanceof Error
+                        ? profileEvidenceReviewErrorDetail.message
+                        : undefined
+                    }
+                    onRefresh={async () => {
+                      await refetchProfileEvidenceReview();
+                    }}
+                  />
+                ) : null}
                 <OwnerProfileWorkspace
                   mode={setupMode === "profile-media" ? "media" : "profile"}
                   draft={profileDraft}
@@ -3154,14 +3209,8 @@ export default function RestaurantOwnerDashboard() {
                             Number(totals.ctaClicks || 0) > 0 ||
                             Number(totals.shareOpens || 0) > 0 ||
                             Number(totals.highIntentActions || 0) > 0;
-                          const completionStatus =
-                            computeProfileCompletionStatus(
-                              currentRestaurant as any,
-                              {
-                                hasActiveDeal:
-                                  Number(stats?.activeDeals || 0) > 0,
-                              },
-                            );
+                          const completionTruth = (currentRestaurant as any)
+                            .profileCompletionTruth as ProfileCompletionTruth | null;
                           const canonicalMenuItemCount = Math.max(
                             Number(
                               (currentRestaurant as any)?.menuItemCount || 0,
@@ -3176,61 +3225,44 @@ export default function RestaurantOwnerDashboard() {
                           const completionItems = [
                             {
                               id: "menu",
-                              label: "Menu missing",
-                              why: "Customers need a menu to decide quickly.",
-                              done: Boolean(completionStatus.menu),
+                              label:
+                                completionTruth?.menuState ===
+                                "present_needs_confirmation"
+                                  ? "Menu needs owner confirmation"
+                                  : completionTruth?.menuState === "rejected"
+                                    ? "Menu needs an approved current version"
+                                    : "Menu missing",
+                              why: "A menu counts as complete only when it is public and owner-approved.",
+                              done:
+                                completionTruth?.menuState ===
+                                "approved_current",
                               href: `/menu-builder?restaurantId=${encodeURIComponent(String(selectedRestaurant))}`,
                             },
                             {
                               id: "photos",
-                              label: "Photos missing",
-                              why: "Photos help people trust what they are choosing.",
-                              done: Boolean(completionStatus.photos),
+                              label: "Approved profile media missing",
+                              why: "A logo, cover image, or explicitly approved gallery image is required.",
+                              done: completionTruth?.mediaState === "ready",
                               href: `/restaurant-owner-dashboard?setup=profile-media&restaurantId=${encodeURIComponent(String(selectedRestaurant))}`,
                             },
                             {
                               id: "hours",
-                              label: "Business hours missing",
-                              why: "People act faster when they know if you are open.",
-                              done: Boolean(completionStatus.hours),
+                              label: currentIsTruckBusiness
+                                ? "Dated truck stop missing"
+                                : "Weekly business hours missing",
+                              why: currentIsTruckBusiness
+                                ? "Food-truck availability requires a real dated stop; weekly hours or a recent edit do not count."
+                                : "Publish at least one valid weekly hours window.",
+                              done: completionTruth?.availabilityReady === true,
                               href: `/restaurant-owner-dashboard?setup=schedule&restaurantId=${encodeURIComponent(String(selectedRestaurant))}`,
                             },
                             {
-                              id: "service-area",
-                              label: "Service area missing",
-                              why: "A clear location helps direction and pickup decisions.",
-                              done: Boolean(completionStatus["service-area"]),
+                              id: "publication",
+                              label: "Public profile is not published",
+                              why: "Content readiness and public publication are separate states.",
+                              done:
+                                completionTruth?.publicRouteState === "published",
                               href: `/restaurant-owner-dashboard?setup=profile&restaurantId=${encodeURIComponent(String(selectedRestaurant))}`,
-                            },
-                            {
-                              id: "contact",
-                              label: "Contact method missing",
-                              why: "Calls and direct actions need an obvious contact path.",
-                              done: Boolean(completionStatus.contact),
-                              href: `/restaurant-owner-dashboard?setup=profile&restaurantId=${encodeURIComponent(String(selectedRestaurant))}`,
-                            },
-                            {
-                              id: "social",
-                              label: "Social link missing",
-                              why: "Social links help discovery visitors follow and return.",
-                              done: Boolean(completionStatus.social),
-                              href: `/restaurant-owner-dashboard?setup=profile&restaurantId=${encodeURIComponent(String(selectedRestaurant))}`,
-                            },
-                            {
-                              id: "catering-events",
-                              label: "Catering/private event info missing",
-                              why: "Private event details create another high-intent action path.",
-                              done: Boolean(
-                                completionStatus["catering-events"],
-                              ),
-                              href: "/events",
-                            },
-                            {
-                              id: "deal",
-                              label: "Deal/special missing",
-                              why: "Current offers give people a reason to choose you today.",
-                              done: Boolean(completionStatus.deal),
-                              href: "/deal-creation",
                             },
                           ];
                           const profileStrength = completionItems.filter(
@@ -3246,13 +3278,8 @@ export default function RestaurantOwnerDashboard() {
                             {
                               menu: "Menu update clicked",
                               photos: "Photos update clicked",
-                              hours: "Hours update clicked",
-                              "service-area": "Service area update clicked",
-                              contact: "Contact method update clicked",
-                              social: "Social link update clicked",
-                              "catering-events":
-                                "Catering/events update clicked",
-                              deal: "Deal/special update clicked",
+                              hours: "Availability update clicked",
+                              publication: "Publication update clicked",
                             };
                           const completionActions = Array.isArray(
                             (totals as any).completionActions,
@@ -3770,608 +3797,137 @@ export default function RestaurantOwnerDashboard() {
           </div>
         )}
 
-        {/* Business onboarding checklist */}
+        {/* Canonical business onboarding checklist */}
         {activeWorkspaceModule === "overview" &&
           currentRestaurant &&
           (() => {
-            const hasBasics = Boolean(
-              (currentRestaurant as any).name &&
-              ((currentRestaurant as any).description ||
-                (currentRestaurant as any).cuisineType ||
-                (currentRestaurant as any).businessType),
+            const completionTruth = (currentRestaurant as any)
+              .profileCompletionTruth as ProfileCompletionTruth | null;
+            const profileSetupHref = buildOwnerSetupHref("profile");
+            const availabilitySetupHref = buildOwnerSetupHref(
+              "schedule",
+              currentIsTruckBusiness ? { truck: "1" } : undefined,
             );
-            const hasPhoto = Boolean(
-              (currentRestaurant as any).imageUrl ||
-              (currentRestaurant as any).logoUrl ||
-              (currentRestaurant as any).coverImageUrl ||
-              (
-                ((currentRestaurant as any)?.socialAutopostSettings &&
-                Array.isArray(
-                  (currentRestaurant as any).socialAutopostSettings
-                    .publicGalleryImages,
-                )
-                  ? (currentRestaurant as any).socialAutopostSettings
-                      .publicGalleryImages
-                  : []) as any[]
-              ).some((image: any) => {
-                if (!image) return false;
-                const approved = Boolean(image.publicApproved);
-                return approved && Boolean(String(image.url || "").trim());
-              }) ||
-              ((currentRestaurant as any).galleryImages || []).some(
-                (image: any) => {
-                  if (!image) return false;
-                  if (typeof image === "string") return Boolean(image.trim());
-                  const approved =
-                    image.publicApproved === undefined
-                      ? true
-                      : Boolean(image.publicApproved);
-                  return (
-                    approved &&
-                    Boolean(String(image.url || image.imageUrl || "").trim())
-                  );
-                },
-              ),
-            );
-            const hasMenu = Boolean(
-              (currentRestaurant as any).menuUrl ||
-              (currentRestaurant as any).hasMenu ||
-              (currentRestaurant as any).menuImageUrl ||
-              (currentRestaurant as any).menuPdfUrl ||
-              (currentRestaurant as any).featuredMenuItems?.length ||
-              Number((currentRestaurant as any).menuItemCount || 0) > 0 ||
-              Number((currentRestaurant as any).publicMenuItemCount || 0) > 0,
-            );
-            const hasAddress = Boolean(
-              (currentRestaurant as any).address ||
-              (currentRestaurant as any).city,
-            );
-            const hasPhone = Boolean(
-              (currentRestaurant as any).phone ||
-              (currentRestaurant as any).contactPhone,
-            );
-            const profileActionLinks =
-              (currentRestaurant as any)?.socialAutopostSettings &&
-              typeof (currentRestaurant as any).socialAutopostSettings ===
-                "object" &&
-              typeof (currentRestaurant as any).socialAutopostSettings
-                .publicActionLinks === "object"
-                ? (currentRestaurant as any).socialAutopostSettings
-                    .publicActionLinks
-                : {};
-            const hasActionLinks = Boolean(
-              (currentRestaurant as any).onlineOrderingUrl ||
-              (currentRestaurant as any).deliveryUrl ||
-              (currentRestaurant as any).doordashUrl ||
-              (currentRestaurant as any).uberEatsUrl ||
-              (currentRestaurant as any).toastUrl ||
-              (currentRestaurant as any).squareUrl ||
-              (currentRestaurant as any).chowNowUrl ||
-              (currentRestaurant as any).grubhubUrl ||
-              (currentRestaurant as any).cateringInquiryUrl ||
-              (currentRestaurant as any).truckBookingInquiryUrl ||
-              profileActionLinks.onlineOrderingUrl ||
-              profileActionLinks.deliveryUrl ||
-              profileActionLinks.doordashUrl ||
-              profileActionLinks.uberEatsUrl ||
-              profileActionLinks.toastUrl ||
-              profileActionLinks.squareUrl ||
-              profileActionLinks.chowNowUrl ||
-              profileActionLinks.grubhubUrl ||
-              profileActionLinks.cateringInquiryUrl ||
-              profileActionLinks.truckBookingInquiryUrl,
-            );
-            const hasContact = Boolean(
-              hasPhone ||
-              (currentRestaurant as any).websiteUrl ||
-              (currentRestaurant as any).facebookPageUrl ||
-              (currentRestaurant as any).instagramUrl ||
-              hasActionLinks,
-            );
-            const isBarBusiness = currentIsBarBusiness;
-            const hasSchedule = Boolean(
-              (currentRestaurant as any).operatingHours ||
-              (currentRestaurant as any).businessHours ||
-              (currentRestaurant as any).hours ||
-              (currentRestaurant as any).schedulePublished,
-            );
-            const servesFood = Boolean(
-              (currentRestaurant as any).servesFood ??
-              (currentRestaurant as any).hasKitchen ??
-              (currentRestaurant as any).hasMenu,
-            );
-            const hostsFoodTrucks = Boolean(
-              (currentRestaurant as any).hostsFoodTrucks ??
-              (currentRestaurant as any).wantsFoodTrucks,
-            );
-            const parseDateCandidate = (value: unknown) => {
-              if (!value) return null;
-              const parsed = new Date(String(value));
-              return Number.isNaN(parsed.getTime()) ? null : parsed;
-            };
-            const parseTimeToMinutes = (value: unknown) => {
-              const text = String(value || "").trim();
-              if (!text) return null;
-              const match = text.match(/^(\d{1,2}):(\d{2})/);
-              if (!match) return null;
-              const hours = Number(match[1]);
-              const minutes = Number(match[2]);
-              if (!Number.isFinite(hours) || !Number.isFinite(minutes))
-                return null;
-              if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59)
-                return null;
-              return hours * 60 + minutes;
-            };
-            const weekdayToIndex = (value: unknown) => {
-              const day = String(value || "")
-                .trim()
-                .toLowerCase();
-              const map: Record<string, number> = {
-                sun: 0,
-                sunday: 0,
-                mon: 1,
-                monday: 1,
-                tue: 2,
-                tues: 2,
-                tuesday: 2,
-                wed: 3,
-                weds: 3,
-                wednesday: 3,
-                thu: 4,
-                thur: 4,
-                thurs: 4,
-                thursday: 4,
-                fri: 5,
-                friday: 5,
-                sat: 6,
-                saturday: 6,
-              };
-              return Number.isFinite(map[day]) ? map[day] : null;
-            };
-            const resolveNextDateForDay = (value: unknown) => {
-              const weekday = weekdayToIndex(value);
-              if (weekday == null) return null;
-              const now = new Date();
-              const candidate = new Date(now);
-              candidate.setHours(0, 0, 0, 0);
-              const delta = (weekday - candidate.getDay() + 7) % 7;
-              candidate.setDate(candidate.getDate() + delta);
-              return candidate;
-            };
-            const getScheduleDate = (entry: any) =>
-              parseDateCandidate(
-                entry?.date || entry?.startDate || entry?.dayDate,
-              ) ||
-              resolveNextDateForDay(
-                entry?.day || entry?.weekday || entry?.dayOfWeek,
-              );
-            const scheduleStatusAllows = (value: unknown) => {
-              const normalized = String(value || "scheduled")
-                .trim()
-                .toLowerCase();
-              if (!normalized) return true;
-              return !["cancelled", "canceled", "closed", "inactive"].includes(
-                normalized,
-              );
-            };
-            const hasScheduleLocation = (entry: any) =>
-              Boolean(
-                String(
-                  entry?.locationName ||
-                    entry?.location ||
-                    entry?.address ||
-                    entry?.serviceArea ||
-                    entry?.city ||
-                    entry?.label ||
-                    "",
-                ).trim(),
-              );
-            const collectTruckScheduleEntries = () => {
-              const truckSchedule =
-                (currentRestaurant as any).truckSchedule || {};
-              const pool = [
-                ...(Array.isArray((currentRestaurant as any).upcomingStops)
-                  ? (currentRestaurant as any).upcomingStops
-                  : []),
-                ...(Array.isArray((currentRestaurant as any).schedules)
-                  ? (currentRestaurant as any).schedules
-                  : []),
-                ...(Array.isArray((currentRestaurant as any).truckSchedules)
-                  ? (currentRestaurant as any).truckSchedules
-                  : []),
-                ...(Array.isArray(truckSchedule?.upcomingStops)
-                  ? truckSchedule.upcomingStops
-                  : []),
-              ];
-              for (const single of [
-                (currentRestaurant as any).todayStop,
-                (currentRestaurant as any).currentStop,
-                (currentRestaurant as any).nextStop,
-                truckSchedule?.todayStop,
-                truckSchedule?.currentStop,
-                truckSchedule?.nextStop,
-              ]) {
-                if (single && typeof single === "object") {
-                  pool.push(single);
-                }
-              }
-              return pool;
-            };
-            const hasValidTruckOperatingWindow = (entries: any[]) => {
-              const now = new Date();
-              const weekAhead = new Date(now);
-              weekAhead.setDate(weekAhead.getDate() + 7);
-              return entries.some((entry) => {
-                if (!scheduleStatusAllows(entry?.status)) return false;
-                const date = getScheduleDate(entry);
-                if (!date) return false;
-                const startMinutes = parseTimeToMinutes(
-                  entry?.startTime || entry?.start || entry?.opensAt,
-                );
-                const endMinutes = parseTimeToMinutes(
-                  entry?.endTime || entry?.end || entry?.closesAt,
-                );
-                if (startMinutes == null || endMinutes == null) return false;
-                if (!hasScheduleLocation(entry)) return false;
-                const startAt = new Date(date);
-                startAt.setHours(
-                  Math.floor(startMinutes / 60),
-                  startMinutes % 60,
-                  0,
-                  0,
-                );
-                const endAt = new Date(date);
-                endAt.setHours(
-                  Math.floor(endMinutes / 60),
-                  endMinutes % 60,
-                  0,
-                  0,
-                );
-                if (!(endAt > startAt)) return false;
-                return startAt >= now && startAt <= weekAhead;
-              });
-            };
-            const isTruckServingByScheduleNow = (entries: any[]) => {
-              const now = new Date();
-              return entries.some((entry) => {
-                if (!scheduleStatusAllows(entry?.status)) return false;
-                const date = getScheduleDate(entry);
-                if (!date) return false;
-                const startMinutes = parseTimeToMinutes(
-                  entry?.startTime || entry?.start || entry?.opensAt,
-                );
-                const endMinutes = parseTimeToMinutes(
-                  entry?.endTime || entry?.end || entry?.closesAt,
-                );
-                if (startMinutes == null || endMinutes == null) return false;
-                if (!hasScheduleLocation(entry)) return false;
-                const startAt = new Date(date);
-                startAt.setHours(
-                  Math.floor(startMinutes / 60),
-                  startMinutes % 60,
-                  0,
-                  0,
-                );
-                const endAt = new Date(date);
-                endAt.setHours(
-                  Math.floor(endMinutes / 60),
-                  endMinutes % 60,
-                  0,
-                  0,
-                );
-                if (!(endAt > startAt)) return false;
-                return now >= startAt && now <= endAt;
-              });
-            };
-            const daysSince = (date: Date) =>
-              Math.floor((Date.now() - date.getTime()) / (1000 * 60 * 60 * 24));
-            const scheduleFreshnessDays = 7;
-            const truckMenuWarningDays = 14;
-            const truckMenuStaleDays = 30;
-            const restaurantMenuWarningDays = 60;
-            const restaurantMenuStaleDays = 90;
-            const truckScheduleEntries = collectTruckScheduleEntries();
-            const hasValidTruckScheduleWindow =
-              hasValidTruckOperatingWindow(truckScheduleEntries);
-            const servingByTruckScheduleNow =
-              isTruckServingByScheduleNow(truckScheduleEntries);
-            const serverTruckPresence = deriveTruckPresence(
+            const checklistItems = [
               {
-                mobileOnline: (currentRestaurant as any).mobileOnline,
-                liveBroadcasting: (currentRestaurant as any).liveBroadcasting,
-                currentLatitude: (currentRestaurant as any).currentLatitude,
-                currentLongitude: (currentRestaurant as any).currentLongitude,
-                lastBroadcastAt: (currentRestaurant as any).lastBroadcastAt,
-                liveUntilAt: (currentRestaurant as any).liveUntilAt,
-                locationSource:
-                  (currentRestaurant as any).locationSource || "owner_gps",
-                gpsAccuracy: (currentRestaurant as any).gpsAccuracy,
+                id: "menu",
+                label:
+                  completionTruth?.menuState === "approved_current"
+                    ? "Approved current menu"
+                    : completionTruth?.menuState ===
+                        "present_needs_confirmation"
+                      ? "Menu needs owner confirmation"
+                      : completionTruth?.menuState === "rejected"
+                        ? "Menu needs an approved current version"
+                        : "Approved current menu missing",
+                done:
+                  completionTruth?.menuState === "approved_current",
+                href: menuBuilderHref,
               },
-              { freshnessMs: DEFAULT_TRUCK_BROADCAST_FRESHNESS_MS },
+              {
+                id: "media",
+                label:
+                  completionTruth?.mediaState === "ready"
+                    ? "Approved profile media ready"
+                    : "Approved profile media missing",
+                done: completionTruth?.mediaState === "ready",
+                href: buildOwnerSetupHref("profile-media"),
+              },
+              {
+                id: "availability",
+                label: currentIsTruckBusiness
+                  ? completionTruth?.availabilityReady === true
+                    ? "Dated truck stops published"
+                    : "Dated truck stops missing"
+                  : completionTruth?.availabilityReady === true
+                    ? "Weekly business hours published"
+                    : "Weekly business hours missing",
+                done: completionTruth?.availabilityReady === true,
+                href: availabilitySetupHref,
+              },
+              {
+                id: "publication",
+                label:
+                  completionTruth?.publicRouteState === "published"
+                    ? "Public profile published"
+                    : "Public profile is not published",
+                done:
+                  completionTruth?.publicRouteState === "published",
+                href: profileSetupHref,
+              },
+            ] as const;
+            const completedCount = checklistItems.filter(
+              (item) => item.done,
+            ).length;
+            if (completedCount === checklistItems.length) return null;
+
+            const completionPercent = Math.round(
+              (completedCount / checklistItems.length) * 100,
             );
-            const liveByMobileSignal =
-              serverTruckPresence.broadcastState === "live";
-            const operatingUpdatedAtCandidate = [
-              (currentRestaurant as any).truckScheduleUpdatedAt,
-              (currentRestaurant as any).scheduleUpdatedAt,
-              (currentRestaurant as any).operatingHoursUpdatedAt,
-              (currentRestaurant as any).updatedAt,
-            ]
-              .map(parseDateCandidate)
-              .find(Boolean) as Date | null;
-            const scheduleUpdatedRecently = Boolean(
-              operatingUpdatedAtCandidate &&
-              daysSince(operatingUpdatedAtCandidate) <= scheduleFreshnessDays,
-            );
-            const hasOperatingTimeRequirement = isFoodTruck
-              ? hasValidTruckScheduleWindow || scheduleUpdatedRecently
-              : hasSchedule;
-            const truckAvailableNow =
-              liveByMobileSignal || servingByTruckScheduleNow;
-            const menuFreshnessDateCandidate = [
-              (currentRestaurant as any).menuReviewedAt,
-              (currentRestaurant as any).menuUpdatedAt,
-              (currentRestaurant as any).menuLastUpdatedAt,
-              (currentRestaurant as any).menuLastReviewedAt,
-            ]
-              .map(parseDateCandidate)
-              .find(Boolean) as Date | null;
-            const menuFreshnessDays = menuFreshnessDateCandidate
-              ? daysSince(menuFreshnessDateCandidate)
-              : null;
-            const menuWarningDays = isFoodTruck
-              ? truckMenuWarningDays
-              : restaurantMenuWarningDays;
-            const menuStaleDays = isFoodTruck
-              ? truckMenuStaleDays
-              : restaurantMenuStaleDays;
-            const menuNeedsReview = menuFreshnessDays == null;
-            const menuIsStale = Boolean(
-              menuFreshnessDays != null && menuFreshnessDays > menuStaleDays,
-            );
-            const menuNeedsNudge = Boolean(
-              menuFreshnessDays != null &&
-              menuFreshnessDays > menuWarningDays &&
-              menuFreshnessDays <= menuStaleDays,
-            );
-            const menuIsCurrent = hasMenu && !menuNeedsReview && !menuIsStale;
-            const hasDeal = (stats?.activeDeals || 0) > 0;
-            const hasEvents =
-              Number((currentRestaurant as any).upcomingPublicEventCount || 0) >
-                0 ||
-              Number((currentRestaurant as any).upcomingEventCount || 0) > 0;
-            const hasBarMarketing = hasDeal || hasEvents;
-            const featuredBartenders = Array.isArray(
-              (currentRestaurant as any).featuredBartenders,
-            )
-              ? (currentRestaurant as any).featuredBartenders
-              : [];
-            const hasActiveFeaturedBartender = featuredBartenders.some(
-              (entry: any) =>
-                Boolean(
-                  entry &&
-                  (entry.isActive ?? true) &&
-                  String(entry.name || "").trim(),
-                ),
-            );
+            const livePresenceCopy =
+              completionTruth?.livePresenceState === "live"
+                ? "Live now"
+                : completionTruth?.livePresenceState === "stale"
+                  ? "Last live signal is stale"
+                  : completionTruth?.livePresenceState === "offline"
+                    ? "Currently offline"
+                    : "Live status unknown";
             const verificationState = (currentRestaurant as any)
               .verificationState;
-            const isVerifiedProfile = Boolean(
-              verificationState?.isVerifiedForSetup ??
-              (currentRestaurant as any).isVerified,
-            );
-            const barScheduleReady = hostsFoodTrucks
-              ? hasOperatingTimeRequirement
-              : true;
-            const publicReady = isBarBusiness
-              ? hasBasics &&
-                hasAddress &&
-                hasContact &&
-                hasPhoto &&
-                hasSchedule &&
-                hasBarMarketing &&
-                (!servesFood || hasMenu) &&
-                barScheduleReady
-              : hasBasics &&
-                hasAddress &&
-                hasContact &&
-                hasMenu &&
-                hasPhoto &&
-                hasOperatingTimeRequirement &&
-                (isFoodTruck ? true : hasDeal);
-            const profileSetupHref = `/restaurant-owner-dashboard?setup=profile&restaurantId=${encodeURIComponent(
-              String(selectedRestaurant),
-            )}`;
-            const checklistItems = isBarBusiness
-              ? [
-                  {
-                    label: "Bar profile complete",
-                    done: hasBasics && hasAddress,
-                    href: profileSetupHref,
-                  },
-                  {
-                    label: "Hours complete",
-                    done: hasSchedule,
-                    href: "/restaurant-owner-dashboard?setup=schedule",
-                  },
-                  {
-                    label: "Photos/logo complete",
-                    done: hasPhoto,
-                    href: profileSetupHref,
-                  },
-                  {
-                    label: "Contact/social links complete",
-                    done: hasContact,
-                    href: profileSetupHref,
-                  },
-                  {
-                    label: "Events or specials current",
-                    done: hasBarMarketing,
-                    href: hasEvents ? "/events" : "/deal-creation",
-                  },
-                  ...(servesFood
-                    ? [
-                        {
-                          label: menuNeedsReview
-                            ? "Food menu complete (needs review timestamp)"
-                            : menuIsStale
-                              ? "Food menu complete (stale - refresh needed)"
-                              : menuNeedsNudge
-                                ? "Food menu complete (review soon)"
-                                : "Food menu complete",
-                          done: menuIsCurrent,
-                          href: `/menu-builder?restaurantId=${encodeURIComponent(
-                            String(selectedRestaurant),
-                          )}`,
-                        },
-                      ]
-                    : []),
-                  ...(hostsFoodTrucks
-                    ? [
-                        {
-                          label: "Truck hosting availability complete",
-                          done: hasOperatingTimeRequirement,
-                          href: "/restaurant-owner-dashboard?setup=schedule&truck=1",
-                        },
-                        {
-                          label: "Event/truck schedule current",
-                          done: hasOperatingTimeRequirement,
-                          href: "/restaurant-owner-dashboard?setup=schedule&truck=1",
-                        },
-                      ]
-                    : []),
-                  {
-                    label: "Public profile ready",
-                    done: publicReady,
-                    href: profileSetupHref,
-                  },
-                  {
-                    label: isVerifiedProfile
-                      ? "Verified profile badge"
-                      : "Verification pending (non-blocking)",
-                    done: isVerifiedProfile,
-                    href: profileSetupHref,
-                  },
-                ]
-              : [
-                  {
-                    label: "Basics complete",
-                    done: hasBasics,
-                    href: profileSetupHref,
-                  },
-                  {
-                    label:
-                      "Photos complete (add logo, cover photo, or food/truck photos)",
-                    done: hasPhoto,
-                    href: profileSetupHref,
-                  },
-                  {
-                    label: "Address or service area set",
-                    done: hasAddress,
-                    href: profileSetupHref,
-                  },
-                  {
-                    label: "Contact links complete",
-                    done: hasContact,
-                    href: profileSetupHref,
-                  },
-                  {
-                    label: menuNeedsReview
-                      ? "Menu current (needs review timestamp)"
-                      : menuIsStale
-                        ? "Menu current (stale - refresh needed)"
-                        : menuNeedsNudge
-                          ? "Menu current (review soon)"
-                          : "Menu current",
-                    done: menuIsCurrent,
-                    href: `/menu-builder?restaurantId=${encodeURIComponent(
-                      String(selectedRestaurant),
-                    )}`,
-                  },
-                  ...(isFoodTruck
-                    ? [
-                        {
-                          label: "Schedule this week",
-                          done: hasOperatingTimeRequirement,
-                          href: "/restaurant-owner-dashboard?setup=schedule&truck=1",
-                        },
-                      ]
-                    : [
-                        {
-                          label: "Hours complete",
-                          done: hasOperatingTimeRequirement,
-                          href: "/restaurant-owner-dashboard?setup=schedule",
-                        },
-                      ]),
-                  {
-                    label: "Deals or specials added",
-                    done: hasDeal,
-                    href: "/deal-creation",
-                  },
-                  {
-                    label: "Events added (if relevant)",
-                    done: hasEvents,
-                    href: "/events",
-                  },
-                  {
-                    label: "Public profile ready",
-                    done: publicReady,
-                    href: profileSetupHref,
-                  },
-                  ...(isFoodTruck
-                    ? [
-                        {
-                          label: liveByMobileSignal
-                            ? "Live broadcast active"
-                            : servingByTruckScheduleNow
-                              ? "Current scheduled stop active"
-                              : "No live broadcast or current stop",
-                          done: truckAvailableNow,
-                          href: "/restaurant-owner-dashboard?setup=schedule&truck=1",
-                        },
-                      ]
-                    : []),
-                  {
-                    label: isVerifiedProfile
-                      ? "Verified profile badge"
-                      : "Verification pending (non-blocking)",
-                    done: isVerifiedProfile,
-                    href: profileSetupHref,
-                  },
-                ];
-            const completedCount = checklistItems.filter((i) => i.done).length;
-            if (completedCount === checklistItems.length) return null;
+            const verificationCopy =
+              verificationState?.verificationLabel === "verified"
+                ? "Verified"
+                : verificationState?.verificationLabel === "review_required"
+                  ? "Review required"
+                  : verificationState?.verificationLabel === "inactive"
+                    ? "Inactive"
+                    : "Verification pending";
+
             return (
-              <div className="mb-6 rounded-lg border border-blue-200 bg-blue-50 p-4">
-                <div className="mb-3 flex items-center justify-between">
+              <div
+                className="mb-6 rounded-lg border border-blue-200 bg-blue-50 p-4"
+                data-testid="canonical-profile-completion-checklist"
+              >
+                <div className="mb-3 flex items-center justify-between gap-3">
                   <div>
                     <h2 className="text-base font-semibold text-blue-900">
                       Finish setting up your business
                     </h2>
-                    <p className="text-xs text-blue-700 mt-0.5">
-                      {completedCount} of {checklistItems.length} steps complete
+                    <p className="mt-0.5 text-xs text-blue-700">
+                      {completedCount} of {checklistItems.length} required steps
+                      complete
                     </p>
                   </div>
                   <span className="text-xs font-medium text-blue-600">
-                    {Math.round((completedCount / checklistItems.length) * 100)}
-                    %
+                    {completionPercent}%
                   </span>
                 </div>
-                <div className="mb-3 h-1.5 w-full rounded-full bg-blue-200">
+                <div
+                  className="mb-3 h-1.5 w-full rounded-full bg-blue-200"
+                  role="progressbar"
+                  aria-label="Required profile setup completion"
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={completionPercent}
+                >
                   <div
                     className="h-1.5 rounded-full bg-blue-500 transition-all"
-                    style={{
-                      width: `${Math.round((completedCount / checklistItems.length) * 100)}%`,
-                    }}
+                    style={{ width: completionPercent + "%" }}
                   />
                 </div>
                 <ul className="space-y-2">
                   {checklistItems.map((item) => (
-                    <li key={item.label} className="flex items-center gap-3">
+                    <li key={item.id} className="flex items-center gap-3">
                       {item.done ? (
-                        <CheckCircle className="h-4 w-4 flex-shrink-0 text-emerald-500" />
+                        <CheckCircle
+                          className="h-4 w-4 shrink-0 text-emerald-600"
+                          aria-hidden="true"
+                        />
                       ) : (
-                        <div className="h-4 w-4 flex-shrink-0 rounded-full border-2 border-blue-400" />
+                        <div
+                          className="h-4 w-4 shrink-0 rounded-full border-2 border-blue-400"
+                          aria-hidden="true"
+                        />
                       )}
                       {item.done ? (
                         <span className="text-sm text-blue-700 line-through opacity-60">
@@ -4379,7 +3935,7 @@ export default function RestaurantOwnerDashboard() {
                         </span>
                       ) : (
                         <Link href={item.href}>
-                          <span className="text-sm font-medium text-blue-800 underline underline-offset-2 hover:text-blue-600 cursor-pointer">
+                          <span className="cursor-pointer text-sm font-medium text-blue-800 underline underline-offset-2 hover:text-blue-600">
                             {item.label}
                           </span>
                         </Link>
@@ -4387,12 +3943,23 @@ export default function RestaurantOwnerDashboard() {
                     </li>
                   ))}
                 </ul>
-                {isBarBusiness && !hasActiveFeaturedBartender ? (
-                  <p className="mt-3 text-xs text-blue-700">
-                    Optional boost: feature a bartender to highlight signature
-                    drinks and featured nights.
+                {currentIsTruckBusiness ? (
+                  <p
+                    className="mt-3 rounded-md border border-blue-200 bg-white/70 px-3 py-2 text-xs text-blue-800"
+                    data-testid="truck-live-presence-information"
+                  >
+                    Live presence: {livePresenceCopy}. This is informational and
+                    does not affect profile completion.
                   </p>
                 ) : null}
+                <p
+                  className="mt-3 rounded-md border border-blue-200 bg-white/70 px-3 py-2 text-xs text-blue-800"
+                  data-testid="business-verification-information"
+                >
+                  Verification: {verificationCopy}. Verification is shown
+                  separately and does not affect the four profile-completion
+                  steps.
+                </p>
               </div>
             );
           })()}

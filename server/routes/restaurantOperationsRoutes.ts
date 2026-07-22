@@ -34,6 +34,11 @@ import {
 import { computeProfileCompletionStatus } from "@shared/profileCompletionStatus";
 import { getBusinessAccessContext } from "../services/businessTeamAccess";
 import { getBusinessVerificationState } from "../services/businessVerificationState";
+import { loadProfileCompletionEvidenceBatch } from "../services/profileCompletionEvidence";
+import {
+  MENU_REVISION_ALGORITHM,
+  loadMenuRevisionEvidence,
+} from "../services/menuRevision";
 
 type AnalyticsAccessResult = {
   hasAccess: boolean;
@@ -111,44 +116,205 @@ const asRecord = (value: unknown): Record<string, any> =>
     ? (value as Record<string, any>)
     : {};
 
+const safePersistenceErrorContext = (error: unknown) => {
+  const record = asRecord(error);
+  return {
+    errorName:
+      typeof record.name === "string" ? record.name.slice(0, 80) : "Error",
+    errorCode:
+      typeof record.code === "string" ? record.code.slice(0, 80) : "unknown",
+  };
+};
+
+export const sanitizeOwnerWorkspaceSettings = (
+  value: unknown,
+  options?: { includePendingMedia?: boolean },
+) => {
+  const settings = asRecord(value);
+  const safeSettings: Record<string, unknown> = {};
+  if (settings.publicActionLinks && typeof settings.publicActionLinks === "object") {
+    safeSettings.publicActionLinks = settings.publicActionLinks;
+  }
+  if (Array.isArray(settings.publicGalleryImages)) {
+    safeSettings.publicGalleryImages = options?.includePendingMedia
+      ? settings.publicGalleryImages
+      : settings.publicGalleryImages.filter(
+          (item: unknown) => asRecord(item).publicApproved === true,
+        );
+  }
+  if (settings.platforms && typeof settings.platforms === "object") {
+    safeSettings.platforms = settings.platforms;
+  }
+  if (settings.triggers && typeof settings.triggers === "object") {
+    safeSettings.triggers = settings.triggers;
+  }
+  if (typeof settings.promptBeforePost === "boolean") {
+    safeSettings.promptBeforePost = settings.promptBeforePost;
+  }
+  return safeSettings;
+};
+
+export const sanitizeOwnerWorkspaceRestaurant = (
+  restaurant: Record<string, any>,
+  options?: { includePendingMedia?: boolean },
+) => {
+  const { rawData: _rawData, ...safeRestaurant } = restaurant;
+  return {
+    ...safeRestaurant,
+    socialAutopostSettings: sanitizeOwnerWorkspaceSettings(
+      restaurant.socialAutopostSettings,
+      options,
+    ),
+  };
+};
+
+const sanitizeOwnerMutationRestaurant = (restaurant: Record<string, any>) =>
+  sanitizeOwnerWorkspaceRestaurant(restaurant, { includePendingMedia: true });
+
+export const mergeOwnerProfileActionLinks = (
+  settingsValue: unknown,
+  actionLinkUpdates: Record<string, unknown>,
+) => {
+  const settings = asRecord(settingsValue);
+  return {
+    ...settings,
+    publicActionLinks: {
+      ...asRecord(settings.publicActionLinks),
+      ...actionLinkUpdates,
+    },
+  };
+};
+
+type OwnerSocialSettingsPatch = {
+  platforms?: Record<string, boolean | undefined>;
+  triggers?: Record<string, boolean | undefined>;
+  promptBeforePost?: boolean;
+};
+
+export const mergeOwnerSocialSettings = (
+  settingsValue: unknown,
+  patch?: OwnerSocialSettingsPatch,
+) => {
+  const settings = asRecord(settingsValue);
+  if (!patch) return settings;
+  return {
+    ...settings,
+    ...(patch.platforms
+      ? {
+          platforms: {
+            ...asRecord(settings.platforms),
+            ...patch.platforms,
+          },
+        }
+      : {}),
+    ...(patch.triggers
+      ? {
+          triggers: {
+            ...asRecord(settings.triggers),
+            ...patch.triggers,
+          },
+        }
+      : {}),
+    ...(patch.promptBeforePost !== undefined
+      ? { promptBeforePost: patch.promptBeforePost }
+      : {}),
+  };
+};
+
+const withLockedRestaurantSettings = async <T>(
+  restaurantId: string,
+  mutate: (tx: any, restaurant: Record<string, any>) => Promise<T>,
+): Promise<T | null> =>
+  db.transaction(async (tx: any) => {
+    // Profile evidence decisions use this same restaurant-scoped lock. Every
+    // read/merge/write of the shared settings document must serialize with
+    // those decisions so an unrelated owner update cannot restore stale JSON.
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(hashtext(${restaurantId}))`,
+    );
+    const [restaurant] = await tx
+      .select()
+      .from(restaurants)
+      .where(eq(restaurants.id, restaurantId))
+      .limit(1)
+      .for("update");
+    if (!restaurant) return null;
+    return mutate(tx, restaurant as Record<string, any>);
+  });
+
 const isTruckRow = (restaurant: any) =>
   Boolean(
     restaurant?.isFoodTruck ||
       String(restaurant?.businessType || "").toLowerCase() === "food_truck",
   );
 
-const buildOwnerMenuApprovalState = (restaurant: any, menuItemCount: number) => {
+export const buildOwnerMenuApprovalState = (
+  restaurant: any,
+  menuItemCount: number,
+  currentMenuRevision: string | null = null,
+) => {
   const rawData = asRecord(restaurant?.rawData);
   const approval = asRecord(rawData.ownerMenuApproval);
   const status = String(approval.status || "").trim().toLowerCase();
-  const ownerApproved = status === "approved" || approval.ownerApproved === true;
-  const rejected = status === "rejected" || status === "not_current";
+  const rejectedMenuRevision = String(
+    approval.rejectedMenuRevision || "",
+  ).trim();
+  const rejected =
+    (status === "rejected" || status === "not_current") &&
+    (currentMenuRevision
+      ? rejectedMenuRevision === currentMenuRevision
+      : !rejectedMenuRevision);
+  const claimsOwnerApproval =
+    status === "approved" || approval.ownerApproved === true;
+  const approvedMenuRevision = String(
+    approval.approvedMenuRevision || "",
+  ).trim();
+  const ownerApproved = Boolean(
+    !rejected &&
+    claimsOwnerApproval &&
+      currentMenuRevision &&
+      approvedMenuRevision === currentMenuRevision,
+  );
   const hasMenuSurface = Boolean(
     menuItemCount > 0 ||
       restaurant?.menuUrl ||
       restaurant?.menuImageUrl ||
       restaurant?.menuPdfUrl,
   );
+  const canApproveCurrentMenu = Boolean(
+    isTruckRow(restaurant) &&
+      menuItemCount > 0 &&
+      currentMenuRevision &&
+      !rejected,
+  );
   const ownerApprovalRequired = Boolean(
-    isTruckRow(restaurant) && hasMenuSurface && !ownerApproved && !rejected,
+    canApproveCurrentMenu && !ownerApproved,
   );
   return {
-    status: ownerApproved
-      ? "owner_approved"
-      : rejected
-        ? "rejected"
+    status: rejected
+      ? "rejected"
+      : ownerApproved
+        ? "owner_approved"
         : ownerApprovalRequired
           ? "needs_owner_confirmation"
           : "unavailable",
-    label: ownerApproved
-      ? "Owner-approved menu"
-      : rejected
-        ? "Menu unavailable / pending update"
+    label: rejected
+      ? "Menu unavailable / pending update"
+      : ownerApproved
+        ? "Owner-approved menu"
         : ownerApprovalRequired
           ? "Menu added from available source — needs owner confirmation"
+          : isTruckRow(restaurant) && hasMenuSurface
+            ? "Add or import structured menu items before approval"
           : "Menu unavailable / pending update",
     ownerApproved,
     ownerApprovalRequired,
+    canApproveCurrentMenu,
+    approvalBlockedReason:
+      isTruckRow(restaurant) && hasMenuSurface && !canApproveCurrentMenu && !rejected
+        ? "structured_menu_required"
+        : null,
+    approvalStale: claimsOwnerApproval && !ownerApproved && !rejected,
     reviewedAt: String(approval.reviewedAt || "").trim() || null,
     skippedAt: String(approval.skippedAt || "").trim() || null,
   };
@@ -344,10 +510,14 @@ export function registerRestaurantOperationsRoutes(
     isAuthenticated,
     async (req: any, res) => {
       try {
-        const attachVerificationState = async (rows: any[]) => {
+        const attachVerificationState = async (
+          rows: any[],
+          canManageProfileIds: Set<string>,
+        ) => {
           if (!rows.length) return rows;
           const ids = rows.map((row) => row.id);
-          const [verificationRows, menuCountRows] = await Promise.all([
+          const [verificationRows, menuCountRows, completionEvidenceByRestaurant] =
+            await Promise.all([
             db
               .select({
                 restaurantId: verificationRequests.restaurantId,
@@ -367,6 +537,7 @@ export function registerRestaurantOperationsRoutes(
               .from(menuItems)
               .where(inArray(menuItems.restaurantId, ids))
               .groupBy(menuItems.restaurantId),
+            loadProfileCompletionEvidenceBatch(ids.map((id) => String(id))),
           ]);
 
           const latestByRestaurant = new Map<string, any>();
@@ -386,25 +557,42 @@ export function registerRestaurantOperationsRoutes(
           return rows.map((restaurant) => {
             const latestVerification = latestByRestaurant.get(String(restaurant.id));
             const menuItemCount = menuCountByRestaurant.get(String(restaurant.id)) || 0;
+            const completionEvidence = completionEvidenceByRestaurant.get(
+              String(restaurant.id),
+            );
             const businessInsuranceSubmitted =
               Boolean(String(latestVerification?.licenseNumber || "").trim()) ||
               (Array.isArray(latestVerification?.documents) &&
                 latestVerification.documents.length > 0) ||
               String(latestVerification?.status || "").toLowerCase() === "approved";
-            return {
-              ...restaurant,
-              menuItemCount,
-              menuApproval: buildOwnerMenuApprovalState(restaurant, menuItemCount),
-              verificationState: getBusinessVerificationState({
-                isActive: restaurant.isActive,
-                isVerified: restaurant.isVerified,
-                insuranceVerified: restaurant.insuranceVerified,
-                insuranceExpiresAt: restaurant.insuranceExpiresAt,
-                emailVerified: req.user?.emailVerified === true,
-                businessInsuranceSubmitted,
-                claimedFromImportId: restaurant.claimedFromImportId,
-              }),
-            };
+            return sanitizeOwnerWorkspaceRestaurant(
+              {
+                ...restaurant,
+                menuItemCount,
+                menuApproval: buildOwnerMenuApprovalState(
+                  restaurant,
+                  menuItemCount,
+                  completionEvidence?.menuRevision || null,
+                ),
+                profileCompletionTruth: completionEvidence?.truth || null,
+                truckOperatingPlan:
+                  completionEvidence?.truckOperatingPlan || null,
+                verificationState: getBusinessVerificationState({
+                  isActive: restaurant.isActive,
+                  isVerified: restaurant.isVerified,
+                  insuranceVerified: restaurant.insuranceVerified,
+                  insuranceExpiresAt: restaurant.insuranceExpiresAt,
+                  emailVerified: req.user?.emailVerified === true,
+                  businessInsuranceSubmitted,
+                  claimedFromImportId: restaurant.claimedFromImportId,
+                }),
+              },
+              {
+                includePendingMedia: canManageProfileIds.has(
+                  String(restaurant.id),
+                ),
+              },
+            );
           });
         };
 
@@ -413,6 +601,14 @@ export function registerRestaurantOperationsRoutes(
         // ordinary owner tools serialize an unbounded payload.
         const restaurantsByOwner = await storage.getRestaurantsByOwner(req.user.id);
         const context = await getBusinessAccessContext(req.user.id);
+        const canManageProfileIds = new Set(
+          context.restaurants
+            .filter(
+              (restaurant) =>
+                restaurant.isOwner || restaurant.permissions.manageProfile,
+            )
+            .map((restaurant) => String(restaurant.id)),
+        );
 
         const ownedIds = new Set(restaurantsByOwner.map((r: any) => r.id));
         const collaboratorRestaurantIds = context.restaurants
@@ -420,7 +616,12 @@ export function registerRestaurantOperationsRoutes(
           .map((r) => r.id);
 
         if (!collaboratorRestaurantIds.length) {
-          return res.json(await attachVerificationState(restaurantsByOwner as any[]));
+          return res.json(
+            await attachVerificationState(
+              restaurantsByOwner as any[],
+              canManageProfileIds,
+            ),
+          );
         }
 
         const collaboratorRestaurants = await db
@@ -435,7 +636,9 @@ export function registerRestaurantOperationsRoutes(
           }
         }
 
-        res.json(await attachVerificationState(merged as any[]));
+        res.json(
+          await attachVerificationState(merged as any[], canManageProfileIds),
+        );
       } catch (error) {
         console.error("Error fetching user restaurants:", error);
         res.status(500).json({ message: "Failed to fetch restaurants" });
@@ -485,57 +688,87 @@ export function registerRestaurantOperationsRoutes(
           });
         }
 
-        const [menuCountRow] = await db
-          .select({ value: sql<number>`count(*)::integer` })
-          .from(menuItems)
-          .where(eq(menuItems.restaurantId, restaurantId));
-        const menuItemCount = Number(menuCountRow?.value || 0);
-        const currentApproval = buildOwnerMenuApprovalState(
-          restaurant,
-          menuItemCount,
-        );
-        if (body.action === "approve" && menuItemCount <= 0) {
+        const menuRevisionEvidence = await loadMenuRevisionEvidence(restaurantId);
+        const menuItemCount = menuRevisionEvidence.publicItemCount;
+        if (
+          body.action === "approve" &&
+          (menuItemCount <= 0 || !menuRevisionEvidence.revision)
+        ) {
           return res.status(409).json({
             message: "Cannot approve an empty menu",
           });
         }
 
-        const rawData = asRecord((restaurant as any).rawData);
-        const now = new Date().toISOString();
-        const ownerMenuApproval = {
-          ...asRecord(rawData.ownerMenuApproval),
-          status:
-            body.action === "approve"
-              ? "approved"
-              : body.action === "reject"
-                ? "rejected"
-                : "skipped",
-          ownerApproved: body.action === "approve",
-          ownerApprovalRequired: body.action === "skip",
-          reviewedByUserId: req.user.id,
-          reviewedAt: body.action === "skip" ? null : now,
-          skippedAt: body.action === "skip" ? now : null,
-          note: String(body.note || "").trim() || null,
-          previousStatus: currentApproval.status,
-        };
-
-        const [updated] = await db
-          .update(restaurants)
-          .set({
-            rawData: {
-              ...rawData,
-              ownerMenuApproval,
-            } as any,
-            updatedAt: new Date(),
-          } as any)
-          .where(eq(restaurants.id, restaurantId))
-          .returning();
+        const updated = await withLockedRestaurantSettings(
+          restaurantId,
+          async (tx, lockedRestaurant) => {
+            const currentApproval = buildOwnerMenuApprovalState(
+              lockedRestaurant,
+              menuItemCount,
+              menuRevisionEvidence.revision,
+            );
+            const rawData = asRecord(lockedRestaurant.rawData);
+            const now = new Date().toISOString();
+            const ownerMenuApproval = {
+              ...asRecord(rawData.ownerMenuApproval),
+              status:
+                body.action === "approve"
+                  ? "approved"
+                  : body.action === "reject"
+                    ? "rejected"
+                    : "skipped",
+              ownerApproved: body.action === "approve",
+              ownerApprovalRequired: body.action === "skip",
+              reviewedByUserId: req.user.id,
+              reviewedAt: body.action === "skip" ? null : now,
+              skippedAt: body.action === "skip" ? now : null,
+              note: String(body.note || "").trim() || null,
+              previousStatus: currentApproval.status,
+              approvedMenuRevision:
+                body.action === "approve"
+                  ? menuRevisionEvidence.revision
+                  : null,
+              approvedMenuRevisionAlgorithm:
+                body.action === "approve" ? MENU_REVISION_ALGORITHM : null,
+              rejectedMenuRevision:
+                body.action === "reject"
+                  ? menuRevisionEvidence.revision
+                  : null,
+              rejectedMenuRevisionAlgorithm:
+                body.action === "reject" && menuRevisionEvidence.revision
+                  ? MENU_REVISION_ALGORITHM
+                  : null,
+            };
+            const [nextRestaurant] = await tx
+              .update(restaurants)
+              .set({
+                rawData: {
+                  ...rawData,
+                  ownerMenuApproval,
+                } as any,
+                updatedAt: new Date(),
+              } as any)
+              .where(eq(restaurants.id, restaurantId))
+              .returning();
+            return nextRestaurant;
+          },
+        );
+        if (!updated) {
+          return res.status(404).json({ message: "Restaurant not found" });
+        }
 
         res.json({
-          menuApproval: buildOwnerMenuApprovalState(updated, menuItemCount),
+          menuApproval: buildOwnerMenuApprovalState(
+            updated,
+            menuItemCount,
+            menuRevisionEvidence.revision,
+          ),
         });
       } catch (error) {
-        console.error("Error updating owner menu approval:", error);
+        console.error(
+          "Owner menu approval persistence failed",
+          safePersistenceErrorContext(error),
+        );
         res.status(500).json({ message: "Failed to update menu approval" });
       }
     },
@@ -620,43 +853,54 @@ export function registerRestaurantOperationsRoutes(
             .map(([key, value]) => [key, normalize(value)]),
         );
 
-        const updates: Record<string, unknown> = { ...baseUpdates };
-        if (Object.keys(actionLinkUpdates).length > 0) {
-          const restaurant = await storage.getRestaurant(restaurantId);
-          const existingSettings =
-            restaurant && typeof (restaurant as any).socialAutopostSettings === "object"
-              ? { ...((restaurant as any).socialAutopostSettings || {}) }
-              : {};
-          const existingPublicActionLinks =
-            existingSettings &&
-            typeof (existingSettings as any).publicActionLinks === "object"
-              ? { ...((existingSettings as any).publicActionLinks || {}) }
-              : {};
-          updates.socialAutopostSettings = {
-            ...existingSettings,
-            publicActionLinks: {
-              ...existingPublicActionLinks,
-              ...actionLinkUpdates,
-            },
-          };
-        }
-
-        if (Object.keys(updates).length === 0) {
+        if (
+          Object.keys(baseUpdates).length === 0 &&
+          Object.keys(actionLinkUpdates).length === 0
+        ) {
           return res.status(400).json({ message: "No profile fields provided" });
         }
 
-        const updatedRestaurant = await storage.updateRestaurant(
+        const updatedRestaurant = await withLockedRestaurantSettings(
           restaurantId,
-          updates as any,
+          async (tx, lockedRestaurant) => {
+            const updates: Record<string, unknown> = {
+              ...baseUpdates,
+              updatedAt: new Date(),
+            };
+            if (Object.keys(actionLinkUpdates).length > 0) {
+              const existingSettings = asRecord(
+                lockedRestaurant.socialAutopostSettings,
+              );
+              updates.socialAutopostSettings = mergeOwnerProfileActionLinks(
+                existingSettings,
+                actionLinkUpdates,
+              );
+            }
+            const [updated] = await tx
+              .update(restaurants)
+              .set(updates as any)
+              .where(eq(restaurants.id, restaurantId))
+              .returning();
+            return updated;
+          },
         );
+        if (!updatedRestaurant) {
+          return res.status(404).json({ message: "Restaurant not found" });
+        }
 
-        res.json({ success: true, restaurant: updatedRestaurant });
+        res.json({
+          success: true,
+          restaurant: sanitizeOwnerMutationRestaurant(updatedRestaurant),
+        });
       } catch (error) {
-        console.error("Error updating restaurant profile basics:", error);
+        console.error(
+          "Restaurant profile basics update failed",
+          safePersistenceErrorContext(error),
+        );
         res.status(400).json({
           message:
-            error instanceof Error
-              ? error.message
+            error instanceof z.ZodError
+              ? "Invalid business profile fields"
               : "Failed to update business profile",
         });
       }
@@ -822,7 +1066,10 @@ export function registerRestaurantOperationsRoutes(
           });
         }
 
-        res.json({ success: true, restaurant: updatedRestaurant });
+        res.json({
+          success: true,
+          restaurant: sanitizeOwnerMutationRestaurant(updatedRestaurant),
+        });
       } catch (error) {
         console.error("Error updating mobile settings:", error);
         res.status(400).json({
@@ -878,7 +1125,10 @@ export function registerRestaurantOperationsRoutes(
           lastBroadcastAt: updatedRestaurant.lastBroadcastAt || new Date(),
         });
 
-        res.json({ success: true, restaurant: updatedRestaurant });
+        res.json({
+          success: true,
+          restaurant: sanitizeOwnerMutationRestaurant(updatedRestaurant),
+        });
       } catch (error) {
         console.error("Error updating restaurant location:", error);
         res.status(400).json({
@@ -915,7 +1165,10 @@ export function registerRestaurantOperationsRoutes(
           hoursData.operatingHours,
         );
 
-        res.json({ success: true, restaurant: updatedRestaurant });
+        res.json({
+          success: true,
+          restaurant: sanitizeOwnerMutationRestaurant(updatedRestaurant),
+        });
       } catch (error) {
         console.error("Error updating operating hours:", error);
         res.status(400).json({
@@ -954,6 +1207,28 @@ export function registerRestaurantOperationsRoutes(
           });
         }
 
+        const socialAutopostSettingsSchema = z
+          .object({
+            platforms: z
+              .object({
+                facebook: z.boolean().optional(),
+                instagram: z.boolean().optional(),
+                x: z.boolean().optional(),
+              })
+              .strict()
+              .optional(),
+            triggers: z
+              .object({
+                schedule: z.boolean().optional(),
+                booking: z.boolean().optional(),
+                live: z.boolean().optional(),
+                deal: z.boolean().optional(),
+              })
+              .strict()
+              .optional(),
+            promptBeforePost: z.boolean().optional(),
+          })
+          .strict();
         const schema = z.object({
           facebookPageUrl: z
             .string()
@@ -968,29 +1243,58 @@ export function registerRestaurantOperationsRoutes(
             .nullable()
             .or(z.literal("")),
           xUrl: z.string().url().optional().nullable().or(z.literal("")),
-          socialAutopostSettings: z.record(z.any()).optional().nullable(),
+          socialAutopostSettings: socialAutopostSettingsSchema.optional(),
         });
 
         const parsed = schema.parse(req.body);
-        const [updated] = await db
-          .update(restaurants)
-          .set({
-            facebookPageUrl: parsed.facebookPageUrl || null,
-            instagramUrl: parsed.instagramUrl || null,
-            xUrl: parsed.xUrl || null,
-            socialAutopostSettings: parsed.socialAutopostSettings ?? null,
-            updatedAt: new Date(),
-          })
-          .where(eq(restaurants.id, restaurantId))
-          .returning();
+        const updated = await withLockedRestaurantSettings(
+          restaurantId,
+          async (tx, lockedRestaurant) => {
+            const existingSettings = asRecord(
+              lockedRestaurant.socialAutopostSettings,
+            );
+            const nextSettings = mergeOwnerSocialSettings(
+              existingSettings,
+              parsed.socialAutopostSettings,
+            );
+            const updates: Record<string, unknown> = {
+              socialAutopostSettings: nextSettings,
+              updatedAt: new Date(),
+            };
+            if (parsed.facebookPageUrl !== undefined) {
+              updates.facebookPageUrl = parsed.facebookPageUrl || null;
+            }
+            if (parsed.instagramUrl !== undefined) {
+              updates.instagramUrl = parsed.instagramUrl || null;
+            }
+            if (parsed.xUrl !== undefined) {
+              updates.xUrl = parsed.xUrl || null;
+            }
+            const [nextRestaurant] = await tx
+              .update(restaurants)
+              .set(updates)
+              .where(eq(restaurants.id, restaurantId))
+              .returning();
+            return nextRestaurant;
+          },
+        );
+        if (!updated) {
+          return res.status(404).json({ message: "Restaurant not found" });
+        }
 
-        res.json({ success: true, restaurant: updated });
+        res.json({
+          success: true,
+          restaurant: sanitizeOwnerMutationRestaurant(updated),
+        });
       } catch (error) {
-        console.error("Error updating social settings:", error);
+        console.error(
+          "Restaurant social settings update failed",
+          safePersistenceErrorContext(error),
+        );
         res.status(400).json({
           message:
-            error instanceof Error
-              ? error.message
+            error instanceof z.ZodError
+              ? "Invalid social settings"
               : "Failed to update social settings",
         });
       }
@@ -2832,6 +3136,8 @@ export function registerRestaurantOperationsRoutes(
         .select()
         .from(restaurants)
         .where(inArray(restaurants.id, ownerRestaurantIds));
+      const completionEvidenceByRestaurant =
+        await loadProfileCompletionEvidenceBatch(ownerRestaurantIds);
 
       const rows = await db
         .select({
@@ -2857,6 +3163,18 @@ export function registerRestaurantOperationsRoutes(
 
       const byEntity = new Map<string, any>();
       for (const restaurant of ownedRestaurants as any[]) {
+        const completionTruth = completionEvidenceByRestaurant.get(
+          String(restaurant.id),
+        )?.truth;
+        const compatibilityCompletionStatus = computeProfileCompletionStatus(
+          restaurant,
+          {
+            hasActiveDeal:
+              Number(restaurant?.activeDeals || 0) > 0 ||
+              Number(restaurant?.activeDealsCount || 0) > 0 ||
+              Boolean(restaurant?.hasActiveDeals),
+          },
+        );
         const entityType =
           restaurant.isFoodTruck || String(restaurant.businessType || "").toLowerCase() === "food_truck"
             ? "truck"
@@ -2874,12 +3192,14 @@ export function registerRestaurantOperationsRoutes(
           highIntentActions: 0,
           completionActionClicks: 0,
           completionActionsRaw: new Map<string, number>(),
-          completionStatus: computeProfileCompletionStatus(restaurant, {
-            hasActiveDeal:
-              Number(restaurant?.activeDeals || 0) > 0 ||
-              Number(restaurant?.activeDealsCount || 0) > 0 ||
-              Boolean(restaurant?.hasActiveDeals),
-          }),
+          completionStatus: {
+            ...compatibilityCompletionStatus,
+            menu: completionTruth?.menuState === "approved_current",
+            photos: completionTruth?.mediaState === "ready",
+            hours: completionTruth?.availabilityReady === true,
+            publication:
+              completionTruth?.publicRouteState === "published",
+          },
           topSourcesRaw: new Map<string, number>(),
           lastActivityAt: null as string | null,
         });
@@ -2996,6 +3316,7 @@ export function registerRestaurantOperationsRoutes(
       "social",
       "catering-events",
       "deal",
+      "publication",
     ]),
   });
 

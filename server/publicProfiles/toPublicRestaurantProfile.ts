@@ -588,12 +588,28 @@ export function toPublicRestaurantProfile(input: {
   const ownerMenuApprovalStatus = String(rawMenuApproval.status || "")
     .trim()
     .toLowerCase();
-  const ownerMenuApproved =
-    ownerMenuApprovalStatus === "approved" ||
-    rawMenuApproval.ownerApproved === true;
+  const currentMenuRevision = String(row.menuRevision || "").trim();
+  const menuRevisionCoversRenderedMenu =
+    row.menuRevisionCoversRenderedMenu === true;
+  const approvedMenuRevision = String(
+    rawMenuApproval.approvedMenuRevision || "",
+  ).trim();
+  const rejectedMenuRevision = String(
+    rawMenuApproval.rejectedMenuRevision || "",
+  ).trim();
   const ownerMenuRejected =
-    ownerMenuApprovalStatus === "rejected" ||
-    ownerMenuApprovalStatus === "not_current";
+    (ownerMenuApprovalStatus === "rejected" ||
+      ownerMenuApprovalStatus === "not_current") &&
+    (currentMenuRevision
+      ? rejectedMenuRevision === currentMenuRevision
+      : !rejectedMenuRevision);
+  const ownerMenuApproved =
+    !ownerMenuRejected &&
+    menuRevisionCoversRenderedMenu &&
+    Boolean(currentMenuRevision) &&
+    approvedMenuRevision === currentMenuRevision &&
+    (ownerMenuApprovalStatus === "approved" ||
+      rawMenuApproval.ownerApproved === true);
   const hasAnyMenuSurface = Boolean(
     menuSections.length > 0 ||
     menuVariants.some((variant) => variant.menuSections.length > 0) ||
@@ -603,19 +619,19 @@ export function toPublicRestaurantProfile(input: {
     featuredMenuItems.length > 0,
   );
   const menuApproval =
-    profileType === "truck" && ownerMenuApproved
+    profileType === "truck" && ownerMenuRejected
       ? {
-          status: "owner_approved" as const,
-          label: "Owner-approved menu",
-          ownerApproved: true,
+          status: "rejected" as const,
+          label: "Menu unavailable / pending update",
+          ownerApproved: false,
           ownerApprovalRequired: false,
           reviewedAt: String(rawMenuApproval.reviewedAt || "").trim() || null,
         }
-      : profileType === "truck" && ownerMenuRejected
+      : profileType === "truck" && ownerMenuApproved
         ? {
-            status: "rejected" as const,
-            label: "Menu unavailable / pending update",
-            ownerApproved: false,
+            status: "owner_approved" as const,
+            label: "Owner-approved menu",
+            ownerApproved: true,
             ownerApprovalRequired: false,
             reviewedAt: String(rawMenuApproval.reviewedAt || "").trim() || null,
           }
@@ -644,9 +660,13 @@ export function toPublicRestaurantProfile(input: {
     menuApproval.status === "rejected" ? [] : featuredMenuItems;
   const publicMenuUrl = menuApproval.status === "rejected" ? null : menuUrl;
   const publicMenuImageUrl =
-    menuApproval.status === "rejected" ? null : menuImageUrl;
+    menuApproval.status === "rejected" || ownerMenuApproved
+      ? null
+      : menuImageUrl;
   const publicMenuPdfUrl =
-    menuApproval.status === "rejected" ? null : menuPdfUrl;
+    menuApproval.status === "rejected" || ownerMenuApproved
+      ? null
+      : menuPdfUrl;
   const dealCount = Math.max(
     0,
     Number(

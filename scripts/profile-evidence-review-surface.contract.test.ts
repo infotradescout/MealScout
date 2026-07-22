@@ -11,23 +11,31 @@ const required = [
   "Identity signals:",
   "Menu signals:",
   "Missing fields:",
-  "Menu deferred override:",
   "Publish warnings:",
   "Publish audit notes:",
   "Why unknown:",
   "OCR text snippet:",
   "OCR confidence:",
-  "Approve updates to existing truck",
-  "Approve new truck draft",
   "Reject weak/unknown evidence",
-  "Mark menuDeferred=true",
-  "Require menu before publish",
-  "submit(\"apply\")",
+  "Direct publication is disabled.",
+  "Queue for Owner Review",
+  "This intake never creates a new truck draft.",
 ];
 
 for (const snippet of required) {
   if (!adminUi.includes(snippet)) {
     throw new Error(`Missing review surface snippet: ${snippet}`);
+  }
+}
+
+for (const forbidden of [
+  "Menu deferred override:",
+  "Mark menuDeferred=true",
+  "Require menu before publish",
+  'submit("apply")',
+]) {
+  if (adminUi.includes(forbidden)) {
+    throw new Error(`Dead or unsafe review control remains: ${forbidden}`);
   }
 }
 

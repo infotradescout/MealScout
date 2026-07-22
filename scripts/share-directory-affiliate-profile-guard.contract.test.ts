@@ -129,11 +129,13 @@ assert(
 );
 
 assert(
-  adminRoutes.includes("hasPublicProfile: publicReady") &&
+  adminRoutes.includes(
+    'completionTruth?.publicRouteState === "published" && canonicalPath',
+  ) &&
     adminRoutes.includes(
-      "publicProfileUrl: publicReady ? canonicalPath : null",
+      "publicProfileUrl: hasPublicProfile ? canonicalPath : null",
     ),
-  "Admin completion API must suppress public-profile URLs until the profile is public-ready.",
+  "Admin completion API must expose published profile URLs independently of completion readiness.",
 );
 assert(
   adminControlCenter.includes(

@@ -28,7 +28,8 @@ const requiredUiSnippets = [
   "Profile actions taken",
   "Menu update clicked",
   "Photos update clicked",
-  "Hours update clicked",
+  "Availability update clicked",
+  "Publication update clicked",
   "No completion actions recorded yet.",
 ];
 

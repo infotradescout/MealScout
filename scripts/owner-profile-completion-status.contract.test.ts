@@ -8,8 +8,11 @@ if (!routeFile.includes("computeProfileCompletionStatus")) {
   throw new Error("PDA-2.10 contract missing shared status adapter usage in server reconciliation.");
 }
 
-if (!ownerDashboardFile.includes("computeProfileCompletionStatus")) {
-  throw new Error("PDA-2.10 contract missing shared status adapter usage in owner completion UI.");
+if (!ownerDashboardFile.includes("profileCompletionTruth as ProfileCompletionTruth | null")) {
+  throw new Error("PDA-2.10 owner UI must consume server-supplied canonical completion truth.");
+}
+if (ownerDashboardFile.includes("computeProfileCompletionStatus")) {
+  throw new Error("PDA-2.10 owner UI must not recompute completion from raw profile fields.");
 }
 
 const statusA = computeProfileCompletionStatus({

@@ -20,7 +20,8 @@ const requiredMediaRouteSnippets = [
   "publicApproved: isTrustedUploader",
   'approvalStatus: galleryEntry.publicApproved ? "approved" : "pending"',
   '"/api/restaurants/:restaurantId/media-gallery/:mediaId"',
-  "requestedApproval !== undefined && isStaffOrAdmin",
+  "input.publicApproved !== undefined && input.canModerate",
+  "withLockedRestaurantSettings(",
   "publicGalleryImages",
 ];
 

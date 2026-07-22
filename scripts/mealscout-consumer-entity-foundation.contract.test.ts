@@ -353,13 +353,24 @@ const ownerDashboardSource = readFileSync(
   resolve(process.cwd(), "client/src/pages/restaurant-owner-dashboard.tsx"),
   "utf8",
 );
+const profileCompletionEvidenceSource = readFileSync(
+  resolve(process.cwd(), "server/services/profileCompletionEvidence.ts"),
+  "utf8",
+);
 assert.match(
-  ownerDashboardSource,
+  profileCompletionEvidenceSource,
   /import \{[\s\S]*deriveTruckPresence[\s\S]*\} from "@shared\/consumerEntity"/,
+  "Canonical profile completion evidence must derive truck presence on the server",
 );
 assert.match(
   ownerDashboardSource,
-  /serverTruckPresence\.broadcastState === "live"/,
+  /completionTruth\?\.livePresenceState === "live"/,
+  "Owner UI must render the server-derived presence verdict",
+);
+assert.doesNotMatch(
+  ownerDashboardSource,
+  /deriveTruckPresence\(/,
+  "Owner UI must not recompute canonical truck presence from raw profile fields",
 );
 assert.doesNotMatch(
   ownerDashboardSource,

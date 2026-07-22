@@ -52,6 +52,12 @@ jobs:
       - name: Truck Availability Truth Contract
         run: npm run test:truck-availability-truth
 
+      - name: Canonical Profile Completion Truth Contract
+        run: npm run test:profile-completion-truth
+
+      - name: Owner Profile Evidence Review Contract
+        run: npm run test:profile-evidence-owner-review
+
       - name: Public Data Boundary Contract
         run: npm run test:public-data-boundary
 

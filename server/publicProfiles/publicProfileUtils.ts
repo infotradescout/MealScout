@@ -82,7 +82,23 @@ export const imageAsset = (
   url: unknown,
   source: PublicImageAsset["source"],
 ): PublicImageAsset | null => {
-  const normalized = normalizeUrl(url);
+  const raw = String(url || "").trim();
+  let normalized: string | null = null;
+  if (/^\/(?!\/)/.test(raw)) {
+    normalized = raw;
+  } else if (/^https?:\/\//i.test(raw)) {
+    try {
+      const parsed = new URL(raw);
+      normalized =
+        ["http:", "https:"].includes(parsed.protocol) &&
+        !parsed.username &&
+        !parsed.password
+          ? parsed.toString()
+          : null;
+    } catch {
+      normalized = null;
+    }
+  }
   if (!normalized) return null;
   return {
     url: normalized,

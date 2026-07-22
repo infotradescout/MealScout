@@ -38,6 +38,7 @@ import { z } from "zod";
 import { distributedRateLimit } from "../middleware/distributedRateLimit";
 import { forwardGeocode } from "../utils/geocoding";
 import { ensurePremiumTrialForUserId } from "../services/premiumTrial";
+import { loadProfileCompletionEvidenceBatch } from "../services/profileCompletionEvidence";
 import {
   canAssignUserType,
   getRoleAssignmentDeniedMessage,
@@ -86,6 +87,101 @@ import { listParkingPassOccurrences } from "../services/parkingPassVirtual";
 import { runParkingPassIntegrity } from "../services/parkingPassIntegrity";
 import { getPaymentHealthSnapshot } from "../services/paymentHealth";
 import { getSupplyMarketDataLanes } from "../services/supplyMarketIntel";
+
+const asAdminCompletionRecord = (value: unknown): Record<string, any> =>
+  value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, any>)
+    : {};
+
+const normalizeAdminCompletionValue = (value: unknown) => {
+  const text = String(value ?? "").trim();
+  return text.length > 0 ? text : null;
+};
+
+export const mergeAdminBusinessCompletionSettings = (input: {
+  settingsValue: unknown;
+  publicActionLinks?: Record<string, unknown>;
+  reviewed?: Record<string, unknown>;
+  galleryImageUrl?: unknown;
+  galleryImageApproved?: boolean;
+  verifiedAt: string;
+}) => {
+  const settings = asAdminCompletionRecord(input.settingsValue);
+  let nextSettings: Record<string, unknown> = { ...settings };
+
+  if (input.publicActionLinks) {
+    const actionLinks = {
+      ...asAdminCompletionRecord(settings.publicActionLinks),
+    };
+    for (const [key, value] of Object.entries(input.publicActionLinks)) {
+      if (value === undefined) continue;
+      actionLinks[key] = normalizeAdminCompletionValue(value);
+    }
+    nextSettings.publicActionLinks = actionLinks;
+  }
+
+  if (input.reviewed) {
+    const reviewedUpdates = Object.fromEntries(
+      Object.entries(input.reviewed).filter(([, value]) => value !== undefined),
+    );
+    nextSettings.completionReview = {
+      ...asAdminCompletionRecord(settings.completionReview),
+      ...reviewedUpdates,
+    };
+  }
+
+  if (input.galleryImageUrl !== undefined) {
+    const url = normalizeAdminCompletionValue(input.galleryImageUrl);
+    if (url) {
+      const gallery = Array.isArray(settings.publicGalleryImages)
+        ? [...settings.publicGalleryImages]
+        : [];
+      nextSettings.publicGalleryImages = [
+        ...gallery,
+        {
+          url,
+          source: "gallery",
+          publicApproved: input.galleryImageApproved !== false,
+          lastVerifiedAt: input.verifiedAt,
+        },
+      ];
+    }
+  }
+
+  return nextSettings;
+};
+
+export const createLockedAdminBusinessCompletionMutation = (database: any) =>
+  async <T>(
+    businessId: string,
+    mutate: (tx: any, restaurant: Record<string, any>) => Promise<T>,
+  ): Promise<T | null> =>
+    database.transaction(async (tx: any) => {
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(hashtext(${businessId}))`,
+      );
+      const [restaurant] = await tx
+        .select()
+        .from(restaurants)
+        .where(eq(restaurants.id, businessId))
+        .limit(1)
+        .for("update");
+      if (!restaurant) return null;
+      return mutate(tx, restaurant as Record<string, any>);
+    });
+
+const withLockedAdminBusinessCompletion =
+  createLockedAdminBusinessCompletionMutation(db);
+
+const safeAdminCompletionErrorContext = (error: unknown) => {
+  const record = asAdminCompletionRecord(error);
+  return {
+    errorName:
+      typeof record.name === "string" ? record.name.slice(0, 80) : "Error",
+    errorCode:
+      typeof record.code === "string" ? record.code.slice(0, 80) : "unknown",
+  };
+};
 
 const buildLocationKey = (
   address?: string | null,
@@ -2462,6 +2558,9 @@ export function registerAdminManagementRoutes(app: Express) {
           .limit(limit);
 
         const restaurantIds = rows.map((row: any) => row.id).filter(Boolean);
+        const completionEvidencePromise = loadProfileCompletionEvidenceBatch(
+          restaurantIds.map((id: unknown) => String(id)),
+        );
         const [menuRows, menuItemRows, dealRows, eventRows, mediaRows, analyticsRows] =
           restaurantIds.length
             ? await Promise.all([
@@ -2516,6 +2615,7 @@ export function registerAdminManagementRoutes(app: Express) {
                   .limit(6000),
               ])
             : [[], [], [], [], [], []];
+        const completionEvidenceByRestaurant = await completionEvidencePromise;
 
         const menuByRestaurant = new Map<string, number>();
         menuRows.forEach((row: any) => {
@@ -2651,6 +2751,10 @@ export function registerAdminManagementRoutes(app: Express) {
           const activeEvents = activeEventsByRestaurant.get(String(row.id)) || 0;
           const photoCount = photosByRestaurant.get(String(row.id)) || 0;
           const analyticsCount = analyticsByRestaurant.get(String(row.id)) || 0;
+          const completionEvidence = completionEvidenceByRestaurant.get(
+            String(row.id),
+          );
+          const completionTruth = completionEvidence?.truth;
 
           const basicsReady = Boolean(
             row?.name &&
@@ -2692,13 +2796,9 @@ export function registerAdminManagementRoutes(app: Express) {
           const hideAsTestQa = Boolean(completionReview?.hideAsTestQa);
           const blockerReason = String(completionReview?.blockerReason || "").trim() || null;
 
-          const menuReady = menuItemCount > 0 || hasMenuFallback || menuReviewedUnavailable;
-          const photoReady = Boolean(
-            row?.logoUrl || row?.coverImageUrl || photoCount > 0 || photosReviewedUnavailable,
-          );
-          const scheduleReady = isTruck
-            ? Boolean(row?.operatingHours || row?.mobileOnline || scheduleReviewedUnavailable)
-            : true;
+          const menuReady = completionTruth?.menuState === "approved_current";
+          const photoReady = completionTruth?.mediaState === "ready";
+          const scheduleReady = completionTruth?.availabilityReady === true;
           const dealsReady = activeDeals > 0 || dealsReviewedNone;
           const eventsReady = activeEvents > 0 || eventsReviewedNone;
           const qrReady = Boolean(canonicalPath);
@@ -2722,7 +2822,11 @@ export function registerAdminManagementRoutes(app: Express) {
           if (!contactReady) missingFields.push("contact/actions");
           if (!menuReady) missingFields.push("menu");
           if (!photoReady) missingFields.push("photos");
-          if (isTruck && !scheduleReady) missingFields.push("truck schedule");
+          if (!scheduleReady) {
+            missingFields.push(
+              isTruck ? "dated truck schedule" : "weekly business hours",
+            );
+          }
           if (!dealsReady) missingFields.push("deals (optional)");
           if (!eventsReady) missingFields.push("events (optional)");
 
@@ -2780,13 +2884,17 @@ export function registerAdminManagementRoutes(app: Express) {
             hideAsTestQa ||
             /\b(test|qa|seed|demo|fake|internal|sample|sandbox|staging)\b/.test(qaHint);
 
-          const publicReady = Boolean(
-            basicsReady && contactReady && menuReady && photoReady && scheduleReady && qrReady,
+          const publicReady = completionTruth?.publicProfileReady === true;
+          const hasPublicProfile = Boolean(
+            completionTruth?.publicRouteState === "published" && canonicalPath,
           );
           const handoffReady = Boolean(
             publicReady &&
+              basicsReady &&
+              contactReady &&
               menuReady &&
               photoReady &&
+              scheduleReady &&
               qrReady &&
               !identityNeedsReviewFinal &&
               !testOrQaDetected,
@@ -2799,7 +2907,11 @@ export function registerAdminManagementRoutes(app: Express) {
           if (!eventsReady) adminFixableItems.push("events");
           const ownerInputBlockers: string[] = [];
           if (!basicsReady) ownerInputBlockers.push("basics");
-          if (isTruck && !scheduleReady) ownerInputBlockers.push("truck schedule");
+          if (!scheduleReady) {
+            ownerInputBlockers.push(
+              isTruck ? "dated truck schedule" : "weekly business hours",
+            );
+          }
           if (!menuReady && !hasMenuFallback && menuItemCount === 0) ownerInputBlockers.push("menu source");
           if (!photoReady && !row?.logoUrl && !row?.coverImageUrl && photoCount === 0)
             ownerInputBlockers.push("photo proof");
@@ -2863,8 +2975,12 @@ export function registerAdminManagementRoutes(app: Express) {
           if (identityNeedsReviewFinal && !identityReviewed) {
             rankReason.push("Possible duplicate/name conflict");
           }
-          if (isTruck && !scheduleReady) {
-            rankReason.push("Truck missing schedule");
+          if (!scheduleReady) {
+            rankReason.push(
+              isTruck
+                ? "Truck missing a dated stop"
+                : "Business missing valid weekly hours",
+            );
           }
           if (!rankReason.length) {
             rankReason.push("Needs focused completion cleanup");
@@ -2891,12 +3007,13 @@ export function registerAdminManagementRoutes(app: Express) {
             claimed,
             verifiedProfile: Boolean(row?.isVerified),
             locallyOwned: Boolean(row?.hasGoldenPlate),
-            hasPublicProfile: publicReady,
-            publicProfileUrl: publicReady ? canonicalPath : null,
+            hasPublicProfile,
+            publicProfileUrl: hasPublicProfile ? canonicalPath : null,
             profileCompletenessScore: completenessScore,
             missingFields,
             menuStatus: {
               ready: menuReady,
+              state: completionTruth?.menuState || "missing",
               menuCount,
               menuItemCount,
               hasMenuFallback,
@@ -2904,6 +3021,7 @@ export function registerAdminManagementRoutes(app: Express) {
             },
             photoStatus: {
               ready: photoReady,
+              state: completionTruth?.mediaState || "missing",
               hasLogo: Boolean(row?.logoUrl),
               hasCover: Boolean(row?.coverImageUrl),
               uploadedCount: photoCount,
@@ -2920,10 +3038,18 @@ export function registerAdminManagementRoutes(app: Express) {
               hasActionLinks,
             },
             scheduleStatus: {
-              required: isTruck,
+              required: true,
               ready: scheduleReady,
+              kind: isTruck ? "dated_truck_schedule" : "fixed_weekly_hours",
+              state: isTruck
+                ? completionTruth?.datedTruckScheduleState || "missing"
+                : completionTruth?.fixedWeeklyHoursState || "missing",
+              workflowState:
+                completionTruth?.datedTruckScheduleWorkflowState ||
+                "not_applicable",
               mobileOnline: Boolean(row?.mobileOnline),
-              hasOperatingHours: Boolean(row?.operatingHours),
+              hasOperatingHours:
+                completionTruth?.fixedWeeklyHoursState === "ready",
               reviewedUnavailable: scheduleReviewedUnavailable,
             },
             dealsEventsStatus: {
@@ -2944,6 +3070,7 @@ export function registerAdminManagementRoutes(app: Express) {
               websiteUrl: candidate.websiteUrl || null,
             })),
             publicReady,
+            completionTruth: completionTruth || null,
             handoffReady,
             adminFixable,
             blockedOwnerInput,
@@ -2975,11 +3102,7 @@ export function registerAdminManagementRoutes(app: Express) {
                   ? "fix_now"
                   : "needs_business_input",
               photos: photoReady ? "ready" : "needs_business_input",
-              schedule: !isTruck
-                ? "not_applicable"
-                : scheduleReady
-                  ? "ready"
-                  : "needs_business_input",
+              schedule: scheduleReady ? "ready" : "needs_business_input",
               deals: dealsReady ? "optional_reviewed" : "optional",
               events: eventsReady ? "optional_reviewed" : "optional",
             },
@@ -3064,11 +3187,6 @@ export function registerAdminManagementRoutes(app: Express) {
         });
 
         const parsed = schema.parse(req.body || {});
-        const normalize = (value: unknown) => {
-          const text = String(value ?? "").trim();
-          return text.length > 0 ? text : null;
-        };
-
         const restaurant = await storage.getRestaurant(businessId);
         if (!restaurant) {
           return res.status(404).json({ message: "Business not found" });
@@ -3169,68 +3287,50 @@ export function registerAdminManagementRoutes(app: Express) {
         ] as const;
         for (const field of directFields) {
           if ((parsed as any)[field] !== undefined) {
-            updates[field] = normalize((parsed as any)[field]);
+            updates[field] = normalizeAdminCompletionValue((parsed as any)[field]);
           }
         }
         if (parsed.operatingHours !== undefined) {
           updates.operatingHours = parsed.operatingHours ?? null;
         }
 
-        const existingSettings =
-          restaurant && typeof (restaurant as any).socialAutopostSettings === "object"
-            ? { ...((restaurant as any).socialAutopostSettings || {}) }
-            : {};
-        const existingActionLinks =
-          existingSettings && typeof (existingSettings as any).publicActionLinks === "object"
-            ? { ...((existingSettings as any).publicActionLinks || {}) }
-            : {};
-        const existingReview =
-          existingSettings && typeof (existingSettings as any).completionReview === "object"
-            ? { ...((existingSettings as any).completionReview || {}) }
-            : {};
-        const existingGallery =
-          Array.isArray((existingSettings as any)?.publicGalleryImages)
-            ? [...((existingSettings as any).publicGalleryImages || [])]
-            : [];
-
-        if (parsed.publicActionLinks) {
-          const actionLinks = { ...existingActionLinks };
-          for (const [key, value] of Object.entries(parsed.publicActionLinks)) {
-            if (value === undefined) continue;
-            actionLinks[key] = normalize(value);
-          }
-          existingSettings.publicActionLinks = actionLinks;
+        const verifiedAt = new Date().toISOString();
+        const updatedRestaurant = await withLockedAdminBusinessCompletion(
+          businessId,
+          async (tx, lockedRestaurant) => {
+            const socialAutopostSettings = mergeAdminBusinessCompletionSettings({
+              settingsValue: lockedRestaurant.socialAutopostSettings,
+              publicActionLinks: parsed.publicActionLinks,
+              reviewed: parsed.reviewed,
+              galleryImageUrl: parsed.galleryImageUrl,
+              galleryImageApproved: parsed.galleryImageApproved,
+              verifiedAt,
+            });
+            const [updated] = await tx
+              .update(restaurants)
+              .set({
+                ...updates,
+                socialAutopostSettings,
+                updatedAt: new Date(),
+              } as any)
+              .where(eq(restaurants.id, businessId))
+              .returning();
+            return updated;
+          },
+        );
+        if (!updatedRestaurant) {
+          return res.status(404).json({ message: "Business not found" });
         }
-        if (parsed.reviewed) {
-          existingSettings.completionReview = {
-            ...existingReview,
-            ...parsed.reviewed,
-          };
-        }
-        if (parsed.galleryImageUrl !== undefined) {
-          const url = normalize(parsed.galleryImageUrl);
-          if (url) {
-            existingSettings.publicGalleryImages = [
-              ...existingGallery,
-              {
-                url,
-                source: "gallery",
-                publicApproved: parsed.galleryImageApproved !== false,
-                lastVerifiedAt: new Date().toISOString(),
-              },
-            ];
-          }
-        }
-
-        updates.socialAutopostSettings = existingSettings;
-        const updatedRestaurant = await storage.updateRestaurant(businessId, updates as any);
         return res.json({ ok: true, restaurant: updatedRestaurant });
       } catch (error) {
-        console.error("Error updating business completion fields:", error);
-        return res.status(400).json({
+        console.error(
+          "Admin business completion update failed",
+          safeAdminCompletionErrorContext(error),
+        );
+        return res.status(error instanceof z.ZodError ? 400 : 500).json({
           message:
-            error instanceof Error
-              ? error.message
+            error instanceof z.ZodError
+              ? "Invalid business completion fields"
               : "Failed to update business completion fields",
         });
       }

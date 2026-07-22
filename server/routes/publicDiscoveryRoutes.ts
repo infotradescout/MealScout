@@ -21,7 +21,9 @@ import {
   events,
   hosts,
   menuCategories,
+  menuItemModifiers,
   menuItems,
+  menuItemVariants,
   menuItemRecommendations,
   menuItemPhotos,
   menus,
@@ -47,6 +49,7 @@ import {
   resolveUniqueCleanBusinessPathForEntity,
 } from "../publicProfiles/publicBusinessSlugResolver";
 import { buildPublicTruckOperatingPlan } from "../services/truckOperatingPlan";
+import { createStructuredMenuRevision } from "../services/menuRevision";
 import { loadConfirmedEventTrucks } from "../services/confirmedEventTrucks";
 import { resolveCityTimeZoneSync } from "../services/cityTimeZone";
 import { buildSlotDateTimes } from "../services/timeIntent";
@@ -533,24 +536,27 @@ const buildPublicMenuPayload = async (
     viewerUserId?: string | null;
   },
 ) => {
+  // These exact structured rows feed both the rendered payload and its
+  // revision. Computing the revision from a second query can pair content B
+  // with revision A during a concurrent menu edit and falsely retain an owner
+  // approval label.
   const menuRows = await db
-    .select({
-      id: menus.id,
-      name: menus.name,
-      serviceType: menus.serviceType,
-      updatedAt: menus.updatedAt,
-      importedAt: menus.importedAt,
-    })
+    .select()
     .from(menus)
-    .where(and(eq(menus.restaurantId, restaurantId), eq(menus.isActive, true)));
+    .where(
+      and(eq(menus.restaurantId, restaurantId), eq(menus.isActive, true)),
+    );
 
-  const importUrlRows = await db.execute(
-    sql`select import_url from menus where restaurant_id = ${restaurantId} and is_active = true and import_url is not null order by updated_at desc nulls last limit 1`,
-  );
   const menuUrlFallback =
-    (Array.isArray((importUrlRows as any)?.rows)
-      ? String((importUrlRows as any).rows[0]?.import_url || "").trim()
-      : "") || null;
+    [...menuRows]
+      .filter((row: any) => String(row.importUrl || "").trim())
+      .sort(
+        (left: any, right: any) =>
+          new Date(right.updatedAt || right.importedAt || 0).getTime() -
+          new Date(left.updatedAt || left.importedAt || 0).getTime(),
+      )
+      .map((row: any) => String(row.importUrl || "").trim())
+      .find(Boolean) || null;
 
   const [linkedListing] = await db
     .select({
@@ -656,17 +662,14 @@ const buildPublicMenuPayload = async (
           : (null as Date | null),
       menuUrl: menuUrlFallback,
       hasStructuredMenu: listingMenuSections.length > 0,
+      menuRevision: null as string | null,
+      menuRevisionCoversRenderedMenu: false,
     };
   }
 
   const menuIds = menuRows.map((row: any) => row.id);
   const categoryRows = await db
-    .select({
-      id: menuCategories.id,
-      menuId: menuCategories.menuId,
-      name: menuCategories.name,
-      sortOrder: menuCategories.sortOrder,
-    })
+    .select()
     .from(menuCategories)
     .where(
       and(
@@ -676,25 +679,38 @@ const buildPublicMenuPayload = async (
     );
 
   const itemRows = await db
-    .select({
-      id: menuItems.id,
-      menuId: menuItems.menuId,
-      categoryId: menuItems.categoryId,
-      name: menuItems.name,
-      description: menuItems.description,
-      priceCents: menuItems.priceCents,
-      imageUrl: menuItems.imageUrl,
-      updatedAt: menuItems.updatedAt,
-      sortOrder: menuItems.sortOrder,
-    })
+    .select()
     .from(menuItems)
     .where(
-      and(inArray(menuItems.menuId, menuIds), eq(menuItems.isAvailable, true)),
+      and(
+        inArray(menuItems.menuId, menuIds),
+        eq(menuItems.restaurantId, restaurantId),
+        eq(menuItems.isAvailable, true),
+      ),
     );
 
   const itemIds = itemRows
     .map((row: any) => String(row.id || ""))
     .filter(Boolean);
+  const [revisionVariantRows, revisionModifierRows] = itemIds.length
+    ? await Promise.all([
+        db
+          .select()
+          .from(menuItemVariants)
+          .where(inArray(menuItemVariants.menuItemId, itemIds)),
+        db
+          .select()
+          .from(menuItemModifiers)
+          .where(inArray(menuItemModifiers.menuItemId, itemIds)),
+      ])
+    : [[], []];
+  const menuRevisionEvidence = createStructuredMenuRevision({
+    menus: menuRows as Array<Record<string, unknown>>,
+    categories: categoryRows as Array<Record<string, unknown>>,
+    items: itemRows as Array<Record<string, unknown>>,
+    variants: revisionVariantRows as Array<Record<string, unknown>>,
+    modifiers: revisionModifierRows as Array<Record<string, unknown>>,
+  });
   let publicPhotoRows: Array<{
     menuItemId: string | null;
     imageUrl: string | null;
@@ -1022,6 +1038,8 @@ const buildPublicMenuPayload = async (
     menuLastUpdatedAt: activeVariant?.menuLastUpdatedAt || menuLastUpdatedAt,
     menuUrl: menuUrlFallback,
     hasStructuredMenu: activeSections.length > 0,
+    menuRevision: menuRevisionEvidence.revision,
+    menuRevisionCoversRenderedMenu: true,
   };
 };
 
