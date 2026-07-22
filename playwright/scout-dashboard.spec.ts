@@ -268,23 +268,7 @@ test.describe("Scout local dashboard", () => {
     await expect(page.locator('a[href="/map"], a[href$="/map"]')).toHaveCount(0);
   });
 
-  // The button this test drove ("Expand map to fullscreen") was renamed to
-  // "Expand map" and now lives inside the spatial-decision rail, which only
-  // renders once `spatialDecisionItems` is non-empty — and that requires a
-  // marker from `sceneFilteredMapMarkers`, which in the default (non-fullMap)
-  // sheet state never populates under any mock data this suite can supply
-  // (verified empirically: adding multiple nearby restaurants still leaves
-  // the rail and its button entirely absent from the DOM). The page also
-  // defines pull-to-expand drag handlers (handleSheetTouchStart/Move/End,
-  // handleSheetMouseDown/Move/Up in explore-preview-v2.tsx) that read as the
-  // intended fallback entry point, but they are never attached to any
-  // element via onTouchStart/onMouseDown — dead code. As it stands there may
-  // be no way to reach fullMap from the default Scout view without an
-  // already-populated decision rail. That's either a real gap or a gesture
-  // wiring regression, not something this test suite should decide or mask.
-  test.fixme(
-    "Scout map expand stays on Scout",
-    async ({ page }) => {
+  test("Scout map expand stays on Scout", async ({ page }) => {
       await page.setViewportSize({ width: 430, height: 932 });
       await page.goto(`${FRONTEND}/scout`, { waitUntil: "domcontentloaded" });
 
@@ -296,8 +280,7 @@ test.describe("Scout local dashboard", () => {
       await expect(page).toHaveURL(/\/scout(?:[?#].*)?$/);
       await expect(page.getByRole("button", { name: /collapse/i })).toBeVisible();
       await expect(page.getByTestId("scout-interactive-map")).toBeVisible();
-    },
-  );
+  });
 
   test("Parking Pass route owns the parking map experience", async ({ page }) => {
     await page.goto(`${FRONTEND}/parking-pass`, { waitUntil: "domcontentloaded" });

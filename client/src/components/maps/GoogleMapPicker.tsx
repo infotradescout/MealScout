@@ -59,6 +59,24 @@ export interface GoogleMapPickerProps {
   routePath?: GeoPoint[];
 }
 
+const removeGoogleMarker = (marker: any) => {
+  if (!marker) return;
+  if (typeof marker.setMap === "function") {
+    marker.setMap(null);
+    return;
+  }
+  if ("map" in marker) marker.map = null;
+};
+
+const updateGoogleMarkerPosition = (marker: any, position: GeoPoint) => {
+  if (!marker) return;
+  if (typeof marker.setPosition === "function") {
+    marker.setPosition(position);
+    return;
+  }
+  marker.position = position;
+};
+
 // ─── Google Maps loader (shared singleton) ────────────────────────────────────
 
 type GoogleMapsWindow = Window & {
@@ -174,6 +192,14 @@ function GoogleMapRenderer({
   // Portal state: the DOM node injected into the InfoWindow + the ReactNode to render there
   const [infoPortalContainer, setInfoPortalContainer] = useState<HTMLDivElement | null>(null);
   const [infoPortalContent, setInfoPortalContent] = useState<React.ReactNode>(null);
+  const fitPinsKey = fitPins
+    ? pins
+        .map(
+          (pin) =>
+            `${pin.key}:${pin.position.lat.toFixed(6)},${pin.position.lng.toFixed(6)}`,
+        )
+        .join("|")
+    : "";
 
   // Load SDK + initialise map
   useEffect(() => {
@@ -260,7 +286,7 @@ function GoogleMapRenderer({
     return () => {
       cancelled = true;
       Array.from(markersRef.current.values()).forEach((marker) => {
-        marker.setMap?.(null);
+        removeGoogleMarker(marker);
       });
       markersRef.current.clear();
       Array.from(trafficCircleRefs.current.values()).forEach((circle) => {
@@ -302,7 +328,7 @@ function GoogleMapRenderer({
     const incomingKeys = new Set(pins.map((p) => p.key));
     for (const [key, marker] of existing) {
       if (!incomingKeys.has(key)) {
-        marker.setMap(null);
+        removeGoogleMarker(marker);
         existing.delete(key);
       }
     }
@@ -310,7 +336,10 @@ function GoogleMapRenderer({
     // Add / update markers
     for (const pin of pins) {
       if (existing.has(pin.key)) {
-        existing.get(pin.key).setPosition({ lat: pin.position.lat, lng: pin.position.lng });
+        updateGoogleMarkerPosition(existing.get(pin.key), {
+          lat: pin.position.lat,
+          lng: pin.position.lng,
+        });
       } else {
         const AdvancedMarkerElement = g.maps.marker?.AdvancedMarkerElement;
         const useAdvanced = Boolean(AdvancedMarkerElement && mapId);
@@ -382,7 +411,10 @@ function GoogleMapRenderer({
     const bounds = new g.maps.LatLngBounds();
     validPins.forEach((pin) => bounds.extend(pin.position));
     map.fitBounds(bounds, 72);
-  }, [fitPins, mapReadyVersion, pins]);
+    // Pin popup/content changes must not refit the viewport. Refit only when
+    // the actual pin geometry changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fitPins, fitPinsKey, mapReadyVersion]);
 
   useEffect(() => {
     routePolylineRef.current?.setMap?.(null);

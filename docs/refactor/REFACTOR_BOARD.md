@@ -2,6 +2,15 @@
 
 Use this board to track every refactor item from queue to verification.
 
+Mandatory operating contracts:
+
+- `docs/refactor/EXECUTION_DISCIPLINE_PROTOCOL.md`
+- `docs/refactor/HOTSPOT_OWNERSHIP_MATRIX.md`
+- `docs/refactor/REFACTOR_METRICS_LOG.md`
+
+No item may move to In Progress without a named owner, named non-author
+reviewer, bounded blast radius, rollback method, and parity-check plan.
+
 ## Queued
 
 _nothing queued_

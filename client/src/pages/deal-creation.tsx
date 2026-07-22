@@ -48,6 +48,10 @@ import { authUrl } from "@/lib/api";
 import type { Restaurant } from "@shared/schema";
 import { isBarBusinessType, isTruckBusinessType } from "@shared/businessTypes";
 import { buildPublicProfilePath } from "@/lib/public-profile-path";
+import {
+  getScopedBusinessPermissions,
+  type BusinessAccessContext,
+} from "@/lib/business-access";
 
 const dealSchema = z
   .object({
@@ -190,14 +194,7 @@ export default function DealCreation() {
     };
   }, [selectedBusiness]);
 
-  const { data: businessAccess } = useQuery<{
-    hasAnyAccess: boolean;
-    permissions: {
-      manageDeals: boolean;
-      manageProfile?: boolean;
-      viewAnalytics?: boolean;
-    };
-  }>({
+  const { data: businessAccess } = useQuery<BusinessAccessContext>({
     queryKey: ["/api/business-access/me"],
     enabled: isAuthenticated,
     retry: false,
@@ -570,26 +567,38 @@ export default function DealCreation() {
       user.userType === "duper_admin" ||
       user.userType === "super_admin" ||
       user.userType === "staff");
+  const scopedBusinessPermissions = getScopedBusinessPermissions(
+    businessAccess,
+    selectedBusiness.id,
+  );
   const canManageDeals =
     Boolean(isAdminOrStaff) ||
     user?.userType === "restaurant_owner" ||
     user?.userType === "food_truck" ||
-    businessAccess?.permissions?.manageDeals === true;
+    scopedBusinessPermissions.manageDeals;
   const canManageBusinessProfile =
     Boolean(isAdminOrStaff) ||
     user?.userType === "restaurant_owner" ||
     user?.userType === "food_truck" ||
-    businessAccess?.permissions?.manageProfile === true;
+    scopedBusinessPermissions.manageProfile;
   const isOwnerRole =
     Boolean(isAdminOrStaff) ||
     user?.userType === "restaurant_owner" ||
     user?.userType === "food_truck";
   const workspaceCapabilities = {
+    overview: canManageBusinessProfile,
+    profile: canManageBusinessProfile,
+    menu: canManageBusinessProfile,
+    availability:
+      isOwnerRole || scopedBusinessPermissions.manageParkingPass,
+    media: canManageBusinessProfile,
     deals: canManageDeals,
     audience:
-      isOwnerRole || businessAccess?.permissions?.viewAnalytics === true,
+      isOwnerRole || scopedBusinessPermissions.viewAnalytics,
+    work: isOwnerRole || scopedBusinessPermissions.manageParkingPass,
     team: isOwnerRole,
     payments: isOwnerRole,
+    settings: canManageBusinessProfile,
   };
   if (!canManageDeals) {
     return (

@@ -73,11 +73,8 @@ const NAV_HELP: Record<string, string> = {
     "Use admin tools to manage users, businesses, and platform operations.",
 };
 
-let hasGlobalNavigation = false;
-
 export default function Navigation({ scope = "local" }: NavigationProps) {
   const isGlobalScope = scope === "global";
-  const [showLocalNav, setShowLocalNav] = useState(true);
   const [moreOpen, setMoreOpen] = useState(false);
   const [location] = useLocation();
   const currentPath = location.split("?")[0];
@@ -95,24 +92,6 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
     setQuery: setScoutSearchQuery,
     setActiveFilter: setScoutSearchFilter,
   } = useScoutNavSearch();
-
-  useEffect(() => {
-    if (isGlobalScope) {
-      hasGlobalNavigation = true;
-      return () => {
-        hasGlobalNavigation = false;
-      };
-    }
-    if (hasGlobalNavigation) {
-      setShowLocalNav(false);
-    }
-  }, [isGlobalScope]);
-
-  useEffect(() => {
-    if (!isGlobalScope && hasGlobalNavigation) {
-      setShowLocalNav(false);
-    }
-  });
 
   useEffect(() => {
     setMoreOpen(false);
@@ -248,7 +227,11 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
 
   if (isGlobalScope && !user && currentPath === "/") return null;
   if (isWheelPage || isDocFullscreen || isScoutMapFullscreen) return null;
-  if (!isGlobalScope && !showLocalNav) return null;
+  // App.tsx owns the one global navigation instance for every shell route.
+  // Page-local legacy instances stay mounted only long enough to preserve
+  // hook order, then render nothing so route transitions cannot flash a
+  // duplicate nav before effects run.
+  if (!isGlobalScope) return null;
 
   const dashboardPath = "/dashboard";
   const isScoutRoute =

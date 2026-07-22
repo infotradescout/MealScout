@@ -5549,6 +5549,13 @@ export default function ExplorePreview() {
           <section
             data-testid="scout-map-container"
             data-scout-mobile-thirds-map="true"
+            onTouchStart={handleSheetTouchStart}
+            onTouchMove={handleSheetTouchMove}
+            onTouchEnd={handleSheetTouchEnd}
+            onMouseDown={handleSheetMouseDown}
+            onMouseMove={handleSheetMouseMove}
+            onMouseUp={handleSheetMouseUp}
+            onMouseLeave={handleSheetMouseUp}
             className={`relative overflow-hidden ${
               sheetState === "fullMap"
                 ? "w-full bg-[var(--bg-surface)]"
@@ -5790,6 +5797,15 @@ export default function ExplorePreview() {
                     className="h-4 w-4 text-[color:var(--text-primary)]"
                     aria-hidden="true"
                   />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={openScoutMap}
+                  aria-label="Expand map"
+                  className="absolute right-3 top-14 z-20 inline-flex h-9 w-9 items-center justify-center rounded-full bg-[var(--action-primary)] text-[color:var(--action-primary-text)] ring-1 ring-white/70 backdrop-blur-xl shadow-[0_8px_20px_rgba(0,0,0,0.18)]"
+                >
+                  <Maximize2 className="h-4 w-4" aria-hidden="true" />
                 </button>
 
                 <SpatialDecisionRail
@@ -6416,10 +6432,6 @@ const scoutRotatingRowFallbackCopy: Partial<
   new_to_mealscout: {
     title: "More on MealScout",
     subtitle: "New local listings are still building.",
-  },
-  community_picks: {
-    title: "Community Food Spots",
-    subtitle: "No community picks are posted yet.",
   },
   worth_discovering: {
     title: "More Worth Discovering",
@@ -8195,8 +8207,18 @@ function ActiveSceneContent({
       });
     });
     const claimedFallbackBusinessKeys = new Set<string>();
-    const rotatingSpotsForRow = (rowId: ScoutHorizontalRowId) =>
-      rowId === "food_trucks_today" ? [] : rotatingSpots;
+    const rotatingSpotsForRow = (rowId: ScoutHorizontalRowId) => {
+      if (rowId === "food_trucks_today" || rowId === "community_picks") {
+        return [];
+      }
+      if (rowId === "nearby_restaurants" || rowId === "happy_hours") {
+        return rotatingSpots.filter(
+          (spot) =>
+            getScoutRestaurantLikeKind(spot.restaurant) === "restaurant",
+        );
+      }
+      return rotatingSpots;
+    };
     const emptyRowsEligibleForRotation = new Set(
       baseScoutRows
         .filter(
@@ -8234,26 +8256,7 @@ function ActiveSceneContent({
             !claimedFallbackBusinessKeys.has(key))
         );
       });
-      const unusedFallbackSpots = rowSpotPool.filter((spot) => {
-        const key = getScoutBusinessCardKey(
-          spot.restaurant,
-          getRestaurantProfilePath(spot.restaurant),
-        );
-        return (
-          (!key || !claimedFallbackBusinessKeys.has(key)) &&
-          !unseenEverywhereSpots.includes(spot)
-        );
-      });
-      const fallbackSpotOrder = [
-        ...unseenEverywhereSpots,
-        ...unusedFallbackSpots,
-        ...rowSpotPool.filter(
-          (spot) =>
-            !unseenEverywhereSpots.includes(spot) &&
-            !unusedFallbackSpots.includes(spot),
-        ),
-      ];
-      const fallbackCards = fallbackSpotOrder
+      const fallbackCards = unseenEverywhereSpots
         .slice(0, 4)
         .map(
           (spot) =>

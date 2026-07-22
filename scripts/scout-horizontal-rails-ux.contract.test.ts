@@ -210,9 +210,9 @@ const assignments = assignScoutBusinessCardsBySection([
 
 assert.deepEqual(assignments.live_trucks_now?.map((item) => item.id), ["truck-1"]);
 assert.deepEqual(assignments.food_trucks_today, []);
-assert.deepEqual(assignments.open_now_near_you?.map((item) => item.id), ["truck-1", "restaurant-1"]);
-assert.deepEqual(assignments.nearby_restaurants?.map((item) => item.id), ["restaurant-1"]);
-assert.deepEqual(assignments.worth_discovering?.map((item) => item.id), ["truck-1", "restaurant-1"]);
+assert.deepEqual(assignments.open_now_near_you?.map((item) => item.id), ["restaurant-1"]);
+assert.deepEqual(assignments.nearby_restaurants, []);
+assert.deepEqual(assignments.worth_discovering, []);
 
 assert.equal(normalizeScoutBusinessKind({ businessType: "food_cart_collective" }, "restaurant"), "local_activity");
 

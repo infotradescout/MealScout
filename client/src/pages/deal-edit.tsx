@@ -27,6 +27,10 @@ import type { Deal, Restaurant } from "@shared/schema";
 import { authUrl } from "@/lib/api";
 import { isBarBusinessType, isTruckBusinessType } from "@shared/businessTypes";
 import { buildPublicProfilePath } from "@/lib/public-profile-path";
+import {
+  getScopedBusinessPermissions,
+  type BusinessAccessContext,
+} from "@/lib/business-access";
 
 const dealEditSchema = z
   .object({
@@ -85,12 +89,7 @@ export default function DealEdit() {
     queryKey: ["/api/restaurants/my-restaurants"],
     enabled: isAuthenticated,
   });
-  const { data: businessAccess } = useQuery<{
-    permissions?: {
-      manageDeals?: boolean;
-      viewAnalytics?: boolean;
-    };
-  }>({
+  const { data: businessAccess } = useQuery<BusinessAccessContext>({
     queryKey: ["/api/business-access/me"],
     enabled: isAuthenticated,
     retry: false,
@@ -404,13 +403,26 @@ export default function DealEdit() {
     user?.userType === "super_admin" ||
     user?.userType === "staff";
   const canManageDeals =
-    isOwnerRole || businessAccess?.permissions?.manageDeals === true;
+    isOwnerRole ||
+    getScopedBusinessPermissions(businessAccess, selectedBusiness.id)
+      .manageDeals;
+  const scopedBusinessPermissions = getScopedBusinessPermissions(
+    businessAccess,
+    selectedBusiness.id,
+  );
   const workspaceCapabilities = {
+    overview: isOwnerRole || scopedBusinessPermissions.manageProfile,
+    profile: isOwnerRole || scopedBusinessPermissions.manageProfile,
+    menu: isOwnerRole || scopedBusinessPermissions.manageProfile,
+    availability:
+      isOwnerRole || scopedBusinessPermissions.manageParkingPass,
+    media: isOwnerRole || scopedBusinessPermissions.manageProfile,
     deals: canManageDeals,
-    audience:
-      isOwnerRole || businessAccess?.permissions?.viewAnalytics === true,
+    work: isOwnerRole || scopedBusinessPermissions.manageParkingPass,
+    audience: isOwnerRole || scopedBusinessPermissions.viewAnalytics,
     team: isOwnerRole,
     payments: isOwnerRole,
+    settings: isOwnerRole || scopedBusinessPermissions.manageProfile,
   };
   const publicEntityType =
     selectedBusiness.isFoodTruck ||
@@ -991,7 +1003,6 @@ export default function DealEdit() {
     </BusinessWorkspaceShell>
   );
 }
-
 
 
 

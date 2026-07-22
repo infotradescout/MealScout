@@ -186,6 +186,24 @@ try {
           verified: true,
         },
       ],
+      overrides: [
+        {
+          field: "description",
+          value: "Allowed owner-approved description",
+          reason: "owner correction",
+          evidenceDigest: "sha256:description",
+          actorReference: "owner:restaurant-1",
+          authorizedAt: "2026-07-19T15:05:00.000Z",
+        },
+        {
+          field: "payment",
+          value: { account: "override-must-not-cross" },
+          reason: "invalid protected override",
+          evidenceDigest: "sha256:payment-override",
+          actorReference: "owner:restaurant-1",
+          authorizedAt: "2026-07-19T15:05:00.000Z",
+        },
+      ],
     }),
     "sent",
   );
@@ -203,7 +221,12 @@ try {
     ["menu"],
   );
   assert.equal(inheritanceBody.candidates[0].value.sections.length, 0);
+  assert.deepEqual(
+    inheritanceBody.overrides.map((override: { field: string }) => override.field),
+    ["description"],
+  );
   assert.ok(!calls[1].body.includes("must-not-cross"));
+  assert.ok(!calls[1].body.includes("override-must-not-cross"));
 } finally {
   globalThis.fetch = originalFetch;
   for (const name of envNames) {

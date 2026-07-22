@@ -32,3 +32,15 @@
 ## Validation
 
 - [ ] `npm run check`
+# Refactor controls (required when a hot seam is touched)
+
+- Bounded seam / excluded scope:
+- Blast radius:
+- Owner GitHub handle:
+- Non-author reviewer GitHub handle:
+- Rollback method:
+- Auth and ownership parity:
+- Subscription gate parity:
+- Booking/event transition parity:
+- Admin totals/telemetry parity:
+- Metrics-log entry:

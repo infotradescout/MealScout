@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { isMealScoutProductionUrl } from "./productionTargetSafety";
 
 type SmokePacketInput = {
   profileType:
@@ -243,15 +244,9 @@ const run = async () => {
   const logoOverwrite = hasFlag("--logo-overwrite");
   const allowProduction = hasFlag("--allow-production");
 
-  const baseUrlHost = (() => {
-    try {
-      return new URL(baseUrl).host.toLowerCase();
-    } catch {
-      return "";
-    }
-  })();
+  const targetsMealScoutProduction = isMealScoutProductionUrl(baseUrl);
 
-  if (!allowProduction && /mealscout\.us$/i.test(baseUrlHost)) {
+  if (!allowProduction && targetsMealScoutProduction) {
     throw new Error(
       "Refusing to target production host without --allow-production.",
     );
