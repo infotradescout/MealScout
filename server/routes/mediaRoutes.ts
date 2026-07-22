@@ -7,6 +7,7 @@ import { storage } from "../storage";
 import { isAuthenticated } from "../unifiedAuth";
 import {
   deleteFromCloudinary,
+  isAuthenticatedCloudinaryDeliveryUrl,
   isCloudinaryConfigured,
   upload,
   uploadToCloudinary,
@@ -652,32 +653,43 @@ export function registerMediaRoutes(app: Express) {
 
   app.delete("/api/upload/:imageId", isAuthenticated, async (req: any, res) => {
     try {
-      const imageId = req.params.imageId;
-      const images = await db
-        .select()
-        .from(imageUploads)
-        .where(eq(imageUploads.id, imageId))
-        .limit(1);
-      const image = images[0];
+      const imageId = String(req.params.imageId || "").trim();
+      const outcome = await db.transaction(async (tx: any) => {
+        const [image] = await tx
+          .select()
+          .from(imageUploads)
+          .where(eq(imageUploads.id, imageId))
+          .limit(1)
+          .for("update");
+        if (!image) return "not_found" as const;
+        if (
+          image.uploadedByUserId !== req.user.id &&
+          req.user.userType !== "admin" &&
+          req.user.userType !== "duper_admin" &&
+          req.user.userType !== "super_admin"
+        ) {
+          return "forbidden" as const;
+        }
 
-      if (!image) {
+        // Keep the row locked until the remote bytes and authoritative upload
+        // record are both gone. Evidence decisions take a shared row lock, so
+        // they cannot approve a screenshot concurrently with this deletion.
+        if (image.cloudinaryPublicId) {
+          await deleteFromCloudinary(image.cloudinaryPublicId, {
+            type: isAuthenticatedCloudinaryDeliveryUrl(image.cloudinaryUrl)
+              ? "authenticated"
+              : "upload",
+          });
+        }
+        await tx.delete(imageUploads).where(eq(imageUploads.id, imageId));
+        return "deleted" as const;
+      });
+      if (outcome === "not_found") {
         return res.status(404).json({ message: "Image not found" });
       }
-
-      if (
-        image.uploadedByUserId !== req.user.id &&
-        req.user.userType !== "admin" &&
-        req.user.userType !== "duper_admin" &&
-        req.user.userType !== "super_admin"
-      ) {
+      if (outcome === "forbidden") {
         return res.status(403).json({ message: "Not authorized" });
       }
-
-      if (image.cloudinaryPublicId) {
-        await deleteFromCloudinary(image.cloudinaryPublicId);
-      }
-
-      await db.delete(imageUploads).where(eq(imageUploads.id, imageId));
 
       res.json({ message: "Image deleted successfully" });
     } catch (error) {

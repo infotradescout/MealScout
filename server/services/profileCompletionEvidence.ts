@@ -27,6 +27,7 @@ import {
   loadMenuRevisionEvidenceBatch,
   type MenuRevisionEvidence,
 } from "./menuRevision";
+import { deriveProfileEvidenceQuarantineVisibility } from "./profileEvidenceQuarantine";
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -155,11 +156,27 @@ const resolveMenuApproval = (
 const hasPublicApprovedMedia = (
   restaurant: ProfileCompletionRestaurantRecord,
 ) => {
+  const quarantineVisibility =
+    deriveProfileEvidenceQuarantineVisibility(restaurant);
   if (
-    isSafePublicMediaUrl(restaurant.logoUrl) ||
-    isSafePublicMediaUrl(restaurant.coverImageUrl)
+    isSafePublicMediaUrl(restaurant.logoUrl) &&
+    (!quarantineVisibility.hideMedia ||
+      quarantineVisibility.isAccepted("media_logo"))
   ) {
     return true;
+  }
+  if (
+    isSafePublicMediaUrl(restaurant.coverImageUrl) &&
+    (!quarantineVisibility.hideMedia ||
+      quarantineVisibility.isAccepted("media_cover"))
+  ) {
+    return true;
+  }
+  if (
+    quarantineVisibility.hideMedia &&
+    !quarantineVisibility.isAccepted("media_gallery")
+  ) {
+    return false;
   }
   const settings = asRecord(restaurant.socialAutopostSettings);
   const gallery = Array.isArray(settings.publicGalleryImages)

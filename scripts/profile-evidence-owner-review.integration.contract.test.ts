@@ -5,6 +5,8 @@ const routes = read("server/routes/profileEvidenceReviewRoutes.ts");
 const access = read("server/services/profileEvidenceReviewAccess.ts");
 const operations = read("server/routes/restaurantOperationsRoutes.ts");
 const intake = read("server/routes/admin/truckImportAdminRoutes.ts");
+const imageUpload = read("server/imageUpload.ts");
+const mediaRoutes = read("server/routes/mediaRoutes.ts");
 const registry = read("shared/profileEvidenceReview.ts");
 const rootRoutes = read("server/routes.ts");
 
@@ -32,22 +34,45 @@ requireAll(
     '"/api/restaurants/:restaurantId/profile-evidence-review/:proposalId"',
     "eq(businessStaffMemberships.restaurantId, restaurantId)",
     "hasProfileEvidenceReviewAccess",
+    "hasProfileEvidenceReviewDecisionAccess",
     "db.transaction(async (tx: any)",
     "pg_advisory_xact_lock",
     '.for("update")',
     '.for("share")',
-    "const review = buildReviewDto(restaurant)",
-    "ownerEvidenceImagesById(restaurant)",
+    "const review = await buildReviewDto(restaurant)",
+    "ownerEvidenceImagesById(",
     "isProfileEvidenceDecisionSourceInspectable",
+    'res.set("Cache-Control", "private, no-store")',
+    "inArray(imageUploads.id, referencedUploadIds)",
+    "eq(imageUploads.entityId, String(restaurant.id))",
+    "isAuthenticatedCloudinaryDeliveryUrl(row.cloudinaryUrl)",
+    "createAuthenticatedEvidenceReviewUrl(",
+    "await buildReviewDto(restaurant, tx, true)",
     "action: parsed.data.action",
     "proposal: proposalDto",
     'code: "evidence_not_inspectable"',
     "expectedCurrentValueFingerprint",
     "getProfileEvidenceFieldDefinition(field).destination",
     "planProfileEvidenceReviewDecision",
+    'proposal && plan.decision.action !== "declined"',
+    "reconcileOwnerConfirmedEvidenceQuarantine",
   ],
   "resource-scoped evidence route",
 );
+
+const imageResolverStart = routes.indexOf("const ownerEvidenceImagesById");
+const imageResolverEnd = routes.indexOf(
+  "const buildReviewDto",
+  imageResolverStart,
+);
+const imageResolver = routes.slice(imageResolverStart, imageResolverEnd);
+for (const mutableAlias of ["normalizedFilename", "originalFilename"]) {
+  if (imageResolver.includes(mutableAlias)) {
+    throw new Error(
+      `Owner evidence resolution must not use mutable alias ${mutableAlias}.`,
+    );
+  }
+}
 
 if (!routes.includes("getTableColumns(restaurants)") || !routes.includes(".leftJoin(")) {
   throw new Error(
@@ -62,6 +87,8 @@ requireAll(
     "String(membership.restaurantId || \"\").trim() === restaurantId",
     'String(membership.status || "").trim() === "active"',
     "permissions.manageProfile === true",
+    'if (input.userType === "staff") return false',
+    "if (isWriteAdmin(input.userType)) return true",
   ],
   "exact selected-business authorization",
 );
@@ -135,8 +162,110 @@ requireAll(
     "if (explicitRestaurant)",
     "explicitRestaurant.claimedFromImportId",
     "mergeProfileEvidenceApplySettings",
+    "uploadPrivateEvidenceToCloudinary(",
+    "bindProfileEvidenceProposalImageReferences(",
+    "ownerReviewEvidenceFieldProposals",
+    'deliveryType: "authenticated"',
+    "compactProfileEvidenceIntakeRequests(",
+    "countActiveProfileEvidenceIntakeRequests(",
   ],
   "queue-only intake",
+);
+
+const finalQueueTransactionStart = intake.indexOf(
+  "if (queuesOwnerReview && matchedRestaurant && reservedQueueRequest)",
+);
+const finalQueueTransactionEnd = intake.indexOf(
+  "} else if (mode === \"apply\")",
+  finalQueueTransactionStart,
+);
+const finalQueueTransaction = intake.slice(
+  finalQueueTransactionStart,
+  finalQueueTransactionEnd,
+);
+requireAll(
+  finalQueueTransaction,
+  [
+    '.for("update")',
+    'String(freshRestaurant.ownerId || "") !== expectedOwnerUserId',
+    'code: "existing_profile_owner_mismatch"',
+    "const queuedSettings = appendEvidence(freshSettings)",
+  ],
+  "final locked owner-review queue write",
+);
+if (
+  finalQueueTransaction.indexOf(
+    'String(freshRestaurant.ownerId || "") !== expectedOwnerUserId',
+  ) > finalQueueTransaction.indexOf("const queuedSettings = appendEvidence(freshSettings)")
+) {
+  throw new Error(
+    "Final evidence queue write must recheck the expected owner before merging evidence.",
+  );
+}
+
+requireAll(
+  imageUpload,
+  [
+    "uploadPrivateEvidenceToCloudinary(",
+    'type: "authenticated"',
+    "createAuthenticatedEvidenceReviewUrl(",
+    "cloudinary.utils.private_download_url(",
+    "expires_at: Math.floor(nowMs / 1000) + 5 * 60",
+    'attachment: false',
+  ],
+  "private evidence delivery",
+);
+const reviewUrlHelperStart = imageUpload.indexOf(
+  "export function createAuthenticatedEvidenceReviewUrl",
+);
+const reviewUrlHelperEnd = imageUpload.indexOf(
+  "export const isAuthenticatedCloudinaryDeliveryUrl",
+  reviewUrlHelperStart,
+);
+const reviewUrlHelper = imageUpload.slice(
+  reviewUrlHelperStart,
+  reviewUrlHelperEnd,
+);
+if (reviewUrlHelper.includes("cloudinary.url(")) {
+  throw new Error("Owner review URLs must expire; durable signed URLs are forbidden.");
+}
+requireAll(
+  mediaRoutes,
+  [
+    "isAuthenticatedCloudinaryDeliveryUrl(image.cloudinaryUrl)",
+    '? "authenticated"',
+    "deleteFromCloudinary(image.cloudinaryPublicId",
+  ],
+  "authenticated evidence deletion",
+);
+
+const evidenceUploadStart = intake.indexOf("const uploadEvidenceFiles = async");
+const evidenceUploadEnd = intake.indexOf(
+  "if ((mode === \"apply\" || queuesOwnerReview) && hasEvidenceFiles)",
+  evidenceUploadStart,
+);
+const evidenceUploadRoute = intake.slice(evidenceUploadStart, evidenceUploadEnd);
+const galleryPush = evidenceUploadRoute.indexOf(
+  "existingGallery.push(galleryEntry)",
+);
+const publicationGuard = evidenceUploadRoute.lastIndexOf(
+  "if (allowEvidencePublication)",
+  galleryPush,
+);
+if (galleryPush < 0 || publicationGuard < 0) {
+  throw new Error(
+    "Pending owner-review evidence must not enter publicGalleryImages.",
+  );
+}
+requireAll(
+  evidenceUploadRoute,
+  [
+    "remoteUrl: queuesOwnerReview",
+    '? null',
+    "uploadPrivateEvidenceToCloudinary(",
+    'sql`${imageUploads.cloudinaryUrl} like ${"%/image/authenticated/%"}`',
+  ],
+  "opaque private evidence persistence",
 );
 
 const evidenceApplyRouteStart = intake.indexOf(

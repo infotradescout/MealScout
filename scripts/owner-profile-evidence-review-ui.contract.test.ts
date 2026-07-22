@@ -47,7 +47,11 @@ for (const snippet of [
   'button-decline-evidence-phone\")).toBeEnabled()',
   'proposalId: PHONE_ID,\n    action: "decline"',
   'getByLabel("About your business")',
-  '"Current owner-written description."',
+  '"Owner-corrected public description."',
+  "profileWrites: () => profileWrites",
+  'description: "Owner-corrected public description."',
+  'fill("Owner unsaved fusion cuisine")',
+  'cuisineType: "Owner unsaved fusion cuisine"',
 ]) {
   if (!browserSpec.includes(snippet)) {
     throw new Error(`Owner evidence browser coverage is missing: ${snippet}`);

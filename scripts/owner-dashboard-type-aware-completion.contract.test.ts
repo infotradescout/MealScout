@@ -4,6 +4,18 @@ const ownerDashboard = readFileSync(
   "client/src/pages/restaurant-owner-dashboard.tsx",
   "utf8",
 ).replace(/\r\n/g, "\n");
+const parkingPass = readFileSync(
+  "client/src/pages/parking-pass.tsx",
+  "utf8",
+).replace(/\r\n/g, "\n");
+const parkingPassManage = readFileSync(
+  "client/src/pages/parking-pass-manage.tsx",
+  "utf8",
+).replace(/\r\n/g, "\n");
+const parkingPassNavigation = readFileSync(
+  "client/src/lib/parkingPassOwnerNavigation.ts",
+  "utf8",
+).replace(/\r\n/g, "\n");
 
 function requireAll(source: string, snippets: string[], label: string) {
   for (const snippet of snippets) {
@@ -61,12 +73,47 @@ requireAll(
     'completionTruth?.mediaState === "ready"',
     "completionTruth?.availabilityReady === true",
     'completionTruth?.publicRouteState === "published"',
-    'currentIsTruckBusiness ? { truck: "1" } : undefined',
+    "currentDatedStopScheduleHref",
+    "`/parking-pass?setup=schedule&truckId=${encodeURIComponent(",
     '"Dated truck stops missing"',
     'data-testid="truck-live-presence-information"',
     "does not affect profile completion.",
   ],
   "canonical owner completion UI",
+);
+
+requireAll(
+  parkingPass,
+  [
+    'queryKey: ["/api/subscription/status"]',
+    "distributionStatus?.hasAccess === true",
+    'data-testid="dated-stop-distribution-access-required"',
+    'setLocation("/subscribe")',
+    "parseParkingPassOwnerNavigation(window.location.search)",
+    "selectRequestedAccessibleTruck(",
+    "reconcileParkingPassTopTab({",
+  ],
+  "dated-stop schedule access",
+);
+
+requireAll(
+  parkingPassNavigation,
+  [
+    'params.get("truckId")',
+    'topTab: "schedule"',
+    "if (input.accessIsLoading) return input.currentTab;",
+    "accessibleTrucks.find((truck) => String(truck.id) === requestedId)",
+  ],
+  "dated-stop deep-link navigation",
+);
+
+requireAll(
+  parkingPassManage,
+  [
+    'fetch("/api/restaurants/my-restaurants"',
+    "`/parking-pass?setup=schedule&truckId=${encodeURIComponent(",
+  ],
+  "dated-stop manage redirect",
 );
 
 const truthReads = ownerDashboard.match(

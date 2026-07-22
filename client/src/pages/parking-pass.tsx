@@ -62,6 +62,13 @@ import {
   normalizeParkingPassLocationSearch,
   parkingPassLocationMatches,
 } from "@/lib/parkingPassSearch";
+import {
+  parseParkingPassOwnerNavigation,
+  reconcileParkingPassTopTab,
+  selectRequestedAccessibleTruck,
+  type ParkingPassHostToolsTab,
+  type ParkingPassTopTab,
+} from "@/lib/parkingPassOwnerNavigation";
 import { formatRelativeTime } from "@/lib/relative-time";
 import {
   ParkingScheduleCalendar,
@@ -807,7 +814,23 @@ export default function ParkingPassPage() {
     retry: false,
     refetchOnWindowFocus: false,
   });
+  const {
+    data: distributionStatus,
+    isLoading: distributionStatusLoading,
+    isError: distributionStatusError,
+    refetch: refetchDistributionStatus,
+  } = useQuery<{ hasAccess?: boolean; status?: string }>({
+    queryKey: ["/api/subscription/status"],
+    enabled: !!user,
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
   const isAdminOrStaff = isStaffOrAdminUserType(user?.userType);
+  const isDistributionAdmin = [
+    "admin",
+    "duper_admin",
+    "super_admin",
+  ].includes(String(user?.userType || ""));
   const [adminParkingMode, setAdminParkingMode] = useState<
     "auto" | "truck" | "host"
   >("auto");
@@ -827,7 +850,10 @@ export default function ParkingPassPage() {
     user?.userType === "food_truck"
       ? "/restaurant-signup?businessType=food_truck&source=parking-pass&claim=1"
       : "/restaurant-signup?businessType=restaurant&source=parking-pass&claim=1";
-  const hasPremiumTruckTools = canManageParkingPass;
+  const hasBusinessDistributionAccess =
+    isDistributionAdmin || distributionStatus?.hasAccess === true;
+  const hasPremiumTruckTools =
+    canManageParkingPass && hasBusinessDistributionAccess;
   const [isLoading, setIsLoading] = useState(true);
   const [passListings, setPassListings] = useState<ParkingPassListing[]>([]);
   const [ownedFoodTrucks, setOwnedFoodTrucks] = useState<any[]>([]);
@@ -1216,30 +1242,14 @@ export default function ParkingPassPage() {
     ).padStart(2, "0")}`;
   }, []);
   const [liveLeaveTime, setLiveLeaveTime] = useState(defaultLeaveTime);
-  const [topTab, setTopTab] = useState<"book" | "schedule" | "host">("book");
-  const [hostToolsTab, setHostToolsTab] = useState<
-    "listings" | "location" | "payments"
-  >("listings");
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const setup = String(params.get("setup") || params.get("tab") || "")
-      .trim()
-      .toLowerCase();
-    if (setup === "schedule" || setup === "truck") {
-      setTopTab("schedule");
-      return;
-    }
-    if (setup === "host" || setup === "location") {
-      setTopTab("host");
-      setHostToolsTab(setup === "location" ? "location" : "listings");
-      return;
-    }
-    if (setup === "payments") {
-      setTopTab("host");
-      setHostToolsTab("payments");
-    }
-  }, []);
+  const [ownerNavigation] = useState(() =>
+    parseParkingPassOwnerNavigation(window.location.search),
+  );
+  const [topTab, setTopTab] = useState<ParkingPassTopTab>(
+    ownerNavigation.topTab,
+  );
+  const [hostToolsTab, setHostToolsTab] =
+    useState<ParkingPassHostToolsTab>(ownerNavigation.hostToolsTab);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -1454,8 +1464,13 @@ export default function ParkingPassPage() {
                 : [];
               setOwnedFoodTrucks(validFoodTrucks);
               if (validFoodTrucks.length > 0) {
-                setTruckId(validFoodTrucks[0].id);
-                setTruck(validFoodTrucks[0]);
+                const selectedTruck = selectRequestedAccessibleTruck(
+                  validFoodTrucks,
+                  ownerNavigation.requestedTruckId,
+                );
+                if (!selectedTruck) return;
+                setTruckId(selectedTruck.id);
+                setTruck(selectedTruck);
               } else {
                 setTruckId(null);
                 setTruck(null);
@@ -1508,7 +1523,7 @@ export default function ParkingPassPage() {
     return () => {
       cancelled = true;
     };
-  }, [isAuthenticated, toast]);
+  }, [isAuthenticated, ownerNavigation.requestedTruckId, toast]);
 
   useEffect(() => {
     if (!truck) return;
@@ -2057,8 +2072,12 @@ export default function ParkingPassPage() {
   const handleCreateSchedule = async () => {
     if (!hasPremiumTruckTools) {
       toast({
-        title: "Permission required",
-        description: "This account cannot manage the selected truck's schedule.",
+        title: canManageParkingPass
+          ? "Business Distribution access required"
+          : "Permission required",
+        description: canManageParkingPass
+          ? "Start or restore Business Distribution access before publishing a dated stop."
+          : "This account cannot manage the selected truck's schedule.",
         variant: "destructive",
       });
       return;
@@ -3708,22 +3727,20 @@ export default function ParkingPassPage() {
         "book",
         canScheduleTab ? "schedule" : null,
         canHostTab ? "host" : null,
-      ].filter(Boolean) as Array<"book" | "schedule" | "host">,
+      ].filter(Boolean) as ParkingPassTopTab[],
     [canHostTab, canScheduleTab],
   );
 
   useEffect(() => {
-    const preferred: "book" | "schedule" | "host" = canHostTab
-      ? canUseTruckSide
-        ? "book"
-        : "host"
-      : "book";
-    if (!availableTabs.includes(topTab)) {
-      setTopTab(preferred);
-    } else if (!canUseTruckSide && topTab === "schedule") {
-      setTopTab(preferred);
-    }
-  }, [availableTabs, canHostTab, canUseTruckSide, topTab]);
+    const nextTab = reconcileParkingPassTopTab({
+      currentTab: topTab,
+      accessIsLoading: isLoading,
+      availableTabs,
+      canUseTruckSide,
+      canUseHostSide: canHostTab,
+    });
+    if (nextTab !== topTab) setTopTab(nextTab);
+  }, [availableTabs, canHostTab, canUseTruckSide, isLoading, topTab]);
   const normalizedCityQuery = normalizeParkingPassLocationSearch(cityQuery);
   const locationGroups = useMemo(() => {
     const byHost = new Map<string, ParkingPassLocationGroup>();
@@ -6462,10 +6479,50 @@ export default function ParkingPassPage() {
           {topTab === "schedule" && isTruckViewUser && (
             <Card className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)]">
               <CardContent className="p-5 space-y-4">
-                {!hasPremiumTruckTools && (
+                {!canManageParkingPass && (
                   <div className="rounded-xl border border-[color:var(--accent-text)]/25 bg-[color:var(--accent-text)]/8 p-4 text-sm text-[color:var(--text-secondary)]">
                     Ask the business owner to grant schedule and profile
                     permissions for this truck.
+                  </div>
+                )}
+                {canManageParkingPass && !hasBusinessDistributionAccess && (
+                  <div
+                    className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950"
+                    data-testid="dated-stop-distribution-access-required"
+                  >
+                    <p className="font-semibold">
+                      {distributionStatusLoading
+                        ? "Checking dated-stop access…"
+                        : distributionStatusError
+                          ? "Dated-stop access could not be verified"
+                          : "Business Distribution access is required for dated stops"}
+                    </p>
+                    <p className="mt-1 text-xs leading-5 text-amber-900/80">
+                      {distributionStatusError
+                        ? "Try the access check again before editing this schedule."
+                        : "Weekly service hours and live sharing do not satisfy the dated-stop profile requirement. Start or restore access to publish a manual stop."}
+                    </p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {distributionStatusError ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => void refetchDistributionStatus()}
+                        >
+                          Retry access check
+                        </Button>
+                      ) : null}
+                      {!distributionStatusLoading ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={() => setLocation("/subscribe")}
+                        >
+                          View access options
+                        </Button>
+                      ) : null}
+                    </div>
                   </div>
                 )}
                 {hasPremiumTruckTools && !canManageTruckProfile && (

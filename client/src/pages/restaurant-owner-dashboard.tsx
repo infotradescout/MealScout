@@ -108,7 +108,10 @@ import {
 import { z } from "zod";
 import type { Restaurant } from "@shared/schema";
 import type { PublicRestaurantProfile } from "@shared/publicProfiles";
-import type { ProfileEvidenceOwnerReviewDto } from "@shared/profileEvidenceReview";
+import type {
+  ProfileEvidenceOwnerReviewDto,
+  ProfileEvidenceReviewField,
+} from "@shared/profileEvidenceReview";
 import type { ProfileCompletionTruth } from "@shared/profileCompletionStatus";
 import { SEOHead } from "@/components/seo-head";
 import { buildPublicProfilePath } from "@/lib/public-profile-path";
@@ -170,6 +173,53 @@ interface TruckBookingItem {
   } | null;
 }
 
+const buildOwnerProfileDraft = (
+  restaurant: Restaurant | Record<string, any>,
+): OwnerProfileDraft => {
+  const row: any = restaurant;
+  const actionLinks =
+    row?.socialAutopostSettings &&
+    typeof row.socialAutopostSettings === "object" &&
+    typeof row.socialAutopostSettings.publicActionLinks === "object"
+      ? row.socialAutopostSettings.publicActionLinks
+      : {};
+  return {
+    name: String(row?.name || ""),
+    description: String(row?.description || ""),
+    cuisineType: String(row?.cuisineType || ""),
+    businessType: resolveStoredFoodBusinessType(row) || "restaurant",
+    address: String(row?.address || ""),
+    city: String(row?.city || ""),
+    state: String(row?.state || ""),
+    phone: String(row?.phone || ""),
+    websiteUrl: String(row?.websiteUrl || ""),
+    facebookPageUrl: String(row?.facebookPageUrl || ""),
+    instagramUrl: String(row?.instagramUrl || ""),
+    xUrl: String(row?.xUrl || ""),
+    menuUrl: String(row?.menuUrl || ""),
+    onlineOrderingUrl: String(
+      row?.onlineOrderingUrl || actionLinks?.onlineOrderingUrl || "",
+    ),
+    deliveryUrl: String(row?.deliveryUrl || actionLinks?.deliveryUrl || ""),
+    doordashUrl: String(row?.doordashUrl || actionLinks?.doordashUrl || ""),
+    uberEatsUrl: String(row?.uberEatsUrl || actionLinks?.uberEatsUrl || ""),
+    toastUrl: String(row?.toastUrl || actionLinks?.toastUrl || ""),
+    squareUrl: String(row?.squareUrl || actionLinks?.squareUrl || ""),
+    chowNowUrl: String(row?.chowNowUrl || actionLinks?.chowNowUrl || ""),
+    grubhubUrl: String(row?.grubhubUrl || actionLinks?.grubhubUrl || ""),
+    cateringInquiryUrl: String(
+      row?.cateringInquiryUrl || actionLinks?.cateringInquiryUrl || "",
+    ),
+    truckBookingInquiryUrl: String(
+      row?.truckBookingInquiryUrl ||
+        actionLinks?.truckBookingInquiryUrl ||
+        "",
+    ),
+    logoUrl: String(row?.logoUrl || ""),
+    coverImageUrl: String(row?.coverImageUrl || ""),
+  };
+};
+
 type PublicProfileQrPayload = Pick<
   PublicRestaurantProfile,
   "seo" | "menuSections" | "menuUrl" | "menuPdfUrl" | "menuImageUrl" | "deals"
@@ -220,6 +270,8 @@ export default function RestaurantOwnerDashboard() {
     logoUrl: "",
     coverImageUrl: "",
   });
+  const [profileDraftNeedsRefresh, setProfileDraftNeedsRefresh] =
+    useState(false);
   const [mediaCategory, setMediaCategory] = useState<string>("food");
   const setupPanelRef = useRef<HTMLDivElement | null>(null);
 
@@ -336,9 +388,11 @@ export default function RestaurantOwnerDashboard() {
   });
 
   // Fetch user's restaurants
-  const { data: restaurants = [], isLoading: loadingRestaurants } = useQuery<
-    Restaurant[]
-  >({
+  const {
+    data: restaurants = [],
+    isLoading: loadingRestaurants,
+    refetch: refetchRestaurants,
+  } = useQuery<Restaurant[]>({
     queryKey: ["/api/restaurants/my-restaurants"],
     enabled: !!user,
   });
@@ -669,6 +723,9 @@ export default function RestaurantOwnerDashboard() {
         name: currentRestaurant.name,
       })
     : null;
+  const currentDatedStopScheduleHref = `/parking-pass?setup=schedule&truckId=${encodeURIComponent(
+    String(selectedRestaurant),
+  )}`;
   const activeWorkspaceModule: BusinessWorkspaceModuleId =
     setupMode === "profile"
       ? "profile"
@@ -1083,49 +1140,8 @@ export default function RestaurantOwnerDashboard() {
   };
   useEffect(() => {
     if (!currentRestaurant) return;
-    const row: any = currentRestaurant;
-    const actionLinks =
-      row?.socialAutopostSettings &&
-      typeof row.socialAutopostSettings === "object" &&
-      typeof row.socialAutopostSettings.publicActionLinks === "object"
-        ? row.socialAutopostSettings.publicActionLinks
-        : {};
-    setProfileDraft({
-      name: String(row?.name || ""),
-      description: String(row?.description || ""),
-      cuisineType: String(row?.cuisineType || ""),
-      businessType:
-        resolveStoredFoodBusinessType(row) || "restaurant",
-      address: String(row?.address || ""),
-      city: String(row?.city || ""),
-      state: String(row?.state || ""),
-      phone: String(row?.phone || ""),
-      websiteUrl: String(row?.websiteUrl || ""),
-      facebookPageUrl: String(row?.facebookPageUrl || ""),
-      instagramUrl: String(row?.instagramUrl || ""),
-      xUrl: String(row?.xUrl || ""),
-      menuUrl: String(row?.menuUrl || ""),
-      onlineOrderingUrl: String(
-        row?.onlineOrderingUrl || actionLinks?.onlineOrderingUrl || "",
-      ),
-      deliveryUrl: String(row?.deliveryUrl || actionLinks?.deliveryUrl || ""),
-      doordashUrl: String(row?.doordashUrl || actionLinks?.doordashUrl || ""),
-      uberEatsUrl: String(row?.uberEatsUrl || actionLinks?.uberEatsUrl || ""),
-      toastUrl: String(row?.toastUrl || actionLinks?.toastUrl || ""),
-      squareUrl: String(row?.squareUrl || actionLinks?.squareUrl || ""),
-      chowNowUrl: String(row?.chowNowUrl || actionLinks?.chowNowUrl || ""),
-      grubhubUrl: String(row?.grubhubUrl || actionLinks?.grubhubUrl || ""),
-      cateringInquiryUrl: String(
-        row?.cateringInquiryUrl || actionLinks?.cateringInquiryUrl || "",
-      ),
-      truckBookingInquiryUrl: String(
-        row?.truckBookingInquiryUrl ||
-          actionLinks?.truckBookingInquiryUrl ||
-          "",
-      ),
-      logoUrl: String(row?.logoUrl || ""),
-      coverImageUrl: String(row?.coverImageUrl || ""),
-    });
+    setProfileDraft(buildOwnerProfileDraft(currentRestaurant));
+    setProfileDraftNeedsRefresh(false);
   }, [currentRestaurant?.id]);
   const visibleTruckBookings = truckBookings;
   const liveShareUrl = currentPublicProfileHref
@@ -2392,10 +2408,11 @@ export default function RestaurantOwnerDashboard() {
                     </div>
                   </Link>
                   <Link
-                    href={buildOwnerSetupHref(
-                      "schedule",
-                      currentIsTruckBusiness ? { truck: "1" } : undefined,
-                    )}
+                    href={
+                      currentIsTruckBusiness
+                        ? currentDatedStopScheduleHref
+                        : buildOwnerSetupHref("schedule")
+                    }
                   >
                     <div className="flex w-full items-center gap-2 rounded-md border border-orange-200 bg-white px-3 py-2 text-orange-900 hover:bg-orange-100">
                       <Clock className="h-4 w-4 text-orange-900" />
@@ -2446,16 +2463,50 @@ export default function RestaurantOwnerDashboard() {
                     onRefresh={async () => {
                       await refetchProfileEvidenceReview();
                     }}
+                    onProfileRefresh={async (
+                      field: ProfileEvidenceReviewField,
+                    ) => {
+                      setProfileDraftNeedsRefresh(true);
+                      const refreshed = await refetchRestaurants();
+                      if (refreshed.error) throw refreshed.error;
+                      const authoritativeRestaurant = refreshed.data?.find(
+                        (restaurant) =>
+                          String(restaurant.id) === String(selectedRestaurant),
+                      );
+                      if (!authoritativeRestaurant) {
+                        throw new Error("Updated business profile was not returned.");
+                      }
+                      const authoritativeDraft = buildOwnerProfileDraft(
+                        authoritativeRestaurant,
+                      );
+                      setProfileDraft((currentDraft) => ({
+                        ...currentDraft,
+                        [field]: authoritativeDraft[field],
+                      }));
+                      setProfileDraftNeedsRefresh(false);
+                    }}
                   />
                 ) : null}
                 <OwnerProfileWorkspace
                   mode={setupMode === "profile-media" ? "media" : "profile"}
                   draft={profileDraft}
                   onDraftChange={setProfileDraft}
-                  onSave={() =>
-                    updateProfileBasicsMutation.mutate(profileDraft)
+                  onSave={() => {
+                    if (profileDraftNeedsRefresh) {
+                      toast({
+                        title: "Reload profile before saving",
+                        description:
+                          "A reviewed suggestion was applied, but the editable profile has not refreshed yet.",
+                        variant: "destructive",
+                      });
+                      return;
+                    }
+                    updateProfileBasicsMutation.mutate(profileDraft);
+                  }}
+                  isSaving={
+                    updateProfileBasicsMutation.isPending ||
+                    profileDraftNeedsRefresh
                   }
-                  isSaving={updateProfileBasicsMutation.isPending}
                   gallery={(() => {
                     const settings =
                       currentRestaurant &&
@@ -3254,7 +3305,9 @@ export default function RestaurantOwnerDashboard() {
                                 ? "Food-truck availability requires a real dated stop; weekly hours or a recent edit do not count."
                                 : "Publish at least one valid weekly hours window.",
                               done: completionTruth?.availabilityReady === true,
-                              href: `/restaurant-owner-dashboard?setup=schedule&restaurantId=${encodeURIComponent(String(selectedRestaurant))}`,
+                              href: currentIsTruckBusiness
+                                ? currentDatedStopScheduleHref
+                                : `/restaurant-owner-dashboard?setup=schedule&restaurantId=${encodeURIComponent(String(selectedRestaurant))}`,
                             },
                             {
                               id: "publication",
@@ -3804,10 +3857,9 @@ export default function RestaurantOwnerDashboard() {
             const completionTruth = (currentRestaurant as any)
               .profileCompletionTruth as ProfileCompletionTruth | null;
             const profileSetupHref = buildOwnerSetupHref("profile");
-            const availabilitySetupHref = buildOwnerSetupHref(
-              "schedule",
-              currentIsTruckBusiness ? { truck: "1" } : undefined,
-            );
+            const availabilitySetupHref = currentIsTruckBusiness
+              ? currentDatedStopScheduleHref
+              : buildOwnerSetupHref("schedule");
             const checklistItems = [
               {
                 id: "menu",
@@ -5228,7 +5280,7 @@ export default function RestaurantOwnerDashboard() {
                               variant="ghost"
                               className="mt-2 px-0 text-orange-800"
                             >
-                              <Link href="/parking-pass-manage">
+                              <Link href={currentDatedStopScheduleHref}>
                                 Manage booked stops
                               </Link>
                             </Button>
