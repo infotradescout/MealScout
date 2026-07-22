@@ -5,6 +5,11 @@ const FRONTEND = process.env.FRONTEND_URL ?? "http://localhost:5174";
 test.describe("Search recovery flows", () => {
   test("Did-you-mean updates query and emits telemetry", async ({ page }) => {
     const telemetryEvents: Array<{ eventName?: string; properties?: Record<string, unknown> }> = [];
+    const waitForSearchResponse = (query: string) =>
+      page.waitForResponse((response) => {
+        const url = new URL(response.url());
+        return url.pathname === "/api/search" && url.searchParams.get("q") === query;
+      });
 
     await page.route("**/api/telemetry/track", async (route) => {
       const payload = route.request().postDataJSON() as {
@@ -72,19 +77,20 @@ test.describe("Search recovery flows", () => {
       });
     });
 
-    // The did-you-mean suggestion only appears after the debounced search
-    // effect fires and the mocked /api/search response lands — waiting on
-    // that response directly (rather than relying solely on the default
-    // assertion timeout) keeps this deterministic under parallel-worker load
-    // instead of racing a multi-hop debounce -> fetch -> render chain.
+    // Match the unified search endpoint and query exactly. A substring match
+    // also catches /api/search/trending and lets this test run ahead of the
+    // debounce -> fetch -> render chain on slower browser workers.
     await Promise.all([
-      page.waitForResponse((res) => res.url().includes("/api/search")),
+      waitForSearchResponse("piza"),
       page.goto(`${FRONTEND}/search?q=piza`, { waitUntil: "domcontentloaded" }),
     ]);
 
     const suggestionButton = page.getByTestId("button-did-you-mean");
     await expect(suggestionButton).toBeVisible();
-    await suggestionButton.click();
+    await Promise.all([
+      waitForSearchResponse("pizza"),
+      suggestionButton.click(),
+    ]);
 
     await expect(page).toHaveURL(/\/search\?q=pizza/);
     // Copy changed from "Deals for" to "Deals matching" (search.tsx:1344).
