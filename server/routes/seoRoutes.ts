@@ -9,7 +9,6 @@ import {
   isNotNull,
   isNull,
   lte,
-  ne,
   or,
 } from "drizzle-orm";
 
@@ -17,6 +16,7 @@ import { db } from "../db";
 import {
   cities,
   deals,
+  eventBookings,
   events,
   hosts,
   restaurants,
@@ -29,6 +29,166 @@ import {
   isBarBusinessType,
   isTruckBusinessType,
 } from "@shared/businessTypes";
+import { resolveCityTimeZoneSync } from "../services/cityTimeZone";
+import { buildSlotDateTimes } from "../services/timeIntent";
+import { dateKeyInZone } from "../services/dateKeys";
+import { isSlotPublic } from "../services/publicSlotGate";
+import {
+  assembleTruckOperatingPlan,
+  type TruckOperatingPlanRow,
+} from "../services/truckOperatingPlan";
+
+const truckBusinessTypeAliases = [
+  "food_truck",
+  "truck",
+  "food-truck",
+  "foodtruck",
+  "mobile_food_vendor",
+];
+
+const hasEligibleConfirmedEventInCity = async (input: {
+  cityLike: string;
+  windowStart: Date;
+  windowEnd: Date;
+  now: Date;
+}) => {
+  const rows = await db
+    .select({
+      id: eventBookings.id,
+      date: events.date,
+      startTime: events.startTime,
+      endTime: events.endTime,
+      hostCity: hosts.city,
+      hostState: hosts.state,
+      bookingConfirmedAt: eventBookings.bookingConfirmedAt,
+    })
+    .from(eventBookings)
+    .innerJoin(events, eq(eventBookings.eventId, events.id))
+    .innerJoin(hosts, eq(events.hostId, hosts.id))
+    .innerJoin(restaurants, eq(eventBookings.truckId, restaurants.id))
+    .where(
+      and(
+        eq(eventBookings.status, "confirmed"),
+        isNotNull(eventBookings.bookingConfirmedAt),
+        inArray(events.status, ["open", "booked", "filled"]),
+        eq(restaurants.isActive, true),
+        or(
+          eq(restaurants.isFoodTruck, true),
+          inArray(restaurants.businessType, truckBusinessTypeAliases),
+        ),
+        gte(events.date, input.windowStart),
+        lte(events.date, input.windowEnd),
+        or(ilike(hosts.city, input.cityLike), ilike(hosts.address, input.cityLike)),
+      ),
+    )
+    .limit(250);
+
+  return rows.some((row: any) => {
+    if (!row.bookingConfirmedAt) return false;
+    const timeZone = resolveCityTimeZoneSync({
+      city: row.hostCity || null,
+      state: row.hostState || null,
+    });
+    const interval = buildSlotDateTimes({
+      timeZone,
+      date: row.date,
+      startTime: String(row.startTime || ""),
+      endTime: String(row.endTime || ""),
+    });
+    return Boolean(
+      interval &&
+        isSlotPublic({
+          slot: {
+            source: "parking_pass_booking",
+            status: "confirmed",
+            startsAtUtc: interval.startUtc,
+            endsAtUtc: interval.endUtc,
+            lastConfirmedAtUtc: row.bookingConfirmedAt,
+          },
+          now: input.now,
+          ttlHours: 24 * 365 * 100,
+        }),
+    );
+  });
+};
+
+const hasEligibleManualTruckStopInCity = async (input: {
+  cityLike: string;
+  windowStart: Date;
+  windowEnd: Date;
+  now: Date;
+}) => {
+  const rows = await db
+    .select({
+      stopId: truckManualSchedules.id,
+      date: truckManualSchedules.date,
+      startTime: truckManualSchedules.startTime,
+      endTime: truckManualSchedules.endTime,
+      sourceStatus: truckManualSchedules.status,
+      isPublic: truckManualSchedules.isPublic,
+      locationName: truckManualSchedules.locationName,
+      address: truckManualSchedules.address,
+      city: truckManualSchedules.city,
+      state: truckManualSchedules.state,
+      timezone: truckManualSchedules.timezone,
+      updatedAt: truckManualSchedules.updatedAt,
+      lastConfirmedAt: truckManualSchedules.lastConfirmedAt,
+      expiresAt: truckManualSchedules.expiresAt,
+      sourceType: truckManualSchedules.sourceType,
+      sourceConfidence: truckManualSchedules.sourceConfidence,
+      ownerSubmittedEquivalent: truckManualSchedules.ownerSubmittedEquivalent,
+      mapEligible: truckManualSchedules.mapEligible,
+      liveFeedEligible: truckManualSchedules.liveFeedEligible,
+    })
+    .from(truckManualSchedules)
+    .innerJoin(restaurants, eq(truckManualSchedules.truckId, restaurants.id))
+    .where(
+      and(
+        eq(truckManualSchedules.isPublic, true),
+        inArray(truckManualSchedules.status, [
+          "open",
+          "confirmed",
+          "scheduled",
+          "booked",
+          "filled",
+        ]),
+        or(
+          eq(truckManualSchedules.liveFeedEligible, true),
+          isNull(truckManualSchedules.liveFeedEligible),
+        ),
+        or(
+          isNull(truckManualSchedules.expiresAt),
+          gte(truckManualSchedules.expiresAt, input.now),
+        ),
+        isNotNull(truckManualSchedules.lastConfirmedAt),
+        eq(restaurants.isActive, true),
+        or(
+          eq(restaurants.isFoodTruck, true),
+          inArray(restaurants.businessType, truckBusinessTypeAliases),
+        ),
+        gte(truckManualSchedules.date, input.windowStart),
+        lte(truckManualSchedules.date, input.windowEnd),
+        or(
+          ilike(truckManualSchedules.city, input.cityLike),
+          ilike(truckManualSchedules.address, input.cityLike),
+        ),
+      ),
+    )
+    .limit(250);
+  const plan = assembleTruckOperatingPlan({
+    rows: rows.map((row: any) => ({
+      sourceKind: "manual",
+      ...row,
+    })) as TruckOperatingPlanRow[],
+    now: input.now,
+  });
+  return Boolean(
+    plan.currentStop ||
+      plan.todayStop ||
+      plan.nextStop ||
+      plan.upcomingStops.length > 0,
+  );
+};
 
 const toSlug = (value: string | null | undefined) =>
   String(value || "")
@@ -171,6 +331,7 @@ export function registerSeoRoutes(app: Express) {
           city: restaurants.city,
           cuisineType: restaurants.cuisineType,
           isFoodTruck: restaurants.isFoodTruck,
+          businessType: restaurants.businessType,
           updatedAt: restaurants.updatedAt,
         })
         .from(restaurants)
@@ -273,7 +434,10 @@ export function registerSeoRoutes(app: Express) {
       );
       const truckRestaurantCity = new Set(
         restaurantRows
-          .filter((row: any) => Boolean(row.isFoodTruck))
+          .filter(
+            (row: any) =>
+              Boolean(row.isFoodTruck) || isTruckBusinessType(row.businessType),
+          )
           .map((row: any) =>
             String(row.city || "")
               .trim()
@@ -434,19 +598,39 @@ export function registerSeoRoutes(app: Express) {
       // Event city pages: /events-today/:citySlug where upcoming public events exist.
       try {
         const now = new Date();
+        const queryStart = new Date(now);
+        queryStart.setUTCHours(0, 0, 0, 0);
+        queryStart.setUTCDate(queryStart.getUTCDate() - 1);
         const windowEnd = new Date(now.getTime() + 24 * 60 * 60 * 1000);
         const eventCityRows = await db
-          .select({
+          .selectDistinct({
             cityName: hosts.city,
+            hostState: hosts.state,
+            eventDate: events.date,
+            eventStartTime: events.startTime,
+            eventEndTime: events.endTime,
+            bookingConfirmedAt: eventBookings.bookingConfirmedAt,
             updatedAt: events.updatedAt,
           })
-          .from(events)
+          .from(eventBookings)
+          .innerJoin(events, eq(eventBookings.eventId, events.id))
           .innerJoin(hosts, eq(events.hostId, hosts.id))
+          .innerJoin(restaurants, eq(eventBookings.truckId, restaurants.id))
           .where(
             and(
-              isNotNull(events.bookedRestaurantId),
-              ne(events.status, "cancelled"),
-              gte(events.date, now),
+              eq(eventBookings.status, "confirmed"),
+              isNotNull(eventBookings.bookingConfirmedAt),
+              inArray(events.status, ["open", "booked", "filled"]),
+              or(
+                isNull(events.requiresPayment),
+                eq(events.requiresPayment, false),
+              ),
+              eq(restaurants.isActive, true),
+              or(
+                eq(restaurants.isFoodTruck, true),
+                inArray(restaurants.businessType, truckBusinessTypeAliases),
+              ),
+              gte(events.date, queryStart),
               lte(events.date, windowEnd),
               isNotNull(hosts.city),
             ),
@@ -454,6 +638,36 @@ export function registerSeoRoutes(app: Express) {
 
         const eventCityLastmod = new Map<string, string | null>();
         for (const row of eventCityRows) {
+          const timeZone = resolveCityTimeZoneSync({
+            city: row.cityName || null,
+            state: row.hostState || null,
+          });
+          const interval = buildSlotDateTimes({
+            timeZone,
+            date: row.eventDate,
+            startTime: String(row.eventStartTime || ""),
+            endTime: String(row.eventEndTime || ""),
+          });
+          if (
+            !interval ||
+            interval.endUtc.getTime() < now.getTime() ||
+            dateKeyInZone(interval.startUtc, timeZone) !==
+              dateKeyInZone(now, timeZone) ||
+            !row.bookingConfirmedAt ||
+            !isSlotPublic({
+              slot: {
+                source: "parking_pass_booking",
+                status: "confirmed",
+                startsAtUtc: interval.startUtc,
+                endsAtUtc: interval.endUtc,
+                lastConfirmedAtUtc: row.bookingConfirmedAt,
+              },
+              now,
+              ttlHours: 24 * 365 * 100,
+            })
+          ) {
+            continue;
+          }
           const cityName = String(row.cityName || "")
             .trim()
             .toLowerCase();
@@ -560,38 +774,83 @@ export function registerSeoRoutes(app: Express) {
   app.get("/sitemap-locations.xml", async (_req, res) => {
     try {
       const baseUrl = resolveSitemapSiteUrl();
-      const ttlHoursRaw = Number(process.env.PUBLIC_SLOT_TTL_HOURS ?? 72);
       const lookaheadHoursRaw = Number(
         process.env.PUBLIC_SLOT_LOOKAHEAD_HOURS ?? 24 * 7,
       );
-      const ttlHours = Number.isFinite(ttlHoursRaw)
-        ? Math.max(1, Math.min(ttlHoursRaw, 24 * 30))
-        : 72;
       const lookaheadHours = Number.isFinite(lookaheadHoursRaw)
         ? Math.max(1, Math.min(lookaheadHoursRaw, 24 * 30))
         : 24 * 7;
       const now = new Date();
-      const cutoff = new Date(now.getTime() - ttlHours * 60 * 60 * 1000);
       const windowStart = new Date(now.getTime() - 24 * 60 * 60 * 1000);
       const windowEnd = new Date(
         now.getTime() + lookaheadHours * 60 * 60 * 1000,
       );
 
-      const eligibleHostIds = await db
-        .select({ hostId: events.hostId })
-        .from(events)
+      const candidateRows = await db
+        .select({
+          hostId: events.hostId,
+          eventDate: events.date,
+          eventStartTime: events.startTime,
+          eventEndTime: events.endTime,
+          hostCity: hosts.city,
+          hostState: hosts.state,
+          bookingConfirmedAt: eventBookings.bookingConfirmedAt,
+        })
+        .from(eventBookings)
+        .innerJoin(events, eq(eventBookings.eventId, events.id))
+        .innerJoin(hosts, eq(events.hostId, hosts.id))
+        .innerJoin(restaurants, eq(eventBookings.truckId, restaurants.id))
         .where(
           and(
-            isNotNull(events.bookedRestaurantId),
-            ne(events.status, "cancelled"),
+            eq(eventBookings.status, "confirmed"),
+            isNotNull(eventBookings.bookingConfirmedAt),
+            inArray(events.status, ["open", "booked", "filled"]),
+            eq(restaurants.isActive, true),
+            or(
+              eq(restaurants.isFoodTruck, true),
+              inArray(restaurants.businessType, truckBusinessTypeAliases),
+            ),
             gte(events.date, windowStart),
             lte(events.date, windowEnd),
-            gte(events.lastConfirmedAt, cutoff),
           ),
         )
-        .groupBy(events.hostId)
-        .limit(50000)
-        .then((rows: any[]) => rows.map((row) => String(row.hostId)));
+        .limit(50000);
+
+      const eligibleHostIds = Array.from(
+        new Set<string>(
+          candidateRows.flatMap((row: (typeof candidateRows)[number]) => {
+            const timeZone = resolveCityTimeZoneSync({
+              city: row.hostCity || null,
+              state: row.hostState || null,
+            });
+            const interval = buildSlotDateTimes({
+              timeZone,
+              date: row.eventDate,
+              startTime: String(row.eventStartTime || ""),
+              endTime: String(row.eventEndTime || ""),
+            });
+            if (
+              !interval ||
+              !row.bookingConfirmedAt ||
+              !isSlotPublic({
+                slot: {
+                  source: "parking_pass_booking",
+                  status: "confirmed",
+                  startsAtUtc: interval.startUtc,
+                  endsAtUtc: interval.endUtc,
+                  lastConfirmedAtUtc: row.bookingConfirmedAt,
+                },
+                now,
+                lookaheadHours,
+                ttlHours: 24 * 365 * 100,
+              })
+            ) {
+              return [];
+            }
+            return [String(row.hostId)];
+          }),
+        ),
+      );
 
       const rows =
         eligibleHostIds.length === 0
@@ -626,18 +885,13 @@ export function registerSeoRoutes(app: Express) {
         .select()
         .from(cities)
         .orderBy(desc(cities.createdAt));
-      const ttlHoursRaw = Number(process.env.PUBLIC_SLOT_TTL_HOURS ?? 72);
       const lookaheadHoursRaw = Number(
         process.env.PUBLIC_SLOT_LOOKAHEAD_HOURS ?? 24 * 7,
       );
-      const ttlHours = Number.isFinite(ttlHoursRaw)
-        ? Math.max(1, Math.min(ttlHoursRaw, 24 * 30))
-        : 72;
       const lookaheadHours = Number.isFinite(lookaheadHoursRaw)
         ? Math.max(1, Math.min(lookaheadHoursRaw, 24 * 30))
         : 24 * 7;
       const now = new Date();
-      const cutoff = new Date(now.getTime() - ttlHours * 60 * 60 * 1000);
       const windowStart = new Date(now.getTime() - 24 * 60 * 60 * 1000);
       const windowEnd = new Date(
         now.getTime() + lookaheadHours * 60 * 60 * 1000,
@@ -658,7 +912,7 @@ export function registerSeoRoutes(app: Express) {
               eq(restaurants.isActive, true),
               or(
                 eq(restaurants.isFoodTruck, true),
-                eq(restaurants.businessType, "food_truck"),
+                inArray(restaurants.businessType, truckBusinessTypeAliases),
               ),
               or(
                 ilike(restaurants.city, cityLike),
@@ -668,43 +922,25 @@ export function registerSeoRoutes(app: Express) {
           )
           .limit(1);
 
-        const hasEvent = await db
-          .select({ id: events.id })
-          .from(events)
-          .innerJoin(hosts, eq(events.hostId, hosts.id))
-          .where(
-            and(
-              isNotNull(events.bookedRestaurantId),
-              ne(events.status, "cancelled"),
-              gte(events.date, windowStart),
-              lte(events.date, windowEnd),
-              gte(events.lastConfirmedAt, cutoff),
-              or(ilike(hosts.city, cityLike), ilike(hosts.address, cityLike)),
-            ),
-          )
-          .limit(1);
-
-        const hasManual = await db
-          .select({ id: truckManualSchedules.id })
-          .from(truckManualSchedules)
-          .where(
-            and(
-              eq(truckManualSchedules.isPublic, true),
-              gte(truckManualSchedules.date, windowStart),
-              lte(truckManualSchedules.date, windowEnd),
-              gte(truckManualSchedules.lastConfirmedAt, cutoff),
-              or(
-                ilike(truckManualSchedules.city, cityLike),
-                ilike(truckManualSchedules.address, cityLike),
-              ),
-            ),
-          )
-          .limit(1);
+        const [hasEvent, hasManual] = await Promise.all([
+          hasEligibleConfirmedEventInCity({
+            cityLike,
+            windowStart,
+            windowEnd,
+            now,
+          }),
+          hasEligibleManualTruckStopInCity({
+            cityLike,
+            windowStart,
+            windowEnd,
+            now,
+          }),
+        ]);
 
         if (
           hasTruck.length === 0 &&
-          hasEvent.length === 0 &&
-          hasManual.length === 0
+          !hasEvent &&
+          !hasManual
         ) {
           continue;
         }
@@ -780,18 +1016,13 @@ export function registerSeoRoutes(app: Express) {
         "food-trucks-tonight",
         "food-trucks-this-weekend",
       ];
-      const ttlHoursRaw = Number(process.env.PUBLIC_SLOT_TTL_HOURS ?? 72);
       const lookaheadHoursRaw = Number(
         process.env.PUBLIC_SLOT_LOOKAHEAD_HOURS ?? 24 * 7,
       );
-      const ttlHours = Number.isFinite(ttlHoursRaw)
-        ? Math.max(1, Math.min(ttlHoursRaw, 24 * 30))
-        : 72;
       const lookaheadHours = Number.isFinite(lookaheadHoursRaw)
         ? Math.max(1, Math.min(lookaheadHoursRaw, 24 * 30))
         : 24 * 7;
       const now = new Date();
-      const cutoff = new Date(now.getTime() - ttlHours * 60 * 60 * 1000);
       const windowStart = new Date(now.getTime() - 24 * 60 * 60 * 1000);
       const windowEnd = new Date(
         now.getTime() + lookaheadHours * 60 * 60 * 1000,
@@ -804,40 +1035,22 @@ export function registerSeoRoutes(app: Express) {
         if (!slug || !cityName) continue;
         const cityLike = `%${cityName}%`;
 
-        const hasEvent = await db
-          .select({ id: events.id })
-          .from(events)
-          .innerJoin(hosts, eq(events.hostId, hosts.id))
-          .where(
-            and(
-              isNotNull(events.bookedRestaurantId),
-              ne(events.status, "cancelled"),
-              gte(events.date, windowStart),
-              lte(events.date, windowEnd),
-              gte(events.lastConfirmedAt, cutoff),
-              or(ilike(hosts.city, cityLike), ilike(hosts.address, cityLike)),
-            ),
-          )
-          .limit(1);
+        const [hasEvent, hasManual] = await Promise.all([
+          hasEligibleConfirmedEventInCity({
+            cityLike,
+            windowStart,
+            windowEnd,
+            now,
+          }),
+          hasEligibleManualTruckStopInCity({
+            cityLike,
+            windowStart,
+            windowEnd,
+            now,
+          }),
+        ]);
 
-        const hasManual = await db
-          .select({ id: truckManualSchedules.id })
-          .from(truckManualSchedules)
-          .where(
-            and(
-              eq(truckManualSchedules.isPublic, true),
-              gte(truckManualSchedules.date, windowStart),
-              lte(truckManualSchedules.date, windowEnd),
-              gte(truckManualSchedules.lastConfirmedAt, cutoff),
-              or(
-                ilike(truckManualSchedules.city, cityLike),
-                ilike(truckManualSchedules.address, cityLike),
-              ),
-            ),
-          )
-          .limit(1);
-
-        if (hasEvent.length === 0 && hasManual.length === 0) continue;
+        if (!hasEvent && !hasManual) continue;
         for (const mode of modes) {
           entries.push({
             loc: `${baseUrl}/city/${encodeURIComponent(slug)}/${encodeURIComponent(mode)}`,
@@ -856,46 +1069,92 @@ export function registerSeoRoutes(app: Express) {
   app.get("/sitemap-events.xml", async (_req, res) => {
     try {
       const baseUrl = resolveSitemapSiteUrl();
-      const ttlHoursRaw = Number(process.env.PUBLIC_SLOT_TTL_HOURS ?? 72);
       const lookaheadHoursRaw = Number(
         process.env.PUBLIC_SLOT_LOOKAHEAD_HOURS ?? 24 * 7,
       );
-      const ttlHours = Number.isFinite(ttlHoursRaw)
-        ? Math.max(1, Math.min(ttlHoursRaw, 24 * 30))
-        : 72;
       const lookaheadHours = Number.isFinite(lookaheadHoursRaw)
         ? Math.max(1, Math.min(lookaheadHoursRaw, 24 * 30))
         : 24 * 7;
       const now = new Date();
-      const cutoff = new Date(now.getTime() - ttlHours * 60 * 60 * 1000);
       const windowStart = new Date(now.getTime() - 24 * 60 * 60 * 1000);
       const windowEnd = new Date(
         now.getTime() + lookaheadHours * 60 * 60 * 1000,
       );
 
       const rows = await db
-        .select({
+        .selectDistinct({
           id: events.id,
           name: events.name,
           hostName: hosts.businessName,
+          eventDate: events.date,
+          eventStartTime: events.startTime,
+          eventEndTime: events.endTime,
+          hostCity: hosts.city,
+          hostState: hosts.state,
+          bookingConfirmedAt: eventBookings.bookingConfirmedAt,
           updatedAt: events.updatedAt,
         })
-        .from(events)
+        .from(eventBookings)
+        .innerJoin(events, eq(eventBookings.eventId, events.id))
         .innerJoin(hosts, eq(events.hostId, hosts.id))
+        .innerJoin(restaurants, eq(eventBookings.truckId, restaurants.id))
         .where(
           and(
-            isNotNull(events.bookedRestaurantId),
-            ne(events.status, "cancelled"),
+            eq(eventBookings.status, "confirmed"),
+            isNotNull(eventBookings.bookingConfirmedAt),
+            inArray(events.status, ["open", "booked", "filled"]),
+            or(
+              isNull(events.requiresPayment),
+              eq(events.requiresPayment, false),
+            ),
+            eq(restaurants.isActive, true),
+            or(
+              eq(restaurants.isFoodTruck, true),
+              inArray(restaurants.businessType, truckBusinessTypeAliases),
+            ),
             gte(events.date, windowStart),
             lte(events.date, windowEnd),
-            gte(events.lastConfirmedAt, cutoff),
           ),
         )
         .orderBy(desc(events.updatedAt))
         .limit(50000);
 
+      const eligibleRows = rows.filter((row: any) => {
+        const timeZone = resolveCityTimeZoneSync({
+          city: row.hostCity || null,
+          state: row.hostState || null,
+        });
+        const interval = buildSlotDateTimes({
+          timeZone,
+          date: row.eventDate,
+          startTime: String(row.eventStartTime || ""),
+          endTime: String(row.eventEndTime || ""),
+        });
+        return Boolean(
+          interval &&
+            row.bookingConfirmedAt &&
+            isSlotPublic({
+              slot: {
+                source: "parking_pass_booking",
+                status: "confirmed",
+                startsAtUtc: interval.startUtc,
+                endsAtUtc: interval.endUtc,
+                lastConfirmedAtUtc: row.bookingConfirmedAt,
+              },
+              now,
+              lookaheadHours,
+              ttlHours: 24 * 365 * 100,
+            }),
+        );
+      });
+      const uniqueEligibleRows = Array.from(
+        new Map(
+          eligibleRows.map((row: any) => [String(row.id), row] as const),
+        ).values(),
+      );
+
       sendUrlsetXml(res, {
-        entries: rows.map((row: any) => {
+        entries: uniqueEligibleRows.map((row: any) => {
           const title = row.name || row.hostName || row.id;
           return {
             loc: `${baseUrl}/event/${encodeURIComponent(`${toSlug(title) || row.id}--${row.id}`)}`,

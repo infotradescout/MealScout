@@ -5,6 +5,7 @@ import {
   isBarBusinessType,
   isRestaurantLikeBusinessType,
   isTruckBusinessType,
+  resolveStoredFoodBusinessType,
   toCanonicalFoodBusinessType,
 } from "../shared/businessTypes";
 
@@ -17,6 +18,21 @@ assert.equal(isTruckBusinessType("truck"), true);
 assert.equal(isBarBusinessType("taproom"), true);
 assert.equal(isRestaurantLikeBusinessType("nightlife"), true);
 assert.equal(isRestaurantLikeBusinessType("food_truck"), false);
+assert.equal(
+  resolveStoredFoodBusinessType({
+    businessType: "restaurant",
+    isFoodTruck: true,
+  }),
+  "food_truck",
+  "A legacy split identity must remain private as a truck until explicitly changed",
+);
+assert.equal(
+  resolveStoredFoodBusinessType({
+    businessType: "food_truck",
+    isFoodTruck: false,
+  }),
+  "food_truck",
+);
 
 const boundaryFiles = [
   "client/src/pages/explore-preview-v2.tsx",

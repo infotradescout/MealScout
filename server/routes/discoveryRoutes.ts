@@ -1,12 +1,13 @@
 import type { Express } from "express";
 import { db } from "../db";
-import { cities, events, hosts, restaurants, truckManualSchedules } from "@shared/schema";
-import { and, eq, gte, ilike, inArray, isNotNull, lte, ne, or, sql } from "drizzle-orm";
+import { cities, eventBookings, events, hosts, restaurants, truckManualSchedules } from "@shared/schema";
+import { and, eq, gte, ilike, inArray, isNotNull, lte, or, sql } from "drizzle-orm";
 import { buildSlotDateTimes, intervalOverlaps, resolveTimeIntent, type TimeIntent } from "../services/timeIntent";
 import { getPublicSlotGateConfigFromEnv, isSlotPublic, type PublicSlot } from "../services/publicSlotGate";
 import { resolveCityTimeZone, usStateToTimeZone } from "../services/cityTimeZone";
 import { dateKeyInZone } from "../services/dateKeys";
 import { assertPublicResponseSafe } from "../publicProfiles";
+import { isTruckOperatingPlanRowPublic } from "../services/truckOperatingPlan";
 
 type TimeKey = "now" | "breakfast" | "lunch" | "dinner" | "tonight" | "this-weekend";
 
@@ -310,8 +311,8 @@ export function registerDiscoveryRoutes(app: Express) {
                 endTime: events.endTime,
                 name: events.name,
                 status: events.status,
-                lastConfirmedAt: events.lastConfirmedAt,
-                updatedAt: events.updatedAt,
+                lastConfirmedAt: eventBookings.bookingConfirmedAt,
+                updatedAt: eventBookings.updatedAt,
                 truckId: restaurants.id,
                 truckName: restaurants.name,
                 cuisineType: restaurants.cuisineType,
@@ -320,13 +321,26 @@ export function registerDiscoveryRoutes(app: Express) {
                 logoUrl: restaurants.logoUrl,
                 coverImageUrl: restaurants.coverImageUrl,
               })
-              .from(events)
-              .innerJoin(restaurants, eq(events.bookedRestaurantId, restaurants.id))
+              .from(eventBookings)
+              .innerJoin(events, eq(eventBookings.eventId, events.id))
+              .innerJoin(restaurants, eq(eventBookings.truckId, restaurants.id))
               .where(
                 and(
+                  eq(eventBookings.status, "confirmed"),
+                  isNotNull(eventBookings.bookingConfirmedAt),
                   inArray(events.hostId, hostIds),
-                  isNotNull(events.bookedRestaurantId),
-                  ne(events.status, "cancelled"),
+                  inArray(events.status, ["open", "booked", "filled"]),
+                  eq(restaurants.isActive, true),
+                  or(
+                    eq(restaurants.isFoodTruck, true),
+                    inArray(restaurants.businessType, [
+                      "food_truck",
+                      "truck",
+                      "food-truck",
+                      "foodtruck",
+                      "mobile_food_vendor",
+                    ]),
+                  ),
                   gte(events.date, windowStart),
                   lte(events.date, windowEnd),
                 ),
@@ -346,6 +360,16 @@ export function registerDiscoveryRoutes(app: Express) {
           state: truckManualSchedules.state,
           lastConfirmedAt: truckManualSchedules.lastConfirmedAt,
           updatedAt: truckManualSchedules.updatedAt,
+          timezone: truckManualSchedules.timezone,
+          expiresAt: truckManualSchedules.expiresAt,
+          sourceType: truckManualSchedules.sourceType,
+          sourceConfidence: truckManualSchedules.sourceConfidence,
+          ownerSubmittedEquivalent:
+            truckManualSchedules.ownerSubmittedEquivalent,
+          mapEligible: truckManualSchedules.mapEligible,
+          liveFeedEligible: truckManualSchedules.liveFeedEligible,
+          status: truckManualSchedules.status,
+          isPublic: truckManualSchedules.isPublic,
           truckName: restaurants.name,
           cuisineType: restaurants.cuisineType,
           truckCity: restaurants.city,
@@ -361,6 +385,17 @@ export function registerDiscoveryRoutes(app: Express) {
             or(ilike(truckManualSchedules.city, cityLike), ilike(truckManualSchedules.address, cityLike)),
             gte(truckManualSchedules.date, windowStart),
             lte(truckManualSchedules.date, windowEnd),
+            eq(restaurants.isActive, true),
+            or(
+              eq(restaurants.isFoodTruck, true),
+              inArray(restaurants.businessType, [
+                "food_truck",
+                "truck",
+                "food-truck",
+                "foodtruck",
+                "mobile_food_vendor",
+              ]),
+            ),
           ),
         )
         .limit(5000);
@@ -390,7 +425,7 @@ export function registerDiscoveryRoutes(app: Express) {
           date: new Date(row.date),
           startTime: String(row.startTime || ""),
           endTime: String(row.endTime || ""),
-          lastConfirmedAtUtc: new Date(row.lastConfirmedAt || row.updatedAt || row.date || Date.now()),
+          lastConfirmedAtUtc: new Date(row.lastConfirmedAt),
           locationName: host?.businessName ? String(host.businessName) : row.name ? String(row.name) : null,
           address: host?.address ? String(host.address) : null,
           hostId: String(row.hostId || ""),
@@ -398,6 +433,35 @@ export function registerDiscoveryRoutes(app: Express) {
       }
 
       for (const row of manualRows as any[]) {
+        if (
+          !isTruckOperatingPlanRowPublic(
+            {
+              sourceKind: "manual",
+              stopId: row.id,
+              date: row.date,
+              startTime: row.startTime,
+              endTime: row.endTime,
+              sourceStatus: row.status,
+              isPublic: row.isPublic,
+              locationName: row.locationName,
+              address: row.address,
+              city: row.city,
+              state: row.state,
+              timezone: row.timezone,
+              updatedAt: row.updatedAt,
+              lastConfirmedAt: row.lastConfirmedAt,
+              expiresAt: row.expiresAt,
+              sourceType: row.sourceType,
+              sourceConfidence: row.sourceConfidence,
+              ownerSubmittedEquivalent: row.ownerSubmittedEquivalent,
+              mapEligible: row.mapEligible,
+              liveFeedEligible: row.liveFeedEligible,
+            },
+            now,
+          )
+        ) {
+          continue;
+        }
         items.push({
           kind: "manual",
           truckId: String(row.truckId),
@@ -429,7 +493,17 @@ export function registerDiscoveryRoutes(app: Express) {
           lastConfirmedAtUtc: item.lastConfirmedAtUtc,
         };
 
-        if (!isSlotPublic({ slot, now, ...gate })) return false;
+        if (
+          item.kind === "booking" &&
+          !isSlotPublic({
+            slot,
+            now,
+            ...gate,
+            ttlHours: item.kind === "booking" ? 24 * 365 * 100 : gate.ttlHours,
+          })
+        ) {
+          return false;
+        }
 
         return intervalOverlaps({
           startUtc: dt.startUtc,
@@ -549,7 +623,6 @@ export function registerDiscoveryRoutes(app: Express) {
       const window = resolveTimeIntent({ timeZone, intent, now });
       const gate = getFreshnessGateConfig();
 
-      const cutoff = new Date(now.getTime() - gate.ttlHours * 60 * 60 * 1000);
       const windowStart = new Date(window.startUtc.getTime() - 24 * 60 * 60 * 1000);
       const windowEnd = new Date(window.endUtc.getTime() + 24 * 60 * 60 * 1000);
 
@@ -561,25 +634,34 @@ export function registerDiscoveryRoutes(app: Express) {
           endTime: events.endTime,
           name: events.name,
           status: events.status,
-          lastConfirmedAt: events.lastConfirmedAt,
-          updatedAt: events.updatedAt,
+          lastConfirmedAt: eventBookings.bookingConfirmedAt,
+          updatedAt: eventBookings.updatedAt,
           truckId: restaurants.id,
           truckName: restaurants.name,
           cuisineType: restaurants.cuisineType,
         })
-        .from(events)
-        .innerJoin(restaurants, eq(events.bookedRestaurantId, restaurants.id))
+        .from(eventBookings)
+        .innerJoin(events, eq(eventBookings.eventId, events.id))
+        .innerJoin(restaurants, eq(eventBookings.truckId, restaurants.id))
         .where(
           and(
+            eq(eventBookings.status, "confirmed"),
+            isNotNull(eventBookings.bookingConfirmedAt),
             eq(events.hostId, hostId),
-            isNotNull(events.bookedRestaurantId),
-            ne(events.status, "cancelled"),
+            inArray(events.status, ["open", "booked", "filled"]),
+            eq(restaurants.isActive, true),
+            or(
+              eq(restaurants.isFoodTruck, true),
+              inArray(restaurants.businessType, [
+                "food_truck",
+                "truck",
+                "food-truck",
+                "foodtruck",
+                "mobile_food_vendor",
+              ]),
+            ),
             gte(events.date, windowStart),
             lte(events.date, windowEnd),
-            gte(
-              sql`COALESCE(${events.lastConfirmedAt}, ${events.updatedAt}, ${events.date}::timestamp)`,
-              cutoff,
-            ),
           ),
         )
         .limit(5000);
@@ -616,9 +698,18 @@ export function registerDiscoveryRoutes(app: Express) {
           status: "confirmed",
           startsAtUtc: dt.startUtc,
           endsAtUtc: dt.endUtc,
-          lastConfirmedAtUtc: new Date(row.lastConfirmedAt || row.updatedAt || row.date || Date.now()),
+          lastConfirmedAtUtc: new Date(row.lastConfirmedAt),
         };
-        if (!isSlotPublic({ slot, now, ...gate })) continue;
+        if (
+          !isSlotPublic({
+            slot,
+            now,
+            ...gate,
+            ttlHours: 24 * 365 * 100,
+          })
+        ) {
+          continue;
+        }
         if (
           !intervalOverlaps({
             startUtc: dt.startUtc,
@@ -714,7 +805,16 @@ export function registerDiscoveryRoutes(app: Express) {
         .where(
           and(
             eq(restaurants.isActive, true),
-            or(eq(restaurants.isFoodTruck, true), eq(restaurants.businessType, "food_truck")),
+            or(
+              eq(restaurants.isFoodTruck, true),
+              inArray(restaurants.businessType, [
+                "food_truck",
+                "truck",
+                "food-truck",
+                "foodtruck",
+                "mobile_food_vendor",
+              ]),
+            ),
             or(ilike(restaurants.city, cityLike), ilike(restaurants.address, cityLike)),
             or(ilike(restaurants.cuisineType, cuisineLike), ilike(restaurants.name, cuisineLike)),
           ),

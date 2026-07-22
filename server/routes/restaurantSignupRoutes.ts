@@ -10,7 +10,10 @@ import { storage } from "../storage";
 import { emitMealScoutEvent, buildMealScoutEventInput } from "../services/merlinEventEmitter";
 import { isPasswordStrong, PASSWORD_REQUIREMENTS } from "../utils/passwordPolicy";
 import { vacEvaluateRestaurantSignup } from "../vacLite";
-import { promoteBusinessSetupToProfile } from "../services/businessOnboardingPromotion";
+import {
+  BusinessPromotionError,
+  promoteBusinessSetupToProfile,
+} from "../services/businessOnboardingPromotion";
 import { distributedRateLimit } from "../middleware/distributedRateLimit";
 import {
   fetchWebsiteProfilePreview,
@@ -88,6 +91,12 @@ const importFromUrlLimiter = distributedRateLimit({
   windowMs: 10 * 60 * 1000,
 });
 
+const restaurantSignupLimiter = distributedRateLimit({
+  scope: "restaurants:signup",
+  limit: 6,
+  windowMs: 60 * 60 * 1000,
+});
+
 export function registerRestaurantSignupRoutes(
   app: Express,
   { ensureTrialForUser, queueSocialPost }: RestaurantSignupRouteDependencies,
@@ -119,7 +128,10 @@ export function registerRestaurantSignupRoutes(
     },
   );
 
-  app.post("/api/restaurants/signup", async (req: any, res) => {
+  app.post(
+    "/api/restaurants/signup",
+    restaurantSignupLimiter,
+    async (req: any, res) => {
     try {
       const { userData, restaurantData } = req.body;
       if (restaurantData?.acceptTerms !== true) {
@@ -234,7 +246,51 @@ export function registerRestaurantSignupRoutes(
         });
       }
       const validatedRestaurantData = restaurantParseResult.data;
+      const promotionMetadataResult = z
+        .object({
+          onboardingAttemptId: z.string().uuid().optional().nullable(),
+          targetRestaurantId: z.string().uuid().optional().nullable(),
+          placeEvidence: z
+            .object({
+              placeId: z.string().trim().max(240).optional().nullable(),
+              formattedAddress: z.string().trim().max(500).optional().nullable(),
+              latitude: z.number().min(-90).max(90).optional().nullable(),
+              longitude: z.number().min(-180).max(180).optional().nullable(),
+            })
+            .optional()
+            .nullable(),
+        })
+        .superRefine((metadata, ctx) => {
+          if (!metadata.targetRestaurantId && !metadata.onboardingAttemptId) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: ["onboardingAttemptId"],
+              message: "A stable onboarding attempt is required.",
+            });
+          }
+          if (metadata.targetRestaurantId && metadata.onboardingAttemptId) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: ["onboardingAttemptId"],
+              message: "A resume target and a new onboarding attempt cannot be combined.",
+            });
+          }
+        })
+        .safeParse({
+          onboardingAttemptId: restaurantData?.onboardingAttemptId || null,
+          targetRestaurantId: restaurantData?.targetRestaurantId || null,
+          placeEvidence: restaurantData?.placeEvidence || null,
+        });
+      if (!promotionMetadataResult.success) {
+        return res.status(400).json({
+          message: "Invalid business setup metadata.",
+        });
+      }
       const promoted = await promoteBusinessSetupToProfile(user.id, {
+        onboardingAttemptId:
+          promotionMetadataResult.data.onboardingAttemptId || null,
+        targetRestaurantId:
+          promotionMetadataResult.data.targetRestaurantId || null,
         businessName: validatedRestaurantData.name,
         businessType: validatedRestaurantData.businessType,
         address: validatedRestaurantData.address,
@@ -254,6 +310,7 @@ export function registerRestaurantSignupRoutes(
           restaurantData?.menuDraft ||
           restaurantData?.truck?.menu ||
           [],
+        placeEvidence: promotionMetadataResult.data.placeEvidence || null,
       });
       const restaurant = promoted.restaurant as any;
 
@@ -263,12 +320,22 @@ export function registerRestaurantSignupRoutes(
           currentType,
         );
         if (allowedToPromote && currentType !== "food_truck") {
-          await storage.updateUserType(user.id, "food_truck");
-          user = (await storage.getUserById(user.id)) || user;
+          try {
+            await storage.updateUserType(user.id, "food_truck");
+            user = (await storage.getUserById(user.id)) || user;
+          } catch (error) {
+            console.warn(
+              "Unable to synchronize the account role after truck onboarding",
+              error,
+            );
+          }
         }
       }
 
-      if (String((restaurant as any)?.businessType || "") === "food_truck") {
+      if (
+        promoted.created &&
+        String((restaurant as any)?.businessType || "") === "food_truck"
+      ) {
         try {
           const { maybeTriggerPensacolaFoodTruckDrip } =
             await import("../services/pensacolaFoodTruckDrip");
@@ -281,58 +348,63 @@ export function registerRestaurantSignupRoutes(
         }
       }
 
-      try {
-        const enabled =
-          String(
-            process.env.VAC_AUTO_VERIFY_ENABLED || "true",
-          ).toLowerCase() !== "false";
-        if (enabled) {
-          const vac = await vacEvaluateRestaurantSignup({
-            user,
-            restaurant,
-            req,
-          });
-          console.log("🔍 VAC-lite evaluation:", {
-            restaurantId: restaurant.id,
-            restaurantName: (restaurant as any).name,
-            score: vac.score,
-            threshold: vac.threshold,
-            shouldAutoVerify: vac.shouldAutoVerify,
-            signals: vac.signals,
-          });
+      if (promoted.created) {
+        try {
+          const enabled =
+            String(
+              process.env.VAC_AUTO_VERIFY_ENABLED || "true",
+            ).toLowerCase() !== "false";
+          if (enabled) {
+            const vac = await vacEvaluateRestaurantSignup({
+              user,
+              restaurant,
+              req,
+            });
+            console.log("🔍 VAC-lite evaluation:", {
+              restaurantId: restaurant.id,
+              restaurantName: (restaurant as any).name,
+              score: vac.score,
+              threshold: vac.threshold,
+              shouldAutoVerify: vac.shouldAutoVerify,
+              signals: vac.signals,
+            });
 
-          if (vac.shouldAutoVerify) {
-            console.log("✅ Auto-verifying restaurant:", restaurant.id);
-            await storage.setRestaurantVerified(restaurant.id, true);
-            (restaurant as any).isVerified = true;
-            try {
-              user = (await ensureTrialForUser(user)) || user;
-            } catch (error) {
-              console.warn("ensureTrialForUser failed after auto-verify:", error);
-            }
-          } else {
-            console.log(
-              "⚠️  Creating manual verification request for:",
-              restaurant.id,
-            );
-            const hasPending = await storage.hasPendingVerificationRequest(
-              restaurant.id,
-            );
-            if (!hasPending) {
-              await storage.createVerificationRequest({
-                restaurantId: restaurant.id,
-                documents: [],
-              });
+            if (vac.shouldAutoVerify) {
+              console.log("✅ Auto-verifying restaurant:", restaurant.id);
+              await storage.setRestaurantVerified(restaurant.id, true);
+              (restaurant as any).isVerified = true;
+              try {
+                user = (await ensureTrialForUser(user)) || user;
+              } catch (error) {
+                console.warn("ensureTrialForUser failed after auto-verify:", error);
+              }
             } else {
-              console.log("ℹ️  Pending verification request already exists");
+              console.log(
+                "⚠️  Creating manual verification request for:",
+                restaurant.id,
+              );
+              const hasPending = await storage.hasPendingVerificationRequest(
+                restaurant.id,
+              );
+              if (!hasPending) {
+                await storage.createVerificationRequest({
+                  restaurantId: restaurant.id,
+                  documents: [],
+                });
+              } else {
+                console.log("ℹ️  Pending verification request already exists");
+              }
             }
           }
+        } catch (error) {
+          console.warn("VAC-lite failed", error);
         }
-      } catch (error) {
-        console.warn("VAC-lite failed", error);
       }
 
-      if ((restaurant as any).businessType === "food_truck") {
+      if (
+        promoted.created &&
+        (restaurant as any).businessType === "food_truck"
+      ) {
         try {
           const baseUrl = (
             process.env.PUBLIC_BASE_URL || "https://www.mealscout.us"
@@ -348,80 +420,82 @@ export function registerRestaurantSignupRoutes(
         }
       }
 
-      const referralId =
-        req.body?.referralId ||
-        req.query?.referralId ||
-        req.cookies?.referralRecordId ||
-        req.cookies?.referralId;
+      if (promoted.created) {
+        const referralId =
+          req.body?.referralId ||
+          req.query?.referralId ||
+          req.cookies?.referralRecordId ||
+          req.cookies?.referralId;
 
-      if (referralId) {
-        try {
-          const { attachReferralToSignup } = await import("../referralService");
-          await attachReferralToSignup(referralId, restaurant.id);
-          console.log("[Phase 2] Referral attached:", {
-            referralId,
-            restaurantId: restaurant.id,
-          });
-        } catch (error) {
-          console.error("[Phase 2] Error attaching referral:", error);
+        if (referralId) {
+          try {
+            const { attachReferralToSignup } = await import("../referralService");
+            await attachReferralToSignup(referralId, restaurant.id);
+            console.log("[Phase 2] Referral attached:", {
+              referralId,
+              restaurantId: restaurant.id,
+            });
+          } catch (error) {
+            console.error("[Phase 2] Error attaching referral:", error);
+          }
         }
-      }
 
-      if (referralId && user?.id) {
-        try {
-          const { resolveAffiliateUserId } =
-            await import("../affiliateTagService");
-          const affiliateUserId = await resolveAffiliateUserId(referralId);
-          if (affiliateUserId && affiliateUserId !== user.id) {
-            const [existingUser] = await db
-              .select({ affiliateCloserUserId: users.affiliateCloserUserId })
-              .from(users)
-              .where(eq(users.id, user.id))
-              .limit(1);
-
-            if (!existingUser?.affiliateCloserUserId) {
-              const [affiliate] = await db
-                .select({ affiliatePercent: users.affiliatePercent })
+        if (referralId && user?.id) {
+          try {
+            const { resolveAffiliateUserId } =
+              await import("../affiliateTagService");
+            const affiliateUserId = await resolveAffiliateUserId(referralId);
+            if (affiliateUserId && affiliateUserId !== user.id) {
+              const [existingUser] = await db
+                .select({ affiliateCloserUserId: users.affiliateCloserUserId })
                 .from(users)
-                .where(eq(users.id, affiliateUserId))
+                .where(eq(users.id, user.id))
                 .limit(1);
-              const percentSnapshot = Math.max(
-                Number(affiliate?.affiliatePercent ?? 5),
-                0,
-              );
 
-              await db
-                .update(users)
-                .set({
-                  affiliateCloserUserId: affiliateUserId,
-                  affiliateCloserPercent: percentSnapshot,
-                  updatedAt: new Date(),
-                })
-                .where(eq(users.id, user.id));
+              if (!existingUser?.affiliateCloserUserId) {
+                const [affiliate] = await db
+                  .select({ affiliatePercent: users.affiliatePercent })
+                  .from(users)
+                  .where(eq(users.id, affiliateUserId))
+                  .limit(1);
+                const percentSnapshot = Math.max(
+                  Number(affiliate?.affiliatePercent ?? 5),
+                  0,
+                );
+
+                await db
+                  .update(users)
+                  .set({
+                    affiliateCloserUserId: affiliateUserId,
+                    affiliateCloserPercent: percentSnapshot,
+                    updatedAt: new Date(),
+                  })
+                  .where(eq(users.id, user.id));
+              }
             }
+          } catch (error) {
+            console.error("[Phase 2] Error attaching user referral:", error);
           }
-        } catch (error) {
-          console.error("[Phase 2] Error attaching user referral:", error);
         }
-      }
 
-      try {
-        const event = buildMealScoutEventInput({
-          entity_id: restaurant.id,
-          event_type: "restaurant_onboarded",
-          user,
-          restaurant,
-          payload: {
-            business_name: (restaurant as any).name,
-            city: (restaurant as any).city,
-            county: (restaurant as any).county,
-            location:
-              `${(restaurant as any).city || ""} ${(restaurant as any).state || ""}`.trim() || undefined
-          }
-        });
-        await emitMealScoutEvent(event).catch(() => {});
-      } catch (error) {
-        console.warn("[Merlin emitter] restaurant signup emit failed:", error);
+        try {
+          const event = buildMealScoutEventInput({
+            entity_id: restaurant.id,
+            event_type: "restaurant_onboarded",
+            user,
+            restaurant,
+            payload: {
+              business_name: (restaurant as any).name,
+              city: (restaurant as any).city,
+              county: (restaurant as any).county,
+              location:
+                `${(restaurant as any).city || ""} ${(restaurant as any).state || ""}`.trim() || undefined
+            }
+          });
+          await emitMealScoutEvent(event).catch(() => {});
+        } catch (error) {
+          console.warn("[Merlin emitter] restaurant signup emit failed:", error);
+        }
       }
 
       res.json({
@@ -437,6 +511,9 @@ export function registerRestaurantSignupRoutes(
           message: getFriendlySignupValidationMessage(error),
         });
       }
+      if (error instanceof BusinessPromotionError) {
+        return res.status(error.statusCode).json({ message: error.message });
+      }
       // An unexpected failure here (DB error, a downstream service throwing,
       // etc.) is not the same as "you filled out the form wrong" — reporting
       // it as a 400 validation message left owners with no way to tell a
@@ -446,5 +523,6 @@ export function registerRestaurantSignupRoutes(
           "Something went wrong creating your account. Please try again in a moment, and contact support if it keeps happening.",
       });
     }
-  });
+    },
+  );
 }

@@ -114,6 +114,17 @@ export function toCanonicalFoodBusinessType(
   return null;
 }
 
+export function resolveStoredFoodBusinessType(input: {
+  businessType?: unknown;
+  isFoodTruck?: unknown;
+}): FoodBusinessType | null {
+  const canonical = toCanonicalFoodBusinessType(input.businessType);
+  if (input.isFoodTruck === true || canonical === "food_truck") {
+    return "food_truck";
+  }
+  return canonical;
+}
+
 export function getBusinessCapabilities(
   value: unknown,
 ): BusinessCapabilities | null {

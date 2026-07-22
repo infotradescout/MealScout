@@ -1,9 +1,25 @@
-import { and, desc, eq, gte, isNotNull, sql } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  gte,
+  inArray,
+  isNotNull,
+  isNull,
+  lte,
+  or,
+  sql,
+} from "drizzle-orm";
 
 import { db } from "../db";
 import { storage } from "../storage";
 import { getPrivateBehaviorScoresForRestaurants } from "./privateBehaviorScoreService";
 import { events, hosts, restaurants } from "@shared/schema";
+import { loadConfirmedEventTrucks } from "./confirmedEventTrucks";
+import { resolveCityTimeZoneSync } from "./cityTimeZone";
+import { buildSlotDateTimes } from "./timeIntent";
+import { dateKeyInZone } from "./dateKeys";
+import { isSlotPublic } from "./publicSlotGate";
 
 export type RecommendationEntityType =
   | "truck"
@@ -313,11 +329,11 @@ export async function buildLocalRecommendations(
         startTime: events.startTime,
         endTime: events.endTime,
         status: events.status,
-        requiresPayment: events.requiresPayment,
         updatedAt: events.updatedAt,
         lastConfirmedAt: events.lastConfirmedAt,
-        bookedRestaurantId: events.bookedRestaurantId,
         hostName: hosts.businessName,
+        hostCity: hosts.city,
+        hostState: hosts.state,
         hostLat: hosts.latitude,
         hostLng: hosts.longitude,
       })
@@ -326,7 +342,10 @@ export async function buildLocalRecommendations(
       .where(
         and(
           isNotNull(events.hostId),
+          inArray(events.status, ["open", "booked", "filled"]),
+          or(eq(events.requiresPayment, false), isNull(events.requiresPayment)),
           gte(events.date, new Date(Date.now() - 24 * 60 * 60 * 1000)),
+          lte(events.date, new Date(Date.now() + 24 * 60 * 60 * 1000)),
         ),
       )
       .orderBy(desc(events.updatedAt))
@@ -334,6 +353,9 @@ export async function buildLocalRecommendations(
     getRestaurantSignals(),
     getUserRestaurantSets(input.userId),
   ]);
+  const confirmedTrucksByEvent = await loadConfirmedEventTrucks(
+    (publicEvents as any[]).map((event) => String(event.id || "")),
+  );
 
   const candidateRestaurantIds = Array.from(
     new Set(
@@ -564,10 +586,53 @@ export async function buildLocalRecommendations(
     const distanceMiles = milesBetween(lat, lng, hostLat, hostLng);
     if (!Number.isFinite(distanceMiles) || distanceMiles > radiusKm * 0.621371)
       continue;
+    const timeZone = resolveCityTimeZoneSync({
+      city: eventRow.hostCity || null,
+      state: eventRow.hostState || null,
+    });
+    const interval = buildSlotDateTimes({
+      timeZone,
+      date: eventRow.date,
+      startTime: String(eventRow.startTime || ""),
+      endTime: String(eventRow.endTime || ""),
+    });
+    const now = new Date();
+    if (
+      !interval ||
+      interval.endUtc.getTime() < now.getTime() ||
+      dateKeyInZone(interval.startUtc, timeZone) !== dateKeyInZone(now, timeZone)
+    ) {
+      continue;
+    }
 
+    const confirmedTrucks =
+      confirmedTrucksByEvent.get(String(eventRow.id || "")) || [];
+    const lastConfirmedAtUtc = confirmedTrucks
+      .map((truck) => truck.bookingConfirmedAt)
+      .filter((value): value is Date => value instanceof Date)
+      .sort((left, right) => right.getTime() - left.getTime())[0];
+    if (
+      !lastConfirmedAtUtc ||
+      !isSlotPublic({
+        slot: {
+          source: "parking_pass_booking",
+          status: "confirmed",
+          startsAtUtc: interval.startUtc,
+          endsAtUtc: interval.endUtc,
+          lastConfirmedAtUtc,
+        },
+        ttlHours: 24 * 365 * 100,
+      })
+    ) {
+      continue;
+    }
     const eventReasons = dedupeReasons([
       "Happening today",
-      eventRow.bookedRestaurantId ? "Serving nearby" : "",
+      confirmedTrucks.length === 1
+        ? "1 food truck confirmed"
+        : confirmedTrucks.length > 1
+          ? `${confirmedTrucks.length} food trucks confirmed`
+          : "",
     ]);
 
     recommendations.push({
@@ -587,24 +652,6 @@ export async function buildLocalRecommendations(
       },
     });
 
-    if (eventRow.requiresPayment) {
-      recommendations.push({
-        id: `host_spot:${String(eventRow.hostId)}:${eventId}`,
-        entityType: "host_spot",
-        entityId: String(eventRow.hostId),
-        score: 24 + Math.max(0, 10 - distanceMiles),
-        reasons: dedupeReasons(["Happening today", "Serving nearby"]),
-        availability: "available_today",
-        source: "operator_update",
-        distanceMiles: Number(distanceMiles.toFixed(2)),
-        freshnessLabel: "Confirmed today",
-        metadata: {
-          hostName: eventRow.hostName || "Host location",
-          eventId,
-          sourceDetail: "paid_event_slot",
-        },
-      });
-    }
   }
 
   recommendations.sort((a, b) => b.score - a.score);

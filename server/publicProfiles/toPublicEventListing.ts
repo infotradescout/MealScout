@@ -48,6 +48,25 @@ function toPublicEventSeries(
   return { id, name };
 }
 
+function toPublicEventTrucks(trucks: any): Record<string, unknown>[] {
+  if (!Array.isArray(trucks)) return [];
+  const projected: Record<string, unknown>[] = [];
+  for (const truck of trucks) {
+    const id = String(truck?.id || truck?.truckId || "").trim();
+    if (!id) continue;
+    projected.push({
+      id,
+      name: String(truck?.name || "Food truck"),
+      cuisineType: truck?.cuisineType || null,
+      city: truck?.city || null,
+      state: truck?.state || null,
+      logoUrl: truck?.logoUrl || null,
+      coverImageUrl: truck?.coverImageUrl || null,
+    });
+  }
+  return projected;
+}
+
 export function toPublicEventListing(event: any): Record<string, unknown> {
   if (!event || typeof event !== "object" || Array.isArray(event)) return {};
 
@@ -63,7 +82,6 @@ export function toPublicEventListing(event: any): Record<string, unknown> {
     endTime,
     maxTrucks,
     status,
-    bookedRestaurantId,
     hardCapEnabled,
     hostPriceCents,
     breakfastPriceCents,
@@ -78,7 +96,9 @@ export function toPublicEventListing(event: any): Record<string, unknown> {
     updatedAt,
     host,
     series,
+    trucks,
   } = event;
+  const publicTrucks = toPublicEventTrucks(trucks);
 
   return {
     id,
@@ -92,7 +112,7 @@ export function toPublicEventListing(event: any): Record<string, unknown> {
     endTime,
     maxTrucks,
     status,
-    bookedRestaurantId,
+    bookedRestaurantId: publicTrucks[0]?.id || null,
     hardCapEnabled,
     hostPriceCents,
     breakfastPriceCents,
@@ -107,6 +127,7 @@ export function toPublicEventListing(event: any): Record<string, unknown> {
     updatedAt,
     host: toPublicEventHost(host),
     series: toPublicEventSeries(series),
+    trucks: publicTrucks,
   };
 }
 

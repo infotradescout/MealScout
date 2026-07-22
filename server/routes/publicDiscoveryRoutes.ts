@@ -1,6 +1,6 @@
 import type { Express } from "express";
 import { createHash } from "crypto";
-import { and, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNotNull, lte, sql } from "drizzle-orm";
 import { z } from "zod";
 import {
   isBarBusinessType,
@@ -17,6 +17,7 @@ import {
   affiliateShareEvents,
   cities,
   deals,
+  eventBookings,
   events,
   hosts,
   menuCategories,
@@ -31,7 +32,6 @@ import {
   supplierProducts,
   suppliers,
   truckImportListings,
-  truckManualSchedules,
   videoStories,
 } from "@shared/schema";
 import {
@@ -46,6 +46,12 @@ import {
   resolvePublicBusinessSlug,
   resolveUniqueCleanBusinessPathForEntity,
 } from "../publicProfiles/publicBusinessSlugResolver";
+import { buildPublicTruckOperatingPlan } from "../services/truckOperatingPlan";
+import { loadConfirmedEventTrucks } from "../services/confirmedEventTrucks";
+import { resolveCityTimeZoneSync } from "../services/cityTimeZone";
+import { buildSlotDateTimes } from "../services/timeIntent";
+import { isSlotPublic } from "../services/publicSlotGate";
+import { canExposeAnonymousEventDetail } from "../publicProfiles/publicEventDetailAccess";
 import { buildPublicProfilePath } from "../publicProfiles/publicProfileUtils";
 import { isAuthenticated } from "../unifiedAuth";
 
@@ -218,347 +224,6 @@ const sourceTypeFromActor = (actorType: string) => {
   if (actorType === "llm_bot") return "llm_crawler";
   if (actorType === "bot") return "crawler";
   return "human";
-};
-
-const toDateOnly = (value: Date) => {
-  const year = value.getFullYear();
-  const month = String(value.getMonth() + 1).padStart(2, "0");
-  const day = String(value.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-};
-
-const buildHostProfilePath = (
-  hostId: string | null,
-  hostName: string | null,
-) => {
-  const safeId = String(hostId || "").trim();
-  if (!safeId) return null;
-  return buildPublicProfilePath({
-    entityType: "location",
-    name: hostName || safeId,
-    id: safeId,
-  });
-};
-
-const buildDirectionsUrl = (input: {
-  latitude: number | null;
-  longitude: number | null;
-  addressPublicLabel: string | null;
-}) => {
-  if (
-    typeof input.latitude === "number" &&
-    Number.isFinite(input.latitude) &&
-    typeof input.longitude === "number" &&
-    Number.isFinite(input.longitude)
-  ) {
-    return `https://maps.google.com/?q=${input.latitude},${input.longitude}`;
-  }
-  if (input.addressPublicLabel) {
-    return `https://maps.google.com/?q=${encodeURIComponent(input.addressPublicLabel)}`;
-  }
-  return null;
-};
-
-const classifyTruckStopStatus = (input: {
-  startsAt: Date | null;
-  endsAt: Date | null;
-  now: Date;
-  sourceStatus?: string | null;
-}) => {
-  const sourceStatus = String(input.sourceStatus || "")
-    .trim()
-    .toLowerCase();
-  if (sourceStatus === "closed") return "closed" as const;
-  if (sourceStatus.includes("cancel")) return "canceled" as const;
-  if (sourceStatus.includes("sold_out")) return "sold_out" as const;
-  if (sourceStatus.includes("closed_early")) return "closed_early" as const;
-  if (sourceStatus.includes("move")) return "moved" as const;
-  if (!input.startsAt || !input.endsAt) return "scheduled" as const;
-  if (input.now >= input.startsAt && input.now <= input.endsAt)
-    return "here_now" as const;
-  if (input.now > input.endsAt) return "completed" as const;
-  return "scheduled" as const;
-};
-
-const buildPublicTruckSchedulePayload = async (restaurantId: string) => {
-  const now = new Date();
-  const todayStart = new Date(now);
-  todayStart.setHours(0, 0, 0, 0);
-  const horizonEnd = new Date(todayStart);
-  horizonEnd.setDate(horizonEnd.getDate() + 14);
-
-  const eventStops = await db
-    .select({
-      stopId: events.id,
-      date: events.date,
-      startTime: events.startTime,
-      endTime: events.endTime,
-      sourceStatus: events.status,
-      locationName: hosts.businessName,
-      address: hosts.address,
-      city: hosts.city,
-      state: hosts.state,
-      latitude: hosts.latitude,
-      longitude: hosts.longitude,
-      hostId: hosts.id,
-      hostName: hosts.businessName,
-      updatedAt: events.updatedAt,
-      lastConfirmedAt: events.lastConfirmedAt,
-    })
-    .from(events)
-    .innerJoin(hosts, eq(events.hostId, hosts.id))
-    .where(
-      and(
-        eq(events.bookedRestaurantId, restaurantId),
-        gte(events.date, todayStart),
-        lte(events.date, horizonEnd),
-      ),
-    );
-
-  const manualStops = await db
-    .select({
-      stopId: truckManualSchedules.id,
-      date: truckManualSchedules.date,
-      startTime: truckManualSchedules.startTime,
-      endTime: truckManualSchedules.endTime,
-      sourceStatus: truckManualSchedules.status,
-      locationName: truckManualSchedules.locationName,
-      address: truckManualSchedules.address,
-      city: truckManualSchedules.city,
-      state: truckManualSchedules.state,
-      latitude: sql<number | null>`null`,
-      longitude: sql<number | null>`null`,
-      hostId: sql<string | null>`null`,
-      hostName: sql<string | null>`null`,
-      updatedAt: truckManualSchedules.updatedAt,
-      lastConfirmedAt: truckManualSchedules.lastConfirmedAt,
-      notice: truckManualSchedules.notes,
-      mapEligible: truckManualSchedules.mapEligible,
-      liveFeedEligible: truckManualSchedules.liveFeedEligible,
-    })
-    .from(truckManualSchedules)
-    .where(
-      and(
-        eq(truckManualSchedules.truckId, restaurantId),
-        eq(truckManualSchedules.isPublic, true),
-        gte(truckManualSchedules.date, todayStart),
-        lte(truckManualSchedules.date, horizonEnd),
-      ),
-    );
-
-  const allStops = [...eventStops, ...manualStops]
-    .map((row: any) => {
-      const date = row.date ? new Date(row.date) : null;
-      if (!date) return null;
-      const startRaw = String(row.startTime || "").trim();
-      const endRaw = String(row.endTime || "").trim();
-      const sourceStatus = String(row.sourceStatus || "")
-        .trim()
-        .toLowerCase();
-      const isClosedDay = sourceStatus === "closed";
-      const startDate = isClosedDay ? null : new Date(date);
-      const endDate = isClosedDay ? null : new Date(date);
-      if (startDate && /^\d{1,2}:\d{2}/.test(startRaw)) {
-        const [h, m] = startRaw.split(":").map(Number);
-        startDate.setHours(h || 0, m || 0, 0, 0);
-      } else if (startDate) {
-        startDate.setHours(0, 0, 0, 0);
-      }
-      if (endDate && /^\d{1,2}:\d{2}/.test(endRaw)) {
-        const [h, m] = endRaw.split(":").map(Number);
-        endDate.setHours(h || 0, m || 0, 0, 0);
-      } else if (endDate) {
-        endDate.setHours(23, 59, 0, 0);
-      }
-      if (startDate && endDate && endDate < startDate) {
-        endDate.setDate(endDate.getDate() + 1);
-      }
-      const status = classifyTruckStopStatus({
-        startsAt: startDate,
-        endsAt: endDate,
-        now,
-        sourceStatus: row.sourceStatus,
-      });
-      const addressPublicLabel = [row.address, row.city, row.state]
-        .map((value) => String(value || "").trim())
-        .filter(Boolean)
-        .join(", ");
-      const locationName = String(row.locationName || "").trim() || null;
-      const latitude =
-        row.latitude != null && Number.isFinite(Number(row.latitude))
-          ? Number(row.latitude)
-          : null;
-      const longitude =
-        row.longitude != null && Number.isFinite(Number(row.longitude))
-          ? Number(row.longitude)
-          : null;
-      return {
-        stopId: String(row.stopId || "").trim() || null,
-        date: toDateOnly(date),
-        startTime: startRaw || null,
-        endTime: endRaw || null,
-        timeWindowLabel:
-          startRaw && endRaw
-            ? `${startRaw} - ${endRaw}`
-            : startRaw || endRaw || null,
-        locationName,
-        addressPublicLabel: addressPublicLabel || null,
-        city: String(row.city || "").trim() || null,
-        state: String(row.state || "").trim() || null,
-        latitude: isClosedDay || row.mapEligible === false ? null : latitude,
-        longitude: isClosedDay || row.mapEligible === false ? null : longitude,
-        hostProfilePath: buildHostProfilePath(
-          String(row.hostId || "").trim() || null,
-          String(row.hostName || "").trim() || null,
-        ),
-        directionsUrl:
-          isClosedDay || row.mapEligible === false
-            ? null
-            : buildDirectionsUrl({
-                latitude,
-                longitude,
-                addressPublicLabel: addressPublicLabel || null,
-              }),
-        status,
-        startsAt: startDate || date,
-        endsAt: endDate || date,
-        updatedAt: row.updatedAt ? new Date(row.updatedAt) : null,
-        lastConfirmedAt: row.lastConfirmedAt
-          ? new Date(row.lastConfirmedAt)
-          : null,
-        notice: String(row.notice || "").trim() || null,
-      };
-    })
-    .filter(Boolean)
-    .sort(
-      (a: any, b: any) => a.startsAt.getTime() - b.startsAt.getTime(),
-    ) as Array<any>;
-
-  const openStops = allStops.filter((stop) => stop.status !== "closed");
-  const closedStops = allStops.filter((stop) => stop.status === "closed");
-
-  const currentStop =
-    openStops.find((stop) => stop.status === "here_now") || null;
-  const todayKey = toDateOnly(now);
-  const todayStop =
-    openStops.find(
-      (stop) => stop.date === todayKey && stop.status !== "completed",
-    ) || null;
-  const nextStop =
-    openStops.find((stop) => stop.startsAt.getTime() > now.getTime()) || null;
-  const upcomingStops = openStops
-    .filter((stop) => stop !== currentStop)
-    .slice(0, 8)
-    .map((stop) => ({
-      stopId: stop.stopId,
-      date: stop.date,
-      startTime: stop.startTime,
-      endTime: stop.endTime,
-      timeWindowLabel: stop.timeWindowLabel,
-      locationName: stop.locationName,
-      addressPublicLabel: stop.addressPublicLabel,
-      city: stop.city,
-      state: stop.state,
-      latitude: stop.latitude,
-      longitude: stop.longitude,
-      hostProfilePath: stop.hostProfilePath,
-      directionsUrl: stop.directionsUrl,
-      notice: stop.notice,
-      status: stop.status,
-    }));
-  const closedScheduleStops = closedStops.map((stop) => ({
-    stopId: stop.stopId,
-    date: stop.date,
-    startTime: stop.startTime,
-    endTime: stop.endTime,
-    timeWindowLabel: stop.timeWindowLabel,
-    locationName: stop.locationName,
-    addressPublicLabel: stop.addressPublicLabel,
-    city: stop.city,
-    state: stop.state,
-    latitude: null,
-    longitude: null,
-    hostProfilePath: null,
-    directionsUrl: null,
-    notice: stop.notice,
-    status: stop.status,
-  }));
-
-  const latestTouch = allStops
-    .map((stop) => stop.lastConfirmedAt || stop.updatedAt || stop.startsAt)
-    .filter((value): value is Date => value instanceof Date)
-    .sort((a, b) => b.getTime() - a.getTime())[0];
-
-  const notice =
-    allStops.find(
-      (stop) =>
-        stop.notice ||
-        stop.status === "canceled" ||
-        stop.status === "moved" ||
-        stop.status === "sold_out" ||
-        stop.status === "closed_early",
-    )?.notice || null;
-
-  const topStatus =
-    currentStop?.status ||
-    todayStop?.status ||
-    nextStop?.status ||
-    (openStops.length > 0
-      ? "scheduled"
-      : closedStops.length > 0
-        ? "closed"
-        : "unknown");
-
-  const statusLabelMap: Record<string, string> = {
-    here_now: "Here now",
-    scheduled: "Scheduled",
-    completed: "Completed",
-    closed: "Closed",
-    canceled: "Canceled",
-    moved: "Moved",
-    sold_out: "Sold out",
-    closed_early: "Closed early",
-    unknown: "No schedule posted",
-  };
-
-  const compactStop = (stop: any) =>
-    stop
-      ? {
-          stopId: stop.stopId,
-          date: stop.date,
-          startTime: stop.startTime,
-          endTime: stop.endTime,
-          timeWindowLabel: stop.timeWindowLabel,
-          locationName: stop.locationName,
-          addressPublicLabel: stop.addressPublicLabel,
-          city: stop.city,
-          state: stop.state,
-          latitude: stop.latitude,
-          longitude: stop.longitude,
-          hostProfilePath: stop.hostProfilePath,
-          directionsUrl: stop.directionsUrl,
-          notice: stop.notice,
-          status: stop.status,
-        }
-      : null;
-
-  return {
-    truckSchedule: {
-      status: topStatus,
-      statusLabel: statusLabelMap[topStatus] || "Scheduled",
-      lastUpdatedAt: latestTouch ? latestTouch.toISOString() : null,
-      notice,
-      currentStop: compactStop(currentStop),
-      todayStop: compactStop(todayStop),
-      nextStop: compactStop(nextStop),
-      upcomingStops,
-      closedStops: closedScheduleStops,
-      nextWindowLabel:
-        nextStop?.timeWindowLabel || todayStop?.timeWindowLabel || null,
-      upcomingCount: upcomingStops.length,
-      closedCount: closedScheduleStops.length,
-    },
-  };
 };
 
 const classifyPublicDealType = (input: {
@@ -735,34 +400,48 @@ const buildPublicEventsPayload = async (input: {
   restaurantRow?: any;
 }) => {
   const now = new Date();
-  const rows = await db
-    .select({
-      id: events.id,
-      title: events.name,
-      description: events.description,
-      eventType: events.eventType,
-      date: events.date,
-      startTime: events.startTime,
-      endTime: events.endTime,
-      status: events.status,
-      hostId: events.hostId,
-      hostName: hosts.businessName,
-      hostAddress: hosts.address,
-      hostCity: hosts.city,
-      hostState: hosts.state,
-    })
-    .from(events)
-    .leftJoin(hosts, eq(events.hostId, hosts.id))
-    .where(
-      input.restaurantId
-        ? and(
-            eq(events.bookedRestaurantId, input.restaurantId),
-            gte(events.date, now),
-          )
-        : input.hostId
-          ? and(eq(events.hostId, input.hostId), gte(events.date, now))
-          : gte(events.date, now),
-    );
+  const queryStart = new Date(now);
+  queryStart.setUTCHours(0, 0, 0, 0);
+  queryStart.setUTCDate(queryStart.getUTCDate() - 1);
+  const publicEventFields = {
+    id: events.id,
+    title: events.name,
+    description: events.description,
+    eventType: events.eventType,
+    date: events.date,
+    startTime: events.startTime,
+    endTime: events.endTime,
+    status: events.status,
+    hostId: events.hostId,
+    hostName: hosts.businessName,
+    hostAddress: hosts.address,
+    hostCity: hosts.city,
+    hostState: hosts.state,
+  };
+  const rows = input.restaurantId
+    ? await db
+        .select(publicEventFields)
+        .from(eventBookings)
+        .innerJoin(events, eq(eventBookings.eventId, events.id))
+        .leftJoin(hosts, eq(events.hostId, hosts.id))
+        .where(
+          and(
+            eq(eventBookings.truckId, input.restaurantId),
+            eq(eventBookings.status, "confirmed"),
+            isNotNull(eventBookings.bookingConfirmedAt),
+            inArray(events.status, ["open", "booked", "filled"]),
+            gte(events.date, queryStart),
+          ),
+        )
+    : await db
+        .select(publicEventFields)
+        .from(events)
+        .leftJoin(hosts, eq(events.hostId, hosts.id))
+        .where(
+          input.hostId
+            ? and(eq(events.hostId, input.hostId), gte(events.date, queryStart))
+            : gte(events.date, queryStart),
+        );
 
   const upcoming = rows
     .filter(
@@ -772,18 +451,33 @@ const buildPublicEventsPayload = async (input: {
       (a: any, b: any) =>
         new Date(a.date as any).getTime() - new Date(b.date as any).getTime(),
     )
-    .slice(0, 8)
     .map((row: any) => {
       const title = String(row.title || "").trim();
       const id = String(row.id || "").trim();
       if (!id || !title) return null;
       const dateObj = row.date ? new Date(row.date as any) : null;
-      const dateLabel =
-        dateObj && Number.isFinite(dateObj.getTime())
-          ? dateObj.toLocaleDateString()
-          : null;
       const startTime = String(row.startTime || "").trim();
       const endTime = String(row.endTime || "").trim();
+      const timeZone = resolveCityTimeZoneSync({
+        city: row.hostCity || null,
+        state: row.hostState || null,
+      });
+      const interval =
+        dateObj && Number.isFinite(dateObj.getTime())
+          ? buildSlotDateTimes({
+              timeZone,
+              date: dateObj,
+              startTime,
+              endTime,
+            })
+          : null;
+      if (!interval || interval.endUtc.getTime() < now.getTime()) return null;
+      const dateLabel = new Intl.DateTimeFormat("en-US", {
+        timeZone,
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      }).format(interval.startUtc);
       const timeWindowLabel =
         startTime && endTime
           ? `${startTime} - ${endTime}`
@@ -810,11 +504,8 @@ const buildPublicEventsPayload = async (input: {
         title,
         description: String(row.description || "").trim() || null,
         eventType: classifyPublicEventType(row.eventType, row.title),
-        startsAt:
-          dateObj && Number.isFinite(dateObj.getTime())
-            ? dateObj.toISOString()
-            : null,
-        endsAt: null,
+        startsAt: interval.startUtc.toISOString(),
+        endsAt: interval.endUtc.toISOString(),
         dateLabel,
         timeWindowLabel,
         locationName: String(row.hostName || "").trim() || null,
@@ -825,7 +516,8 @@ const buildPublicEventsPayload = async (input: {
         actionType,
       };
     })
-    .filter(Boolean);
+    .filter(Boolean)
+    .slice(0, 8);
 
   return {
     eventsItems: upcoming,
@@ -1975,17 +1667,15 @@ export function registerPublicDiscoveryRoutes(app: Express) {
             updatedAt: events.updatedAt,
             lastConfirmedAt: events.lastConfirmedAt,
             maxTrucks: events.maxTrucks,
+            requiresPayment: events.requiresPayment,
             hostId: events.hostId,
-            bookedRestaurantId: events.bookedRestaurantId,
             hostName: hosts.businessName,
             hostAddress: hosts.address,
             hostCity: hosts.city,
             hostState: hosts.state,
-            truckName: restaurants.name,
           })
           .from(events)
           .innerJoin(hosts, eq(events.hostId, hosts.id))
-          .leftJoin(restaurants, eq(events.bookedRestaurantId, restaurants.id))
           .where(eq(events.id, id))
           .limit(1);
 
@@ -1993,15 +1683,61 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           return res.status(404).json({ message: "Entity not found" });
         }
 
-        const freshnessHours = hoursSince(
-          row.lastConfirmedAt || row.updatedAt || row.date,
+        const confirmedTrucks =
+          (await loadConfirmedEventTrucks([String(row.id)])).get(
+            String(row.id),
+          ) || [];
+        const primaryTruck = confirmedTrucks[0] || null;
+        const latestBookingConfirmation = confirmedTrucks
+          .map((truck) => truck.bookingConfirmedAt)
+          .filter((value): value is Date => value instanceof Date)
+          .sort((left, right) => right.getTime() - left.getTime())[0];
+        const freshnessSource =
+          latestBookingConfirmation || row.lastConfirmedAt || row.updatedAt || row.date;
+        const timeZone = resolveCityTimeZoneSync({
+          city: row.hostCity || null,
+          state: row.hostState || null,
+        });
+        const interval = buildSlotDateTimes({
+          timeZone,
+          date: row.date,
+          startTime: String(row.startTime || ""),
+          endTime: String(row.endTime || ""),
+        });
+        const lastConfirmedAtUtc = freshnessSource
+          ? new Date(freshnessSource as any)
+          : null;
+        const slotIsPublic = Boolean(
+          interval &&
+            lastConfirmedAtUtc &&
+            Number.isFinite(lastConfirmedAtUtc.getTime()) &&
+            isSlotPublic({
+              slot: {
+                source: "parking_pass_booking",
+                status: primaryTruck ? "confirmed" : "tentative",
+                startsAtUtc: interval.startUtc,
+                endsAtUtc: interval.endUtc,
+                lastConfirmedAtUtc,
+              },
+              ...(primaryTruck ? { ttlHours: 24 * 365 * 100 } : {}),
+            }),
         );
+        if (
+          !canExposeAnonymousEventDetail({
+            requiresPayment: row.requiresPayment,
+            status: row.status,
+            slotIsPublic,
+          })
+        ) {
+          return res.status(404).json({ message: "Entity not found" });
+        }
+        const freshnessHours = hoursSince(freshnessSource);
         const knowledgeGaps = [
           !row.name ? "missing_event_name" : null,
           !row.date ? "missing_event_date" : null,
           !row.eventType ? "missing_event_type" : null,
           !row.description ? "missing_description" : null,
-          !row.bookedRestaurantId ? "missing_restaurant_link" : null,
+          confirmedTrucks.length === 0 ? "missing_confirmed_truck" : null,
         ].filter(Boolean) as string[];
 
         const readinessScore =
@@ -2009,7 +1745,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           (row.date && row.startTime ? 1 : 0) +
           (row.description ? 1 : 0) +
           (row.hostId ? 1 : 0) +
-          (row.bookedRestaurantId ? 1 : 0);
+          (confirmedTrucks.length > 0 ? 1 : 0);
 
         const canonicalPath = `/event/${row.id}`;
 
@@ -2022,14 +1758,16 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           freshness: staleBucketFromHours(freshnessHours),
           freshnessHours: roundToWholeHours(freshnessHours),
           machineReadiness: machineReadinessBucket(readinessScore),
-          updatedAt: row.lastConfirmedAt || row.updatedAt || row.date || null,
+          updatedAt: freshnessSource || null,
           verified: false,
           active:
-            String(row.status || "").toLowerCase() === "published" ||
-            String(row.status || "").toLowerCase() === "active",
+            ["open", "booked", "filled"].includes(
+              String(row.status || "").toLowerCase(),
+            ),
           evidenceSummary: {
             hasHost: Boolean(row.hostId),
-            hasBookedTruck: Boolean(row.bookedRestaurantId),
+            hasBookedTruck: confirmedTrucks.length > 0,
+            confirmedTruckCount: confirmedTrucks.length,
             maxTrucks: Number(row.maxTrucks || 0),
           },
           sourceFields: {
@@ -2037,7 +1775,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
             hasDate: Boolean(row.date),
             hasTime: Boolean(row.startTime && row.endTime),
             hasHost: Boolean(row.hostId && row.hostName),
-            hasBookedTruck: Boolean(row.bookedRestaurantId && row.truckName),
+            hasBookedTruck: confirmedTrucks.length > 0,
           },
           knowledgeGaps,
           sourceTruthStatements: [
@@ -2047,10 +1785,16 @@ export function registerPublicDiscoveryRoutes(app: Express) {
                   .filter(Boolean)
                   .join(", ")
               : null,
-            row.bookedRestaurantId && row.truckName
-              ? `Booked truck: ${row.truckName}`
-              : "Truck not booked yet",
-            row.lastConfirmedAt ? "Recently confirmed on MealScout" : null,
+            confirmedTrucks.length > 0
+              ? confirmedTrucks.length === 1
+                ? `Confirmed truck: ${primaryTruck?.name}`
+                : `${confirmedTrucks.length} confirmed trucks: ${confirmedTrucks
+                    .map((truck) => truck.name)
+                    .join(", ")}`
+              : "No confirmed truck booking yet",
+            latestBookingConfirmation
+              ? "Booking confirmed on MealScout"
+              : null,
           ].filter(Boolean),
         });
       }
@@ -2231,27 +1975,22 @@ export function registerPublicDiscoveryRoutes(app: Express) {
         const profileSettings = (ownerUser?.publicProfileSettings || {}) as any;
         const showAddress = profileSettings.showAddress !== false;
         const showContact = profileSettings.showContact !== false;
-        const [menuPayload, schedulePayload, dealsPayload, eventsPayload] =
+        const [menuPayload, operatingPlanPayload, dealsPayload] =
           await Promise.all([
             buildPublicMenuPayload(String(row.id), {
               preferredMenuId: queryPreferredMenuId || null,
               eventId: queryEventId || null,
               viewerUserId,
             }),
-            buildPublicTruckSchedulePayload(String(row.id)),
+            buildPublicTruckOperatingPlan(String(row.id)),
             buildPublicDealsPayload(String(row.id), row),
-            buildPublicEventsPayload({
-              restaurantId: String(row.id),
-              restaurantRow: row,
-            }),
           ]);
         const mapped = toPublicTruckProfile({
           row: {
             ...row,
             ...menuPayload,
-            ...schedulePayload,
+            ...operatingPlanPayload,
             ...dealsPayload,
-            ...eventsPayload,
           },
           baseUrl,
           showAddress,
@@ -2409,28 +2148,29 @@ export function registerPublicDiscoveryRoutes(app: Express) {
         const profileSettings = (ownerUser?.publicProfileSettings || {}) as any;
         const showAddress = profileSettings.showAddress !== false;
         const showContact = profileSettings.showContact !== false;
-        const [menuPayload, schedulePayload, dealsPayload, eventsPayload] =
+        const isTruckProfile = isTruckRestaurantRow(row);
+        const [menuPayload, dealsPayload, profileActivityPayload] =
           await Promise.all([
             buildPublicMenuPayload(String(row.id), {
               preferredMenuId: queryPreferredMenuId || null,
               eventId: queryEventId || null,
               viewerUserId,
             }),
-            buildPublicTruckSchedulePayload(String(row.id)),
             buildPublicDealsPayload(String(row.id), row),
-            buildPublicEventsPayload({
-              restaurantId: String(row.id),
-              restaurantRow: row,
-            }),
+            isTruckProfile
+              ? buildPublicTruckOperatingPlan(String(row.id))
+              : buildPublicEventsPayload({
+                  restaurantId: String(row.id),
+                  restaurantRow: row,
+                }),
           ]);
-        if (isTruckRestaurantRow(row)) {
+        if (isTruckProfile) {
           const mapped = toPublicTruckProfile({
             row: {
               ...row,
               ...menuPayload,
-              ...schedulePayload,
               ...dealsPayload,
-              ...eventsPayload,
+              ...profileActivityPayload,
             },
             baseUrl,
             showAddress,
@@ -2466,7 +2206,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
               ...row,
               ...menuPayload,
               ...dealsPayload,
-              ...eventsPayload,
+              ...profileActivityPayload,
             },
             baseUrl,
             showAddress,
@@ -2501,7 +2241,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
             ...row,
             ...menuPayload,
             ...dealsPayload,
-            ...eventsPayload,
+            ...profileActivityPayload,
           },
           baseUrl,
           showAddress,
@@ -2849,7 +2589,6 @@ export function registerPublicDiscoveryRoutes(app: Express) {
             name: events.name,
             description: events.description,
             hostName: hosts.businessName,
-            bookedRestaurantId: events.bookedRestaurantId,
           })
           .from(events)
           .innerJoin(hosts, eq(events.hostId, hosts.id))

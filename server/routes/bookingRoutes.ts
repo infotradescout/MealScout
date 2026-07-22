@@ -5,6 +5,7 @@ import {
   eventBookings,
   eventInterests,
   events,
+  eventSeries,
   hosts,
   restaurants,
   telemetryEvents,
@@ -15,14 +16,12 @@ import { storage } from "../storage";
 import { emailService } from "../emailService";
 import { canEmailForTopic } from "../utils/notificationPreferences";
 import { resolveCityTimeZoneSync } from "../services/cityTimeZone";
-import {
-  getPublicSlotGateConfigFromEnv,
-  isSlotPublic,
-} from "../services/publicSlotGate";
 import { buildSlotDateTimes } from "../services/timeIntent";
-import { dateKeyInZone } from "../services/dateKeys";
+import { dateKeyInZone, utcDateFromDateKey } from "../services/dateKeys";
 import Stripe from "stripe";
 import { isInternalTeamUserType } from "../roleAccess";
+import { isTruckOperatingPlanRowPublic } from "../services/truckOperatingPlan";
+import { resolveStoredFoodBusinessType } from "@shared/businessTypes";
 
 const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY)
@@ -494,11 +493,17 @@ export function registerBookingRoutes(
     try {
       const { truckId } = req.params;
       const [truck] = await db
-        .select({ id: restaurants.id, ownerId: restaurants.ownerId })
+        .select({
+          id: restaurants.id,
+          ownerId: restaurants.ownerId,
+          businessType: restaurants.businessType,
+          isFoodTruck: restaurants.isFoodTruck,
+          isActive: restaurants.isActive,
+        })
         .from(restaurants)
         .where(eq(restaurants.id, truckId));
 
-      if (!truck) {
+      if (!truck || resolveStoredFoodBusinessType(truck) !== "food_truck") {
         return res.status(404).json({ message: "Truck not found" });
       }
 
@@ -514,15 +519,61 @@ export function registerBookingRoutes(
           "manageParkingPass",
         );
       }
+      if (!truck.isActive && !includePrivate) {
+        return res.status(404).json({ message: "Truck not found" });
+      }
 
       const entries = await storage.getTruckManualSchedules(truckId);
+      const now = new Date();
       const filtered = !ownerHasPremiumAccess
         ? []
         : includePrivate
           ? entries
-          : entries.filter((entry) => entry.isPublic);
+          : entries.filter((entry) =>
+              isTruckOperatingPlanRowPublic(
+                {
+                  sourceKind: "manual",
+                  stopId: entry.id,
+                  date: entry.date,
+                  startTime: entry.startTime,
+                  endTime: entry.endTime,
+                  sourceStatus: entry.status,
+                  isPublic: entry.isPublic,
+                  locationName: entry.locationName,
+                  address: entry.address,
+                  city: entry.city,
+                  state: entry.state,
+                  timezone: (entry as any).timezone,
+                  updatedAt: entry.updatedAt,
+                  lastConfirmedAt: (entry as any).lastConfirmedAt,
+                  expiresAt: (entry as any).expiresAt,
+                  sourceType: (entry as any).sourceType,
+                  sourceConfidence: (entry as any).sourceConfidence,
+                  ownerSubmittedEquivalent: (entry as any).ownerSubmittedEquivalent,
+                  notice: entry.notes,
+                  mapEligible: (entry as any).mapEligible,
+                  liveFeedEligible: (entry as any).liveFeedEligible,
+                },
+                now,
+              ),
+            );
 
-      res.json(filtered);
+      res.json(
+        includePrivate
+          ? filtered
+          : filtered.map((entry) => ({
+              id: entry.id,
+              date: entry.date,
+              startTime: entry.startTime,
+              endTime: entry.endTime,
+              locationName: entry.locationName,
+              address: entry.address,
+              city: entry.city,
+              state: entry.state,
+              notes: entry.notes,
+              status: entry.status,
+            })),
+      );
     } catch (error) {
       console.error("Error fetching manual schedule:", error);
       res.status(500).json({ message: "Failed to fetch schedule" });
@@ -544,6 +595,14 @@ export function registerBookingRoutes(
         }
 
         const { truckId } = req.params;
+        const truck = await storage.getRestaurant(truckId);
+        if (
+          !truck ||
+          resolveStoredFoodBusinessType(truck) !== "food_truck" ||
+          !truck.isActive
+        ) {
+          return res.status(404).json({ message: "Truck not found" });
+        }
         const isAuthorized = await storage.verifyRestaurantOwnership(
           truckId,
           req.user.id,
@@ -562,21 +621,30 @@ export function registerBookingRoutes(
           endTime: z.string().min(1),
           address: z.string().min(1),
           locationName: z.string().optional(),
-          city: z.string().optional(),
-          state: z.string().optional(),
+          city: z.string().trim().min(1),
+          state: z.string().trim().min(2),
           notes: z.string().optional(),
           isPublic: z.boolean().optional(),
         });
 
         const parsed = schema.parse(req.body);
-        const parsedDate = new Date(`${parsed.date}T00:00:00`);
-        if (Number.isNaN(parsedDate.getTime())) {
+        const timeZone = resolveCityTimeZoneSync({
+          city: parsed.city || null,
+          state: parsed.state || null,
+        });
+        const interval = buildSlotDateTimes({
+          timeZone,
+          date: parsed.date,
+          startTime: parsed.startTime,
+          endTime: parsed.endTime,
+        });
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(parsed.date) || !interval) {
           return res.status(400).json({ message: "Invalid date" });
         }
 
         const created = await storage.createTruckManualSchedule({
           truckId,
-          date: parsedDate,
+          date: utcDateFromDateKey(parsed.date),
           startTime: parsed.startTime,
           endTime: parsed.endTime,
           locationName: parsed.locationName || null,
@@ -585,6 +653,13 @@ export function registerBookingRoutes(
           state: parsed.state || null,
           notes: parsed.notes || null,
           isPublic: parsed.isPublic ?? true,
+          status: "confirmed",
+          timezone: timeZone,
+          sourceType: "owner_manual",
+          sourceConfidence: "confirmed",
+          ownerSubmittedEquivalent: true,
+          expiresAt: interval.endUtc,
+          lastConfirmedAt: new Date(),
         });
 
         try {
@@ -604,6 +679,9 @@ export function registerBookingRoutes(
         res.json(created);
       } catch (error) {
         console.error("Error creating manual schedule:", error);
+        if (error instanceof z.ZodError) {
+          return res.status(400).json({ message: "Invalid schedule details" });
+        }
         res.status(500).json({ message: "Failed to create schedule entry" });
       }
     },
@@ -624,6 +702,14 @@ export function registerBookingRoutes(
         }
 
         const { truckId, scheduleId } = req.params;
+        const truck = await storage.getRestaurant(truckId);
+        if (
+          !truck ||
+          resolveStoredFoodBusinessType(truck) !== "food_truck" ||
+          !truck.isActive
+        ) {
+          return res.status(404).json({ message: "Truck not found" });
+        }
         const isAuthorized = await storage.verifyRestaurantOwnership(
           truckId,
           req.user.id,
@@ -794,16 +880,20 @@ export function registerBookingRoutes(
           id: restaurants.id,
           name: restaurants.name,
           ownerId: restaurants.ownerId,
+          businessType: restaurants.businessType,
+          isFoodTruck: restaurants.isFoodTruck,
+          isActive: restaurants.isActive,
         })
         .from(restaurants)
         .where(eq(restaurants.id, truckId));
 
-      if (!truck) {
+      if (!truck || resolveStoredFoodBusinessType(truck) !== "food_truck") {
         return res.status(404).json({ message: "Truck not found" });
       }
 
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+      const queryStart = new Date();
+      queryStart.setUTCHours(0, 0, 0, 0);
+      queryStart.setUTCDate(queryStart.getUTCDate() - 1);
 
       const isAdmin = ["admin", "duper_admin", "super_admin", "staff"].includes(
         req.user?.userType || "",
@@ -820,6 +910,9 @@ export function registerBookingRoutes(
         );
         includePending = isAdmin || (isOwner && ownerHasPremiumAccess);
       }
+      if (!truck.isActive && !includePending) {
+        return res.status(404).json({ message: "Truck not found" });
+      }
 
       const bookingStatuses = includePending
         ? (["confirmed", "pending"] as const)
@@ -833,18 +926,20 @@ export function registerBookingRoutes(
           bookingConfirmedAt: eventBookings.bookingConfirmedAt,
           createdAt: eventBookings.createdAt,
           slotType: eventBookings.slotType,
+          timezone: eventSeries.timezone,
           event: events,
           host: hosts,
         })
         .from(eventBookings)
         .innerJoin(events, eq(eventBookings.eventId, events.id))
-        .innerJoin(hosts, eq(eventBookings.hostId, hosts.id))
+        .innerJoin(hosts, eq(events.hostId, hosts.id))
+        .leftJoin(eventSeries, eq(events.seriesId, eventSeries.id))
         .where(
           and(
             eq(eventBookings.truckId, truckId),
             inArray(eventBookings.status, bookingStatuses as any),
-            or(eq(events.status, "open"), eq(events.status, "booked")),
-            gte(events.date, today),
+            inArray(events.status, ["open", "booked", "filled"]),
+            gte(events.date, queryStart),
           ),
         )
         .orderBy(desc(events.date));
@@ -865,7 +960,7 @@ export function registerBookingRoutes(
             eq(eventInterests.truckId, truckId),
             eq(eventInterests.status, "accepted"),
             or(eq(events.status, "open"), eq(events.status, "booked")),
-            gte(events.date, today),
+            gte(events.date, queryStart),
           ),
         )
         .orderBy(desc(events.date));
@@ -874,69 +969,29 @@ export function registerBookingRoutes(
         bookingRows.map((row: (typeof bookingRows)[number]) => row.eventId),
       );
 
-      const gate = getPublicSlotGateConfigFromEnv();
       const isPublicBookingSlot = (row: (typeof bookingRows)[number]) => {
-        const timeZone = resolveCityTimeZoneSync({
-          city: (row.host as any)?.city ?? null,
-          state: (row.host as any)?.state ?? null,
-        });
-        const interval = buildSlotDateTimes({
-          timeZone,
-          date: new Date(row.event.date as any),
-          startTime: String(row.event.startTime || ""),
-          endTime: String(row.event.endTime || ""),
-        });
-        if (!interval) return false;
-        const lastConfirmedAtUtc = new Date(
-          (row.event as any).lastConfirmedAt ??
-            row.bookingConfirmedAt ??
-            row.createdAt ??
-            (row.event as any).updatedAt ??
-            row.event.date ??
-            Date.now(),
-        );
-        return isSlotPublic({
-          slot: {
-            source: "parking_pass_booking",
-            status: row.status === "confirmed" ? "confirmed" : "tentative",
-            startsAtUtc: interval.startUtc,
-            endsAtUtc: interval.endUtc,
-            lastConfirmedAtUtc,
-          },
-          ...gate,
-        });
-      };
-
-      const isPublicAcceptedSlot = (
-        row: (typeof acceptedInterestRows)[number],
-      ) => {
-        const timeZone = resolveCityTimeZoneSync({
-          city: (row.host as any)?.city ?? null,
-          state: (row.host as any)?.state ?? null,
-        });
-        const interval = buildSlotDateTimes({
-          timeZone,
-          date: new Date(row.event.date as any),
-          startTime: String(row.event.startTime || ""),
-          endTime: String(row.event.endTime || ""),
-        });
-        if (!interval) return false;
-        const lastConfirmedAtUtc = new Date(
-          (row.event as any).lastConfirmedAt ??
-            row.createdAt ??
-            (row.event as any).updatedAt ??
-            row.event.date ??
-            Date.now(),
-        );
-        return isSlotPublic({
-          slot: {
-            source: "parking_pass_booking",
-            status: "confirmed",
-            startsAtUtc: interval.startUtc,
-            endsAtUtc: interval.endUtc,
-            lastConfirmedAtUtc,
-          },
-          ...gate,
+        return isTruckOperatingPlanRowPublic({
+          sourceKind: "booking",
+          stopId: row.bookingId,
+          date: row.event.date,
+          startTime: row.event.startTime,
+          endTime: row.event.endTime,
+          sourceStatus: row.event.status,
+          bookingStatus: row.status,
+          isPublic: true,
+          locationName: row.host.businessName,
+          address: row.host.address,
+          city: (row.host as any).city,
+          state: (row.host as any).state,
+          latitude: (row.host as any).latitude,
+          longitude: (row.host as any).longitude,
+          hostId: row.host.id,
+          hostName: row.host.businessName,
+          timezone: row.timezone,
+          updatedAt: row.createdAt,
+          lastConfirmedAt: row.bookingConfirmedAt,
+          mapEligible: true,
+          liveFeedEligible: true,
         });
       };
 
@@ -977,12 +1032,10 @@ export function registerBookingRoutes(
             },
           })),
         ...acceptedInterestRows
+          .filter(() => includePending)
           .filter(
             (row: (typeof acceptedInterestRows)[number]) =>
               !bookingEventIds.has(row.eventId),
-          )
-          .filter((row: (typeof acceptedInterestRows)[number]) =>
-            includePending ? true : isPublicAcceptedSlot(row),
           )
           .map((row: (typeof acceptedInterestRows)[number]) => ({
             type: "accepted_interest",
@@ -1015,42 +1068,34 @@ export function registerBookingRoutes(
 
       const manualEntries = await storage.getTruckManualSchedules(truckId);
       const isPublicManualSlot = (entry: (typeof manualEntries)[number]) => {
-        const timeZone = resolveCityTimeZoneSync({
-          city: (entry as any)?.city ?? null,
-          state: (entry as any)?.state ?? null,
-        });
-        const interval =
-          entry.startTime && entry.endTime
-            ? buildSlotDateTimes({
-                timeZone,
-                date: new Date(entry.date as any),
-                startTime: String(entry.startTime || ""),
-                endTime: String(entry.endTime || ""),
-              })
-            : null;
-        if (!interval) return false;
-        const lastConfirmedAtUtc = new Date(
-          (entry as any).lastConfirmedAt ??
-            entry.createdAt ??
-            entry.date ??
-            Date.now(),
-        );
-        return isSlotPublic({
-          slot: {
-            source: "manual",
-            status: "confirmed",
-            startsAtUtc: interval.startUtc,
-            endsAtUtc: interval.endUtc,
-            lastConfirmedAtUtc,
-          },
-          ...gate,
+        return isTruckOperatingPlanRowPublic({
+          sourceKind: "manual",
+          stopId: entry.id,
+          date: entry.date,
+          startTime: entry.startTime,
+          endTime: entry.endTime,
+          sourceStatus: entry.status,
+          isPublic: entry.isPublic,
+          locationName: entry.locationName,
+          address: entry.address,
+          city: entry.city,
+          state: entry.state,
+          timezone: (entry as any).timezone,
+          updatedAt: entry.updatedAt,
+          lastConfirmedAt: (entry as any).lastConfirmedAt,
+          expiresAt: (entry as any).expiresAt,
+          sourceType: (entry as any).sourceType,
+          sourceConfidence: (entry as any).sourceConfidence,
+          ownerSubmittedEquivalent: (entry as any).ownerSubmittedEquivalent,
+          notice: entry.notes,
+          mapEligible: (entry as any).mapEligible,
+          liveFeedEligible: (entry as any).liveFeedEligible,
         });
       };
 
       const manualSchedule = manualEntries
         .filter(() => ownerHasPremiumAccess)
         .filter((entry) => entry.isPublic)
-        .filter((entry) => entry.date >= today)
         .filter((entry) => (includePending ? true : isPublicManualSlot(entry)))
         .map((entry) => ({
           type: "manual",
