@@ -13,6 +13,29 @@ const content = readFileSync(
 const styles = readFileSync("client/src/pages/mealscout-about.css", "utf8");
 const combined = `${page}\n${explainer}\n${content}`;
 
+function cssColor(name: string) {
+  const match = styles.match(new RegExp(`--ms-${name}:\\s*(#[0-9a-f]{6})`, "i"));
+  assert.ok(match, `About styles must define --ms-${name} as a six-digit hex color`);
+  return match[1];
+}
+
+function relativeLuminance(hex: string) {
+  const channels = [1, 3, 5].map((offset) => Number.parseInt(hex.slice(offset, offset + 2), 16) / 255);
+  const [red, green, blue] = channels.map((channel) =>
+    channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4,
+  );
+  return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+}
+
+function contrastRatio(first: string, second: string) {
+  const firstLuminance = relativeLuminance(first);
+  const secondLuminance = relativeLuminance(second);
+  return (
+    (Math.max(firstLuminance, secondLuminance) + 0.05) /
+    (Math.min(firstLuminance, secondLuminance) + 0.05)
+  );
+}
+
 assert.match(page, /MealScoutAboutExplainer/);
 assert.match(page, /https:\/\/www\.mealscout\.us\/about/);
 assert.match(page, /"@type": "AboutPage"/);
@@ -160,6 +183,8 @@ for (const forbiddenClaim of [
   "property, permit, and suitability requirements before confirmation",
   "directions QR assets",
   "Understand and reach the people",
+  "Publish hours, truck schedules, live context, operating windows, and confirmed stops",
+  "one business-specific control surface",
 ]) {
   assert.doesNotMatch(
     combined,
@@ -188,6 +213,60 @@ for (const labelledSection of [
 }
 assert.match(styles, /\.ms-about-jumpbar\s*{/);
 assert.match(styles, /:focus-visible/);
+assert.match(
+  styles,
+  /\.ms-about :where\(a, summary\):focus-visible\s*{[^}]*outline:[^;]*var\(--ms-white\)[^}]*box-shadow:[^;]*var\(--ms-ink\)/s,
+  "About focus indicators must keep a light-and-dark two-tone ring",
+);
+assert.match(
+  styles,
+  /\.ms-about-system-rule > div span\s*{[^}]*color:\s*var\(--ms-ink\)/s,
+  "Numbered system steps must use AA-contrast text",
+);
+assert.match(
+  styles,
+  /\.ms-about-module-grid article > span\s*{[^}]*color:\s*var\(--ms-coral-dark\)/s,
+  "Workspace numbers must use AA-contrast text",
+);
+assert.match(
+  styles,
+  /\.ms-about-guide-number\s*{[^}]*color:\s*var\(--ms-coral-dark\)/s,
+  "Guide numbers must use AA-contrast text",
+);
+
+assert.ok(
+  contrastRatio(cssColor("ink"), cssColor("coral")) >= 4.5,
+  "System-step numbers must meet WCAG AA normal-text contrast",
+);
+for (const surface of ["paper", "cream"]) {
+  assert.ok(
+    contrastRatio(cssColor("coral-dark"), cssColor(surface)) >= 4.5,
+    `Small coral-dark numbers must meet WCAG AA contrast on --ms-${surface}`,
+  );
+}
+for (const surface of [
+  "paper",
+  "white",
+  "cream",
+  "coral",
+  "coral-dark",
+  "orange",
+  "yellow",
+  "green",
+  "green-bright",
+  "plum",
+  "blue",
+]) {
+  const surfaceColor = cssColor(surface);
+  const bestRingContrast = Math.max(
+    contrastRatio(cssColor("white"), surfaceColor),
+    contrastRatio(cssColor("ink"), surfaceColor),
+  );
+  assert.ok(
+    bestRingContrast >= 3,
+    `Two-tone focus ring must keep 3:1 contrast on --ms-${surface}`,
+  );
+}
 assert.match(styles, /scroll-margin-top/);
 assert.match(styles, /@media \(max-width: 760px\)/);
 assert.match(styles, /prefers-reduced-motion/);

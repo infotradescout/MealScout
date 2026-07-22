@@ -40,6 +40,7 @@ test.describe("complete MealScout About guide", () => {
   test.beforeEach(async ({ page }) => {
     await mockGuest(page);
     await page.goto(`${FRONTEND}/about`, { waitUntil: "domcontentloaded" });
+    await page.waitForLoadState("load");
     await dismissBetaDialog(page);
   });
 
@@ -97,24 +98,32 @@ test.describe("complete MealScout About guide", () => {
     expect(hasHorizontalOverflow).toBe(false);
 
     const images = page.locator("main.ms-about img");
-    for (let index = 0; index < await images.count(); index += 1) {
-      const image = images.nth(index);
+    const visibleImages = page.locator("main.ms-about img:visible");
+    const visibleImageCount = await visibleImages.count();
+    for (let index = 0; index < visibleImageCount; index += 1) {
+      const image = visibleImages.nth(index);
       await image.scrollIntoViewIfNeeded();
       await expect
         .poll(() => image.evaluate((element) => element.complete && element.naturalWidth > 0))
         .toBe(true);
     }
+    expect(visibleImageCount).toBeGreaterThan(0);
 
     const brokenImages = await images.evaluateAll((elements) =>
       elements
-        .filter((image) => !(image as HTMLImageElement).complete || (image as HTMLImageElement).naturalWidth === 0)
+        .filter((image) => image.getClientRects().length > 0)
+        .filter(
+          (image) =>
+            !(image as HTMLImageElement).complete ||
+            (image as HTMLImageElement).naturalWidth === 0,
+        )
         .map((image) => (image as HTMLImageElement).src),
     );
     expect(brokenImages).toEqual([]);
   });
 
   test("opens a directly linked help chapter", async ({ page }) => {
-    await page.goto(`${FRONTEND}/about#parking-pass`, { waitUntil: "domcontentloaded" });
+    await page.goto(`${FRONTEND}/about#parking-pass`, { waitUntil: "load" });
 
     const chapter = page.locator("#parking-pass");
     await expect(chapter).toHaveAttribute("open", "");

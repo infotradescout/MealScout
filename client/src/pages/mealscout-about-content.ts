@@ -143,7 +143,7 @@ export const businessWorkspaceModules = [
   { title: "Overview", text: "See the current business, completion, and operating priorities." },
   { title: "Public profile", text: "Control the public identity, story, contact details, and service context." },
   { title: "Menu", text: "Build categories, items, descriptions, prices, options, photos, and availability." },
-  { title: "Availability", text: "Publish hours, truck schedules, live context, operating windows, and confirmed stops." },
+  { title: "Availability", text: "Manage hours, live or saved location context, operating windows, and booked-stop visibility." },
   { title: "Photos", text: "Manage approved food, business, and location media." },
   { title: "Deals", text: "Publish specials and time-sensitive offers without rebuilding the profile." },
   { title: "Orders", text: "See pickup orders and move them through the operating workflow where enabled." },
@@ -232,7 +232,7 @@ export const aboutFeatureGroups: AboutFeatureGroup[] = [
     number: "05",
     icon: "briefcase",
     title: "Business workspace",
-    summary: "Run the operation behind the public profile from one business-specific control surface.",
+    summary: "Manage the public profile and its connected operating tools through a business-specific workspace.",
     status: "available",
     roles: ["Owners", "Approved collaborators"],
     items: [

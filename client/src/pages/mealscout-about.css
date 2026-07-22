@@ -66,8 +66,9 @@
 }
 
 .ms-about :where(a, summary):focus-visible {
-  outline: 3px solid var(--ms-yellow);
-  outline-offset: 4px;
+  outline: 3px solid var(--ms-white);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 6px var(--ms-ink);
   border-radius: 8px;
 }
 
@@ -560,7 +561,7 @@
   width: 26px;
   height: 26px;
   border-radius: 50%;
-  color: white;
+  color: var(--ms-ink);
   background: var(--ms-coral);
   font-size: 10px;
   font-weight: 900;
@@ -1193,7 +1194,7 @@
 .ms-about-module-grid article > span {
   display: block;
   margin-bottom: 45px;
-  color: var(--ms-coral);
+  color: var(--ms-coral-dark);
   font-size: 10px;
   font-weight: 900;
 }
@@ -1532,7 +1533,7 @@
 }
 
 .ms-about-guide-number {
-  color: var(--ms-coral);
+  color: var(--ms-coral-dark);
   font-size: 10px;
   font-weight: 900;
 }
