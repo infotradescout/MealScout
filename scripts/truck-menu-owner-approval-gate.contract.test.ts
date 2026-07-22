@@ -8,6 +8,8 @@ const publicProfileMapper = readText(
   "server/publicProfiles/toPublicRestaurantProfile.ts",
 );
 const publicProfilePage = readText("client/src/pages/public-profile.tsx");
+const publicDiscovery = readText("server/routes/publicDiscoveryRoutes.ts");
+const menuRevision = readText("server/services/menuRevision.ts");
 const ownerDashboard = readText(
   "client/src/pages/restaurant-owner-dashboard.tsx",
 );
@@ -65,6 +67,26 @@ requireIncludes(
   'ownerApprovalRequired: body.action === "skip"',
   "Skipping review must keep approval required instead of approving the menu.",
 );
+requireIncludes(
+  restaurantOps,
+  "approvedMenuRevision",
+  "Owner approval must bind to the exact structured menu revision.",
+);
+requireIncludes(
+  restaurantOps,
+  "rejectedMenuRevision",
+  "Menu rejection must bind to the rejected revision so a rebuilt menu can be reviewed again.",
+);
+requireIncludes(
+  restaurantOps,
+  "canApproveCurrentMenu",
+  "Fallback-only menus must not expose an approval action that the server rejects.",
+);
+requireIncludes(
+  restaurantOps,
+  "!rejected && claimsOwnerApproval",
+  "A contradictory rejected menu must not retain owner-approved state.",
+);
 
 requireIncludes(
   ownerDashboard,
@@ -106,6 +128,61 @@ requireIncludes(
   publicProfileMapper,
   "Owner-approved menu",
   "Public truck profiles must label explicitly approved menus.",
+);
+requireIncludes(
+  publicProfileMapper,
+  "approvedMenuRevision === currentMenuRevision",
+  "Public profiles must not inherit approval from an older menu revision.",
+);
+requireIncludes(
+  publicProfileMapper,
+  "!ownerMenuRejected && menuRevisionCoversRenderedMenu && Boolean(currentMenuRevision)",
+  "Public rejected state must take precedence over stale owner-approved flags.",
+);
+requireIncludes(
+  publicDiscovery,
+  "menuRevision: menuRevisionEvidence.revision",
+  "Public profile assembly must supply the current structured-menu revision.",
+);
+requireIncludes(
+  publicDiscovery,
+  "const menuRevisionEvidence = createStructuredMenuRevision",
+  "Public menu revision must be computed from the exact rows used for the payload.",
+);
+requireIncludes(
+  publicDiscovery,
+  "String(row.importUrl || \"\").trim()",
+  "The rendered external menu URL must come from the same full menu row included in the revision.",
+);
+requireIncludes(
+  publicDiscovery,
+  "menuRevisionCoversRenderedMenu: true",
+  "The owner-approved label must be scoped to the exact structured payload revision.",
+);
+requireIncludes(
+  publicProfileMapper,
+  'menuApproval.status === "rejected" || ownerMenuApproved',
+  "Unrevisioned external menu image and PDF surfaces must not inherit the structured owner-approved label.",
+);
+requireIncludes(
+  publicDiscovery,
+  "eq(menuItems.restaurantId, restaurantId)",
+  "Public menu items must belong to the requested restaurant as well as its active menu.",
+);
+requireExcludes(
+  publicDiscovery,
+  "loadMenuRevisionEvidence(restaurantId)",
+  "Public payload must not fetch an independent revision before fetching rendered content.",
+);
+requireIncludes(
+  menuRevision,
+  'MENU_REVISION_ALGORITHM = "structured-menu-sha256-v1"',
+  "Menu approval must use a deterministic versioned revision algorithm.",
+);
+requireIncludes(
+  menuRevision,
+  "isMenuItemOwnedByRestaurantActiveMenu",
+  "Completion revisions must exclude cross-linked items outside the restaurant's own active menus.",
 );
 requireIncludes(
   publicProfileMapper,

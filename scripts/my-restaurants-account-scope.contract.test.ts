@@ -23,7 +23,9 @@ if (route.includes("storage.getAllRestaurants()")) {
 for (const required of [
   "storage.getRestaurantsByOwner(req.user.id)",
   "getBusinessAccessContext(req.user.id)",
-  "attachVerificationState(restaurantsByOwner as any[])",
+  "attachVerificationState(",
+  "canManageProfileIds",
+  "loadProfileCompletionEvidenceBatch",
 ]) {
   if (!route.includes(required)) {
     throw new Error(`Missing account-scoped my-restaurants behavior: ${required}`);

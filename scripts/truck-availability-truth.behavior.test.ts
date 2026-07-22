@@ -306,6 +306,46 @@ const confirmedBooking = {
 }
 
 {
+  // At this instant UTC is already July 23, while the stop's Chicago-local
+  // business day is still July 22. Closure truth must use the stop timezone.
+  const localBoundaryNow = new Date("2026-07-23T02:30:00.000Z");
+  const sameLocalDayClosure = assembleTruckOperatingPlan({
+    now: localBoundaryNow,
+    rows: [
+      {
+        sourceKind: "manual",
+        stopId: "closed-local-today",
+        date: "2026-07-22",
+        sourceStatus: "closed",
+        isPublic: true,
+        timezone: "America/Chicago",
+        lastConfirmedAt: new Date("2026-07-23T02:00:00.000Z"),
+      },
+    ],
+  });
+  assert.equal(sameLocalDayClosure.status, "closed");
+  assert.equal(sameLocalDayClosure.closedStops[0]?.stopId, "closed-local-today");
+
+  const futureClosure = assembleTruckOperatingPlan({
+    now: localBoundaryNow,
+    rows: [
+      {
+        sourceKind: "manual",
+        stopId: "closed-local-tomorrow",
+        date: "2026-07-23",
+        sourceStatus: "closed",
+        isPublic: true,
+        timezone: "America/Chicago",
+        lastConfirmedAt: new Date("2026-07-23T02:00:00.000Z"),
+      },
+    ],
+  });
+  assert.equal(futureClosure.status, "unknown");
+  assert.equal(futureClosure.statusLabel, "No schedule posted");
+  assert.equal(futureClosure.closedStops[0]?.stopId, "closed-local-tomorrow");
+}
+
+{
   const overnight = assembleTruckOperatingPlan({
     rows: [
       {

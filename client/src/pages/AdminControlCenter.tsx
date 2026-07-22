@@ -23,6 +23,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
+import type { ProfileCompletionTruth } from "@shared/profileCompletionStatus";
 
 type LisaClaimStreamItem = {
   id?: string;
@@ -117,6 +118,7 @@ type BusinessProfileCompletionItem = {
   missingFields: string[];
   menuStatus: {
     ready: boolean;
+    state?: ProfileCompletionTruth["menuState"];
     menuCount: number;
     menuItemCount: number;
     hasMenuFallback: boolean;
@@ -124,6 +126,7 @@ type BusinessProfileCompletionItem = {
   };
   photoStatus: {
     ready: boolean;
+    state?: ProfileCompletionTruth["mediaState"];
     hasLogo: boolean;
     hasCover: boolean;
     uploadedCount: number;
@@ -139,6 +142,11 @@ type BusinessProfileCompletionItem = {
   scheduleStatus: {
     required: boolean;
     ready: boolean;
+    kind?: "dated_truck_schedule" | "fixed_weekly_hours";
+    state?:
+      | ProfileCompletionTruth["datedTruckScheduleState"]
+      | ProfileCompletionTruth["fixedWeeklyHoursState"];
+    workflowState?: ProfileCompletionTruth["datedTruckScheduleWorkflowState"];
     mobileOnline: boolean;
     hasOperatingHours: boolean;
     reviewedUnavailable?: boolean;
@@ -161,6 +169,7 @@ type BusinessProfileCompletionItem = {
     websiteUrl: string | null;
   }>;
   publicReady?: boolean;
+  completionTruth?: ProfileCompletionTruth | null;
   handoffReady?: boolean;
   adminFixable?: boolean;
   blockedOwnerInput?: boolean;

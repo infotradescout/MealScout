@@ -27,6 +27,26 @@ import {
   buildProfileAssetEvidence,
   type ProfileAssetType,
 } from "@shared/profileAssetEvidence";
+import {
+  appendProfileEvidenceReviewProposals,
+  createProfileEvidenceIntakeRequestFingerprint,
+  mergeProfileEvidenceApplySettings,
+  mergeProfileEvidenceQueueContainer,
+  mergeProfileEvidenceQueueContainerWithReport,
+  isDirectProfileEvidenceApplyDisabledMode,
+  normalizeProfileEvidenceProposalBatch,
+  normalizeProfileEvidenceReviewLedger,
+  normalizeQueuedProfileEvidenceMenuItems,
+  normalizeQueuedProfileEvidenceScheduleItems,
+  normalizeQueuedProfileEvidenceTextItems,
+  parseDirectApplyMenuPriceCents,
+  type ProfileEvidenceCurrentValues,
+} from "../../services/profileEvidenceReview";
+import {
+  PROFILE_EVIDENCE_REVIEW_LIMITS,
+  PROFILE_EVIDENCE_REVIEW_FIELDS,
+  getProfileEvidenceFieldDefinition,
+} from "@shared/profileEvidenceReview";
 
 type RequireAdminUser = (req: any, res: any) => boolean;
 type EnsureTruckImportTables = () => Promise<void>;
@@ -473,15 +493,50 @@ export function registerTruckImportAdminRoutes(
     ]),
     async (req: any, res) => {
       if (!requireAdminUser(req, res)) return;
+      let reservedQueueRequest: {
+        restaurantId: string;
+        intakeRequestId: string;
+        fingerprint: string;
+      } | null = null;
       try {
-        await ensureTruckImportTables();
-
         const requestBody =
           typeof req.body?.payload === "string" && req.body.payload.trim()
             ? JSON.parse(req.body.payload)
             : req.body || {};
 
-        const mode = requestBody?.mode === "apply" ? "apply" : "dry_run";
+        const requestedMode = String(requestBody?.mode || "dry_run")
+          .trim()
+          .toLowerCase();
+        if (isDirectProfileEvidenceApplyDisabledMode(requestedMode)) {
+          return res.status(409).json({
+            status: "owner_review_required",
+            code: "direct_apply_disabled_use_owner_review",
+            message:
+              "Direct apply is disabled for this release. Submit with mode queue_owner_review so profile evidence is reviewed before publication.",
+            requiredMode: "queue_owner_review",
+          });
+        }
+
+        await ensureTruckImportTables();
+
+        const mode =
+          requestedMode === "apply"
+            ? "apply"
+            : requestedMode === "queue_owner_review"
+              ? "queue_owner_review"
+              : "dry_run";
+        const queuesOwnerReview = mode === "queue_owner_review";
+        const intakeRequestId = String(requestBody?.intakeRequestId || "").trim();
+        if (
+          queuesOwnerReview &&
+          !/^[A-Za-z0-9][A-Za-z0-9._:-]{7,79}$/.test(intakeRequestId)
+        ) {
+          return res.status(400).json({
+            code: "owner_review_requires_intake_request_id",
+            message:
+              "Owner review requires an 8-80 character intakeRequestId using letters, numbers, dot, underscore, colon, or dash.",
+          });
+        }
         const profileTypeRaw = String(requestBody?.profileType || "unknown")
           .trim()
           .toLowerCase();
@@ -505,42 +560,146 @@ export function registerTruckImportAdminRoutes(
         const descriptionOnlyIfBlank = String(
           requestBody?.descriptionOnlyIfBlank || "",
         ).trim();
-        const incomingMenuItems = Array.isArray(requestBody?.menuItems)
-          ? requestBody.menuItems
-          : [];
-        const incomingScheduleItems = Array.isArray(requestBody?.scheduleItems)
-          ? requestBody.scheduleItems
-          : [];
-        const sourceNotes = Array.isArray(requestBody?.sourceNotes)
-          ? requestBody.sourceNotes
-              .map((v: any) => String(v || "").trim())
-              .filter(Boolean)
-          : [];
-        const missingInfo = Array.isArray(requestBody?.missingInfo)
-          ? requestBody.missingInfo
-              .map((v: any) => String(v || "").trim())
-              .filter(Boolean)
-          : [];
+        const queuedMenuItemBatch = normalizeQueuedProfileEvidenceMenuItems(
+          requestBody?.menuItems,
+        );
+        const queuedScheduleItemBatch =
+          normalizeQueuedProfileEvidenceScheduleItems(
+            requestBody?.scheduleItems,
+          );
+        const incomingMenuItems = queuedMenuItemBatch.items;
+        const incomingScheduleItems = queuedScheduleItemBatch.items;
+        const directApplyMenuItems = incomingMenuItems.map((item, index) => {
+          const priceCents = parseDirectApplyMenuPriceCents(item.price);
+          if (mode === "apply" && priceCents === null) {
+            return { errorIndex: index } as const;
+          }
+          return {
+            item,
+            priceCents: mode === "apply" ? priceCents : null,
+          };
+        });
+        const invalidDirectMenuPrice = directApplyMenuItems.find(
+          (item) => "errorIndex" in item,
+        );
+        if (invalidDirectMenuPrice && "errorIndex" in invalidDirectMenuPrice) {
+          return res.status(400).json({
+            code: "invalid_direct_apply_menu_price",
+            message:
+              "Every direct-apply menu item requires a numeric price such as $12 or 12.50.",
+            itemIndex: invalidDirectMenuPrice.errorIndex,
+          });
+        }
+        const sourceNoteBatch = normalizeQueuedProfileEvidenceTextItems(
+          requestBody?.sourceNotes,
+          "source-note",
+        );
+        const missingInfoBatch = normalizeQueuedProfileEvidenceTextItems(
+          requestBody?.missingInfo,
+          "missing-info",
+        );
+        const sourceNotes = sourceNoteBatch.items;
+        const missingInfo = missingInfoBatch.items;
         const rawSource = requestBody?.rawSource;
         const declaredEvidence = Array.isArray(requestBody?.evidence)
           ? requestBody.evidence.filter(
               (item: unknown) => item && typeof item === "object",
             )
           : [];
-        const evidenceFieldProposals = Array.isArray(
+        const rawEvidenceFieldProposals = Array.isArray(
           requestBody?.evidenceFieldProposals,
         )
           ? requestBody.evidenceFieldProposals
+          : [];
+        if (
+          queuesOwnerReview &&
+          rawEvidenceFieldProposals.length >
+            PROFILE_EVIDENCE_REVIEW_LIMITS.proposalsPerBatch
+        ) {
+          return res.status(400).json({
+            message: `Owner review accepts at most ${PROFILE_EVIDENCE_REVIEW_LIMITS.proposalsPerBatch} evidence proposals per batch.`,
+            code: "owner_review_batch_too_large",
+            proposalResults: {
+              submittedCount: rawEvidenceFieldProposals.length,
+              acceptedCount: 0,
+              acceptedIds: [],
+              rejectedCount: rawEvidenceFieldProposals.length,
+              rejectedIds: Array.from(
+                {
+                  length: Math.min(
+                    rawEvidenceFieldProposals.length,
+                    PROFILE_EVIDENCE_REVIEW_LIMITS.proposalsPerBatch,
+                  ),
+                },
+                (_, index) => `input:${index}`,
+              ),
+              rejectedIdsTruncated:
+                rawEvidenceFieldProposals.length >
+                PROFILE_EVIDENCE_REVIEW_LIMITS.proposalsPerBatch,
+              droppedCount: rawEvidenceFieldProposals.length,
+              droppedIds: [],
+            },
+          });
+        }
+        const evidenceFieldProposals = rawEvidenceFieldProposals.length
+          ? rawEvidenceFieldProposals
+              .slice(0, PROFILE_EVIDENCE_REVIEW_LIMITS.proposalsPerBatch)
               .filter(
                 (proposal: any) => proposal && typeof proposal === "object",
               )
               .map((proposal: any) => ({
-                field: String(proposal.field || "").trim(),
+                field: String(proposal.field || "").trim().slice(0, 160),
                 proposedValue: String(proposal.proposedValue || "").trim(),
-                confidence: String(proposal.confidence || "low").trim(),
-                source: String(proposal.source || "screenshot").trim(),
-                evidenceText: String(proposal.evidenceText || "").trim(),
-                imageRef: String(proposal.imageRef || "").trim(),
+                confidence: String(proposal.confidence || "low")
+                  .trim()
+                  .slice(0, 20),
+                source: String(proposal.source || "screenshot")
+                  .trim()
+                  .slice(0, 40),
+                sourceKind: String(
+                  proposal.sourceKind || proposal.source || "other",
+                )
+                  .trim()
+                  .slice(0, 40),
+                sourceLabel: String(proposal.sourceLabel || "")
+                  .trim()
+                  .slice(0, PROFILE_EVIDENCE_REVIEW_LIMITS.sourceLabel),
+                sourceUrl: String(proposal.sourceUrl || proposal.url || "")
+                  .trim()
+                  .slice(0, PROFILE_EVIDENCE_REVIEW_LIMITS.sourceUrl),
+                evidenceText: String(proposal.evidenceText || "")
+                  .trim()
+                  .slice(0, PROFILE_EVIDENCE_REVIEW_LIMITS.evidenceExcerpt),
+                evidenceExcerpt: String(
+                  proposal.evidenceExcerpt || proposal.evidenceText || "",
+                )
+                  .trim()
+                  .slice(0, PROFILE_EVIDENCE_REVIEW_LIMITS.evidenceExcerpt),
+                imageRef: String(proposal.imageRef || "")
+                  .trim()
+                  .slice(0, PROFILE_EVIDENCE_REVIEW_LIMITS.imageEvidenceId),
+                imageEvidenceIds: Array.isArray(proposal.imageEvidenceIds)
+                  ? proposal.imageEvidenceIds
+                      .slice(0, PROFILE_EVIDENCE_REVIEW_LIMITS.imageEvidenceIds)
+                      .map((id: unknown) =>
+                        String(id || "")
+                          .trim()
+                          .slice(
+                            0,
+                            PROFILE_EVIDENCE_REVIEW_LIMITS.imageEvidenceId,
+                          ),
+                      )
+                      .filter(Boolean)
+                  : [],
+                sourceIdentity: String(proposal.sourceIdentity || "")
+                  .trim()
+                  .slice(0, PROFILE_EVIDENCE_REVIEW_LIMITS.sourceIdentity),
+                batchId: String(proposal.batchId || "")
+                  .trim()
+                  .slice(0, PROFILE_EVIDENCE_REVIEW_LIMITS.batchId),
+                receivedAt: String(proposal.receivedAt || "")
+                  .trim()
+                  .slice(0, 80),
               }))
               .filter(
                 (proposal: any) => proposal.field && proposal.proposedValue,
@@ -574,9 +733,8 @@ export function registerTruckImportAdminRoutes(
             : {};
         const allowMenuOverwrite = Boolean(approvals?.menuOverwrite);
         const allowLogoReplace = Boolean(approvals?.logoOverwrite);
-        const allowEvidencePublication = Boolean(
-          approvals?.evidencePublication,
-        );
+        const allowEvidencePublication =
+          mode === "apply" && Boolean(approvals?.evidencePublication);
 
         const fileMap =
           req.files && typeof req.files === "object"
@@ -654,6 +812,51 @@ export function registerTruckImportAdminRoutes(
         const expectedOwnerUserId = String(
           requestBody?.expectedOwnerUserId || requestBody?.ownerUserId || "",
         ).trim();
+        if (queuesOwnerReview && !explicitProfileId) {
+          return res.status(400).json({
+            status: "needs_review",
+            code: "owner_review_requires_explicit_profile_id",
+            message:
+              "Owner review requires an explicit existingProfileId; heuristic matching is not allowed.",
+          });
+        }
+        if (mode === "apply" && !explicitProfileId) {
+          return res.status(400).json({
+            status: "needs_review",
+            code: "direct_apply_requires_explicit_profile_id",
+            message:
+              "Direct apply requires an explicit existingProfileId; heuristic matching is not allowed.",
+          });
+        }
+        if (mode === "apply" && requestBody?.confirmDirectApply !== true) {
+          return res.status(400).json({
+            status: "needs_confirmation",
+            code: "direct_apply_requires_confirmation",
+            message:
+              "Direct apply requires the literal confirmDirectApply acknowledgement.",
+          });
+        }
+        const queueRequestFiles = Object.entries(fileMap)
+          .flatMap(([field, files]) =>
+            (files || []).map((file) => ({
+              field,
+              name: file.originalname,
+              mimeType: file.mimetype,
+              size: file.size,
+              sha256: createHash("sha256").update(file.buffer).digest("hex"),
+            })),
+          )
+          .sort((left, right) =>
+            `${left.field}:${left.name}:${left.sha256}`.localeCompare(
+              `${right.field}:${right.name}:${right.sha256}`,
+            ),
+          );
+        const queueRequestFingerprint = queuesOwnerReview
+          ? createProfileEvidenceIntakeRequestFingerprint({
+              requestBody,
+              files: queueRequestFiles,
+            })
+          : "";
         const manualDeclaredEvidence = declaredEvidence.filter(
           (item: any) => item?.source === "manual_codex_intake",
         ) as any[];
@@ -904,6 +1107,19 @@ export function registerTruckImportAdminRoutes(
 
         let matchedImportListing: any = null;
         if (profileType === "food_truck") {
+          if (explicitRestaurant) {
+            const linkedListingId = String(
+              explicitRestaurant.claimedFromImportId || "",
+            ).trim();
+            if (linkedListingId) {
+              const [linkedListing] = await db
+                .select()
+                .from(truckImportListings)
+                .where(eq(truckImportListings.id, linkedListingId))
+                .limit(1);
+              matchedImportListing = linkedListing || null;
+            }
+          } else {
           const listingWhere = or(
             matchEmail
               ? eq(
@@ -1026,6 +1242,7 @@ export function registerTruckImportAdminRoutes(
               .limit(1);
             matchedRestaurant = linked || null;
           }
+          }
         }
 
         if (multipleRestaurantStrongMatches) {
@@ -1079,7 +1296,7 @@ export function registerTruckImportAdminRoutes(
 
         let createdDraftId = "";
         if (!matchedRestaurant && !matchedImportListing) {
-          if (mode === "dry_run") {
+          if (mode !== "apply") {
             return res.json({
               status: "needs_review",
               existingTruckId: "",
@@ -1098,7 +1315,12 @@ export function registerTruckImportAdminRoutes(
               sourceNotes,
               debug: buildDebug({
                 classification: "needs_review",
-                classificationReasons: ["no_existing_match", "dry_run_only"],
+                classificationReasons: [
+                  "no_existing_match",
+                  queuesOwnerReview
+                    ? "owner_review_requires_existing_profile"
+                    : "dry_run_only",
+                ],
                 whyUnknown: whyUnknownReasons,
               }),
             });
@@ -1225,6 +1447,140 @@ export function registerTruckImportAdminRoutes(
           matchedRestaurant = linked || null;
         }
 
+        if (queuesOwnerReview && !matchedRestaurant) {
+          return res.status(409).json({
+            status: "needs_review",
+            code: "owner_review_requires_existing_profile",
+            message:
+              "Owner review can only be queued for an existing MealScout profile.",
+            matchedImportListingId: matchedImportListing?.id || "",
+          });
+        }
+
+        if (queuesOwnerReview && matchedRestaurant) {
+          const reservation = await db.transaction(async (tx: any) => {
+            const restaurantId = String(matchedRestaurant.id);
+            await tx.execute(
+              sql`select pg_advisory_xact_lock(hashtext(${restaurantId}))`,
+            );
+            const [freshRestaurant] = await tx
+              .select()
+              .from(restaurants)
+              .where(eq(restaurants.id, restaurantId))
+              .limit(1)
+              .for("update");
+            if (!freshRestaurant) return { status: "missing" as const };
+            const freshSettings =
+              freshRestaurant.socialAutopostSettings &&
+              typeof freshRestaurant.socialAutopostSettings === "object"
+                ? (freshRestaurant.socialAutopostSettings as Record<
+                    string,
+                    unknown
+                  >)
+                : {};
+            const evidenceApply =
+              freshSettings.evidenceApply &&
+              typeof freshSettings.evidenceApply === "object"
+                ? (freshSettings.evidenceApply as Record<string, unknown>)
+                : {};
+            const intakeRequests =
+              evidenceApply.intakeRequests &&
+              typeof evidenceApply.intakeRequests === "object" &&
+              !Array.isArray(evidenceApply.intakeRequests)
+                ? (evidenceApply.intakeRequests as Record<string, any>)
+                : {};
+            const existingRequest = intakeRequests[intakeRequestId];
+            if (existingRequest) {
+              if (
+                String(existingRequest.fingerprint || "") !==
+                queueRequestFingerprint
+              ) {
+                return { status: "conflict" as const };
+              }
+              if (existingRequest.status === "completed") {
+                return {
+                  status: "replay" as const,
+                  result:
+                    existingRequest.result &&
+                    typeof existingRequest.result === "object"
+                      ? existingRequest.result
+                      : {},
+                };
+              }
+              const startedAt = Date.parse(String(existingRequest.startedAt || ""));
+              if (
+                existingRequest.status === "in_progress" &&
+                Number.isFinite(startedAt) &&
+                Date.now() - startedAt < 15 * 60 * 1000
+              ) {
+                return { status: "in_progress" as const };
+              }
+            } else if (Object.keys(intakeRequests).length >= 100) {
+              return { status: "capacity" as const };
+            }
+            const nextSettings = {
+              ...freshSettings,
+              evidenceApply: {
+                ...evidenceApply,
+                intakeRequests: {
+                  ...intakeRequests,
+                  [intakeRequestId]: {
+                    fingerprint: queueRequestFingerprint,
+                    status: "in_progress",
+                    startedAt: new Date().toISOString(),
+                    requestedByUserId: String(req.user?.id || "").slice(0, 200),
+                  },
+                },
+              },
+            };
+            await tx
+              .update(restaurants)
+              .set({ socialAutopostSettings: nextSettings } as any)
+              .where(eq(restaurants.id, restaurantId));
+            return { status: "reserved" as const, restaurant: freshRestaurant };
+          });
+          if (reservation.status === "missing") {
+            return res.status(409).json({
+              code: "owner_review_profile_missing",
+              message: "Profile disappeared before intake could be reserved.",
+            });
+          }
+          if (reservation.status === "conflict") {
+            return res.status(409).json({
+              code: "intake_request_id_conflict",
+              message:
+                "This intakeRequestId was already used for different evidence.",
+            });
+          }
+          if (reservation.status === "in_progress") {
+            return res.status(409).json({
+              code: "intake_request_in_progress",
+              message: "This evidence intake is already in progress.",
+            });
+          }
+          if (reservation.status === "capacity") {
+            return res.status(409).json({
+              code: "intake_request_capacity_reached",
+              message: "The intake idempotency ledger is at capacity.",
+            });
+          }
+          if (reservation.status === "replay") {
+            return res.json({
+              status: "owner_review_replayed",
+              ownerReviewStatus: "replayed",
+              idempotentReplay: true,
+              intakeRequestId,
+              originalResult: reservation.result,
+            });
+          }
+          matchedRestaurant = reservation.restaurant;
+          reservedQueueRequest = {
+            restaurantId: String(reservation.restaurant.id),
+            intakeRequestId,
+            fingerprint: queueRequestFingerprint,
+          };
+        }
+
         const fieldsApplied: string[] = [];
         const fieldsSkipped: string[] = [];
         const conflicts: Array<{
@@ -1236,6 +1592,48 @@ export function registerTruckImportAdminRoutes(
         const listingUpdates: Record<string, unknown> = {};
         const restaurantUpdates: Record<string, unknown> = {};
         const evidenceUploadsSummary: Array<Record<string, unknown>> = [];
+        const queuedGalleryEntries: Array<Record<string, unknown>> = [];
+        let ownerReviewProposalResult = {
+          submittedCount: rawEvidenceFieldProposals.length,
+          acceptedIds: [] as string[],
+          duplicateIds: [] as string[],
+          rejected: [] as Array<{
+            id: string;
+            inputIndex: number;
+            code: string;
+          }>,
+          droppedCount: 0,
+          droppedIds: [] as string[],
+        };
+        let queuedMenuItemResult = {
+          ...queuedMenuItemBatch,
+          acceptedIds: [...queuedMenuItemBatch.acceptedIds],
+          duplicateIds: [...queuedMenuItemBatch.duplicateIds],
+        };
+        let queuedScheduleItemResult = {
+          ...queuedScheduleItemBatch,
+          acceptedIds: [...queuedScheduleItemBatch.acceptedIds],
+          duplicateIds: [...queuedScheduleItemBatch.duplicateIds],
+        };
+        const emptyQueueMergeResult = () => ({
+          acceptedIds: [] as string[],
+          duplicateIds: [] as string[],
+          droppedCount: 0,
+          droppedIds: [] as string[],
+        });
+        let sourceNoteResult = {
+          ...sourceNoteBatch,
+          acceptedIds: [...sourceNoteBatch.acceptedIds],
+          duplicateIds: [...sourceNoteBatch.duplicateIds],
+        };
+        let missingInfoResult = {
+          ...missingInfoBatch,
+          acceptedIds: [...missingInfoBatch.acceptedIds],
+          duplicateIds: [...missingInfoBatch.duplicateIds],
+        };
+        let reviewQueueResult = emptyQueueMergeResult();
+        let uploadedEvidenceResult = emptyQueueMergeResult();
+        let galleryEntryResult = emptyQueueMergeResult();
 
         const summarizeUploadedEvidence = (input: {
           file: Express.Multer.File;
@@ -1440,24 +1838,117 @@ export function registerTruckImportAdminRoutes(
 
         const appendEvidence = (
           existingRaw: Record<string, unknown> | null | undefined,
-        ) => ({
-          ...(existingRaw || {}),
-          evidenceApply: {
-            ...(typeof (existingRaw as any)?.evidenceApply === "object"
-              ? ((existingRaw as any).evidenceApply as Record<string, unknown>)
-              : {}),
-            updatedAt: new Date().toISOString(),
-            sourceNotes,
-            missingInfo,
-            evidenceFieldProposals,
-            queuedMenuItems: incomingMenuItems,
-            queuedScheduleItems: incomingScheduleItems,
-          },
-        });
+          recordProposalResult = true,
+        ) => {
+          const existingContainer = existingRaw || {};
+          const existingEvidenceApply =
+            typeof (existingContainer as any).evidenceApply === "object"
+              ? ((existingContainer as any).evidenceApply as Record<
+                  string,
+                  unknown
+                >)
+              : {};
+          const existingSettings =
+            matchedRestaurant &&
+            typeof (matchedRestaurant as any).socialAutopostSettings ===
+              "object"
+              ? ((matchedRestaurant as any).socialAutopostSettings as Record<
+                  string,
+                  unknown
+                >)
+              : {};
+          const actionLinks =
+            existingSettings &&
+            typeof (existingSettings as any).publicActionLinks === "object"
+              ? ((existingSettings as any).publicActionLinks as Record<
+                  string,
+                  unknown
+                >)
+              : {};
+          const currentValues = Object.fromEntries(
+            PROFILE_EVIDENCE_REVIEW_FIELDS.map((field) => {
+              const destination =
+                getProfileEvidenceFieldDefinition(field).destination;
+              const value =
+                destination.kind === "restaurant_column"
+                  ? (matchedRestaurant as any)?.[destination.column]
+                  : actionLinks[destination.key];
+              return [field, value];
+            }),
+          ) as ProfileEvidenceCurrentValues;
+          const updatedAt = new Date().toISOString();
+          const ledgerOptions = {
+            restaurantId: String(
+              matchedRestaurant?.id ||
+                matchedImportListing?.id ||
+                explicitProfileId,
+            ),
+            fallbackReceivedAt: String(
+              (existingEvidenceApply as any).updatedAt || updatedAt,
+            ),
+            defaultBatchId:
+              String(
+                requestBody?.evidenceBatchId ||
+                  requestBody?.batchId ||
+                  requestBody?.intakeId ||
+                  "",
+              ).trim() || `intake-${updatedAt}`,
+            currentValues,
+          };
+          const existingLedger = normalizeProfileEvidenceReviewLedger(
+            existingContainer,
+            ledgerOptions,
+          );
+          const proposalBatch = normalizeProfileEvidenceProposalBatch(
+            rawEvidenceFieldProposals,
+            ledgerOptions,
+          );
+          const appendedOwnerReview = appendProfileEvidenceReviewProposals(
+            existingLedger,
+            proposalBatch.proposals,
+            ledgerOptions,
+          );
+          if (recordProposalResult) {
+            ownerReviewProposalResult = {
+              submittedCount: rawEvidenceFieldProposals.length,
+              acceptedIds: appendedOwnerReview.addedIds,
+              duplicateIds: Array.from(
+                new Set([
+                  ...proposalBatch.duplicateIds,
+                  ...appendedOwnerReview.duplicateIds,
+                ]),
+              ),
+              rejected: proposalBatch.rejected,
+              droppedCount:
+                proposalBatch.droppedCount +
+                appendedOwnerReview.droppedIds.length,
+              droppedIds: Array.from(
+                new Set([
+                  ...proposalBatch.droppedIds,
+                  ...appendedOwnerReview.droppedIds,
+                ]),
+              ),
+            };
+          }
+          return {
+            ...existingContainer,
+            evidenceApply: {
+              ...existingEvidenceApply,
+              updatedAt,
+              sourceNotes,
+              missingInfo,
+              evidenceFieldProposals: proposalBatch.proposals,
+              queuedMenuItems: incomingMenuItems,
+              queuedScheduleItems: incomingScheduleItems,
+              ownerReview: appendedOwnerReview.ledger,
+            },
+          };
+        };
 
         if (matchedImportListing) {
           listingUpdates.rawData = appendEvidence(
             (matchedImportListing.rawData as Record<string, unknown>) || {},
+            !matchedRestaurant,
           );
         }
 
@@ -1521,16 +2012,10 @@ export function registerTruckImportAdminRoutes(
                 } as any)
                 .returning();
 
-              const toPriceCents = (value: unknown) => {
-                const raw = String(value || "").trim();
-                if (!raw) return 0;
-                const parsed = Number(raw.replace(/[^0-9.]/g, ""));
-                if (!Number.isFinite(parsed)) return 0;
-                return Math.max(0, Math.round(parsed * 100));
-              };
-
-              const itemsToInsert = incomingMenuItems
-                .map((item: any, index: number) => {
+              const itemsToInsert = directApplyMenuItems
+                .map((validatedItem: any, index: number) => {
+                  if (!("item" in validatedItem)) return null;
+                  const item = validatedItem.item;
                   const name = String(
                     item?.item_name || item?.name || "",
                   ).trim();
@@ -1541,7 +2026,7 @@ export function registerTruckImportAdminRoutes(
                     restaurantId: matchedRestaurant.id,
                     name,
                     description: String(item?.description || "").trim() || null,
-                    priceCents: toPriceCents(item?.price),
+                    priceCents: validatedItem.priceCents,
                     itemType: "food",
                     isAvailable: true,
                     sortOrder: index,
@@ -1614,30 +2099,28 @@ export function registerTruckImportAdminRoutes(
             if (existingScheduleCount > 0) {
               scheduleStatus = "queued_review";
             } else if (mode === "apply" && profileType === "food_truck") {
-              const rows = validScheduleItems.map((item: any) => ({
-                truckId: matchedRestaurant.id,
-                date: new Date(String(item.date)),
-                startTime: String(item.start_time || item.startTime),
-                endTime: String(item.end_time || item.endTime),
-                locationName:
-                  String(
-                    item.location_name || item.locationName || "",
-                  ).trim() || null,
-                address:
-                  String(item.address || "").trim() ||
-                  String(
-                    item.location_name ||
-                      item.locationName ||
-                      "Unknown location",
-                  ).trim(),
-                city:
-                  String(item.city || fillIfBlank.city || "").trim() || null,
-                state:
-                  String(item.state || fillIfBlank.state || "").trim() || null,
-                notes: String(item.notes || "").trim() || null,
-                isPublic: true,
-                lastConfirmedAt: new Date(),
-              }));
+              const rows = validScheduleItems.map((item: any) => {
+                const address = String(item.address || "").trim() || null;
+                return {
+                  truckId: matchedRestaurant.id,
+                  date: new Date(String(item.date)),
+                  startTime: String(item.start_time || item.startTime),
+                  endTime: String(item.end_time || item.endTime),
+                  locationName:
+                    String(
+                      item.location_name || item.locationName || "",
+                    ).trim() || null,
+                  address,
+                  city:
+                    String(item.city || fillIfBlank.city || "").trim() || null,
+                  state:
+                    String(item.state || fillIfBlank.state || "").trim() || null,
+                  notes: String(item.notes || "").trim() || null,
+                  isPublic: true,
+                  mapEligible: Boolean(address),
+                  lastConfirmedAt: new Date(),
+                };
+              });
               await db.insert(truckManualSchedules).values(rows as any[]);
               scheduleStatus = "added";
             } else {
@@ -1699,6 +2182,7 @@ export function registerTruckImportAdminRoutes(
                 uploadedAt: new Date().toISOString(),
                 lastVerifiedAt: new Date().toISOString(),
               });
+              queuedGalleryEntries.push(existingGallery[existingGallery.length - 1]);
               evidenceUploadsSummary.push(
                 summarizeUploadedEvidence({
                   file: firstImageFile,
@@ -1760,30 +2244,80 @@ export function registerTruckImportAdminRoutes(
               : [];
 
             for (const file of files) {
-              const uploadResult = await uploadToCloudinary(
-                file.buffer,
-                options.cloudinaryFolder,
-                `restaurant-${matchedRestaurant.id}-${options.evidenceType}-${Date.now()}`,
-              );
-              const insertedUploads = await db
-                .insert(imageUploads)
-                .values({
-                  uploadedByUserId: req.user?.id || null,
-                  imageType: options.imageType,
-                  entityId: matchedRestaurant.id,
-                  entityType: "restaurant",
-                  cloudinaryPublicId: uploadResult.publicId,
-                  cloudinaryUrl: uploadResult.secureUrl,
-                  thumbnailUrl: uploadResult.thumbnailUrl,
-                  width: uploadResult.width,
-                  height: uploadResult.height,
-                  fileSize: uploadResult.bytes,
-                  mimeType: file.mimetype,
-                })
-                .returning();
-              const uploadRow = insertedUploads?.[0];
+              const fileSha256 = createHash("sha256")
+                .update(file.buffer)
+                .digest("hex");
+              const deterministicPublicId = `restaurant-${matchedRestaurant.id}-${options.evidenceType}-${fileSha256.slice(0, 32)}`;
+              const deterministicCloudinaryPublicId = `mealscout/${options.cloudinaryFolder}/${deterministicPublicId}`;
+              const ensureEvidenceUpload = async (executor: any) => {
+                const [existingUpload] = queuesOwnerReview
+                  ? await executor
+                      .select()
+                      .from(imageUploads)
+                      .where(
+                        and(
+                          eq(imageUploads.entityId, matchedRestaurant.id),
+                          eq(imageUploads.entityType, "restaurant"),
+                          eq(imageUploads.imageType, options.imageType),
+                          eq(
+                            imageUploads.cloudinaryPublicId,
+                            deterministicCloudinaryPublicId,
+                          ),
+                        ),
+                      )
+                      .limit(1)
+                  : [];
+                if (existingUpload) {
+                  return {
+                    uploadRow: existingUpload,
+                    uploadResult: {
+                      publicId: existingUpload.cloudinaryPublicId,
+                      secureUrl: existingUpload.cloudinaryUrl,
+                      thumbnailUrl: existingUpload.thumbnailUrl,
+                      width: existingUpload.width,
+                      height: existingUpload.height,
+                      bytes: existingUpload.fileSize,
+                    },
+                  };
+                }
+                const uploadResult = await uploadToCloudinary(
+                  file.buffer,
+                  options.cloudinaryFolder,
+                  queuesOwnerReview
+                    ? deterministicPublicId
+                    : `restaurant-${matchedRestaurant.id}-${options.evidenceType}-${Date.now()}`,
+                );
+                const insertedUploads = await executor
+                  .insert(imageUploads)
+                  .values({
+                    uploadedByUserId: req.user?.id || null,
+                    imageType: options.imageType,
+                    entityId: matchedRestaurant.id,
+                    entityType: "restaurant",
+                    cloudinaryPublicId: uploadResult.publicId,
+                    cloudinaryUrl: uploadResult.secureUrl,
+                    thumbnailUrl: uploadResult.thumbnailUrl,
+                    width: uploadResult.width,
+                    height: uploadResult.height,
+                    fileSize: uploadResult.bytes,
+                    mimeType: file.mimetype,
+                  })
+                  .returning();
+                return {
+                  uploadRow: insertedUploads?.[0] || null,
+                  uploadResult,
+                };
+              };
+              const { uploadRow, uploadResult } = queuesOwnerReview
+                ? await db.transaction(async (tx: any) => {
+                    await tx.execute(
+                      sql`select pg_advisory_xact_lock(hashtext(${deterministicCloudinaryPublicId}))`,
+                    );
+                    return ensureEvidenceUpload(tx);
+                  })
+                : await ensureEvidenceUpload(db);
 
-              existingGallery.push({
+              const galleryEntry = {
                 id: uploadRow?.id || randomUUID(),
                 url: uploadResult.secureUrl,
                 source: "admin_evidence",
@@ -1793,7 +2327,9 @@ export function registerTruckImportAdminRoutes(
                 lastVerifiedAt: allowEvidencePublication
                   ? new Date().toISOString()
                   : null,
-              });
+              };
+              existingGallery.push(galleryEntry);
+              queuedGalleryEntries.push(galleryEntry);
               evidenceUploadsSummary.push({
                 ...summarizeUploadedEvidence({
                   file,
@@ -1818,7 +2354,7 @@ export function registerTruckImportAdminRoutes(
             };
           };
 
-          if (mode === "apply" && hasEvidenceFiles) {
+          if ((mode === "apply" || queuesOwnerReview) && hasEvidenceFiles) {
             await uploadEvidenceFiles(profileEvidenceFiles, {
               cloudinaryFolder: "restaurant-gallery",
               imageType: "restaurant_gallery_truck",
@@ -1936,30 +2472,454 @@ export function registerTruckImportAdminRoutes(
           }
         }
 
-        if (mode === "apply") {
-          if (matchedImportListing && Object.keys(listingUpdates).length > 0) {
-            await db
-              .update(truckImportListings)
-              .set({ ...listingUpdates, updatedAt: new Date() })
-              .where(eq(truckImportListings.id, matchedImportListing.id));
-          }
-          if (matchedRestaurant && Object.keys(restaurantUpdates).length > 0) {
-            await db
-              .update(restaurants)
-              .set({ ...restaurantUpdates, updatedAt: new Date() })
-              .where(eq(restaurants.id, matchedRestaurant.id));
+        if (queuesOwnerReview && matchedRestaurant) {
+          for (const item of reviewQueueItems) {
+            const semanticPayload = Object.fromEntries(
+              Object.entries(item)
+                .filter(([key]) => key !== "queuedAt" && key !== "id")
+                .sort(([left], [right]) => left.localeCompare(right)),
+            );
+            item.id = createHash("sha256")
+              .update(
+                JSON.stringify([
+                  "profile-evidence-review-artifact",
+                  String(matchedRestaurant.id),
+                  semanticPayload,
+                ]),
+              )
+              .digest("hex");
           }
         }
 
+        let queueAcceptedCount =
+          ownerReviewProposalResult.acceptedIds.length +
+          queuedMenuItemResult.acceptedIds.length +
+          queuedScheduleItemResult.acceptedIds.length +
+          sourceNotes.length +
+          missingInfo.length +
+          reviewQueueItems.length +
+          evidenceUploadsSummary.length;
+        if (queuesOwnerReview && matchedRestaurant && reservedQueueRequest) {
+          await db.transaction(async (tx: any) => {
+            const restaurantId = String(matchedRestaurant.id);
+            // Share the exact per-profile lock used by owner decisions. This
+            // prevents a queue write from replacing a decision committed from
+            // a stale pre-upload read.
+            await tx.execute(
+              sql`select pg_advisory_xact_lock(hashtext(${restaurantId}))`,
+            );
+            const [freshRestaurant] = await tx
+              .select()
+              .from(restaurants)
+              .where(eq(restaurants.id, restaurantId))
+              .limit(1)
+              .for("update");
+            if (!freshRestaurant) {
+              throw Object.assign(new Error("Profile disappeared during queue"), {
+                code: "owner_review_profile_missing",
+              });
+            }
+            matchedRestaurant = freshRestaurant;
+            const freshSettings =
+              freshRestaurant.socialAutopostSettings &&
+              typeof freshRestaurant.socialAutopostSettings === "object"
+                ? (freshRestaurant.socialAutopostSettings as Record<
+                    string,
+                    unknown
+                  >)
+                : {};
+            const queuedSettings = appendEvidence(freshSettings);
+            const queuedEvidenceApply =
+              queuedSettings.evidenceApply &&
+              typeof queuedSettings.evidenceApply === "object"
+                ? (queuedSettings.evidenceApply as Record<string, unknown>)
+                : {};
+            const queueMerge = mergeProfileEvidenceQueueContainerWithReport({
+              freshContainer: freshSettings,
+              queuedEvidenceApply,
+              galleryEntries: queuedGalleryEntries,
+              reviewQueueItems,
+              uploadedEvidence: evidenceUploadsSummary,
+            });
+            queuedMenuItemResult = {
+              ...queuedMenuItemBatch,
+              acceptedIds: queueMerge.results.menuItems.acceptedIds,
+              duplicateIds: Array.from(
+                new Set([
+                  ...queuedMenuItemBatch.duplicateIds,
+                  ...queueMerge.results.menuItems.duplicateIds,
+                ]),
+              ),
+              droppedCount:
+                queuedMenuItemBatch.droppedCount +
+                queueMerge.results.menuItems.droppedCount,
+              droppedIds: Array.from(
+                new Set([
+                  ...queuedMenuItemBatch.droppedIds,
+                  ...queueMerge.results.menuItems.droppedIds,
+                ]),
+              ),
+            };
+            queuedScheduleItemResult = {
+              ...queuedScheduleItemBatch,
+              acceptedIds: queueMerge.results.scheduleItems.acceptedIds,
+              duplicateIds: Array.from(
+                new Set([
+                  ...queuedScheduleItemBatch.duplicateIds,
+                  ...queueMerge.results.scheduleItems.duplicateIds,
+                ]),
+              ),
+              droppedCount:
+                queuedScheduleItemBatch.droppedCount +
+                queueMerge.results.scheduleItems.droppedCount,
+              droppedIds: Array.from(
+                new Set([
+                  ...queuedScheduleItemBatch.droppedIds,
+                  ...queueMerge.results.scheduleItems.droppedIds,
+                ]),
+              ),
+            };
+            sourceNoteResult = {
+              ...sourceNoteBatch,
+              acceptedIds: queueMerge.results.sourceNotes.acceptedIds,
+              duplicateIds: Array.from(
+                new Set([
+                  ...sourceNoteBatch.duplicateIds,
+                  ...queueMerge.results.sourceNotes.duplicateIds,
+                ]),
+              ),
+              droppedCount:
+                sourceNoteBatch.droppedCount +
+                queueMerge.results.sourceNotes.droppedCount,
+              droppedIds: Array.from(
+                new Set([
+                  ...sourceNoteBatch.droppedIds,
+                  ...queueMerge.results.sourceNotes.droppedIds,
+                ]),
+              ),
+            };
+            missingInfoResult = {
+              ...missingInfoBatch,
+              acceptedIds: queueMerge.results.missingInfo.acceptedIds,
+              duplicateIds: Array.from(
+                new Set([
+                  ...missingInfoBatch.duplicateIds,
+                  ...queueMerge.results.missingInfo.duplicateIds,
+                ]),
+              ),
+              droppedCount:
+                missingInfoBatch.droppedCount +
+                queueMerge.results.missingInfo.droppedCount,
+              droppedIds: Array.from(
+                new Set([
+                  ...missingInfoBatch.droppedIds,
+                  ...queueMerge.results.missingInfo.droppedIds,
+                ]),
+              ),
+            };
+            reviewQueueResult = queueMerge.results.reviewQueue;
+            uploadedEvidenceResult = queueMerge.results.uploadedEvidence;
+            galleryEntryResult = queueMerge.results.galleryEntries;
+            queueAcceptedCount =
+              ownerReviewProposalResult.acceptedIds.length +
+              queuedMenuItemResult.acceptedIds.length +
+              queuedScheduleItemResult.acceptedIds.length +
+              sourceNoteResult.acceptedIds.length +
+              missingInfoResult.acceptedIds.length +
+              reviewQueueResult.acceptedIds.length +
+              uploadedEvidenceResult.acceptedIds.length +
+              galleryEntryResult.acceptedIds.length;
+            const completedEvidenceApply =
+              queueMerge.container.evidenceApply &&
+              typeof queueMerge.container.evidenceApply === "object"
+                ? (queueMerge.container.evidenceApply as Record<string, any>)
+                : {};
+            const completedIntakeRequests =
+              completedEvidenceApply.intakeRequests &&
+              typeof completedEvidenceApply.intakeRequests === "object" &&
+              !Array.isArray(completedEvidenceApply.intakeRequests)
+                ? (completedEvidenceApply.intakeRequests as Record<string, any>)
+                : {};
+            const completedSettings = {
+              ...queueMerge.container,
+              evidenceApply: {
+                ...completedEvidenceApply,
+                intakeRequests: {
+                  ...completedIntakeRequests,
+                  [intakeRequestId]: {
+                    fingerprint: queueRequestFingerprint,
+                    status: "completed",
+                    startedAt:
+                      completedIntakeRequests[intakeRequestId]?.startedAt ||
+                      new Date().toISOString(),
+                    completedAt: new Date().toISOString(),
+                    requestedByUserId: String(req.user?.id || "").slice(0, 200),
+                    result: {
+                      acceptedCount: queueAcceptedCount,
+                      ownerReviewAcceptedCount:
+                        ownerReviewProposalResult.acceptedIds.length,
+                      evidenceBacklogAcceptedCount: Math.max(
+                        0,
+                        queueAcceptedCount -
+                          ownerReviewProposalResult.acceptedIds.length,
+                      ),
+                      proposalAcceptedCount:
+                        ownerReviewProposalResult.acceptedIds.length,
+                      menuAcceptedCount:
+                        queuedMenuItemResult.acceptedIds.length,
+                      scheduleAcceptedCount:
+                        queuedScheduleItemResult.acceptedIds.length,
+                      sourceNoteAcceptedCount:
+                        sourceNoteResult.acceptedIds.length,
+                      missingInfoAcceptedCount:
+                        missingInfoResult.acceptedIds.length,
+                      reviewQueueAcceptedCount:
+                        reviewQueueResult.acceptedIds.length,
+                      uploadedEvidenceAcceptedCount:
+                        uploadedEvidenceResult.acceptedIds.length,
+                      galleryEntryAcceptedCount:
+                        galleryEntryResult.acceptedIds.length,
+                    },
+                  },
+                },
+              },
+            };
+            await tx
+              .update(restaurants)
+              // Queue metadata is not a public-profile edit and must not bump
+              // restaurants.updatedAt/freshness ranking.
+              .set({ socialAutopostSettings: completedSettings } as any)
+              .where(eq(restaurants.id, restaurantId));
+
+            if (matchedImportListing && queueAcceptedCount > 0) {
+              const [freshListing] = await tx
+                .select()
+                .from(truckImportListings)
+                .where(eq(truckImportListings.id, matchedImportListing.id))
+                .limit(1)
+                .for("update");
+              if (freshListing) {
+                matchedImportListing = freshListing;
+                const freshRawData =
+                  freshListing.rawData && typeof freshListing.rawData === "object"
+                    ? (freshListing.rawData as Record<string, unknown>)
+                    : {};
+                const queuedRawData = appendEvidence(freshRawData, false);
+                const queuedListingEvidenceApply =
+                  queuedRawData.evidenceApply &&
+                  typeof queuedRawData.evidenceApply === "object"
+                    ? (queuedRawData.evidenceApply as Record<string, unknown>)
+                    : {};
+                const mergedRawData = mergeProfileEvidenceQueueContainer({
+                  freshContainer: freshRawData,
+                  queuedEvidenceApply: queuedListingEvidenceApply,
+                  reviewQueueItems,
+                  uploadedEvidence: evidenceUploadsSummary,
+                });
+                await tx
+                  .update(truckImportListings)
+                  .set({ rawData: mergedRawData, updatedAt: new Date() } as any)
+                  .where(eq(truckImportListings.id, freshListing.id));
+              }
+            }
+          });
+        } else if (mode === "apply") {
+          if (
+            matchedRestaurant &&
+            (Object.keys(restaurantUpdates).length > 0 ||
+              Object.keys(listingUpdates).length > 0)
+          ) {
+            await db.transaction(async (tx: any) => {
+              const restaurantId = String(matchedRestaurant.id);
+              await tx.execute(
+                sql`select pg_advisory_xact_lock(hashtext(${restaurantId}))`,
+              );
+              const [freshRestaurant] = await tx
+                .select()
+                .from(restaurants)
+                .where(eq(restaurants.id, restaurantId))
+                .limit(1)
+                .for("update");
+              if (!freshRestaurant) {
+                throw Object.assign(
+                  new Error("Profile disappeared during direct apply"),
+                  { code: "direct_apply_profile_missing" },
+                );
+              }
+              const plannedSettings =
+                restaurantUpdates.socialAutopostSettings &&
+                typeof restaurantUpdates.socialAutopostSettings === "object"
+                  ? (restaurantUpdates.socialAutopostSettings as Record<
+                      string,
+                      unknown
+                    >)
+                  : {};
+              const freshSettings =
+                freshRestaurant.socialAutopostSettings &&
+                typeof freshRestaurant.socialAutopostSettings === "object"
+                  ? (freshRestaurant.socialAutopostSettings as Record<
+                      string,
+                      unknown
+                  >)
+                  : {};
+              const freshEvidenceContainer = appendEvidence(
+                freshSettings,
+                false,
+              );
+              const freshPlannedSettings = {
+                ...plannedSettings,
+                evidenceApply:
+                  freshEvidenceContainer.evidenceApply &&
+                  typeof freshEvidenceContainer.evidenceApply === "object"
+                    ? freshEvidenceContainer.evidenceApply
+                    : {},
+              };
+              const directUpdates: Record<string, unknown> = {};
+              for (const [field, value] of Object.entries(restaurantUpdates)) {
+                if (field === "socialAutopostSettings") continue;
+                if (
+                  field === "logoUrl"
+                    ? allowLogoReplace || isBlankValue((freshRestaurant as any)[field])
+                    : isBlankValue((freshRestaurant as any)[field])
+                ) {
+                  directUpdates[field] = value;
+                }
+              }
+              if (Object.keys(plannedSettings).length > 0) {
+                directUpdates.socialAutopostSettings =
+                  mergeProfileEvidenceApplySettings({
+                    freshSettings,
+                    plannedSettings: freshPlannedSettings,
+                    galleryEntries: queuedGalleryEntries,
+                    reviewQueueItems,
+                    uploadedEvidence: evidenceUploadsSummary,
+                  });
+              }
+              if (Object.keys(directUpdates).length > 0) {
+                await tx
+                  .update(restaurants)
+                  .set({ ...directUpdates, updatedAt: new Date() } as any)
+                  .where(eq(restaurants.id, restaurantId));
+              }
+
+              if (
+                matchedImportListing &&
+                String(freshRestaurant.claimedFromImportId || "") ===
+                  String(matchedImportListing.id) &&
+                Object.keys(listingUpdates).length > 0
+              ) {
+                const [freshListing] = await tx
+                  .select()
+                  .from(truckImportListings)
+                  .where(eq(truckImportListings.id, matchedImportListing.id))
+                  .limit(1)
+                  .for("update");
+                if (freshListing) {
+                  const linkedListingUpdates: Record<string, unknown> = {};
+                  for (const [field, value] of Object.entries(listingUpdates)) {
+                    if (field === "rawData") continue;
+                    if (isBlankValue((freshListing as any)[field])) {
+                      linkedListingUpdates[field] = value;
+                    }
+                  }
+                  const freshRawData =
+                    freshListing.rawData && typeof freshListing.rawData === "object"
+                      ? (freshListing.rawData as Record<string, unknown>)
+                      : {};
+                  const plannedRawData =
+                    listingUpdates.rawData &&
+                    typeof listingUpdates.rawData === "object"
+                      ? (listingUpdates.rawData as Record<string, unknown>)
+                      : {};
+                  linkedListingUpdates.rawData =
+                    mergeProfileEvidenceApplySettings({
+                      freshSettings: freshRawData,
+                      plannedSettings: plannedRawData,
+                      reviewQueueItems,
+                      uploadedEvidence: evidenceUploadsSummary,
+                    });
+                  await tx
+                    .update(truckImportListings)
+                    .set({
+                      ...linkedListingUpdates,
+                      updatedAt: new Date(),
+                    } as any)
+                    .where(eq(truckImportListings.id, freshListing.id));
+                }
+              }
+            });
+          }
+        }
+
+        queueAcceptedCount =
+          ownerReviewProposalResult.acceptedIds.length +
+          queuedMenuItemResult.acceptedIds.length +
+          queuedScheduleItemResult.acceptedIds.length +
+          sourceNoteResult.acceptedIds.length +
+          missingInfoResult.acceptedIds.length +
+          reviewQueueResult.acceptedIds.length +
+          uploadedEvidenceResult.acceptedIds.length +
+          galleryEntryResult.acceptedIds.length;
+        const queueCapacityDropCount =
+          ownerReviewProposalResult.droppedCount +
+          queuedMenuItemResult.droppedCount +
+          queuedScheduleItemResult.droppedCount +
+          sourceNoteResult.droppedCount +
+          missingInfoResult.droppedCount +
+          reviewQueueResult.droppedCount +
+          uploadedEvidenceResult.droppedCount +
+          galleryEntryResult.droppedCount;
+        const ownerReviewAcceptedCount =
+          ownerReviewProposalResult.acceptedIds.length;
+        const evidenceBacklogAcceptedCount = Math.max(
+          0,
+          queueAcceptedCount - ownerReviewAcceptedCount,
+        );
+        const evidenceBacklogDropCount = Math.max(
+          0,
+          queueCapacityDropCount - ownerReviewProposalResult.droppedCount,
+        );
+        const ownerReviewRejectedCount = ownerReviewProposalResult.rejected.length;
+        const evidenceBacklogRejectedCount =
+          queuedMenuItemResult.rejected.length +
+          queuedScheduleItemResult.rejected.length +
+          sourceNoteResult.rejected.length +
+          missingInfoResult.rejected.length;
+        const queueBaseStatus =
+          ownerReviewAcceptedCount > 0 && evidenceBacklogAcceptedCount > 0
+            ? "queued_owner_review_and_admin_evidence"
+            : ownerReviewAcceptedCount > 0
+              ? "queued_owner_review"
+              : evidenceBacklogAcceptedCount > 0
+                ? "queued_admin_evidence_backlog"
+                : ownerReviewRejectedCount + evidenceBacklogRejectedCount > 0
+                  ? "evidence_queue_rejected"
+                  : "owner_review_unchanged";
+        const queueStatus =
+          queueCapacityDropCount > 0
+            ? queueAcceptedCount > 0
+              ? `${queueBaseStatus}_partial_capacity`
+              : "evidence_queue_capacity_reached"
+            : queueBaseStatus;
         res.json({
-          status: mode === "apply" ? "applied" : "dry_run",
+          status:
+            mode === "apply"
+              ? "applied"
+              : queuesOwnerReview
+                ? queueStatus
+                : "dry_run",
           existingTruckId: matchedRestaurant?.id || "",
           matchedRestaurantId: matchedRestaurant?.id || "",
           matchedImportListingId: matchedImportListing?.id || "",
+          ...(queuesOwnerReview
+            ? { intakeRequestId, idempotentReplay: false }
+            : {}),
           createdDraftId,
           matchStrength,
           matchedBy,
-          fieldsApplied: Array.from(new Set(fieldsApplied)),
+          fieldsApplied: queuesOwnerReview
+            ? []
+            : Array.from(new Set(fieldsApplied)),
           fieldsSkipped: Array.from(new Set(fieldsSkipped)),
           conflicts,
           menuStatus,
@@ -1967,6 +2927,140 @@ export function registerTruckImportAdminRoutes(
           logoStatus,
           evidenceStatus,
           menuEvidenceStatus,
+          ownerReviewStatus: queuesOwnerReview
+            ? ownerReviewProposalResult.droppedCount > 0 &&
+              ownerReviewAcceptedCount === 0
+              ? "capacity_reached"
+              : ownerReviewAcceptedCount > 0
+              ? "queued"
+              : ownerReviewRejectedCount > 0
+                ? "rejected"
+              : ownerReviewProposalResult.submittedCount > 0
+                ? "unchanged"
+                : "not_requested"
+            : "not_requested",
+          evidenceBacklogStatus: queuesOwnerReview
+            ? evidenceBacklogDropCount > 0
+              ? evidenceBacklogAcceptedCount > 0
+                ? "queued_partial_capacity"
+                : "capacity_reached"
+              : evidenceBacklogAcceptedCount > 0
+                ? "queued"
+                : evidenceBacklogRejectedCount > 0
+                  ? "rejected"
+                : "not_requested"
+            : "not_requested",
+          evidenceBacklogAcceptedCount,
+          evidenceBacklogDroppedCount: evidenceBacklogDropCount,
+          evidenceBacklogRejectedCount,
+          proposalResults: {
+            submittedCount: ownerReviewProposalResult.submittedCount,
+            acceptedCount: ownerReviewProposalResult.acceptedIds.length,
+            acceptedIds: ownerReviewProposalResult.acceptedIds,
+            duplicateCount: ownerReviewProposalResult.duplicateIds.length,
+            duplicateIds: ownerReviewProposalResult.duplicateIds,
+            rejectedCount: ownerReviewProposalResult.rejected.length,
+            rejectedIds: ownerReviewProposalResult.rejected.map(
+              (item) => item.id,
+            ),
+            rejected: ownerReviewProposalResult.rejected,
+            droppedCount: ownerReviewProposalResult.droppedCount,
+            droppedIds: ownerReviewProposalResult.droppedIds,
+            droppedIdsTruncated:
+              ownerReviewProposalResult.droppedCount >
+              ownerReviewProposalResult.droppedIds.length,
+          },
+          queuedMenuItemResults: {
+            submittedCount: Array.isArray(requestBody?.menuItems)
+              ? requestBody.menuItems.length
+              : 0,
+            acceptedCount: queuedMenuItemResult.acceptedIds.length,
+            acceptedIds: queuedMenuItemResult.acceptedIds,
+            duplicateCount: queuedMenuItemResult.duplicateIds.length,
+            duplicateIds: queuedMenuItemResult.duplicateIds,
+            rejectedCount: queuedMenuItemResult.rejected.length,
+            rejectedIds: queuedMenuItemResult.rejected.map((item) => item.id),
+            rejected: queuedMenuItemResult.rejected,
+            droppedCount: queuedMenuItemResult.droppedCount,
+            droppedIds: queuedMenuItemResult.droppedIds,
+            droppedIdsTruncated:
+              queuedMenuItemResult.droppedCount >
+              queuedMenuItemResult.droppedIds.length,
+          },
+          queuedScheduleItemResults: {
+            submittedCount: Array.isArray(requestBody?.scheduleItems)
+              ? requestBody.scheduleItems.length
+              : 0,
+            acceptedCount: queuedScheduleItemResult.acceptedIds.length,
+            acceptedIds: queuedScheduleItemResult.acceptedIds,
+            duplicateCount: queuedScheduleItemResult.duplicateIds.length,
+            duplicateIds: queuedScheduleItemResult.duplicateIds,
+            rejectedCount: queuedScheduleItemResult.rejected.length,
+            rejectedIds: queuedScheduleItemResult.rejected.map(
+              (item) => item.id,
+            ),
+            rejected: queuedScheduleItemResult.rejected,
+            droppedCount: queuedScheduleItemResult.droppedCount,
+            droppedIds: queuedScheduleItemResult.droppedIds,
+            droppedIdsTruncated:
+              queuedScheduleItemResult.droppedCount >
+              queuedScheduleItemResult.droppedIds.length,
+          },
+          sourceNoteResults: {
+            submittedCount: Array.isArray(requestBody?.sourceNotes)
+              ? requestBody.sourceNotes.length
+              : 0,
+            acceptedCount: sourceNoteResult.acceptedIds.length,
+            acceptedIds: sourceNoteResult.acceptedIds,
+            duplicateCount: sourceNoteResult.duplicateIds.length,
+            duplicateIds: sourceNoteResult.duplicateIds,
+            rejectedCount: sourceNoteResult.rejected.length,
+            rejectedIds: sourceNoteResult.rejected.map((item) => item.id),
+            rejected: sourceNoteResult.rejected,
+            droppedCount: sourceNoteResult.droppedCount,
+            droppedIds: sourceNoteResult.droppedIds,
+          },
+          missingInfoResults: {
+            submittedCount: Array.isArray(requestBody?.missingInfo)
+              ? requestBody.missingInfo.length
+              : 0,
+            acceptedCount: missingInfoResult.acceptedIds.length,
+            acceptedIds: missingInfoResult.acceptedIds,
+            duplicateCount: missingInfoResult.duplicateIds.length,
+            duplicateIds: missingInfoResult.duplicateIds,
+            rejectedCount: missingInfoResult.rejected.length,
+            rejectedIds: missingInfoResult.rejected.map((item) => item.id),
+            rejected: missingInfoResult.rejected,
+            droppedCount: missingInfoResult.droppedCount,
+            droppedIds: missingInfoResult.droppedIds,
+          },
+          reviewQueueResults: {
+            submittedCount: reviewQueueItems.length,
+            acceptedCount: reviewQueueResult.acceptedIds.length,
+            acceptedIds: reviewQueueResult.acceptedIds,
+            duplicateCount: reviewQueueResult.duplicateIds.length,
+            duplicateIds: reviewQueueResult.duplicateIds,
+            droppedCount: reviewQueueResult.droppedCount,
+            droppedIds: reviewQueueResult.droppedIds,
+          },
+          uploadedEvidenceResults: {
+            submittedCount: evidenceUploadsSummary.length,
+            acceptedCount: uploadedEvidenceResult.acceptedIds.length,
+            acceptedIds: uploadedEvidenceResult.acceptedIds,
+            duplicateCount: uploadedEvidenceResult.duplicateIds.length,
+            duplicateIds: uploadedEvidenceResult.duplicateIds,
+            droppedCount: uploadedEvidenceResult.droppedCount,
+            droppedIds: uploadedEvidenceResult.droppedIds,
+          },
+          galleryEntryResults: {
+            submittedCount: queuedGalleryEntries.length,
+            acceptedCount: galleryEntryResult.acceptedIds.length,
+            acceptedIds: galleryEntryResult.acceptedIds,
+            duplicateCount: galleryEntryResult.duplicateIds.length,
+            duplicateIds: galleryEntryResult.duplicateIds,
+            droppedCount: galleryEntryResult.droppedCount,
+            droppedIds: galleryEntryResult.droppedIds,
+          },
           reviewQueueItems,
           uploadedEvidence: evidenceUploadsSummary,
           missingInfo,
@@ -1975,6 +3069,8 @@ export function registerTruckImportAdminRoutes(
             classification:
               mode === "apply"
                 ? "apply"
+                : queuesOwnerReview
+                  ? "queue_owner_review"
                 : matchedRestaurant || matchedImportListing
                   ? "update_existing"
                   : createdDraftId
@@ -1986,13 +3082,100 @@ export function registerTruckImportAdminRoutes(
                 : createdDraftId
                   ? "draft_created"
                   : "no_match",
-              mode === "apply" ? "apply_mode" : "dry_run_mode",
+              mode === "apply"
+                ? "apply_mode"
+                : queuesOwnerReview
+                  ? "queue_owner_review_mode"
+                  : "dry_run_mode",
             ],
           }),
         });
       } catch (error: any) {
-        console.error("Error applying profile evidence:", error);
-        res.status(500).json({ message: "Failed to apply profile evidence" });
+        if (reservedQueueRequest) {
+          try {
+            await db.transaction(async (tx: any) => {
+              await tx.execute(
+                sql`select pg_advisory_xact_lock(hashtext(${reservedQueueRequest!.restaurantId}))`,
+              );
+              const [freshRestaurant] = await tx
+                .select()
+                .from(restaurants)
+                .where(eq(restaurants.id, reservedQueueRequest!.restaurantId))
+                .limit(1)
+                .for("update");
+              if (!freshRestaurant) return;
+              const settings =
+                freshRestaurant.socialAutopostSettings &&
+                typeof freshRestaurant.socialAutopostSettings === "object"
+                  ? (freshRestaurant.socialAutopostSettings as Record<
+                      string,
+                      any
+                    >)
+                  : {};
+              const evidenceApply =
+                settings.evidenceApply &&
+                typeof settings.evidenceApply === "object"
+                  ? (settings.evidenceApply as Record<string, any>)
+                  : {};
+              const intakeRequests =
+                evidenceApply.intakeRequests &&
+                typeof evidenceApply.intakeRequests === "object" &&
+                !Array.isArray(evidenceApply.intakeRequests)
+                  ? (evidenceApply.intakeRequests as Record<string, any>)
+                  : {};
+              const current = intakeRequests[reservedQueueRequest!.intakeRequestId];
+              if (
+                current?.status !== "in_progress" ||
+                current?.fingerprint !== reservedQueueRequest!.fingerprint
+              ) {
+                return;
+              }
+              await tx
+                .update(restaurants)
+                .set({
+                  socialAutopostSettings: {
+                    ...settings,
+                    evidenceApply: {
+                      ...evidenceApply,
+                      intakeRequests: {
+                        ...intakeRequests,
+                        [reservedQueueRequest!.intakeRequestId]: {
+                          ...current,
+                          status: "failed",
+                          failedAt: new Date().toISOString(),
+                        },
+                      },
+                    },
+                  },
+                } as any)
+                .where(eq(restaurants.id, reservedQueueRequest!.restaurantId));
+            });
+          } catch {
+            // Best effort only; never log the evidence-bearing DB error.
+          }
+        }
+        const safeErrorName =
+          typeof error?.name === "string" ? error.name.slice(0, 80) : "Error";
+        const safeErrorCode =
+          typeof error?.code === "string" ? error.code.slice(0, 80) : "unknown";
+        const requestProfileId = String(
+          req.body?.existingProfileId || req.body?.match?.profileId || "",
+        )
+          .trim()
+          .slice(0, 200);
+        console.error("Profile evidence write failed", {
+          errorName: safeErrorName,
+          errorCode: safeErrorCode,
+          requestProfileId,
+          requestUserId: String(req.user?.id || "").slice(0, 200),
+        });
+        res.status(safeErrorCode === "owner_review_profile_missing" ? 409 : 500).json({
+          message: "Failed to apply profile evidence",
+          code:
+            safeErrorCode === "owner_review_profile_missing"
+              ? safeErrorCode
+              : "profile_evidence_write_failed",
+        });
       }
     },
   );

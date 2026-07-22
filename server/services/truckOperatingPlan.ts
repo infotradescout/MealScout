@@ -22,6 +22,7 @@ import {
 } from "./publicSlotGate";
 
 export type TruckOperatingPlanRow = {
+  restaurantId?: unknown;
   sourceKind: "booking" | "manual";
   stopId?: unknown;
   eventId?: unknown;
@@ -348,16 +349,19 @@ export function assembleTruckOperatingPlan(input: {
     (stop) => stop.status === "scheduled" || stop.status === "here_now",
   );
   const closedStops = stops.filter((stop) => stop.status === "closed");
+  const isDatedTodayInStopTimeZone = (stop: InternalStop) =>
+    stop.date ===
+    DateTime.fromJSDate(now, { zone: "utc" })
+      .setZone(stop.timezone)
+      .toFormat("yyyy-LL-dd");
+  const todayClosedStops = closedStops.filter(isDatedTodayInStopTimeZone);
   const currentStop =
     actionableStops.find((stop) => stop.status === "here_now") || null;
   const todayStop =
     actionableStops.find(
       (stop) =>
         stop.status !== "completed" &&
-        stop.date ===
-          DateTime.fromJSDate(now, { zone: "utc" })
-            .setZone(stop.timezone)
-            .toFormat("yyyy-LL-dd"),
+        isDatedTodayInStopTimeZone(stop),
     ) || null;
   const nextStop =
     actionableStops.find((stop) => stop.startsAt.getTime() > now.getTime()) ||
@@ -377,7 +381,7 @@ export function assembleTruckOperatingPlan(input: {
     currentStop?.status ||
     todayStop?.status ||
     nextStop?.status ||
-    (closedStops.length > 0 ? "closed" : "unknown");
+    (todayClosedStops.length > 0 ? "closed" : "unknown");
   const statusLabels: Record<PublicTruckScheduleSummary["status"], string> = {
     scheduled: "Scheduled",
     here_now: "Here now",
@@ -456,14 +460,16 @@ const classifyPublicEventType = (
   return "other";
 };
 
-export function assembleTruckOperatingProfileData(input: {
-  rows: TruckOperatingPlanRow[];
-  now?: Date;
-}): {
+export type TruckOperatingProfileData = {
   truckSchedule: PublicTruckScheduleSummary;
   eventsItems: PublicEventItem[];
   upcomingEventCount: number;
-} {
+};
+
+export function assembleTruckOperatingProfileData(input: {
+  rows: TruckOperatingPlanRow[];
+  now?: Date;
+}): TruckOperatingProfileData {
   const truckSchedule = assembleTruckOperatingPlan(input);
   const visibleStops = [
     truckSchedule.currentStop,
@@ -538,14 +544,38 @@ export function assembleTruckOperatingProfileData(input: {
   };
 }
 
-export async function buildPublicTruckOperatingPlan(
-  restaurantId: string,
-): Promise<{
-  truckSchedule: PublicTruckScheduleSummary;
-  eventsItems: PublicEventItem[];
-  upcomingEventCount: number;
-}> {
-  const now = new Date();
+const normalizeRestaurantIds = (restaurantIds: string[]) =>
+  Array.from(
+    new Set(
+      restaurantIds
+        .map((restaurantId) => String(restaurantId || "").trim())
+        .filter(Boolean),
+    ),
+  );
+
+/**
+ * Loads the canonical booking/manual evidence for many trucks with two queries.
+ * Both single-profile and batch consumers use this loader so they cannot drift on
+ * date windows, statuses, or selected evidence fields.
+ */
+export async function loadTruckOperatingPlanRowsByRestaurantIds(
+  restaurantIds: string[],
+  options?: { now?: Date },
+): Promise<Map<string, TruckOperatingPlanRow[]>> {
+  const normalizedIds = normalizeRestaurantIds(restaurantIds);
+  const rowsByRestaurantId = new Map<string, TruckOperatingPlanRow[]>(
+    normalizedIds.map((restaurantId) => [restaurantId, []]),
+  );
+  if (normalizedIds.length === 0) return rowsByRestaurantId;
+
+  const now = options?.now || new Date();
+  const restaurantId = normalizedIds.length === 1 ? normalizedIds[0] : null;
+  const bookingRestaurantScope = restaurantId
+    ? eq(eventBookings.truckId, restaurantId)
+    : inArray(eventBookings.truckId, normalizedIds);
+  const manualRestaurantScope = restaurantId
+    ? eq(truckManualSchedules.truckId, restaurantId)
+    : inArray(truckManualSchedules.truckId, normalizedIds);
   const queryStart = DateTime.fromJSDate(now, { zone: "utc" })
     .minus({ days: 1 })
     .startOf("day")
@@ -557,6 +587,7 @@ export async function buildPublicTruckOperatingPlan(
 
   const bookingRows = await db
     .select({
+      restaurantId: eventBookings.truckId,
       sourceKind: sql<"booking">`'booking'`,
       stopId: eventBookings.id,
       eventId: events.id,
@@ -594,7 +625,7 @@ export async function buildPublicTruckOperatingPlan(
     .leftJoin(eventSeries, eq(events.seriesId, eventSeries.id))
     .where(
       and(
-        eq(eventBookings.truckId, restaurantId),
+        bookingRestaurantScope,
         eq(eventBookings.status, "confirmed"),
         inArray(events.status, ["open", "booked", "filled"]),
         gte(events.date, queryStart),
@@ -604,6 +635,7 @@ export async function buildPublicTruckOperatingPlan(
 
   const manualRows = await db
     .select({
+      restaurantId: truckManualSchedules.truckId,
       sourceKind: sql<"manual">`'manual'`,
       stopId: truckManualSchedules.id,
       eventId: sql<string | null>`null`,
@@ -638,15 +670,55 @@ export async function buildPublicTruckOperatingPlan(
     .from(truckManualSchedules)
     .where(
       and(
-        eq(truckManualSchedules.truckId, restaurantId),
+        manualRestaurantScope,
         eq(truckManualSchedules.isPublic, true),
         gte(truckManualSchedules.date, queryStart),
         lte(truckManualSchedules.date, queryEnd),
       ),
     );
 
-  return assembleTruckOperatingProfileData({
-    rows: [...bookingRows, ...manualRows] as TruckOperatingPlanRow[],
-    now,
-  });
+  for (const row of [...bookingRows, ...manualRows] as TruckOperatingPlanRow[]) {
+    const restaurantId = String(row.restaurantId || "").trim();
+    const bucket = rowsByRestaurantId.get(restaurantId);
+    if (bucket) bucket.push(row);
+  }
+
+  return rowsByRestaurantId;
+}
+
+export async function buildPublicTruckOperatingPlans(
+  restaurantIds: string[],
+  options?: { now?: Date },
+): Promise<Map<string, TruckOperatingProfileData>> {
+  const normalizedIds = normalizeRestaurantIds(restaurantIds);
+  const now = options?.now || new Date();
+  const rowsByRestaurantId = await loadTruckOperatingPlanRowsByRestaurantIds(
+    normalizedIds,
+    { now },
+  );
+  return new Map(
+    normalizedIds.map((restaurantId) => [
+      restaurantId,
+      assembleTruckOperatingProfileData({
+        rows: rowsByRestaurantId.get(restaurantId) || [],
+        now,
+      }),
+    ]),
+  );
+}
+
+export async function buildPublicTruckOperatingPlan(
+  restaurantId: string,
+  options?: { now?: Date },
+): Promise<TruckOperatingProfileData> {
+  const normalizedId = String(restaurantId || "").trim();
+  const now = options?.now || new Date();
+  if (!normalizedId) {
+    return assembleTruckOperatingProfileData({ rows: [], now });
+  }
+  const plans = await buildPublicTruckOperatingPlans([normalizedId], { now });
+  return (
+    plans.get(normalizedId) ||
+    assembleTruckOperatingProfileData({ rows: [], now })
+  );
 }

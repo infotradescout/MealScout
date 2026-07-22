@@ -1,5 +1,5 @@
 import type { Express } from "express";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { randomUUID } from "crypto";
 
 import { db } from "../db";
@@ -11,8 +11,91 @@ import {
   upload,
   uploadToCloudinary,
 } from "../imageUpload";
-import { imageUploads } from "@shared/schema";
+import { imageUploads, restaurants } from "@shared/schema";
 import { hasBusinessPermissionForRestaurant } from "../services/businessTeamAccess";
+
+const asRecord = (value: unknown): Record<string, any> =>
+  value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, any>)
+    : {};
+
+const safePersistenceErrorContext = (error: unknown) => {
+  const record = asRecord(error);
+  return {
+    errorName:
+      typeof record.name === "string" ? record.name.slice(0, 80) : "Error",
+    errorCode:
+      typeof record.code === "string" ? record.code.slice(0, 80) : "unknown",
+  };
+};
+
+export const appendRestaurantGalleryEntry = (
+  settingsValue: unknown,
+  mediaEntry: Record<string, unknown>,
+) => {
+  const settings = asRecord(settingsValue);
+  const publicGalleryImages = Array.isArray(settings.publicGalleryImages)
+    ? [...settings.publicGalleryImages, mediaEntry]
+    : [mediaEntry];
+  return { ...settings, publicGalleryImages };
+};
+
+export const updateRestaurantGalleryEntry = (input: {
+  settingsValue: unknown;
+  mediaId: string;
+  category?: string;
+  publicApproved?: boolean;
+  canModerate: boolean;
+  verifiedAt: string;
+}) => {
+  const settings = asRecord(input.settingsValue);
+  const gallery = Array.isArray(settings.publicGalleryImages)
+    ? [...settings.publicGalleryImages]
+    : [];
+  if (!gallery.length) {
+    return { status: "empty" as const, settings };
+  }
+  let found = false;
+  const publicGalleryImages = gallery.map((entry: unknown) => {
+    const current = asRecord(entry);
+    if (String(current.id || "") !== input.mediaId) return entry;
+    found = true;
+    const nextEntry = { ...current };
+    if (input.category) nextEntry.category = input.category;
+    if (input.publicApproved !== undefined && input.canModerate) {
+      nextEntry.publicApproved = input.publicApproved;
+      nextEntry.lastVerifiedAt = input.publicApproved ? input.verifiedAt : null;
+    }
+    return nextEntry;
+  });
+  if (!found) return { status: "not_found" as const, settings };
+  return {
+    status: "updated" as const,
+    settings: { ...settings, publicGalleryImages },
+  };
+};
+
+export const createLockedRestaurantSettingsMutation = (database: any) =>
+  async <T>(
+    restaurantId: string,
+    mutate: (tx: any, restaurant: Record<string, any>) => Promise<T>,
+  ): Promise<T | null> =>
+    database.transaction(async (tx: any) => {
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(hashtext(${restaurantId}))`,
+      );
+      const [restaurant] = await tx
+        .select()
+        .from(restaurants)
+        .where(eq(restaurants.id, restaurantId))
+        .limit(1)
+        .for("update");
+      if (!restaurant) return null;
+      return mutate(tx, restaurant as Record<string, any>);
+    });
+
+const withLockedRestaurantSettings =
+  createLockedRestaurantSettingsMutation(db);
 
 export function registerMediaRoutes(app: Express) {
   const isStaffOrAdminUserType = (userType?: string | null) =>
@@ -81,29 +164,7 @@ export function registerMediaRoutes(app: Express) {
           })
           .returning();
 
-        const appendPublicMediaEntry = async (mediaEntry: Record<string, unknown>) => {
-          const refreshedRestaurant = await storage.getRestaurant(restaurantId);
-          const existingSettings =
-            refreshedRestaurant &&
-            typeof (refreshedRestaurant as any).socialAutopostSettings === "object"
-              ? { ...((refreshedRestaurant as any).socialAutopostSettings || {}) }
-              : {};
-          const existingGallery = Array.isArray((existingSettings as any).publicGalleryImages)
-            ? [...((existingSettings as any).publicGalleryImages as any[])]
-            : [];
-          existingGallery.push(mediaEntry);
-          await storage.updateRestaurant(restaurantId, {
-            socialAutopostSettings: {
-              ...existingSettings,
-              publicGalleryImages: existingGallery,
-            },
-          });
-        };
-
-        await storage.updateRestaurant(restaurantId, {
-          logoUrl: result.secureUrl,
-        });
-        await appendPublicMediaEntry({
+        const mediaEntry = {
           id: imageUpload[0]?.id || randomUUID(),
           url: result.secureUrl,
           source: "logo",
@@ -111,11 +172,35 @@ export function registerMediaRoutes(app: Express) {
           publicApproved: true,
           uploadedAt: new Date().toISOString(),
           lastVerifiedAt: new Date().toISOString(),
-        });
+        };
+        const updated = await withLockedRestaurantSettings(
+          String(restaurantId),
+          async (tx, lockedRestaurant) => {
+            const [nextRestaurant] = await tx
+              .update(restaurants)
+              .set({
+                logoUrl: result.secureUrl,
+                socialAutopostSettings: appendRestaurantGalleryEntry(
+                  lockedRestaurant.socialAutopostSettings,
+                  mediaEntry,
+                ),
+                updatedAt: new Date(),
+              })
+              .where(eq(restaurants.id, String(restaurantId)))
+              .returning();
+            return nextRestaurant;
+          },
+        );
+        if (!updated) {
+          return res.status(404).json({ message: "Restaurant not found" });
+        }
 
         res.json({ imageUpload: imageUpload[0], url: result.secureUrl });
       } catch (error) {
-        console.error("Error uploading restaurant logo:", error);
+        console.error(
+          "Restaurant logo persistence failed",
+          safePersistenceErrorContext(error),
+        );
         res.status(500).json({ message: "Failed to upload image" });
       }
     },
@@ -181,29 +266,7 @@ export function registerMediaRoutes(app: Express) {
           })
           .returning();
 
-        const appendPublicMediaEntry = async (mediaEntry: Record<string, unknown>) => {
-          const refreshedRestaurant = await storage.getRestaurant(restaurantId);
-          const existingSettings =
-            refreshedRestaurant &&
-            typeof (refreshedRestaurant as any).socialAutopostSettings === "object"
-              ? { ...((refreshedRestaurant as any).socialAutopostSettings || {}) }
-              : {};
-          const existingGallery = Array.isArray((existingSettings as any).publicGalleryImages)
-            ? [...((existingSettings as any).publicGalleryImages as any[])]
-            : [];
-          existingGallery.push(mediaEntry);
-          await storage.updateRestaurant(restaurantId, {
-            socialAutopostSettings: {
-              ...existingSettings,
-              publicGalleryImages: existingGallery,
-            },
-          });
-        };
-
-        await storage.updateRestaurant(restaurantId, {
-          coverImageUrl: result.secureUrl,
-        });
-        await appendPublicMediaEntry({
+        const mediaEntry = {
           id: imageUpload[0]?.id || randomUUID(),
           url: result.secureUrl,
           source: "cover_image",
@@ -211,11 +274,35 @@ export function registerMediaRoutes(app: Express) {
           publicApproved: true,
           uploadedAt: new Date().toISOString(),
           lastVerifiedAt: new Date().toISOString(),
-        });
+        };
+        const updated = await withLockedRestaurantSettings(
+          String(restaurantId),
+          async (tx, lockedRestaurant) => {
+            const [nextRestaurant] = await tx
+              .update(restaurants)
+              .set({
+                coverImageUrl: result.secureUrl,
+                socialAutopostSettings: appendRestaurantGalleryEntry(
+                  lockedRestaurant.socialAutopostSettings,
+                  mediaEntry,
+                ),
+                updatedAt: new Date(),
+              })
+              .where(eq(restaurants.id, String(restaurantId)))
+              .returning();
+            return nextRestaurant;
+          },
+        );
+        if (!updated) {
+          return res.status(404).json({ message: "Restaurant not found" });
+        }
 
         res.json({ imageUpload: imageUpload[0], url: result.secureUrl });
       } catch (error) {
-        console.error("Error uploading restaurant cover:", error);
+        console.error(
+          "Restaurant cover persistence failed",
+          safePersistenceErrorContext(error),
+        );
         res.status(500).json({ message: "Failed to upload image" });
       }
     },
@@ -294,14 +381,6 @@ export function registerMediaRoutes(app: Express) {
           .returning();
         const imageUpload = imageUploadRows[0];
 
-        const existingSettings =
-          restaurant &&
-          typeof (restaurant as any).socialAutopostSettings === "object"
-            ? { ...((restaurant as any).socialAutopostSettings || {}) }
-            : {};
-        const existingGallery = Array.isArray((existingSettings as any).publicGalleryImages)
-          ? [...((existingSettings as any).publicGalleryImages as any[])]
-          : [];
         // There is no admin-wide queue that surfaces pending gallery
         // uploads across restaurants (only a per-restaurant approve button
         // in this same owner dashboard), so uploads from non-staff owners
@@ -319,14 +398,26 @@ export function registerMediaRoutes(app: Express) {
           uploadedAt: new Date().toISOString(),
           lastVerifiedAt: isTrustedUploader ? new Date().toISOString() : null,
         };
-        existingGallery.push(galleryEntry);
-
-        await storage.updateRestaurant(restaurantId, {
-          socialAutopostSettings: {
-            ...existingSettings,
-            publicGalleryImages: existingGallery,
+        const updated = await withLockedRestaurantSettings(
+          restaurantId,
+          async (tx, lockedRestaurant) => {
+            const [nextRestaurant] = await tx
+              .update(restaurants)
+              .set({
+                socialAutopostSettings: appendRestaurantGalleryEntry(
+                  lockedRestaurant.socialAutopostSettings,
+                  galleryEntry,
+                ),
+                updatedAt: new Date(),
+              })
+              .where(eq(restaurants.id, restaurantId))
+              .returning();
+            return nextRestaurant;
           },
-        });
+        );
+        if (!updated) {
+          return res.status(404).json({ message: "Restaurant not found" });
+        }
 
         res.json({
           imageUpload,
@@ -334,7 +425,10 @@ export function registerMediaRoutes(app: Express) {
           approvalStatus: galleryEntry.publicApproved ? "approved" : "pending",
         });
       } catch (error) {
-        console.error("Error uploading restaurant gallery image:", error);
+        console.error(
+          "Restaurant gallery persistence failed",
+          safePersistenceErrorContext(error),
+        );
         res.status(500).json({ message: "Failed to upload gallery image" });
       }
     },
@@ -367,18 +461,6 @@ export function registerMediaRoutes(app: Express) {
           return res.status(403).json({ message: "Not authorized" });
         }
 
-        const existingSettings =
-          restaurant &&
-          typeof (restaurant as any).socialAutopostSettings === "object"
-            ? { ...((restaurant as any).socialAutopostSettings || {}) }
-            : {};
-        const existingGallery = Array.isArray((existingSettings as any).publicGalleryImages)
-          ? [...((existingSettings as any).publicGalleryImages as any[])]
-          : [];
-        if (!existingGallery.length) {
-          return res.status(404).json({ message: "No gallery images found" });
-        }
-
         const requestedApproval =
           req.body?.publicApproved === undefined
             ? undefined
@@ -388,35 +470,43 @@ export function registerMediaRoutes(app: Express) {
             ? String(req.body.category).trim().toLowerCase()
             : undefined;
 
-        let found = false;
-        const updatedGallery = existingGallery.map((entry: any) => {
-          if (String(entry?.id || "") !== mediaId) return entry;
-          found = true;
-          const nextEntry = { ...(entry || {}) } as any;
-          if (requestedCategory) {
-            nextEntry.category = requestedCategory;
-          }
-          if (requestedApproval !== undefined && isStaffOrAdmin) {
-            nextEntry.publicApproved = requestedApproval;
-            nextEntry.lastVerifiedAt = requestedApproval
-              ? new Date().toISOString()
-              : null;
-          }
-          return nextEntry;
-        });
-        if (!found) {
+        const outcome = await withLockedRestaurantSettings(
+          restaurantId,
+          async (tx, lockedRestaurant) => {
+            const galleryUpdate = updateRestaurantGalleryEntry({
+              settingsValue: lockedRestaurant.socialAutopostSettings,
+              mediaId,
+              category: requestedCategory,
+              publicApproved: requestedApproval,
+              canModerate: isStaffOrAdmin,
+              verifiedAt: new Date().toISOString(),
+            });
+            if (galleryUpdate.status !== "updated") return galleryUpdate.status;
+            await tx
+              .update(restaurants)
+              .set({
+                socialAutopostSettings: galleryUpdate.settings,
+                updatedAt: new Date(),
+              })
+              .where(eq(restaurants.id, restaurantId));
+            return galleryUpdate.status;
+          },
+        );
+        if (outcome === null) {
+          return res.status(404).json({ message: "Restaurant not found" });
+        }
+        if (outcome === "empty") {
+          return res.status(404).json({ message: "No gallery images found" });
+        }
+        if (outcome === "not_found") {
           return res.status(404).json({ message: "Gallery image not found" });
         }
-
-        await storage.updateRestaurant(restaurantId, {
-          socialAutopostSettings: {
-            ...existingSettings,
-            publicGalleryImages: updatedGallery,
-          },
-        });
         res.json({ success: true, mediaId });
       } catch (error) {
-        console.error("Error updating restaurant gallery media:", error);
+        console.error(
+          "Restaurant gallery update failed",
+          safePersistenceErrorContext(error),
+        );
         res.status(500).json({ message: "Failed to update gallery media" });
       }
     },

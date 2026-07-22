@@ -1,30 +1,47 @@
 import { readFileSync } from "node:fs";
 
-const ownerDashboard = readFileSync("client/src/pages/restaurant-owner-dashboard.tsx", "utf8");
+const ownerDashboard = readFileSync(
+  "client/src/pages/restaurant-owner-dashboard.tsx",
+  "utf8",
+);
+const completionService = readFileSync(
+  "server/services/profileCompletionEvidence.ts",
+  "utf8",
+);
 
-const requiredSnippets = [
-  "const scheduleFreshnessDays = 7;",
-  "const truckMenuWarningDays = 14;",
-  "const truckMenuStaleDays = 30;",
-  "const restaurantMenuWarningDays = 60;",
-  "const restaurantMenuStaleDays = 90;",
-  "menuNeedsReview",
-  "menuIsStale",
-  "menuNeedsNudge",
-  "Menu current (needs review timestamp)",
-  "Menu current (stale - refresh needed)",
-  "Menu current (review soon)",
-  "Schedule this week",
-  "label: \"Hours complete\"",
-  "? hasValidTruckScheduleWindow || scheduleUpdatedRecently",
-  "menuFreshnessDays != null &&",
-  "menuFreshnessDays > menuWarningDays",
-  "menuFreshnessDays > menuStaleDays",
-];
-
-for (const snippet of requiredSnippets) {
+for (const snippet of [
+  'completionTruth?.menuState === "approved_current"',
+  '"present_needs_confirmation"',
+  'completionTruth?.menuState === "rejected"',
+  "Food-truck availability requires a real dated stop",
+]) {
   if (!ownerDashboard.includes(snippet)) {
-    throw new Error(`Missing owner freshness rules snippet: ${snippet}`);
+    throw new Error(`Owner canonical freshness UI is missing: ${snippet}`);
+  }
+}
+
+for (const snippet of [
+  "rawData.ownerMenuApproval",
+  'status === "approved"',
+  'status === "rejected"',
+  "hasPublicSurface",
+]) {
+  if (!completionService.includes(snippet)) {
+    throw new Error(`Menu approval evidence is missing: ${snippet}`);
+  }
+}
+
+for (const staleRule of [
+  "scheduleFreshnessDays",
+  "truckMenuWarningDays",
+  "truckMenuStaleDays",
+  "restaurantMenuWarningDays",
+  "restaurantMenuStaleDays",
+  "scheduleUpdatedRecently",
+  "Menu current (review soon)",
+]) {
+  if (ownerDashboard.includes(staleRule)) {
+    throw new Error(`Owner completion still contains stale freshness rule: ${staleRule}`);
   }
 }
 

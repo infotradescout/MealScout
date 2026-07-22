@@ -12,7 +12,19 @@ const adminDashboard = readFileSync(
 const routeSnippets = [
   '"/api/admin/profile-evidence/apply"',
   "upload.fields([",
-  'mode === "apply" ? "applied" : "dry_run"',
+  '"queue_owner_review"',
+  '"queued_owner_review"',
+  '"owner_review_unchanged"',
+  "proposalResults:",
+  "queuedMenuItemResults:",
+  "queuedScheduleItemResults:",
+  'code: "owner_review_requires_explicit_profile_id"',
+  'code: "direct_apply_disabled_use_owner_review"',
+  'requiredMode: "queue_owner_review"',
+  "isDirectProfileEvidenceApplyDisabledMode(requestedMode)",
+  "mergeProfileEvidenceApplySettings",
+  "mergeProfileEvidenceQueueContainer",
+  "fieldsApplied: queuesOwnerReview",
   "menuStatus",
   "scheduleStatus",
   "logoStatus",
@@ -31,10 +43,18 @@ for (const snippet of routeSnippets) {
 }
 
 const uiSnippets = [
-  "Profile Evidence Apply",
+  "Profile Evidence Review Intake",
   "/api/admin/profile-evidence/apply",
   "Dry Run",
-  "Apply",
+  "Queue for Owner Review",
+  'submit("queue_owner_review")',
+  '"existingProfileId": ""',
+  '"evidenceFieldProposals": []',
+  "createProfileEvidenceIntakeRequestId",
+  "? { intakeRequestId }",
+  "setIntakeRequestId(createProfileEvidenceIntakeRequestId())",
+  "Admin evidence backlog saved",
+  "Evidence intake completed with no new owner task",
   "matchedImportListingId",
   "matchedRestaurantId",
   "fieldsApplied",
@@ -46,6 +66,19 @@ for (const snippet of uiSnippets) {
   if (!adminDashboard.includes(snippet)) {
     throw new Error(
       `Profile evidence apply UI missing required snippet: ${snippet}`,
+    );
+  }
+}
+
+for (const disabledDirectApplyUi of [
+  'submit("apply")',
+  "confirmDirectApply",
+  "directApplyConfirmation",
+  "Apply Now",
+]) {
+  if (adminDashboard.includes(disabledDirectApplyUi)) {
+    throw new Error(
+      `Disabled direct apply remains exposed in the admin UI: ${disabledDirectApplyUi}`,
     );
   }
 }

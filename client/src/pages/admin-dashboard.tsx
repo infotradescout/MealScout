@@ -1472,11 +1472,21 @@ function TruckImportPanel({ enabled }: { enabled: boolean }) {
   );
 }
 
+let profileEvidenceIntakeSequence = 0;
+
+const createProfileEvidenceIntakeRequestId = () => {
+  const uuid = globalThis.crypto?.randomUUID?.();
+  if (uuid) return `profile-intake:${uuid}`;
+  profileEvidenceIntakeSequence += 1;
+  return `profile-intake:${Date.now().toString(36)}:${profileEvidenceIntakeSequence.toString(36)}:${Math.random().toString(36).slice(2, 10)}`;
+};
+
 function ProfileEvidenceApplyPanel({ enabled }: { enabled: boolean }) {
   const { toast } = useToast();
   const [payloadText, setPayloadText] = useState(`{
   "mode": "dry_run",
   "profileType": "food_truck",
+  "existingProfileId": "",
   "match": {
     "name": "",
     "phone": "",
@@ -1489,6 +1499,7 @@ function ProfileEvidenceApplyPanel({ enabled }: { enabled: boolean }) {
   },
   "fillIfBlank": {},
   "descriptionOnlyIfBlank": "",
+  "evidenceFieldProposals": [],
   "menuItems": [],
   "scheduleItems": [],
   "sourceNotes": [],
@@ -1506,6 +1517,9 @@ function ProfileEvidenceApplyPanel({ enabled }: { enabled: boolean }) {
   const [contactEvidenceFiles, setContactEvidenceFiles] = useState<File[]>([]);
   const [result, setResult] = useState<any | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [intakeRequestId, setIntakeRequestId] = useState(() =>
+    createProfileEvidenceIntakeRequestId(),
+  );
   const parsedPayload = (() => {
     try {
       return JSON.parse(payloadText);
@@ -1513,26 +1527,8 @@ function ProfileEvidenceApplyPanel({ enabled }: { enabled: boolean }) {
       return null;
     }
   })();
-  const markMenuDeferred = (value: boolean) => {
-    if (!parsedPayload) return;
-    const next = {
-      ...parsedPayload,
-      rawSource: {
-        ...(parsedPayload.rawSource || {}),
-        evidenceIngest: {
-          ...((parsedPayload.rawSource || {}).evidenceIngest || {}),
-          extracted: {
-            ...(((parsedPayload.rawSource || {}).evidenceIngest || {})
-              .extracted || {}),
-            menuDeferred: value,
-          },
-        },
-      },
-    };
-    setPayloadText(JSON.stringify(next, null, 2));
-  };
 
-  const submit = async (targetMode: "dry_run" | "apply") => {
+  const submit = async (targetMode: "dry_run" | "queue_owner_review") => {
     if (!enabled || isSubmitting) return;
     let parsed: any;
     try {
@@ -1551,12 +1547,13 @@ function ProfileEvidenceApplyPanel({ enabled }: { enabled: boolean }) {
       const bodyPayload = {
         ...parsed,
         mode: targetMode,
+        ...(targetMode === "queue_owner_review" ? { intakeRequestId } : {}),
       };
 
       const formData = new FormData();
       formData.append("payload", JSON.stringify(bodyPayload));
       if (logoFile) {
-        formData.append("logoImage", logoFile);
+        formData.append("profileImages", logoFile);
       }
       profileEvidenceFiles.forEach((file) =>
         formData.append("profileImages", file),
@@ -1579,12 +1576,35 @@ function ProfileEvidenceApplyPanel({ enabled }: { enabled: boolean }) {
         throw new Error(data?.message || "Failed to apply profile evidence.");
       }
       setResult(data);
+      if (targetMode === "queue_owner_review") {
+        // Preserve this key through failures so a response-loss retry replays
+        // safely. Rotate only after the server confirms completion/replay.
+        setIntakeRequestId(createProfileEvidenceIntakeRequestId());
+      }
       toast({
-        title: targetMode === "apply" ? "Evidence applied" : "Dry run complete",
+        title:
+          targetMode === "queue_owner_review"
+              ? data?.idempotentReplay
+                ? "Evidence intake already saved"
+                : data?.ownerReviewStatus === "queued" &&
+                    data?.evidenceBacklogStatus === "queued"
+                  ? "Owner suggestions and admin evidence saved"
+                  : data?.ownerReviewStatus === "queued"
+                    ? "Owner suggestions queued"
+                    : String(data?.evidenceBacklogStatus || "").startsWith(
+                          "queued",
+                        )
+                      ? "Admin evidence backlog saved"
+                      : "Evidence intake completed with no new owner task"
+              : "Dry run complete",
+        description:
+          targetMode === "queue_owner_review"
+            ? `Status: ${String(data?.status || "unknown").replace(/_/g, " ")}`
+            : undefined,
       });
     } catch (error: any) {
       toast({
-        title: "Evidence apply failed",
+        title: "Profile evidence request failed",
         description: error?.message || "Request failed.",
         variant: "destructive",
       });
@@ -1598,12 +1618,13 @@ function ProfileEvidenceApplyPanel({ enabled }: { enabled: boolean }) {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Package className="w-5 h-5" />
-          Profile Evidence Apply
+          Profile Evidence Review Intake
         </CardTitle>
         <CardDescription>
-          Paste extracted profile JSON, optionally attach a logo, then run
-          dry-run or apply. The API fills only blank fields and reports
-          skips/conflicts.
+          Run a dry check first. Queue for owner review stores bounded evidence
+          and proposed safe-field changes against the explicit canonical profile
+          ID without publishing them. Menu, schedule, and media artifacts remain
+          in the admin evidence backlog until an explicit review workflow acts.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -1616,12 +1637,14 @@ function ProfileEvidenceApplyPanel({ enabled }: { enabled: boolean }) {
           <input
             type="file"
             accept="image/*"
+            aria-label="Logo evidence image"
             onChange={(event) => setLogoFile(event.target.files?.[0] || null)}
           />
           <input
             type="file"
             accept="image/*"
             multiple
+            aria-label="Profile evidence images"
             onChange={(event) =>
               setProfileEvidenceFiles(Array.from(event.target.files || []))
             }
@@ -1630,6 +1653,7 @@ function ProfileEvidenceApplyPanel({ enabled }: { enabled: boolean }) {
             type="file"
             accept="image/*"
             multiple
+            aria-label="Menu evidence images"
             onChange={(event) =>
               setMenuEvidenceFiles(Array.from(event.target.files || []))
             }
@@ -1638,6 +1662,7 @@ function ProfileEvidenceApplyPanel({ enabled }: { enabled: boolean }) {
             type="file"
             accept="image/*"
             multiple
+            aria-label="Hours evidence images"
             onChange={(event) =>
               setHoursEvidenceFiles(Array.from(event.target.files || []))
             }
@@ -1646,6 +1671,7 @@ function ProfileEvidenceApplyPanel({ enabled }: { enabled: boolean }) {
             type="file"
             accept="image/*"
             multiple
+            aria-label="Contact evidence images"
             onChange={(event) =>
               setContactEvidenceFiles(Array.from(event.target.files || []))
             }
@@ -1658,8 +1684,12 @@ function ProfileEvidenceApplyPanel({ enabled }: { enabled: boolean }) {
             >
               {isSubmitting ? "Working..." : "Dry Run"}
             </Button>
-            <Button disabled={isSubmitting} onClick={() => submit("apply")}>
-              {isSubmitting ? "Working..." : "Apply"}
+            <Button
+              disabled={isSubmitting}
+              onClick={() => submit("queue_owner_review")}
+              data-testid="queue-owner-review"
+            >
+              {isSubmitting ? "Working..." : "Queue for Owner Review"}
             </Button>
           </div>
         </div>
@@ -1716,10 +1746,6 @@ function ProfileEvidenceApplyPanel({ enabled }: { enabled: boolean }) {
                 : [];
               const ocrTextSnippet = String(debug?.ocrTextSnippet || "").trim();
               const ocrConfidence = Number(debug?.ocrConfidence || 0);
-              const menuDeferredOverrideActive = Boolean(
-                debug?.menuDeferredOverrideActive ||
-                result?.menuDeferredOverrideActive,
-              );
               return (
                 <>
                   <div>
@@ -1814,10 +1840,6 @@ function ProfileEvidenceApplyPanel({ enabled }: { enabled: boolean }) {
                     {missingFields.length ? missingFields.join(", ") : "(none)"}
                   </div>
                   <div>
-                    <strong>Menu deferred override:</strong>{" "}
-                    {menuDeferredOverrideActive ? "active" : "inactive"}
-                  </div>
-                  <div>
                     <strong>Publish warnings:</strong>{" "}
                     {publishWarnings.length
                       ? publishWarnings.join(" | ")
@@ -1842,21 +1864,11 @@ function ProfileEvidenceApplyPanel({ enabled }: { enabled: boolean }) {
                     {Number.isFinite(ocrConfidence) ? ocrConfidence : 0}
                   </div>
                   <div className="pt-2 flex flex-wrap gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={isSubmitting}
-                      onClick={() => submit("apply")}
-                    >
-                      Approve updates to existing truck
-                    </Button>
-                    <Button
-                      size="sm"
-                      disabled={isSubmitting}
-                      onClick={() => submit("apply")}
-                    >
-                      Approve new truck draft
-                    </Button>
+                    <p className="w-full text-xs text-muted-foreground">
+                      Direct publication is disabled. Use Dry Run, then queue
+                      evidence against the exact existing profile for owner or
+                      admin review. This intake never creates a new truck draft.
+                    </p>
                     <Button
                       size="sm"
                       variant="destructive"
@@ -1864,22 +1876,6 @@ function ProfileEvidenceApplyPanel({ enabled }: { enabled: boolean }) {
                       title="Use existing review/apply path and keep as dry run to reject weak or unknown evidence."
                     >
                       Reject weak/unknown evidence
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      disabled={!parsedPayload}
-                      onClick={() => markMenuDeferred(true)}
-                    >
-                      Mark menuDeferred=true
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      disabled={!parsedPayload}
-                      onClick={() => markMenuDeferred(false)}
-                    >
-                      Require menu before publish
                     </Button>
                   </div>
                   {result.matchedRestaurantId && (

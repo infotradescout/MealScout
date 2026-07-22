@@ -46,8 +46,17 @@ for (const snippet of routeSnippets) {
   }
 }
 
-if (!ownerDashboard.includes("verificationState?.isVerifiedForSetup")) {
-  throw new Error("Owner dashboard must consume canonical verification state for setup messaging");
+for (const snippet of [
+  ".verificationState",
+  "verificationState?.verificationLabel",
+  'data-testid="business-verification-information"',
+  "does not affect the four profile-completion",
+]) {
+  if (!ownerDashboard.includes(snippet)) {
+    throw new Error(
+      `Owner dashboard must show canonical verification outside completion scoring: ${snippet}`,
+    );
+  }
 }
 
 console.log("business-verification-state-reconciliation.contract: PASS");

@@ -6,12 +6,13 @@ const requiredSnippets = [
   "analytics/timeseries?startDate=",
   "&endDate=",
   "if (response.status === 400) return [];",
-  "Verification pending (non-blocking)",
+  "Verification pending",
+  'data-testid="business-verification-information"',
   "Complete truck profile",
-  "Add menu items",
+  "Open menu builder",
   "Add photos or logo",
   "Set schedule/live status",
-  "verificationState?.isVerifiedForSetup",
+  "verificationState?.verificationLabel",
 ];
 
 for (const snippet of requiredSnippets) {
