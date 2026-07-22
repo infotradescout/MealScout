@@ -73,6 +73,9 @@ jobs:
       - name: Action Availability Contract
         run: npm run test:action-availability
 
+      - name: Post-Merge Safety Contract
+        run: npm run test:post-merge-safety
+
       - name: 3D Eats FRUI-TEA Evidence Contract
         run: npm run test:3d-eats-frui-tea-sauce
 
