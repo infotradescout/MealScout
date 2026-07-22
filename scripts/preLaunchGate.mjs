@@ -95,14 +95,19 @@ section("Step 1b: Google Maps API Keys");
 const serverMapsKey = String(process.env.GOOGLE_MAPS_API_KEY || "").trim();
 const webMapsKey = String(process.env.VITE_GOOGLE_MAPS_WEB_API_KEY || "").trim();
 if (!serverMapsKey) {
-  warn("GOOGLE_MAPS_API_KEY is not set — geocoding, Places autocomplete, Routes, Address Validation, and foot-traffic heatmap will be disabled.");
+  warn("GOOGLE_MAPS_API_KEY is not set — server-side Google Places, Routes, geocoding, and address validation are disabled. Add a dedicated API-restricted server key.");
 } else {
   pass("GOOGLE_MAPS_API_KEY is set.");
 }
 if (!webMapsKey) {
-  warn("VITE_GOOGLE_MAPS_WEB_API_KEY is not set — all in-app maps will fall back to Leaflet/OpenStreetMap.");
+  warn("VITE_GOOGLE_MAPS_WEB_API_KEY is not set — interactive Google map surfaces will be unavailable while list-based discovery remains usable.");
 } else {
   pass("VITE_GOOGLE_MAPS_WEB_API_KEY is set.");
+}
+if (serverMapsKey && webMapsKey && serverMapsKey === webMapsKey) {
+  warn("The server and browser Google Maps keys are identical. Use separate API-restricted keys so the server credential is never exposed to clients.");
+} else if (serverMapsKey && webMapsKey) {
+  pass("Google Maps server and browser keys are separated.");
 }
 
 // ─────────────────────────────────────────────

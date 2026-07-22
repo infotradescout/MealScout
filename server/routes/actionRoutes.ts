@@ -18,6 +18,12 @@ import {
 
 const router = Router();
 
+const UNAVAILABLE_ACTIONS = new Set([
+  "GET_COUNTY_TRANSPARENCY",
+  "GET_COUNTY_LEDGER",
+  "GET_COUNTY_VAULT",
+]);
+
 // ==================== ACTION HANDLERS ====================
 
 /**
@@ -591,89 +597,6 @@ async function submitBuilderApplication(params: {
   }
 }
 
-/**
- * Get county transparency data
- */
-async function getCountyTransparency(params: { countyName: string }) {
-  try {
-    if (!params.countyName) {
-      return {
-        success: false,
-        error: "Missing required field: countyName",
-      };
-    }
-
-    return {
-      success: true,
-      data: {
-        countyName: params.countyName,
-        message: "County transparency endpoint - feature coming soon",
-      },
-    };
-  } catch (error: any) {
-    return {
-      success: false,
-      error: error.message,
-    };
-  }
-}
-
-/**
- * Get redemption ledger for county
- */
-async function getCountyRedemptionLedger(params: {
-  countyName: string;
-  limit?: number;
-}) {
-  try {
-    if (!params.countyName) {
-      return {
-        success: false,
-        error: "Missing required field: countyName",
-      };
-    }
-
-    return {
-      success: true,
-      data: [],
-      count: 0,
-      message: "County redemption ledger endpoint - feature coming soon",
-    };
-  } catch (error: any) {
-    return {
-      success: false,
-      error: error.message,
-    };
-  }
-}
-
-/**
- * Get county vault status
- */
-async function getCountyVault(params: { countyName: string }) {
-  try {
-    if (!params.countyName) {
-      return {
-        success: false,
-        error: "Missing required field: countyName",
-      };
-    }
-
-    return {
-      success: true,
-      data: {
-        countyName: params.countyName,
-        message: "County vault endpoint - feature coming soon",
-      },
-    };
-  } catch (error: any) {
-    return {
-      success: false,
-      error: error.message,
-    };
-  }
-}
-
 // ==================== MAIN ACTION ROUTER ====================
 
 router.post("/", async (req, res) => {
@@ -682,6 +605,15 @@ router.post("/", async (req, res) => {
   if (!action) {
     return res.status(400).json({
       error: "Missing required field: action",
+    });
+  }
+
+  if (UNAVAILABLE_ACTIONS.has(action)) {
+    return res.status(501).json({
+      success: false,
+      code: "ACTION_NOT_IMPLEMENTED",
+      action,
+      error: "This action is not implemented",
     });
   }
 
@@ -719,15 +651,6 @@ router.post("/", async (req, res) => {
       case "SUBMIT_BUILDER_APPLICATION":
         result = await submitBuilderApplication(params || {});
         break;
-      case "GET_COUNTY_TRANSPARENCY":
-        result = await getCountyTransparency(params || {});
-        break;
-      case "GET_COUNTY_LEDGER":
-        result = await getCountyRedemptionLedger(params || {});
-        break;
-      case "GET_COUNTY_VAULT":
-        result = await getCountyVault(params || {});
-        break;
       default:
         return res.status(400).json({
           error: `Unknown action: ${action}`,
@@ -742,9 +665,6 @@ router.post("/", async (req, res) => {
             "REDEEM_CREDITS",
             "GET_CREDITS_BALANCE",
             "SUBMIT_BUILDER_APPLICATION",
-            "GET_COUNTY_TRANSPARENCY",
-            "GET_COUNTY_LEDGER",
-            "GET_COUNTY_VAULT",
           ],
         });
     }

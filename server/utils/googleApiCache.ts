@@ -12,6 +12,9 @@
  *   - "reverse_geocode"      "lat:lng" key  → { city, state }
  *   - "county_lookup"        lat/lng or address key → { countyFips, countyName, stateCode }
  *   - "address_validation"   address string → AddressValidationResult
+ *   - "place_intelligence"   place/address → normalized Places profile
+ *   - "operator_support"     rounded origin → nearby operational POIs
+ *   - "route_corridor"       origin/destination → route-aware hosts and POIs
  */
 
 import { db } from "../db";
@@ -21,7 +24,10 @@ export type CacheType =
   | "forward_geocode"
   | "reverse_geocode"
   | "county_lookup"
-  | "address_validation";
+  | "address_validation"
+  | "place_intelligence"
+  | "operator_support"
+  | "route_corridor";
 
 // In-process L1 cache to avoid hitting Postgres on every hot path
 const l1: Map<string, { value: unknown; expiresAt: number | null }> = new Map();
@@ -57,10 +63,13 @@ export async function getCached<T>(
             AND (expires_at IS NULL OR expires_at > NOW())
           LIMIT 1`,
     );
-    const row = (rows as any)?.rows?.[0] ?? (Array.isArray(rows) ? rows[0] : undefined);
+    const row =
+      (rows as any)?.rows?.[0] ?? (Array.isArray(rows) ? rows[0] : undefined);
     if (!row) return undefined;
     const value = row.value as T;
-    const expiresAt = row.expires_at ? new Date(row.expires_at).getTime() : null;
+    const expiresAt = row.expires_at
+      ? new Date(row.expires_at).getTime()
+      : null;
     // Populate L1
     l1.set(k, { value, expiresAt });
     return value;

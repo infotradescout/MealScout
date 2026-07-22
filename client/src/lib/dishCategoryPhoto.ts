@@ -16,7 +16,12 @@ const DISH_CATEGORY_PHOTO_RULES: Array<{
     label: "Sandwiches",
   },
   {
-    match: /\bbbq\b|barbecue|brisket|\bribs\b|pulled pork|smoked|smokehouse/i,
+    // "Korean BBQ", "Hawaiian BBQ", "Filipino BBQ", etc. look nothing like
+    // American BBQ (ribs/brisket/smoker) - there's no matching stock photo
+    // for those cuisines, so exclude them here rather than show a
+    // misleading picture. They fall through to the plain gradient fallback.
+    match:
+      /\b(?<!korean[\s-])(?<!hawaiian[\s-])(?<!filipino[\s-])(?<!japanese[\s-])(?<!chinese[\s-])(?:bbq|barbecue)\b|brisket|\bribs\b|pulled pork|smoked|smokehouse/i,
     image: "/atmospheric/craving-bbq.jpg",
     label: "BBQ",
   },

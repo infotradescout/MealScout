@@ -9,9 +9,9 @@ const publicProfilePathsClient = readFileSync("client/src/lib/public-profile-pat
 const publicProfilePathsServer = readFileSync("server/publicProfiles/publicProfileUtils.ts", "utf8");
 const publicDiscoveryRoutes = readFileSync("server/routes/publicDiscoveryRoutes.ts", "utf8");
 const scoutAdapters = readFileSync("client/src/features/scout/scoutAdapters.ts", "utf8");
+const liveScout = readFileSync("client/src/pages/explore-preview-v2.tsx", "utf8");
 const cityLanding = readFileSync("client/src/pages/city-landing.tsx", "utf8");
 const shareHub = readFileSync("client/src/components/share-hub.tsx", "utf8");
-const mapPage = readFileSync("client/src/pages/map.tsx", "utf8");
 
 for (const snippet of [
   "All public and user-facing MealScout URLs must describe the destination",
@@ -77,7 +77,7 @@ assert(
   "Public profile payloads must expose canonical clean profile paths, not legacy /p paths.",
 );
 
-for (const source of [scoutAdapters, cityLanding, shareHub, mapPage]) {
+for (const source of [scoutAdapters, liveScout, cityLanding, shareHub]) {
   assert(
     source.includes("buildPublicProfilePath("),
     "Launch-critical public link builders must use clean public profile path helper.",
@@ -85,7 +85,7 @@ for (const source of [scoutAdapters, cityLanding, shareHub, mapPage]) {
 }
 
 for (const legacyFragment of ["/p/restaurant/", "/p/truck/", "/p/bar/", "/p/location/", "/p/supplier/"]) {
-  const launchCriticalCombined = [scoutAdapters, cityLanding, shareHub, mapPage].join("\n");
+  const launchCriticalCombined = [scoutAdapters, liveScout, cityLanding, shareHub].join("\n");
   assert.equal(
     launchCriticalCombined.includes(legacyFragment),
     false,

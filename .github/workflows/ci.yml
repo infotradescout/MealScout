@@ -61,6 +61,31 @@ jobs:
       - name: Recommendation Photo Proof Contract
         run: npm run test:recommend-photo-only-proof
 
+      - name: Manual Profile Asset Intake Contract
+        run: npm run test:manual-asset-intake
+
+      - name: Leaflet Removal Contract
+        run: npm run test:leaflet-removal
+
+      - name: Event Date Normalization Contract
+        run: npm run test:event-date-normalization
+
+      - name: Action Availability Contract
+        run: npm run test:action-availability
+
+      - name: Runtime Safety Contracts
+        run: |
+          npx --yes tsx scripts/parking-pass-google-api-capabilities.contract.test.ts
+          npx --yes tsx scripts/mealscout-infinity-shadow.contract.test.ts
+          npx --yes tsx scripts/scout-parking-pass-host-truth.contract.test.ts
+          npx --yes tsx scripts/parking-pass-capacity-concurrency.contract.test.ts
+
+      - name: Install Playwright Browsers
+        run: npx playwright install --with-deps chromium firefox webkit
+
+      - name: Cross-Browser Route Regression (Chromium/Firefox/WebKit + Mobile)
+        run: npm run test:flows:e2e:no-creds
+
       - name: Build
         run: npm run build
 

@@ -45,13 +45,13 @@ for (const expected of [
   'type DealStatus = "live" | "scheduled" | "paused" | "expired"',
   "Needs attention",
   "New special",
-  "Unlock deals",
   "Edit dates",
   "During business hours",
   "Specials could not be loaded",
 ]) {
   assert.ok(workspace.includes(expected), `Missing owner deal behavior: ${expected}`);
 }
+assert.doesNotMatch(workspace, /\/subscribe|Unlock deals/);
 assert.match(
   workspace,
   /queryKey: ownerDealsQueryKey/,
@@ -85,10 +85,7 @@ for (const source of [app, navigation]) {
   assert.match(source, /currentPath\.startsWith\("\/deal-edit\/"\)/);
 }
 
-assert.match(
-  owner,
-  /hasPublishingAccess=\{Boolean\([\s\S]*?isAdmin \|\|[\s\S]*?isStaff \|\|[\s\S]*?subscription/,
-);
+assert.doesNotMatch(owner, /hasPublishingAccess|subscription\?\.hasAccess/);
 
 assert.match(dealDetail, /https:\/\/www\.mealscout\.us\/deal\/\$\{dealId\}/);
 assert.match(scoutAdapters, /`\/deal\/\$\{deal\.id\}`/);

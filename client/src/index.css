@@ -421,40 +421,12 @@
     /* Slightly softer so text/cards stay crisp on dark photography */
     mix-blend-mode: soft-light;
     opacity: 0.38;
-  }/* Leaflet popup: default is white; in night mode it clashes with our light text overrides. */
+  }
 
   .theme-day body::before {
     mix-blend-mode: normal;
     opacity: 0.12;
   }
-  .theme-night .leaflet-popup-content-wrapper,
-  .theme-night .leaflet-popup-tip {
-    background: rgba(16, 14, 12, 0.92) !important;
-    color: rgba(255, 255, 255, 0.92) !important;
-    border: 1px solid rgba(255, 255, 255, 0.14) !important;
-    box-shadow: 0 26px 70px rgba(0, 0, 0, 0.65) !important;
-  }
-
-  .theme-night .leaflet-popup-content p,
-  .theme-night .leaflet-popup-content div,
-  .theme-night .leaflet-popup-content span {
-    color: inherit;
-  }
-
-  .theme-day .leaflet-popup-content-wrapper,
-  .theme-day .leaflet-popup-tip {
-    background: rgba(255, 255, 255, 0.98) !important;
-    color: rgba(15, 23, 42, 0.92) !important;
-    border: 1px solid rgba(15, 23, 42, 0.16) !important;
-    box-shadow: 0 18px 52px rgba(15, 23, 42, 0.18) !important;
-  }
-
-  .theme-day .leaflet-popup-content p,
-  .theme-day .leaflet-popup-content div,
-  .theme-day .leaflet-popup-content span {
-    color: inherit;
-  }
-
   /* Parking Pass: consistent "glass" surfaces + readable text in night mode */
   .pp-glass {
     background: rgba(255, 255, 255, 0.92);
@@ -1121,33 +1093,6 @@
     color: var(--text-primary);
   }
 
-  .theme-day .leaflet-tile {
-    filter: contrast(1.12) saturate(1.06);
-  }
-
-  .theme-day .leaflet-control-zoom a,
-  .theme-day .leaflet-bar a {
-    background: rgba(255, 255, 255, 0.92);
-    color: rgba(15, 23, 42, 0.92);
-    border-color: rgba(15, 23, 42, 0.18);
-  }
-
-  .theme-day .leaflet-control-attribution {
-    background: rgba(255, 255, 255, 0.82) !important;
-    color: rgba(15, 23, 42, 0.78) !important;
-    border-top: 1px solid rgba(15, 23, 42, 0.12);
-  }
-
-  /* Ensure popups/tooltips render above map controls (attribution was overlapping popups). */
-  .leaflet-pane.leaflet-popup-pane {
-    z-index: 1100 !important;
-  }
-
-  .leaflet-top,
-  .leaflet-bottom {
-    z-index: 900 !important;
-  }
-
   .theme-night .filter-pill {
     background: rgba(0, 0, 0, 0.55);
     color: #ffffff;
@@ -1284,9 +1229,7 @@
   .theme-night .pp-glass [class*="text-slate-"],
   .theme-night .pp-glass [class*="text-gray-"],
   .theme-night .pp-glass-muted [class*="text-slate-"],
-  .theme-night .pp-glass-muted [class*="text-gray-"],
-  .theme-night .leaflet-popup-content [class*="text-slate-"],
-  .theme-night .leaflet-popup-content [class*="text-gray-"] {
+  .theme-night .pp-glass-muted [class*="text-gray-"] {
     color: #e5e7eb !important;
   }
 
@@ -1384,40 +1327,6 @@
     background: #f59e0b;
     border: 2px solid #7c2d12;
     box-shadow: 0 2px 4px rgba(15, 23, 42, 0.3);
-  }
-
-  .leaflet-marker-icon {
-    filter: drop-shadow(0 2px 4px rgba(15, 23, 42, 0.35));
-  }
-
-  .pp-pin {
-    background: transparent !important;
-    border: 0 !important;
-  }
-
-  .pp-pin__wrap {
-    position: relative;
-    width: 36px;
-    height: 36px;
-  }
-
-  .pp-pin__img {
-    width: 36px;
-    height: 36px;
-    display: block;
-    filter: drop-shadow(0 3px 6px rgba(15, 23, 42, 0.32));
-  }
-
-  .pp-pin__dot {
-    position: absolute;
-    right: 2px;
-    top: 2px;
-    width: 10px;
-    height: 10px;
-    border-radius: 999px;
-    background: #f59e0b;
-    border: 2px solid rgba(124, 45, 18, 0.9);
-    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.3);
   }
 
   @keyframes map-user-pulse {

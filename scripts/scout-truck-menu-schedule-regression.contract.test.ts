@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { isTruckDiscoverableForScout } from "../server/utils/truckListingEligibility";
 
-const scoutPage = readFileSync("client/src/pages/scout-prototype.tsx", "utf8");
+const scoutPage = readFileSync("client/src/pages/explore-preview-v2.tsx", "utf8");
 const publicProfile = readFileSync("client/src/pages/public-profile.tsx", "utf8");
 const locationRoutes = readFileSync("server/routes/locationUtilityRoutes.ts", "utf8");
 const restaurantOps = readFileSync("server/routes/restaurantOperationsRoutes.ts", "utf8");

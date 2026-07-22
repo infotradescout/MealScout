@@ -42,7 +42,7 @@ import { dateKeyInZone } from "../../services/dateKeys";
 import { resolveCityTimeZoneSync } from "../../services/cityTimeZone";
 import { canEmailForTopic } from "../../utils/notificationPreferences";
 
-export function registerHostEventsRoutes(app: Express) {
+export function registerHostParkingPassRoutes(app: Express) {
   const createHostParkingPassListing = async (req: any, res: any) => {
     try {
       const userId = req.user.id;
@@ -212,7 +212,9 @@ export function registerHostEventsRoutes(app: Express) {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 
-      const hardCapEnabled = Boolean(req.body?.hardCapEnabled);
+      // A Parking Pass is finite inventory: every paid reservation consumes
+      // one of the host's configured truck spots.
+      const hardCapEnabled = true;
 
       // Airbnb-style listing: store defaults on the series; do not materialize occurrences here.
       const existingSeries = await db
@@ -397,7 +399,6 @@ export function registerHostEventsRoutes(app: Express) {
     isAuthenticated,
     createHostParkingPassListing,
   );
-  app.post("/api/hosts/events", isAuthenticated, createHostParkingPassListing);
 
   const listHostParkingPassListings = async (req: any, res: any) => {
     try {
@@ -446,7 +447,6 @@ export function registerHostEventsRoutes(app: Express) {
     isAuthenticated,
     listHostParkingPassListings,
   );
-  app.get("/api/hosts/events", isAuthenticated, listHostParkingPassListings);
 
   // PATCH: Override a single parking pass listing occurrence (time window, capacity, hard cap)
   const updateHostParkingPassListing = async (req: any, res: any) => {
@@ -1114,11 +1114,6 @@ export function registerHostEventsRoutes(app: Express) {
     isAuthenticated,
     updateHostParkingPassListing,
   );
-  app.patch(
-    "/api/hosts/events/:eventId",
-    isAuthenticated,
-    updateHostParkingPassListing,
-  );
 
   app.patch(
     "/api/hosts/interests/:interestId/status",
@@ -1293,11 +1288,6 @@ export function registerHostEventsRoutes(app: Express) {
 
   app.get(
     "/api/hosts/parking-pass/:passId/interests",
-    isAuthenticated,
-    listHostParkingPassInterests,
-  );
-  app.get(
-    "/api/hosts/events/:eventId/interests",
     isAuthenticated,
     listHostParkingPassInterests,
   );

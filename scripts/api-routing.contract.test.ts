@@ -7,7 +7,9 @@ const requiredSnippets = [
   'host === "www.mealscout.us"',
   'host === "mealscout.us"',
   'host.endsWith(".mealscout.us")',
-  "return MEALSCOUT_API_ORIGIN_FALLBACK;",
+  'return normalizedPath.startsWith("/api/");',
+  "if (isMealScoutHost && isMealScoutSameOriginPath(path))",
+  'return path.startsWith("/") ? path : `/${path}`;',
   "if (IS_DEV) return \"\";",
   "const fromEnv = String(import.meta.env.VITE_API_BASE_URL || \"\").trim();",
   "return fromEnv.replace(/\\/+$/, \"\");",
@@ -16,6 +18,18 @@ const requiredSnippets = [
 for (const snippet of requiredSnippets) {
   if (!source.includes(snippet)) {
     throw new Error(`Missing required api-routing behavior snippet: ${snippet}`);
+  }
+}
+
+for (const obsoleteSelectiveRoute of [
+  'normalizedPath.startsWith("/api/truck-claims")',
+  'normalizedPath === "/api/restaurants/signup"',
+  "/^\\/api\\/restaurants\\/[^/]+\\/verification\\/request",
+]) {
+  if (source.includes(obsoleteSelectiveRoute)) {
+    throw new Error(
+      `MealScout API routing must not depend on a selective allowlist: ${obsoleteSelectiveRoute}`,
+    );
   }
 }
 

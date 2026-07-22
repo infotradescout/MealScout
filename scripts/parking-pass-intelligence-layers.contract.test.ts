@@ -3,8 +3,12 @@ import { readFileSync } from "node:fs";
 const parkingPassPage = readFileSync("client/src/pages/parking-pass.tsx", "utf8");
 
 const requiredSnippets = [
-  "supplierOverlayPins",
+  "partnerSupportPins",
+  "discoveredSupportPins",
+  "operationalSupportPins",
+  "/api/map/operator-support",
   "supplierLocations",
+  "showGasLayer",
   "showPropaneLayer",
   "showSupplyLayer",
   "showSupportLayer",
@@ -14,7 +18,8 @@ const requiredSnippets = [
   "propane_dealer",
   "equipment_supplier",
   "Operator support",
-  "mapPins.length + supplierOverlayPins.length",
+  "const parkingPassHostPinCount = mapPins.length + unlistedHostPins.length",
+  "...operationalSupportPins.map",
 ];
 
 for (const snippet of requiredSnippets) {

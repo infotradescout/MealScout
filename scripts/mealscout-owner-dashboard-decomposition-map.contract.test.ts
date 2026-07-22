@@ -25,6 +25,7 @@ const loginContinuation = readFileSync("server/services/loginContinuation.ts", "
 const restaurantOperationsRoutes = readFileSync("server/routes/restaurantOperationsRoutes.ts", "utf8");
 const restaurantCoreRoutes = readFileSync("server/routes/restaurantCoreRoutes.ts", "utf8");
 const menuRoutes = readFileSync("server/routes/menuRoutes.ts", "utf8");
+const profileAccessPolicy = readFileSync("shared/profileAccessPolicy.ts", "utf8");
 const combined = `${map}\n${cleanupMap}`;
 
 function requireIncludes(source: string, snippet: string, label = snippet) {
@@ -170,7 +171,7 @@ function requireMatch(source: string, pattern: RegExp, label: string) {
   "Do not change menu writes",
   "Do not change schedule writes",
   "Do not change media upload/approval behavior",
-  "Do not change subscription gating",
+  "Do not change the profile-access policy without explicit product approval",
   "Do not introduce new features",
 ].forEach((snippet) => requireIncludes(map, snippet, `do-not-touch rule ${snippet}`));
 
@@ -240,7 +241,7 @@ function requireMatch(source: string, pattern: RegExp, label: string) {
   'user?.userType === "food_truck"',
   'queryKey: ["/api/business-access/me"]',
   'queryKey: ["/api/restaurants/my-restaurants"]',
-  'queryKey: ["/api/subscription/status"]',
+  "const hasPremiumLocationTools = canManageParkingPass",
   'queryKey: ["/api/bookings/my-truck", selectedRestaurant]',
   "/api/owner/value-attribution",
   "/api/owner/profile-completion-action",
@@ -262,6 +263,12 @@ function requireMatch(source: string, pattern: RegExp, label: string) {
   "/parking-pass-manage",
   "/menu-builder?restaurantId=",
 ].forEach((snippet) => requireIncludes(ownerDashboard, snippet, `owner dashboard evidence ${snippet}`));
+
+requireIncludes(
+  profileAccessPolicy,
+  "UNIVERSAL_PROFILE_FREE_TRIAL_ACTIVE = true",
+  "current universal profile trial policy",
+);
 
 [
   'queryKey: ["/api/owner/menus", restaurantId]',

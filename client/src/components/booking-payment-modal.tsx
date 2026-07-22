@@ -33,6 +33,24 @@ function getStripePromise(publicKey: string) {
   return promise;
 }
 
+function recordRouteBookingConfirmed(passId: string) {
+  try {
+    const raw = sessionStorage.getItem("mealscout_route_booking_context");
+    if (!raw) return;
+    const context = JSON.parse(raw);
+    sessionStorage.removeItem("mealscout_route_booking_context");
+    void fetch("/api/parking-pass/routes/events", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        eventName: "route_booking_confirmed",
+        properties: { ...context, passId },
+      }),
+    });
+  } catch {}
+}
+
 interface BookingPaymentModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -71,6 +89,7 @@ interface BookingPaymentModalProps {
 interface PaymentFormProps {
   clientSecret: string;
   paymentIntentId: string;
+  passId: string;
   truckId: string;
   totalCents: number;
   breakdown: {
@@ -87,6 +106,7 @@ interface PaymentFormProps {
 function PaymentForm({
   clientSecret,
   paymentIntentId,
+  passId,
   truckId,
   totalCents,
   breakdown,
@@ -173,6 +193,7 @@ function PaymentForm({
               ? "Payment received. Your booking will appear shortly."
               : "Your parking spot has been reserved.",
         });
+        recordRouteBookingConfirmed(passId);
         onSuccess(status);
       }
     } catch (err: any) {
@@ -470,6 +491,7 @@ export function BookingPaymentModal({
           title: "Parking Pass Confirmed!",
           description: "Your parking spot has been reserved.",
         });
+        recordRouteBookingConfirmed(passId);
         handleSuccess("confirmed");
         return;
       }
@@ -601,10 +623,10 @@ export function BookingPaymentModal({
                       </p>
                     </div>
                     <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-card)] p-2">
-                      <p className="text-[11px] font-semibold text-[color:var(--text-primary)]">Foot traffic</p>
+                      <p className="text-[11px] font-semibold text-[color:var(--text-primary)]">Area activity</p>
                       <p className="text-xs text-[color:var(--text-muted)]">
                         {bookingContext.footTraffic.loading
-                          ? "Loading foot traffic..."
+                          ? "Loading area activity..."
                           : bookingContext.footTraffic.summary}
                       </p>
                     </div>
@@ -757,6 +779,7 @@ export function BookingPaymentModal({
             <PaymentForm
               clientSecret={clientSecret}
               paymentIntentId={paymentIntentId}
+              passId={passId}
               truckId={truckId}
               totalCents={bookingData.totalCents}
               breakdown={bookingData.breakdown}
@@ -769,4 +792,3 @@ export function BookingPaymentModal({
     </Dialog>
   );
 }
-

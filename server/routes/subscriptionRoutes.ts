@@ -11,6 +11,7 @@ import {
   restaurantSubscriptions,
   type User,
 } from "@shared/schema";
+import { UNIVERSAL_PROFILE_FREE_TRIAL_ACTIVE } from "@shared/profileAccessPolicy";
 
 type LockedPriceResult = {
   locked: boolean;
@@ -662,8 +663,34 @@ export function registerSubscriptionRoutes(
         return res.status(401).json({ status: "none", hasAccess: false });
       }
 
+      if (await userHasLifetimeRestaurantAccess(req.user.id)) {
+        return res.json({
+          status: "active",
+          hasAccess: true,
+          lifetimeAccess: true,
+          message: "Lifetime premium partner access active",
+        });
+      }
+
+      if (
+        UNIVERSAL_PROFILE_FREE_TRIAL_ACTIVE &&
+        !String(user.stripeSubscriptionId || "").trim()
+      ) {
+        return res.json({
+          status: "active",
+          hasAccess: true,
+          trialAccess: true,
+          universalTrial: true,
+          trialEndsAt: null,
+          message: "Free trial access active",
+        });
+      }
+
       const hydratedUser = await ensureTrialForUser(user);
-      if (isTrialActive(hydratedUser)) {
+      if (
+        !UNIVERSAL_PROFILE_FREE_TRIAL_ACTIVE &&
+        isTrialActive(hydratedUser)
+      ) {
         return res.json({
           status: "active",
           hasAccess: true,
@@ -673,12 +700,15 @@ export function registerSubscriptionRoutes(
         });
       }
 
-      if (await userHasLifetimeRestaurantAccess(req.user.id)) {
+      if (!stripe && UNIVERSAL_PROFILE_FREE_TRIAL_ACTIVE) {
         return res.json({
           status: "active",
           hasAccess: true,
-          lifetimeAccess: true,
-          message: "Lifetime premium partner access active",
+          trialAccess: true,
+          universalTrial: true,
+          trialEndsAt: null,
+          billingStatusUnavailable: true,
+          message: "Free trial access active",
         });
       }
 
@@ -715,8 +745,22 @@ export function registerSubscriptionRoutes(
               const refreshedSubscription = await stripe.subscriptions.retrieve(
                 hydratedUser.stripeSubscriptionId,
               );
+              const refreshedHasPaidAccess = ["active", "trialing"].includes(
+                refreshedSubscription.status,
+              );
+              const usesUniversalTrial =
+                UNIVERSAL_PROFILE_FREE_TRIAL_ACTIVE && !refreshedHasPaidAccess;
               res.json({
                 status: refreshedSubscription.status,
+                hasAccess:
+                  UNIVERSAL_PROFILE_FREE_TRIAL_ACTIVE || refreshedHasPaidAccess,
+                ...(usesUniversalTrial
+                  ? {
+                      trialAccess: true,
+                      universalTrial: true,
+                      trialEndsAt: null,
+                    }
+                  : {}),
                 currentPeriodEnd: (refreshedSubscription as any)
                   .current_period_end,
                 cancelAtPeriodEnd: (refreshedSubscription as any)
@@ -729,13 +773,37 @@ export function registerSubscriptionRoutes(
           }
         }
 
+        const hasPaidAccess = ["active", "trialing"].includes(
+          subscription.status,
+        );
+        const usesUniversalTrial =
+          UNIVERSAL_PROFILE_FREE_TRIAL_ACTIVE && !hasPaidAccess;
         res.json({
           status: subscription.status,
+          hasAccess: UNIVERSAL_PROFILE_FREE_TRIAL_ACTIVE || hasPaidAccess,
+          ...(usesUniversalTrial
+            ? {
+                trialAccess: true,
+                universalTrial: true,
+                trialEndsAt: null,
+              }
+            : {}),
           currentPeriodEnd: (subscription as any).current_period_end,
           cancelAtPeriodEnd: (subscription as any).cancel_at_period_end,
         });
       } catch (error: any) {
         console.error("Subscription status error:", error);
+        if (UNIVERSAL_PROFILE_FREE_TRIAL_ACTIVE) {
+          return res.json({
+            status: "active",
+            hasAccess: true,
+            trialAccess: true,
+            universalTrial: true,
+            trialEndsAt: null,
+            billingStatusUnavailable: true,
+            message: "Free trial access active",
+          });
+        }
         res.status(500).json({ message: error.message });
       }
     },

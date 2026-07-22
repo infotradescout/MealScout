@@ -196,7 +196,7 @@ export const HOST_ONBOARDING_COPY = {
   verification: {
     title: "Verify your business to unlock bookings",
     intro:
-      "Your account is pending verification. You cannot book parking passes or access premium features until your business is verified. Upload one or more documents below to start the review — most reviews complete within 1 business day.",
+      "Your account is pending verification. Food-truck bookings stay locked until your business is verified, while your profile tools remain available during the free trial. Upload one or more documents below to start the review — most reviews complete within 1 business day.",
     pendingBanner:
       "Verification pending — parking pass bookings are locked until your business is approved.",
     claimRequiredNote:

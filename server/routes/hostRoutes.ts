@@ -77,7 +77,8 @@ import { resolveCityTimeZoneSync } from "../services/cityTimeZone";
 import { requireIdempotencyKey } from "../middleware/idempotency";
 import { distributedRateLimit } from "../middleware/distributedRateLimit";
 import { registerHostProfileRoutes } from "./hosts/profileRoutes";
-import { registerHostEventsRoutes } from "./hosts/eventsRoutes";
+import { registerHostParkingPassRoutes } from "./hosts/eventsRoutes";
+import { isStaffOrAdminUserType } from "@shared/profileAccessPolicy";
 
 const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY)
@@ -104,10 +105,7 @@ export function registerHostRoutes(app: Express) {
   });
 
   const isStaffOrAdminUser = (user: any) =>
-    user?.userType === "staff" ||
-    user?.userType === "admin" ||
-    user?.userType === "duper_admin" ||
-    user?.userType === "super_admin";
+    isStaffOrAdminUserType(user?.userType);
 
   app.get("/api/payments/stripe-config", (_req, res) => {
     const publishableKey = getStripePublishableKey();
@@ -788,7 +786,7 @@ export function registerHostRoutes(app: Express) {
     }
   });
 
-  registerHostEventsRoutes(app);
+  registerHostParkingPassRoutes(app);
 
   // =====================================================================
   // STRIPE CONNECT & PAYMENT ENDPOINTS
@@ -1771,6 +1769,11 @@ export function registerHostRoutes(app: Express) {
           (sum, item) => sum + item.price,
           0,
         );
+        if (hostPriceCents <= 0) {
+          return res.status(400).json({
+            message: "This parking spot does not have a bookable price yet.",
+          });
+        }
         let platformFeeCents = 1000 * bookingDays; // $10/day, no cap
         let adjustedHostPriceCents = hostPriceCents;
         let promoDiscountCents = 0;

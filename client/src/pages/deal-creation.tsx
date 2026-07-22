@@ -190,17 +190,6 @@ export default function DealCreation() {
     };
   }, [selectedBusiness]);
 
-  // Fetch subscription status for deal limits
-  const {
-    data: subscription,
-    isLoading: isSubscriptionLoading,
-    isError: isSubscriptionError,
-  } = useQuery({
-    queryKey: ["/api/subscription/status"],
-    enabled: isAuthenticated,
-    retry: false,
-    refetchOnWindowFocus: false,
-  });
   const { data: businessAccess } = useQuery<{
     hasAnyAccess: boolean;
     permissions: {
@@ -214,12 +203,6 @@ export default function DealCreation() {
     retry: false,
     refetchOnWindowFocus: false,
   });
-
-  console.log("Deal Creation - Subscription Data:", subscription);
-  console.log(
-    "Deal Creation - Is Subscription Loading:",
-    isSubscriptionLoading,
-  );
 
   // Fetch current deal count for limits
   const { data: currentDeals } = useQuery({
@@ -451,23 +434,6 @@ export default function DealCreation() {
         return;
       }
 
-      // Handle subscription required error (402)
-      if (
-        error.message &&
-        (error.message.includes("subscription") ||
-          error.message.includes("Payment Required"))
-      ) {
-        toast({
-          title: "Subscription Required",
-          description: "Please upgrade your subscription to create specials",
-          variant: "destructive",
-        });
-        setTimeout(() => {
-          setLocation("/subscribe?next=/deal-creation&reason=create_deals");
-        }, 1500);
-        return;
-      }
-
       toast({
         title: "Error",
         description: error.message || "Failed to create deal",
@@ -486,7 +452,7 @@ export default function DealCreation() {
       });
       return;
     }
-    // Server-side validation will handle subscription limits
+    // Server-side validation still enforces ownership and publishing rules.
     createDealMutation.mutate(data);
   };
 
@@ -598,17 +564,6 @@ export default function DealCreation() {
     );
   }
 
-  // Show loading while checking subscription
-  if (isSubscriptionLoading) {
-    return (
-      <div className="max-w-md mx-auto bg-[var(--bg-layered)] min-h-screen flex items-center justify-center">
-        <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
-      </div>
-    );
-  }
-
-  // Check subscription status - redirect to subscribe page if needed
-  // Allow access if: active subscription OR has access flag OR admin/staff
   const isAdminOrStaff =
     user &&
     (user.userType === "admin" ||
@@ -636,57 +591,6 @@ export default function DealCreation() {
     team: isOwnerRole,
     payments: isOwnerRole,
   };
-  const hasAccess =
-    canManageDeals &&
-    (Boolean(isAdminOrStaff) ||
-      Boolean(
-        subscription &&
-        ((subscription as any).status === "active" ||
-          (subscription as any).hasAccess === true),
-      ));
-
-  if (!isSubscriptionError && subscription && !hasAccess) {
-    console.log(
-      "Blocking due to subscription status:",
-      (subscription as any).status,
-    );
-    return (
-      <BusinessWorkspaceShell
-        activeModule="deals"
-        business={selectedBusiness}
-        businesses={restaurants}
-        onBusinessChange={handleWorkspaceBusinessChange}
-        publicProfileHref={publicProfileHref}
-        capabilities={workspaceCapabilities}
-      >
-        <div className="mx-auto flex min-h-[70vh] max-w-lg items-center px-4 py-10">
-        <Card className="w-full shadow-clean-lg border-[color:var(--border-subtle)]">
-          <CardContent className="p-6 text-center">
-            <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-[color:var(--accent-text)]/12 text-[color:var(--accent-text)] text-2xl mb-3">
-              💳
-            </div>
-            <h2 className="text-lg font-semibold mb-1">
-              Subscription required to post specials
-            </h2>
-            <p className="text-sm text-muted-foreground mb-4">
-              Unlock unlimited featured spots for your food truck or restaurant
-              with a simple monthly plan.
-            </p>
-            <Link href={`/subscribe?restaurantId=${encodeURIComponent(selectedBusiness.id)}`}>
-              <Button
-                className="w-full"
-                data-testid="button-subscribe-to-create"
-              >
-                View subscription plans
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
-        </div>
-      </BusinessWorkspaceShell>
-    );
-  }
-
   if (!canManageDeals) {
     return (
       <BusinessWorkspaceShell

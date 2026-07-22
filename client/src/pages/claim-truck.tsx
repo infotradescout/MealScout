@@ -330,6 +330,7 @@ export default function ClaimTruckPage() {
               </p>
               <PlaceAutocompleteInput
                 id="claim-missing-business"
+                intent="food"
                 value={missingBusinessQuery}
                 onChange={setMissingBusinessQuery}
                 onSelect={(suggestion) => {

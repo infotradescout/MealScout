@@ -1,6 +1,5 @@
 import { FormEvent, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Link } from "wouter";
 import { useLocation } from "wouter";
 import {
   BriefcaseBusiness,
@@ -121,12 +120,6 @@ type ChefLeadRow = {
   };
 };
 
-type SubscriptionStatus = {
-  status: string;
-  hasAccess?: boolean;
-  trialAccess?: boolean;
-};
-
 const formatMoney = (cents?: number | null) => {
   if (!cents) return "Open";
   return `$${(cents / 100).toFixed(0)}`;
@@ -193,12 +186,6 @@ export default function HiringPage() {
     enabled: isAuthenticated,
   });
 
-  const { data: subscriptionStatus } = useQuery<SubscriptionStatus>({
-    queryKey: ["/api/subscription/status"],
-    enabled: isAuthenticated,
-    retry: false,
-  });
-
   const { data: businessJobs = [] } = useQuery<JobRow[]>({
     queryKey: ["/api/hiring/business/jobs"],
     enabled: isAuthenticated,
@@ -223,11 +210,6 @@ export default function HiringPage() {
       ),
     [restaurants],
   );
-  const ownsPrivateChef = ownedBusinesses.some(
-    (restaurant) => restaurant.businessType === "private_chef",
-  );
-  const hasMarketplaceAccess = Boolean(subscriptionStatus?.hasAccess);
-
   const saveResume = useMutation({
     mutationFn: async (event: FormEvent<HTMLFormElement>) => {
       event.preventDefault();
@@ -673,28 +655,6 @@ export default function HiringPage() {
           </TabsContent>
 
           <TabsContent value="owner" className="space-y-5">
-            {ownsPrivateChef && !hasMarketplaceAccess ? (
-              <Card className="border-amber-300 bg-amber-50">
-                <CardHeader>
-                  <CardTitle className="text-lg text-amber-950">
-                    Private chef marketplace is $25/month
-                  </CardTitle>
-                  <CardDescription className="text-amber-900">
-                    Subscribe to appear in private chef search and receive new
-                    MealScout chef requests.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Button asChild>
-                    <Link href="/subscribe?next=/hiring&reason=private_chef_marketplace">
-                      <DollarSign className="h-4 w-4" />
-                      Activate marketplace
-                    </Link>
-                  </Button>
-                </CardContent>
-              </Card>
-            ) : null}
-
             <div className="grid gap-4 md:grid-cols-3">
               <Card>
                 <CardHeader className="pb-2">

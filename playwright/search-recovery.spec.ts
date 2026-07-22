@@ -72,21 +72,39 @@ test.describe("Search recovery flows", () => {
       });
     });
 
-    await page.goto(`${FRONTEND}/search?q=piza`, { waitUntil: "domcontentloaded" });
+    // The did-you-mean suggestion only appears after the debounced search
+    // effect fires and the mocked /api/search response lands — waiting on
+    // that response directly (rather than relying solely on the default
+    // assertion timeout) keeps this deterministic under parallel-worker load
+    // instead of racing a multi-hop debounce -> fetch -> render chain.
+    await Promise.all([
+      page.waitForResponse((res) => res.url().includes("/api/search")),
+      page.goto(`${FRONTEND}/search?q=piza`, { waitUntil: "domcontentloaded" }),
+    ]);
 
     const suggestionButton = page.getByTestId("button-did-you-mean");
     await expect(suggestionButton).toBeVisible();
     await suggestionButton.click();
 
     await expect(page).toHaveURL(/\/search\?q=pizza/);
-    await expect(page.getByText('Deals for "pizza"')).toBeVisible();
+    // Copy changed from "Deals for" to "Deals matching" (search.tsx:1344).
+    await expect(page.getByText('Deals matching "pizza"')).toBeVisible();
 
-    expect(
-      telemetryEvents.some((event) => event.eventName === "search_did_you_mean_clicked"),
-    ).toBeTruthy();
+    // The telemetry POST is fire-and-forget from the app's perspective, so
+    // checking the array synchronously races the network round-trip (mocked,
+    // but still async) — poll instead of asserting immediately.
+    await expect
+      .poll(() =>
+        telemetryEvents.some((event) => event.eventName === "search_did_you_mean_clicked"),
+      )
+      .toBeTruthy();
   });
 
-  test("Sticky location CTA emits telemetry on mobile", async ({ page }) => {
+  // "button-search-sticky-location" / "search_location_request_sticky" no
+  // longer exist. The surviving equivalent for a bare /search page (no
+  // query, no location yet) is the quick-actions location button, which
+  // shares the same requestUserLocation handler and error copy.
+  test("Quick location CTA emits telemetry on mobile", async ({ page }) => {
     const telemetryEvents: Array<{ eventName?: string }> = [];
     await page.setViewportSize({ width: 390, height: 844 });
 
@@ -120,15 +138,19 @@ test.describe("Search recovery flows", () => {
 
     await page.goto(`${FRONTEND}/search`, { waitUntil: "domcontentloaded" });
 
-    const stickyLocation = page.getByTestId("button-search-sticky-location");
-    await expect(stickyLocation).toBeVisible();
-    await stickyLocation.click();
+    const quickLocation = page.getByTestId("button-search-quick-location");
+    await expect(quickLocation).toBeVisible();
+    await quickLocation.click();
 
     await expect(
       page.getByText("Unable to get your location."),
     ).toBeVisible();
-    expect(
-      telemetryEvents.some((event) => event.eventName === "search_location_request_sticky"),
-    ).toBeTruthy();
+    // See note in the did-you-mean test above re: polling telemetry instead
+    // of asserting synchronously.
+    await expect
+      .poll(() =>
+        telemetryEvents.some((event) => event.eventName === "search_location_request_quick"),
+      )
+      .toBeTruthy();
   });
 });

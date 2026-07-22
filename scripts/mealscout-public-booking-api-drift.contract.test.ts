@@ -3,7 +3,6 @@ import { readFileSync } from "node:fs";
 const targetFiles = [
   "client/src/pages/parking-pass.tsx",
   "client/src/pages/search.tsx",
-  "client/src/pages/scout-prototype.tsx",
   "client/src/pages/public-profile.tsx",
   "client/src/components/booking-payment-modal.tsx",
   "client/src/components/admin/host-location-manager.tsx",

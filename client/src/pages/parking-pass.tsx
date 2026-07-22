@@ -10,11 +10,13 @@ import {
   getSlotWindowMinutesWithCleanup,
   isSlotWithinHours,
 } from "@shared/parkingPassSlots";
+import { isStaffOrAdminUserType } from "@shared/profileAccessPolicy";
 import {
   AlertCircle,
   Calendar,
   Clock,
   Loader2,
+  Navigation,
   Plus,
   Share2,
   Truck,
@@ -56,12 +58,21 @@ import LongPressHelp from "@/components/long-press-help";
 import { initFacebookSDK, postToFacebook } from "@/lib/facebook";
 import { apiUrl } from "@/lib/api";
 import { apiRequest } from "@/lib/queryClient";
+import {
+  normalizeParkingPassLocationSearch,
+  parkingPassLocationMatches,
+} from "@/lib/parkingPassSearch";
 import { formatRelativeTime } from "@/lib/relative-time";
 import {
   ParkingScheduleCalendar,
   type ParkingScheduleItem,
 } from "@/components/parking-schedule-calendar";
 import { PlaceAutocompleteInput } from "@/components/maps/place-autocomplete-input";
+import {
+  ParkingPassTripPlanner,
+  type TripPlannerHost,
+} from "@/components/parking-pass-trip-planner";
+import { AdminRouteConversionCard, HostRouteDemandCard } from "@/components/parking-route-demand-cards";
 
 interface Host {
   id: string;
@@ -181,6 +192,14 @@ type MapFootTrafficResponse = {
     error: string | null;
     cells: MapTrafficCell[];
   };
+  firstParty?: {
+    totalPings: number;
+    totalUniqueActors: number;
+    cells: MapTrafficCell[];
+  };
+  supplySignals?: {
+    cells: MapTrafficCell[];
+  };
   cells: MapTrafficCell[];
 };
 
@@ -257,6 +276,141 @@ interface TruckParkingReport {
 }
 
 type GeoPoint = { lat: number; lng: number };
+
+type PlaceIntelligenceResponse = {
+  available: boolean;
+  source: "google_places";
+  fetchedAt: string;
+  reason?: string;
+  place?: {
+    placeId: string;
+    name: string;
+    formattedAddress: string;
+    latitude: number | null;
+    longitude: number | null;
+    primaryType: string | null;
+    types: string[];
+    businessStatus: string | null;
+    phone: string | null;
+    websiteUri: string | null;
+    googleMapsUri: string | null;
+    openNow: boolean | null;
+    weekdayDescriptions: string[];
+    fuelPrices: {
+      regularCents: number | null;
+      midgradeCents: number | null;
+      premiumCents: number | null;
+      dieselCents: number | null;
+      updatedAt: string | null;
+      source: "google_places";
+    } | null;
+    parkingOptions: Record<string, boolean> | null;
+    restroom: boolean | null;
+    accessibilityOptions: Record<string, boolean> | null;
+  };
+};
+
+type OperatorSupportKind = "gas" | "propane" | "supply" | "support";
+
+type OperatorSupportPlace = {
+  placeId: string;
+  kind: OperatorSupportKind;
+  name: string;
+  address: string;
+  latitude: number;
+  longitude: number;
+  primaryType: string | null;
+  businessStatus: string | null;
+  phone: string | null;
+  googleMapsUri: string | null;
+  straightLineMiles: number;
+  driveDistanceMeters: number | null;
+  driveDurationSeconds: number | null;
+  source: "google_places";
+};
+
+type OperatorSupportResponse = {
+  available: boolean;
+  source: "google_places";
+  fetchedAt: string;
+  reason?: string;
+  categories: Record<OperatorSupportKind, OperatorSupportPlace[]>;
+};
+
+type MapRouteSummaryResponse = {
+  distanceMeters: number;
+  durationSeconds: number;
+  travelMode: "DRIVE" | "WALK" | "BICYCLE";
+  source: "google_routes";
+  encodedPolyline?: string | null;
+};
+
+type RouteCorridorHost = {
+  locationId: string;
+  hostId: string;
+  name: string;
+  address: string;
+  city: string;
+  state: string;
+  latitude: number;
+  longitude: number;
+  spotImageUrl: string | null;
+  distanceFromRouteMiles: number;
+  routeProgressMiles: number;
+  journeyDistanceMeters: number | null;
+  journeyDurationSeconds: number | null;
+  addedDistanceMeters: number | null;
+  addedDurationSeconds: number | null;
+  directionsUri: string;
+  source: "mealscout_parking_pass";
+};
+
+type RouteCorridorSupportPlace = OperatorSupportPlace & {
+  originToStopDistanceMeters: number | null;
+  originToStopDurationSeconds: number | null;
+  stopToDestinationDistanceMeters: number | null;
+  stopToDestinationDurationSeconds: number | null;
+  journeyDistanceMeters: number | null;
+  journeyDurationSeconds: number | null;
+  addedDistanceMeters: number | null;
+  addedDurationSeconds: number | null;
+  directionsUri: string;
+};
+
+type RouteCorridorResponse = {
+  available: boolean;
+  source: "google_routes_places";
+  fetchedAt: string;
+  route: {
+    distanceMeters: number;
+    durationSeconds: number;
+    encodedPolyline: string;
+    path: GeoPoint[];
+    directionsUri: string;
+  };
+  parkingPassHosts: RouteCorridorHost[];
+  categories: Record<OperatorSupportKind, RouteCorridorSupportPlace[]>;
+  corridor: {
+    hostRadiusMiles: number;
+    mapHostLocationsReady: boolean;
+  };
+};
+
+type OperationalSupportPin = {
+  key: string;
+  position: GeoPoint;
+  name: string;
+  addressLabel: string;
+  categoryLabel: string;
+  profileUrl: string | null;
+  googleMapsUri: string | null;
+  contactPhone: string | null;
+  contactEmail: string | null;
+  kind: OperatorSupportKind;
+  source: "mealscout_partner" | "google_places";
+  distanceMiles: number | null;
+  driveDurationSeconds: number | null;
+};
 
 type PlaceDetailsResponse = {
   place?: {
@@ -436,6 +590,25 @@ const distanceMilesBetween = (from: GeoPoint, to: GeoPoint) => {
       Math.sin(dLng / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return earthRadiusMiles * c;
+};
+
+const formatJourneyDuration = (seconds: number) => {
+  const minutes = Math.max(1, Math.round(seconds / 60));
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+  return remainder ? `${hours} hr ${remainder} min` : `${hours} hr`;
+};
+
+const formatJourneyMiles = (meters: number) =>
+  `${(Math.max(0, meters) / 1609.344).toFixed(1)} mi`;
+
+const formatJourneyDetour = (seconds: number | null) => {
+  if (seconds === null || !Number.isFinite(seconds)) {
+    return "Detour estimate unavailable";
+  }
+  if (seconds < 60) return "Under 1 min added";
+  return `+${Math.max(1, Math.round(seconds / 60))} min`;
 };
 
 const buildSlotOptions = (listing: ParkingPassListing) =>
@@ -619,16 +792,6 @@ export default function ParkingPassPage() {
   const { effectiveLocationContext } = useEffectiveLocationContext();
   const { toast } = useToast();
   const [location, setLocation] = useLocation();
-  const { data: subscription } = useQuery<{
-    status: string;
-    hasAccess: boolean;
-    trialAccess?: boolean;
-  }>({
-    queryKey: ["/api/subscription/status"],
-    enabled: !!user,
-    retry: false,
-    refetchOnWindowFocus: false,
-  });
   const { data: businessAccess } = useQuery<{
     hasAnyAccess: boolean;
     linkState?: "linked" | "not_attached";
@@ -644,12 +807,7 @@ export default function ParkingPassPage() {
     retry: false,
     refetchOnWindowFocus: false,
   });
-  const isAdminOrStaff = [
-    "admin",
-    "duper_admin",
-    "super_admin",
-    "staff",
-  ].includes(user?.userType || "");
+  const isAdminOrStaff = isStaffOrAdminUserType(user?.userType);
   const [adminParkingMode, setAdminParkingMode] = useState<
     "auto" | "truck" | "host"
   >("auto");
@@ -669,9 +827,7 @@ export default function ParkingPassPage() {
     user?.userType === "food_truck"
       ? "/restaurant-signup?businessType=food_truck&source=parking-pass&claim=1"
       : "/restaurant-signup?businessType=restaurant&source=parking-pass&claim=1";
-  const hasPremiumTruckTools =
-    canManageParkingPass &&
-    (isAdminOrStaff || Boolean(subscription?.hasAccess));
+  const hasPremiumTruckTools = canManageParkingPass;
   const [isLoading, setIsLoading] = useState(true);
   const [passListings, setPassListings] = useState<ParkingPassListing[]>([]);
   const [ownedFoodTrucks, setOwnedFoodTrucks] = useState<any[]>([]);
@@ -784,7 +940,7 @@ export default function ParkingPassPage() {
   const [endTime, setEndTime] = useState<string>(defaultHostEndTime);
   const [anyTime, setAnyTime] = useState(false);
   const [maxTrucks, setMaxTrucks] = useState(1);
-  const [hardCapEnabled, setHardCapEnabled] = useState(false);
+  const hardCapEnabled = true;
   const [createError, setCreateError] = useState("");
   const [breakfastPrice, setBreakfastPrice] = useState("");
   const [lunchPrice, setLunchPrice] = useState("");
@@ -852,14 +1008,51 @@ export default function ParkingPassPage() {
       setCityQuery(nextQuery);
     }
   }, [cityQuery, effectiveLocationContext]);
+  const [journeyOriginLabel, setJourneyOriginLabel] = useState("");
+  const [journeyOriginCoords, setJourneyOriginCoords] =
+    useState<GeoPoint | null>(null);
+  const [journeyDestinationLabel, setJourneyDestinationLabel] = useState("");
+  const [journeyDestinationCoords, setJourneyDestinationCoords] =
+    useState<GeoPoint | null>(null);
+  const [journeyResult, setJourneyResult] =
+    useState<RouteCorridorResponse | null>(null);
+  const [journeyError, setJourneyError] = useState("");
+  const [isJourneyPlanning, setIsJourneyPlanning] = useState(false);
+  const [journeySupportFilter, setJourneySupportFilter] = useState<
+    "all" | OperatorSupportKind
+  >("all");
+  const journeyOriginInitializedRef = useRef(false);
+  useEffect(() => {
+    if (journeyOriginInitializedRef.current) return;
+    const latitude = parseCoord(effectiveLocationContext?.latitude);
+    const longitude = parseCoord(effectiveLocationContext?.longitude);
+    if (latitude === null || longitude === null) return;
+    journeyOriginInitializedRef.current = true;
+    const locationLabel = [
+      String(effectiveLocationContext?.city || "").trim(),
+      String(effectiveLocationContext?.state || "").trim(),
+    ]
+      .filter(Boolean)
+      .join(", ");
+    setJourneyOriginCoords({ lat: latitude, lng: longitude });
+    setJourneyOriginLabel(locationLabel || "My current area");
+  }, [
+    effectiveLocationContext?.city,
+    effectiveLocationContext?.latitude,
+    effectiveLocationContext?.longitude,
+    effectiveLocationContext?.state,
+  ]);
   const [cartItems, setCartItems] = useState<
     Array<{ listing: ParkingPassListing; slotTypes: string[] }>
   >([]);
   const [checkoutQueue, setCheckoutQueue] = useState<
     Array<{ listing: ParkingPassListing; slotTypes: string[] }>
   >([]);
-  const [viewMode, setViewMode] = useState<"map" | "list">("map");
+  const [viewMode, setViewMode] = useState<"map" | "list">(() =>
+    window.matchMedia("(max-width: 639px)").matches ? "list" : "map",
+  );
   const [showParkingScoutHeat, setShowParkingScoutHeat] = useState(false);
+  const [showGasLayer, setShowGasLayer] = useState(false);
   const [showPropaneLayer, setShowPropaneLayer] = useState(false);
   const [showSupplyLayer, setShowSupplyLayer] = useState(false);
   const [showSupportLayer, setShowSupportLayer] = useState(false);
@@ -956,68 +1149,9 @@ export default function ParkingPassPage() {
     );
   }, [mapLocationsData, cachedMapLocations]);
 
-  // Keep Parking Pass maps in sync with the main map: only show paid/priced host locations.
-  const BOOKABLE_HOST_CACHE_KEY = "mealscout:parking-pass:bookableHostIds:v2";
-  const [cachedBookableHostIds, setCachedBookableHostIds] = useState<
-    Set<string>
-  >(() => {
-    try {
-      const raw = localStorage.getItem(BOOKABLE_HOST_CACHE_KEY);
-      if (!raw) return new Set<string>();
-      const parsed = JSON.parse(raw);
-      const hostIds = Array.isArray(parsed?.hostIds) ? parsed.hostIds : [];
-      return new Set(hostIds.map((id: any) => String(id)));
-    } catch {
-      return new Set<string>();
-    }
-  });
-  const { data: bookableHostIdPayload } = useQuery<
-    { generatedAt: string; hostIds: string[] } | undefined
-  >({
-    queryKey: ["/api/parking-pass/host-ids"],
-    queryFn: async () => {
-      const res = await fetch(apiUrl("/api/parking-pass/host-ids"));
-      if (!res.ok) throw new Error("Failed to load bookable hosts");
-      return res.json();
-    },
-    staleTime: 5 * 60 * 1000,
-    gcTime: 10 * 60 * 1000,
-    refetchOnWindowFocus: false,
-  });
-  useEffect(() => {
-    if (!bookableHostIdPayload || !Array.isArray(bookableHostIdPayload.hostIds)) {
-      return;
-    }
-    const next = new Set(bookableHostIdPayload.hostIds.map((id) => String(id)));
-    setCachedBookableHostIds(next);
-    try {
-      localStorage.setItem(
-        BOOKABLE_HOST_CACHE_KEY,
-        JSON.stringify({
-          hostIds: Array.from(next),
-          generatedAt: bookableHostIdPayload.generatedAt,
-          updatedAt: Date.now(),
-        }),
-      );
-    } catch {
-      // ignore
-    }
-  }, [bookableHostIdPayload]);
-
-  const bookableHostIds = useMemo(() => {
-    const serverIds = Array.isArray(bookableHostIdPayload?.hostIds)
-      ? bookableHostIdPayload.hostIds
-      : null;
-    if (serverIds) return new Set(serverIds.map((id) => String(id)));
-    return cachedBookableHostIds;
-  }, [bookableHostIdPayload, cachedBookableHostIds]);
-
-  const paidMapLocations = useMemo(() => {
-    const listingHostIds = new Set(
-      (passListings || [])
-        .map((listing) => String(listing?.host?.id || "").trim())
-        .filter(Boolean),
-    );
+  // Show every active, mappable host. Booking inventory controls the cards and
+  // checkout actions, but it must not hide a valid place where a truck can park.
+  const parkingPassMapLocations = useMemo(() => {
     const hostLocations = (baseMapLocations.hostLocations || []).filter(
       (loc: any) => {
         const hostId = String(loc?.hostId || "").trim();
@@ -1047,16 +1181,14 @@ export default function ParkingPassPage() {
         ) {
           return false;
         }
-        // Primary source of truth: if we have a visible listing for the host, show it.
-        // Fallback to host-id feed for hosts with map records but no current listing payload.
-        return listingHostIds.has(hostId) || bookableHostIds.has(hostId);
+        return true;
       },
     );
     const supplierLocations = (baseMapLocations.supplierLocations || []).filter(
       (loc: any) => String(loc?.type || "").toLowerCase() === "supplier",
     );
     return { ...baseMapLocations, hostLocations, supplierLocations };
-  }, [baseMapLocations, bookableHostIds, passListings]);
+  }, [baseMapLocations]);
   const [geocodeCache, setGeocodeCache] = useState<Record<string, GeoPoint>>(
     {},
   );
@@ -1747,8 +1879,14 @@ export default function ParkingPassPage() {
     }));
   };
 
-  const hydrateFromPlaceDetails = async (placeId: string) => {
-    const res = await fetch(apiUrl(`/api/map/place-details/${encodeURIComponent(placeId)}`),
+  const hydrateFromPlaceDetails = async (
+    placeId: string,
+    sessionToken?: string,
+  ) => {
+    const params = new URLSearchParams();
+    if (sessionToken) params.set("sessionToken", sessionToken);
+    const query = params.toString();
+    const res = await fetch(apiUrl(`/api/map/place-details/${encodeURIComponent(placeId)}${query ? `?${query}` : ""}`),
       {
         credentials: "include",
       },
@@ -1760,12 +1898,118 @@ export default function ParkingPassPage() {
     return payload.place;
   };
 
+  const handleJourneyPlaceSelect = async (
+    field: "origin" | "destination",
+    suggestion: {
+      placeId: string;
+      text: string;
+      sessionToken?: string;
+    },
+  ) => {
+    try {
+      const place = await hydrateFromPlaceDetails(
+        suggestion.placeId,
+        suggestion.sessionToken,
+      );
+      if (
+        !place ||
+        typeof place.latitude !== "number" ||
+        typeof place.longitude !== "number"
+      ) {
+        throw new Error("Place coordinates unavailable");
+      }
+      const label = place.formattedAddress || suggestion.text;
+      const coords = { lat: place.latitude, lng: place.longitude };
+      if (field === "origin") {
+        journeyOriginInitializedRef.current = true;
+        setJourneyOriginLabel(label);
+        setJourneyOriginCoords(coords);
+      } else {
+        setJourneyDestinationLabel(label);
+        setJourneyDestinationCoords(coords);
+      }
+      setJourneyResult(null);
+      setJourneyError("");
+    } catch {
+      setJourneyError(
+        "Choose a mapped address so MealScout can plan the route.",
+      );
+    }
+  };
+
+  const handleUseJourneyCurrentLocation = () => {
+    const latitude = parseCoord(effectiveLocationContext?.latitude);
+    const longitude = parseCoord(effectiveLocationContext?.longitude);
+    if (latitude === null || longitude === null) {
+      setJourneyError(
+        "Share a current location first, or search for a starting address.",
+      );
+      return;
+    }
+    const label = [
+      String(effectiveLocationContext?.city || "").trim(),
+      String(effectiveLocationContext?.state || "").trim(),
+    ]
+      .filter(Boolean)
+      .join(", ");
+    journeyOriginInitializedRef.current = true;
+    setJourneyOriginLabel(label || "My current area");
+    setJourneyOriginCoords({ lat: latitude, lng: longitude });
+    setJourneyResult(null);
+    setJourneyError("");
+  };
+
+  const handlePlanJourney = async () => {
+    if (!journeyOriginCoords || !journeyDestinationCoords) {
+      setJourneyError("Select both a starting point and destination.");
+      return;
+    }
+    setIsJourneyPlanning(true);
+    setJourneyError("");
+    try {
+      const params = new URLSearchParams({
+        originLat: String(journeyOriginCoords.lat),
+        originLng: String(journeyOriginCoords.lng),
+        destLat: String(journeyDestinationCoords.lat),
+        destLng: String(journeyDestinationCoords.lng),
+      });
+      const response = await fetch(
+        apiUrl(`/api/map/route-corridor?${params.toString()}`),
+        { credentials: "include" },
+      );
+      const payload = (await response.json().catch(() => null)) as
+        | (RouteCorridorResponse & { message?: string })
+        | null;
+      if (!response.ok || !payload?.available) {
+        throw new Error(
+          payload?.message || "This route is unavailable right now.",
+        );
+      }
+      setJourneyResult(payload);
+      setJourneySupportFilter("all");
+      setViewMode("map");
+    } catch (error) {
+      setJourneyResult(null);
+      setJourneyError(
+        error instanceof Error
+          ? error.message
+          : "This route is unavailable right now.",
+      );
+    } finally {
+      setIsJourneyPlanning(false);
+    }
+  };
+
   const handleNewLocationAddressSelect = async (suggestion: {
     placeId: string;
     text: string;
+    sessionToken?: string;
   }) => {
     try {
-      const place = await hydrateFromPlaceDetails(suggestion.placeId);
+      const place = await hydrateFromPlaceDetails(
+        suggestion.placeId,
+        suggestion.sessionToken,
+      );
       if (!place) return;
       setNewLocationForm((current) => ({
         ...current,
@@ -1791,9 +2035,13 @@ export default function ParkingPassPage() {
   const handleScheduleAddressSelect = async (suggestion: {
     placeId: string;
     text: string;
+    sessionToken?: string;
   }) => {
     try {
-      const place = await hydrateFromPlaceDetails(suggestion.placeId);
+      const place = await hydrateFromPlaceDetails(
+        suggestion.placeId,
+        suggestion.sessionToken,
+      );
       if (!place) return;
       setScheduleForm((current) => ({
         ...current,
@@ -1809,12 +2057,10 @@ export default function ParkingPassPage() {
   const handleCreateSchedule = async () => {
     if (!hasPremiumTruckTools) {
       toast({
-        title: "Premium required",
-        description:
-          "Off-platform schedule stops require Premium. Parking pass bookings and menu browsing are always free.",
+        title: "Permission required",
+        description: "This account cannot manage the selected truck's schedule.",
         variant: "destructive",
       });
-      setLocation("/subscribe");
       return;
     }
 
@@ -1921,12 +2167,10 @@ export default function ParkingPassPage() {
   const handleDeleteSchedule = async (scheduleId: string) => {
     if (!hasPremiumTruckTools) {
       toast({
-        title: "Premium required",
-        description:
-          "Managing off-platform schedule stops requires Premium. Parking pass bookings and menu browsing are always free.",
+        title: "Permission required",
+        description: "This account cannot manage the selected truck's schedule.",
         variant: "destructive",
       });
-      setLocation("/subscribe");
       return;
     }
 
@@ -2946,7 +3190,6 @@ export default function ParkingPassPage() {
       setEndTime(defaultHostEndTime);
       setAnyTime(false);
       setMaxTrucks(1);
-      setHardCapEnabled(false);
       setBreakfastPrice("");
       setLunchPrice("");
       setDinnerPrice("");
@@ -3178,12 +3421,10 @@ export default function ParkingPassPage() {
     }
     if (!hasPremiumTruckTools) {
       toast({
-        title: "Premium required",
-        description:
-          "Social auto-post settings require Premium. Parking pass bookings and menu browsing are always free.",
+        title: "Permission required",
+        description: "This account cannot manage the selected truck's social settings.",
         variant: "destructive",
       });
-      setLocation("/subscribe");
       return;
     }
 
@@ -3288,12 +3529,10 @@ export default function ParkingPassPage() {
     }
     if (!hasPremiumTruckTools) {
       toast({
-        title: "Premium required",
-        description:
-          "One-click live location sharing requires Premium. Parking pass bookings and menu browsing are always free.",
+        title: "Permission required",
+        description: "This account cannot share the selected truck's live location.",
         variant: "destructive",
       });
-      setLocation("/subscribe");
       return;
     }
 
@@ -3476,7 +3715,7 @@ export default function ParkingPassPage() {
       setTopTab(preferred);
     }
   }, [availableTabs, canHostTab, canUseTruckSide, topTab]);
-  const normalizedCityQuery = cityQuery.trim().toLowerCase();
+  const normalizedCityQuery = normalizeParkingPassLocationSearch(cityQuery);
   const locationGroups = useMemo(() => {
     const byHost = new Map<string, ParkingPassLocationGroup>();
     passListings.forEach((listing) => {
@@ -3498,18 +3737,14 @@ export default function ParkingPassPage() {
 
   const filteredLocations = useMemo(() => {
     const filtered = normalizedCityQuery
-      ? locationGroups.filter((group) => {
-          const locationText = [
+      ? locationGroups.filter((group) =>
+          parkingPassLocationMatches(normalizedCityQuery, [
             group.host.city,
             group.host.state,
             group.host.address,
             group.host.businessName,
-          ]
-            .filter(Boolean)
-            .join(" ")
-            .toLowerCase();
-          return locationText.includes(normalizedCityQuery);
-        })
+          ]),
+        )
       : locationGroups;
 
     return [...filtered].sort((a, b) => {
@@ -3577,6 +3812,281 @@ export default function ParkingPassPage() {
     ) ||
     activeLocation?.listings[0] ||
     null;
+  const selectedSpotHost =
+    (activeListingForDate || activeListing)?.host ||
+    activeLocation?.host ||
+    null;
+  const selectedSpotCoords = useMemo<GeoPoint | null>(() => {
+    const lat = parseCoord(selectedSpotHost?.latitude);
+    const lng = parseCoord(selectedSpotHost?.longitude);
+    if (lat === null || lng === null) return null;
+    return { lat, lng };
+  }, [selectedSpotHost?.latitude, selectedSpotHost?.longitude]);
+  const selectedSpotAddressLabel = selectedSpotHost
+    ? buildAddressLabel(
+        selectedSpotHost.address,
+        selectedSpotHost.city || "",
+        selectedSpotHost.state || "",
+      )
+    : "";
+  const { data: placeIntelligenceData, isFetching: isPlaceIntelligenceFetching } =
+    useQuery<PlaceIntelligenceResponse>({
+      queryKey: [
+        "/api/map/place-intelligence",
+        selectedSpotHost?.id || null,
+        selectedSpotHost?.businessName || null,
+        selectedSpotAddressLabel,
+        selectedSpotCoords?.lat || null,
+        selectedSpotCoords?.lng || null,
+      ],
+      enabled: Boolean(selectedSpotHost && selectedSpotAddressLabel),
+      queryFn: async () => {
+        const params = new URLSearchParams({
+          name: String(selectedSpotHost?.businessName || ""),
+          address: selectedSpotAddressLabel,
+        });
+        if (selectedSpotCoords) {
+          params.set("lat", String(selectedSpotCoords.lat));
+          params.set("lng", String(selectedSpotCoords.lng));
+        }
+        const response = await fetch(
+          apiUrl(`/api/map/place-intelligence?${params.toString()}`),
+        );
+        if (!response.ok) throw new Error("Failed to load place intelligence");
+        return response.json();
+      },
+      staleTime: 30 * 60 * 1000,
+      refetchOnWindowFocus: false,
+    });
+  const { data: operatorSupportData, isFetching: isOperatorSupportFetching } =
+    useQuery<OperatorSupportResponse>({
+      queryKey: [
+        "/api/map/operator-support",
+        selectedSpotCoords?.lat || null,
+        selectedSpotCoords?.lng || null,
+      ],
+      enabled: Boolean(selectedSpotCoords),
+      queryFn: async () => {
+        const params = new URLSearchParams({
+          lat: String(selectedSpotCoords!.lat),
+          lng: String(selectedSpotCoords!.lng),
+        });
+        const response = await fetch(
+          apiUrl(`/api/map/operator-support?${params.toString()}`),
+        );
+        if (!response.ok) throw new Error("Failed to load operator support");
+        return response.json();
+      },
+      staleTime: 30 * 60 * 1000,
+      refetchOnWindowFocus: false,
+    });
+  const travelOriginCoords = useMemo<GeoPoint | null>(() => {
+    const lat = parseCoord(effectiveLocationContext?.latitude);
+    const lng = parseCoord(effectiveLocationContext?.longitude);
+    if (lat === null || lng === null) return null;
+    return { lat, lng };
+  }, [
+    effectiveLocationContext?.latitude,
+    effectiveLocationContext?.longitude,
+  ]);
+  const { data: selectedSpotRouteSummary, isFetching: isRouteSummaryFetching } =
+    useQuery<MapRouteSummaryResponse>({
+      queryKey: [
+        "/api/map/route-summary",
+        travelOriginCoords?.lat || null,
+        travelOriginCoords?.lng || null,
+        selectedSpotCoords?.lat || null,
+        selectedSpotCoords?.lng || null,
+      ],
+      enabled: Boolean(travelOriginCoords && selectedSpotCoords),
+      queryFn: async () => {
+        const params = new URLSearchParams({
+          originLat: String(travelOriginCoords!.lat),
+          originLng: String(travelOriginCoords!.lng),
+          destLat: String(selectedSpotCoords!.lat),
+          destLng: String(selectedSpotCoords!.lng),
+          travelMode: "DRIVE",
+        });
+        const response = await fetch(
+          apiUrl(`/api/map/route-summary?${params.toString()}`),
+        );
+        if (!response.ok) throw new Error("Failed to load route summary");
+        return response.json();
+      },
+      staleTime: 10 * 60 * 1000,
+      refetchOnWindowFocus: false,
+    });
+  const selectedSpotTravelSummary = selectedSpotRouteSummary
+    ? `${Math.max(1, Math.round(selectedSpotRouteSummary.durationSeconds / 60))} min · ${(selectedSpotRouteSummary.distanceMeters / 1609.344).toFixed(1)} mi drive`
+    : isRouteSummaryFetching
+      ? "Calculating drive time…"
+      : travelOriginCoords
+        ? "Drive time unavailable"
+        : "Share a current location to calculate drive time";
+  const journeyVisibleSupport = useMemo(() => {
+    if (!journeyResult) return [] as RouteCorridorSupportPlace[];
+    if (journeySupportFilter !== "all") {
+      return journeyResult.categories[journeySupportFilter] || [];
+    }
+    const kinds: OperatorSupportKind[] = [
+      "gas",
+      "propane",
+      "supply",
+      "support",
+    ];
+    return kinds.flatMap((kind) =>
+      (journeyResult.categories[kind] || []).slice(0, 2),
+    );
+  }, [journeyResult, journeySupportFilter]);
+  const journeyPlannerHosts = useMemo<TripPlannerHost[]>(() => {
+    if (!journeyResult) return [];
+    const isPlannerListingAvailable = (listing: ParkingPassListing) => {
+      if (String(listing.status || "").toLowerCase() !== "open") return false;
+      if (!listing.hardCapEnabled) return true;
+      return !Array.isArray(listing.availableSpotNumbers) || listing.availableSpotNumbers.length > 0;
+    };
+    return journeyResult.parkingPassHosts.map((host) => {
+      const matchingGroup = locationGroups.find(
+        (group) => String(group.host.id) === String(host.hostId),
+      );
+      const matchingListing = matchingGroup?.listings.find(
+        (listing) => getListingDateKey(listing.date) === selectedDate,
+      ) || matchingGroup?.listings.find(isPlannerListingAvailable) || null;
+      const prices = matchingListing
+        ? [
+            matchingListing.breakfastPriceCents,
+            matchingListing.lunchPriceCents,
+            matchingListing.dinnerPriceCents,
+            matchingListing.dailyPriceCents,
+          ].filter((value): value is number => typeof value === "number" && value > 0)
+        : [];
+      const trafficText = String(matchingGroup?.host.expectedFootTraffic || "").toLowerCase();
+      const traffic: TripPlannerHost["traffic"] = trafficText.includes("high")
+        ? "high"
+        : trafficText.includes("medium") || trafficText.includes("moderate")
+          ? "medium"
+          : trafficText.includes("low")
+            ? "low"
+            : "unknown";
+      return {
+        locationId: host.locationId,
+        hostId: host.hostId,
+        name: host.name,
+        address: host.address,
+        city: host.city,
+        state: host.state,
+        distanceFromRouteMiles: host.distanceFromRouteMiles,
+        routeProgressMiles: host.routeProgressMiles,
+        addedDurationSeconds: host.addedDurationSeconds,
+        directionsUri: host.directionsUri,
+        latitude: host.latitude,
+        longitude: host.longitude,
+        available: Boolean(matchingListing && isPlannerListingAvailable(matchingListing)),
+        priceCents: prices.length > 0 ? Math.min(...prices) : null,
+        traffic,
+      };
+    });
+  }, [journeyResult, locationGroups, selectedDate]);
+  const journeyMapCenter =
+    journeyOriginCoords || journeyDestinationCoords || defaultMapCenter;
+  const journeyMapPins = useMemo<MapPickerPin[]>(() => {
+    if (!journeyResult || !journeyOriginCoords || !journeyDestinationCoords) {
+      return [];
+    }
+    const supportIcon: Record<OperatorSupportKind, string> = {
+      gas: "⛽",
+      propane: "🔥",
+      supply: "📦",
+      support: "🛠️",
+    };
+    return [
+      {
+        key: "journey-origin",
+        position: journeyOriginCoords,
+        popup: (
+          <div className="space-y-1 text-xs">
+            <p className="font-semibold text-orange-600">Trip start</p>
+            <p className="text-[color:var(--text-muted)]">
+              {journeyOriginLabel}
+            </p>
+          </div>
+        ),
+      },
+      {
+        key: "journey-destination",
+        position: journeyDestinationCoords,
+        popup: (
+          <div className="space-y-1 text-xs">
+            <p className="font-semibold text-orange-600">Destination</p>
+            <p className="text-[color:var(--text-muted)]">
+              {journeyDestinationLabel}
+            </p>
+          </div>
+        ),
+      },
+      ...journeyResult.parkingPassHosts.map(
+        (host): MapPickerPin => ({
+          key: `journey-host:${host.locationId}`,
+          position: { lat: host.latitude, lng: host.longitude },
+          popup: (
+            <div className="space-y-1.5 text-xs">
+              <p className="font-semibold text-orange-600">
+                Parking Pass · {host.name}
+              </p>
+              <p className="text-[color:var(--text-muted)]">
+                {buildAddressLabel(host.address, host.city, host.state)}
+              </p>
+              <p className="font-medium text-[color:var(--text-primary)]">
+                {formatJourneyDetour(host.addedDurationSeconds)} ·{" "}
+                {host.distanceFromRouteMiles.toFixed(1)} mi from route
+              </p>
+              <a
+                href={host.directionsUri}
+                target="_blank"
+                rel="noreferrer"
+                className="font-semibold text-orange-600 underline"
+              >
+                Open trip with this stop
+              </a>
+            </div>
+          ),
+        }),
+      ),
+      ...journeyVisibleSupport.map(
+        (place): MapPickerPin => ({
+          key: `journey-support:${place.kind}:${place.placeId}`,
+          position: { lat: place.latitude, lng: place.longitude },
+          occupied: true,
+          popup: (
+            <div className="space-y-1.5 text-xs">
+              <p className="font-semibold text-orange-600">
+                {supportIcon[place.kind]} {place.name}
+              </p>
+              <p className="text-[color:var(--text-muted)]">{place.address}</p>
+              <p className="font-medium text-[color:var(--text-primary)]">
+                {formatJourneyDetour(place.addedDurationSeconds)}
+              </p>
+              <a
+                href={place.directionsUri}
+                target="_blank"
+                rel="noreferrer"
+                className="font-semibold text-orange-600 underline"
+              >
+                Open trip with this stop
+              </a>
+            </div>
+          ),
+        }),
+      ),
+    ];
+  }, [
+    journeyDestinationCoords,
+    journeyDestinationLabel,
+    journeyOriginCoords,
+    journeyOriginLabel,
+    journeyResult,
+    journeyVisibleSupport,
+  ]);
   const selectedDateLabel = format(
     new Date(`${selectedDate}T00:00:00`),
     "EEE, MMM d",
@@ -3601,7 +4111,7 @@ export default function ParkingPassPage() {
       string,
       Array<PublicMapLocation & { coords: GeoPoint; addressLabel: string }>
     >();
-    const locations = paidMapLocations?.hostLocations ?? [];
+    const locations = parkingPassMapLocations?.hostLocations ?? [];
     locations.forEach((loc: PublicMapLocation) => {
       if (loc.type !== "host_location" || !loc.hostId) return;
       const lat = parseCoord(loc.latitude);
@@ -3624,7 +4134,7 @@ export default function ParkingPassPage() {
       }
     });
     return map;
-  }, [paidMapLocations]);
+  }, [parkingPassMapLocations]);
 
   const mapPins = useMemo(
     () =>
@@ -3671,7 +4181,7 @@ export default function ParkingPassPage() {
   );
   const fallbackHostPins = useMemo(
     () =>
-      (paidMapLocations?.hostLocations ?? [])
+      (parkingPassMapLocations?.hostLocations ?? [])
         .map((loc) => {
           const lat = parseCoord(loc.latitude);
           const lng = parseCoord(loc.longitude);
@@ -3680,14 +4190,16 @@ export default function ParkingPassPage() {
           const hostId = String(loc.hostId || "").trim();
           if (!hostId) return null;
 
-          if (normalizedCityQuery) {
-            const searchable = [loc.name, loc.address, loc.city, loc.state]
-              .filter(Boolean)
-              .join(" ")
-              .toLowerCase();
-            if (!searchable.includes(normalizedCityQuery)) {
+          if (
+            normalizedCityQuery &&
+            !parkingPassLocationMatches(normalizedCityQuery, [
+              loc.name,
+              loc.address,
+              loc.city,
+              loc.state,
+            ])
+          ) {
               return null;
-            }
           }
 
           return {
@@ -3715,14 +4227,26 @@ export default function ParkingPassPage() {
             spotImageUrl: string | null;
           } => item !== null,
         ),
-    [paidMapLocations, normalizedCityQuery],
+    [parkingPassMapLocations, normalizedCityQuery],
   );
-  const supplierOverlayPins = useMemo(() => {
-    const raw = Array.isArray(paidMapLocations?.supplierLocations)
-      ? paidMapLocations.supplierLocations
+  const representedMapHostIds = useMemo(
+    () => new Set(filteredLocations.map((group) => String(group.host.id))),
+    [filteredLocations],
+  );
+  const unlistedHostPins = useMemo(
+    () =>
+      fallbackHostPins.filter(
+        (pin) => !representedMapHostIds.has(String(pin.hostId)),
+      ),
+    [fallbackHostPins, representedMapHostIds],
+  );
+  const parkingPassHostPinCount = mapPins.length + unlistedHostPins.length;
+  const partnerSupportPins = useMemo<OperationalSupportPin[]>(() => {
+    const raw = Array.isArray(parkingPassMapLocations?.supplierLocations)
+      ? parkingPassMapLocations.supplierLocations
       : [];
     return raw
-      .map((loc) => {
+      .map((loc): OperationalSupportPin | null => {
         const lat = parseCoord(loc.latitude);
         const lng = parseCoord(loc.longitude);
         if (lat === null || lng === null) return null;
@@ -3730,7 +4254,11 @@ export default function ParkingPassPage() {
         const isPropane = category === "propane_dealer";
         const isSupply =
           category === "supplier" || category === "equipment_supplier";
-        const isSupport = !isPropane && !isSupply;
+        const kind: OperatorSupportKind = isPropane
+          ? "propane"
+          : isSupply
+            ? "supply"
+            : "support";
         return {
           key: `supplier:${String(loc.id || loc.supplierId || `${lat}:${lng}`)}`,
           position: { lat, lng },
@@ -3742,74 +4270,107 @@ export default function ParkingPassPage() {
           ),
           categoryLabel: String(loc.categoryLabel || "Operator support"),
           profileUrl: String(loc.profileUrl || "").trim() || null,
+          googleMapsUri: null,
           contactPhone: String(loc.contactPhone || "").trim() || null,
           contactEmail: String(loc.contactEmail || "").trim() || null,
-          isPropane,
-          isSupply,
-          isSupport,
+          kind,
+          source: "mealscout_partner" as const,
+          distanceMiles: null,
+          driveDurationSeconds: null,
         };
       })
       .filter(
-        (
-          item,
-        ): item is {
-          key: string;
-          position: GeoPoint;
-          name: string;
-          addressLabel: string;
-          categoryLabel: string;
-          profileUrl: string | null;
-          contactPhone: string | null;
-          contactEmail: string | null;
-          isPropane: boolean;
-          isSupply: boolean;
-          isSupport: boolean;
-        } => item !== null,
-      )
-      .filter((pin) => {
-        if (pin.isPropane && showPropaneLayer) return true;
-        if (pin.isSupply && showSupplyLayer) return true;
-        if (pin.isSupport && showSupportLayer) return true;
-        return false;
-      });
-  }, [
-    paidMapLocations?.supplierLocations,
-    showPropaneLayer,
-    showSupplyLayer,
-    showSupportLayer,
-  ]);
+        (item): item is OperationalSupportPin => item !== null,
+      );
+  }, [parkingPassMapLocations?.supplierLocations]);
+  const discoveredSupportPins = useMemo<OperationalSupportPin[]>(() => {
+    const categories = operatorSupportData?.categories;
+    const kinds: OperatorSupportKind[] = [
+      "gas",
+      "propane",
+      "supply",
+      "support",
+    ];
+    const labelByKind: Record<OperatorSupportKind, string> = {
+      gas: "Nearby gas station",
+      propane: "Nearby propane supplier",
+      supply: "Nearby restaurant supply",
+      support: "Nearby kitchen repair",
+    };
+    return kinds.flatMap((kind) =>
+      (categories?.[kind] || []).map((place) => ({
+        key: `google-support:${kind}:${place.placeId}`,
+        position: { lat: place.latitude, lng: place.longitude },
+        name: place.name,
+        addressLabel: place.address,
+        categoryLabel: labelByKind[kind],
+        profileUrl: null,
+        googleMapsUri: place.googleMapsUri,
+        contactPhone: place.phone,
+        contactEmail: null,
+        kind,
+        source: "google_places" as const,
+        distanceMiles: place.straightLineMiles,
+        driveDurationSeconds: place.driveDurationSeconds,
+      })),
+    );
+  }, [operatorSupportData?.categories]);
+  const allOperationalSupportPins = useMemo(
+    () => [...partnerSupportPins, ...discoveredSupportPins],
+    [discoveredSupportPins, partnerSupportPins],
+  );
+  const operationalSupportPins = useMemo(
+    () =>
+      allOperationalSupportPins.filter((pin) => {
+        if (pin.kind === "gas") return showGasLayer;
+        if (pin.kind === "propane") return showPropaneLayer;
+        if (pin.kind === "supply") return showSupplyLayer;
+        return showSupportLayer;
+      }),
+    [
+      allOperationalSupportPins,
+      showGasLayer,
+      showPropaneLayer,
+      showSupplyLayer,
+      showSupportLayer,
+    ],
+  );
   const supplierLayerCounts = useMemo(() => {
-    const raw = Array.isArray(paidMapLocations?.supplierLocations)
-      ? paidMapLocations.supplierLocations
-      : [];
+    let gas = 0;
     let propane = 0;
     let supply = 0;
     let support = 0;
-    raw.forEach((loc) => {
-      const category = String(loc?.category || "").trim().toLowerCase();
-      if (category === "propane_dealer") {
-        propane += 1;
-        return;
-      }
-      if (category === "supplier" || category === "equipment_supplier") {
-        supply += 1;
-        return;
-      }
-      support += 1;
+    allOperationalSupportPins.forEach((pin) => {
+      if (pin.kind === "gas") gas += 1;
+      if (pin.kind === "propane") propane += 1;
+      if (pin.kind === "supply") supply += 1;
+      if (pin.kind === "support") support += 1;
     });
-    return { propane, supply, support };
-  }, [paidMapLocations?.supplierLocations]);
+    return { gas, propane, supply, support };
+  }, [allOperationalSupportPins]);
   const supplierLayerSummary = useMemo(() => {
-    const statusFor = (count: number) => (count > 0 ? String(count) : "Unavailable");
+    const statusFor = (count: number) =>
+      count > 0
+        ? String(count)
+        : isOperatorSupportFetching
+          ? "Loading"
+          : "Unavailable";
     return {
+      gas: statusFor(supplierLayerCounts.gas),
       propane: statusFor(supplierLayerCounts.propane),
       supply: statusFor(supplierLayerCounts.supply),
       support: statusFor(supplierLayerCounts.support),
     };
-  }, [supplierLayerCounts.propane, supplierLayerCounts.supply, supplierLayerCounts.support]);
+  }, [
+    isOperatorSupportFetching,
+    supplierLayerCounts.gas,
+    supplierLayerCounts.propane,
+    supplierLayerCounts.supply,
+    supplierLayerCounts.support,
+  ]);
   const gasPricePins = useMemo(() => {
-    const raw = Array.isArray(paidMapLocations?.hostLocations)
-      ? paidMapLocations.hostLocations
+    const raw = Array.isArray(parkingPassMapLocations?.hostLocations)
+      ? parkingPassMapLocations.hostLocations
       : [];
     return raw
       .map((loc) => {
@@ -3855,7 +4416,7 @@ export default function ParkingPassPage() {
           updatedAt: string | null;
         } => item !== null,
       );
-  }, [paidMapLocations?.hostLocations]);
+  }, [parkingPassMapLocations?.hostLocations]);
   const fallbackMapCenter = useMemo(() => {
     const requestedPin = requestedHostId
       ? fallbackHostPins.find((pin) => pin.hostId === requestedHostId)
@@ -3877,8 +4438,19 @@ export default function ParkingPassPage() {
       (activeHostLocations && activeHostLocations.length > 0
         ? activeHostLocations[0].coords
         : null);
-    return activeCoords || mapPins[0]?.coords || defaultMapCenter;
-  }, [activeLocation, hostLocationsByHostId, mapPins, parkingCoords]);
+    return (
+      activeCoords ||
+      mapPins[0]?.coords ||
+      unlistedHostPins[0]?.coords ||
+      defaultMapCenter
+    );
+  }, [
+    activeLocation,
+    hostLocationsByHostId,
+    mapPins,
+    parkingCoords,
+    unlistedHostPins,
+  ]);
 
   useEffect(() => {
     if (geocodeInFlight.current) return;
@@ -4084,20 +4656,24 @@ export default function ParkingPassPage() {
       staleTime: 5 * 60 * 1000,
       refetchOnWindowFocus: false,
     });
-  const selectedSpotHost = (activeListingForDate || activeListing)?.host || activeLocation?.host || null;
-  const selectedSpotFuelPrices = selectedSpotHost?.fuelPrices || null;
-  const selectedSpotCoords = useMemo<GeoPoint | null>(() => {
-    const lat = parseCoord(selectedSpotHost?.latitude);
-    const lng = parseCoord(selectedSpotHost?.longitude);
-    if (lat === null || lng === null) return null;
-    return { lat, lng };
-  }, [selectedSpotHost?.latitude, selectedSpotHost?.longitude]);
+  const selectedSpotFuelPrices =
+    selectedSpotHost?.showFuelPrices === true && selectedSpotHost?.fuelPrices
+      ? selectedSpotHost.fuelPrices
+      : placeIntelligenceData?.place?.fuelPrices || null;
+  const selectedSpotFuelSource =
+    selectedSpotHost?.showFuelPrices === true && selectedSpotHost?.fuelPrices
+      ? "MealScout host"
+      : placeIntelligenceData?.place?.fuelPrices
+        ? "Google Places"
+        : null;
   const selectedSpotGasPriceSummary = useMemo(() => {
     if (!activeLocation) {
       return "Select a spot to view gas prices.";
     }
-    if (selectedSpotHost?.showFuelPrices !== true || !selectedSpotFuelPrices) {
-      return "Gas prices are not available for this spot yet.";
+    if (!selectedSpotFuelPrices) {
+      return isPlaceIntelligenceFetching
+        ? "Checking Google Places for current prices…"
+        : "No current provider prices were found for this spot.";
     }
     const regular = formatFuelCents(selectedSpotFuelPrices.regularCents);
     const midgrade = formatFuelCents(selectedSpotFuelPrices.midgradeCents);
@@ -4110,10 +4686,15 @@ export default function ParkingPassPage() {
       diesel ? `Diesel ${diesel}` : null,
     ].filter(Boolean) as string[];
     if (!parts.length) {
-      return "Gas prices are not available for this spot yet.";
+      return "No current provider prices were found for this spot.";
     }
-    return parts.join(" · ");
-  }, [activeLocation, selectedSpotFuelPrices, selectedSpotHost?.showFuelPrices]);
+    return `${parts.join(" · ")} · ${selectedSpotFuelSource || "provider"}`;
+  }, [
+    activeLocation,
+    isPlaceIntelligenceFetching,
+    selectedSpotFuelPrices,
+    selectedSpotFuelSource,
+  ]);
   const nearestOperationalSupport = useMemo(() => {
     if (!selectedSpotCoords) {
       return {
@@ -4124,47 +4705,83 @@ export default function ParkingPassPage() {
       };
     }
     const nearestLabel = (
-      points: Array<{ name: string; position: GeoPoint }>,
+      points: Array<{
+        name: string;
+        position: GeoPoint;
+        driveDurationSeconds?: number | null;
+      }>,
       fallback: string,
     ) => {
       if (!points.length) return fallback;
-      let nearest = points[0];
-      let minDistance = distanceMilesBetween(selectedSpotCoords, points[0].position);
-      for (let index = 1; index < points.length; index += 1) {
-        const candidate = points[index];
-        const miles = distanceMilesBetween(selectedSpotCoords, candidate.position);
-        if (miles < minDistance) {
-          minDistance = miles;
-          nearest = candidate;
-        }
-      }
-      return `${nearest.name} · ${minDistance.toFixed(1)} mi`;
+      const ranked = points
+        .map((point) => ({
+          ...point,
+          miles: distanceMilesBetween(selectedSpotCoords, point.position),
+        }))
+        .sort((left, right) => {
+          if (left.driveDurationSeconds && right.driveDurationSeconds) {
+            return left.driveDurationSeconds - right.driveDurationSeconds;
+          }
+          return left.miles - right.miles;
+        });
+      const nearest = ranked[0];
+      const travelLabel = nearest.driveDurationSeconds
+        ? `${Math.max(1, Math.round(nearest.driveDurationSeconds / 60))} min drive`
+        : `${nearest.miles.toFixed(1)} mi`;
+      return `${nearest.name} · ${travelLabel}`;
     };
-    const propanePoints = supplierOverlayPins
-      .filter((pin) => pin.isPropane)
-      .map((pin) => ({ name: pin.name, position: pin.position }));
-    const supplyPoints = supplierOverlayPins
-      .filter((pin) => pin.isSupply)
-      .map((pin) => ({ name: pin.name, position: pin.position }));
-    const supportPoints = supplierOverlayPins
-      .filter((pin) => pin.isSupport)
-      .map((pin) => ({ name: pin.name, position: pin.position }));
-    const gasPoints = gasPricePins.map((pin) => ({
-      name: pin.name,
-      position: pin.position,
-    }));
+    const byKind = (kind: OperatorSupportKind) =>
+      allOperationalSupportPins
+        .filter((pin) => pin.kind === kind)
+        .map((pin) => ({
+          name: pin.name,
+          position: pin.position,
+          driveDurationSeconds: pin.driveDurationSeconds,
+        }));
+    const propanePoints = byKind("propane");
+    const supplyPoints = byKind("supply");
+    const supportPoints = byKind("support");
+    const gasPoints = [
+      ...byKind("gas"),
+      ...gasPricePins.map((pin) => ({
+        name: pin.name,
+        position: pin.position,
+        driveDurationSeconds: null,
+      })),
+    ];
     return {
-      gas: nearestLabel(gasPoints, "Unavailable"),
-      propane: nearestLabel(propanePoints, "Unavailable"),
-      supply: nearestLabel(supplyPoints, "Unavailable"),
-      support: nearestLabel(supportPoints, "Unavailable"),
+      gas: nearestLabel(
+        gasPoints,
+        isOperatorSupportFetching ? "Searching nearby" : "Unavailable",
+      ),
+      propane: nearestLabel(
+        propanePoints,
+        isOperatorSupportFetching ? "Searching nearby" : "Unavailable",
+      ),
+      supply: nearestLabel(
+        supplyPoints,
+        isOperatorSupportFetching ? "Searching nearby" : "Unavailable",
+      ),
+      support: nearestLabel(
+        supportPoints,
+        isOperatorSupportFetching ? "Searching nearby" : "Unavailable",
+      ),
     };
-  }, [gasPricePins, selectedSpotCoords, supplierOverlayPins]);
+  }, [
+    allOperationalSupportPins,
+    gasPricePins,
+    isOperatorSupportFetching,
+    selectedSpotCoords,
+  ]);
   const spotFootTrafficCells = useMemo<MapTrafficCell[]>(() => {
     if (!showParkingScoutHeat || !canManageParkingPass || !activeLocation) return [];
     return (scheduleFootTrafficData?.cells || []).slice(0, 120).map((cell) => {
-      const weight = Number(cell.weight || 0);
-      const color = weight >= 67 ? "#22c55e" : weight >= 34 ? "#eab308" : "#ef4444";
+      const color =
+        cell.source === "first_party"
+          ? "#2563eb"
+          : cell.source === "supply_signal"
+            ? "#f97316"
+            : "#8b5cf6";
       return { ...cell, color };
     });
   }, [
@@ -4174,8 +4791,24 @@ export default function ParkingPassPage() {
     showParkingScoutHeat,
   ]);
   const spotFootTrafficCellCount = spotFootTrafficCells.length;
-  const spotFootTrafficSignalLabel =
-    scheduleFootTrafficData?.signalQuality?.tier || null;
+  const spotActivityBreakdown = useMemo(
+    () => ({
+      mealScoutPings: scheduleFootTrafficData?.firstParty?.totalPings || 0,
+      mealScoutCells: scheduleFootTrafficData?.firstParty?.cells?.length || 0,
+      scheduledCells: scheduleFootTrafficData?.supplySignals?.cells?.length || 0,
+      destinationCells: scheduleFootTrafficData?.googlePlaces?.cells?.length || 0,
+    }),
+    [scheduleFootTrafficData],
+  );
+  const spotActivityTitle =
+    spotActivityBreakdown.mealScoutCells > 0
+      ? "MealScout and area activity"
+      : spotActivityBreakdown.destinationCells > 0
+        ? "Food destination density"
+        : spotActivityBreakdown.scheduledCells > 0
+          ? "Scheduled area activity"
+          : "No area activity signals yet";
+  const spotActivitySummary = `${spotActivityBreakdown.mealScoutPings} MealScout pings · ${spotActivityBreakdown.scheduledCells} scheduled cells · ${spotActivityBreakdown.destinationCells} food-destination cells`;
 
   const nextBookableDateByGroup = useMemo(() => {
     const map = new Map<string, string | null>();
@@ -4236,154 +4869,104 @@ export default function ParkingPassPage() {
 
   return (
     <div className="min-h-screen bg-transparent parking-pass-page">
-      <div className="mx-auto max-w-[1520px] px-4 py-6 sm:px-6 xl:px-8 space-y-6">
-        <div>
+      <div className="mx-auto max-w-[1520px] space-y-4 px-4 py-5 sm:px-6 sm:py-6 xl:px-8">
+        <div className="space-y-1">
           <h1 className="text-2xl font-bold text-[color:var(--text-primary)]">
             Parking Pass
           </h1>
-          <p className="text-xs text-[color:var(--text-muted)]">
-            Find spots, book parking, and run your operating schedule from one place.
-          </p>
-          <p className="mt-1 text-xs text-[color:var(--text-muted)]">
-            You are here as{" "}
-            <span className="font-semibold text-[color:var(--text-primary)]">
-              {topTab === "host"
-                ? "Host"
-                : isTruckViewUser
-                  ? "Food truck"
-                  : isAdminOrStaff
-                    ? "Admin/staff"
-                    : "Operator"}
-            </span>
-            . Start with <span className="font-semibold text-[color:var(--text-primary)]">Find &amp; Book</span> to secure a spot, then use{" "}
-            <span className="font-semibold text-[color:var(--text-primary)]">My Schedule</span> to run your day.
+          <p className="text-sm text-[color:var(--text-muted)]">
+            Book a host location or manage your parking availability.
           </p>
           {isAdminOrStaff && (
-            <div className="mt-3 flex flex-wrap gap-2">
-              <Button
-                size="sm"
-                variant={adminParkingMode === "auto" ? "default" : "outline"}
-                onClick={() => setAdminMode("auto")}
-              >
-                Admin Auto
-              </Button>
-              <Button
-                size="sm"
-                variant={adminParkingMode === "truck" ? "default" : "outline"}
-                onClick={() => setAdminMode("truck")}
-              >
-                Truck Permission
-              </Button>
-              <Button
-                size="sm"
-                variant={adminParkingMode === "host" ? "default" : "outline"}
-                onClick={() => setAdminMode("host")}
-              >
-                Host Permission
-              </Button>
-            </div>
+            <details className="mt-3 rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface-muted)] px-3 py-2 text-xs text-[color:var(--text-secondary)]">
+              <summary className="cursor-pointer font-semibold text-[color:var(--text-primary)]">
+                Admin view: {adminParkingMode === "auto" ? "Automatic" : adminParkingMode === "truck" ? "Food truck" : "Host"}
+              </summary>
+              <p className="mt-2 text-[11px] text-[color:var(--text-muted)]">
+                {isAdminOrStaff ? "Admin access" : "Operator access"}
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  variant={adminParkingMode === "auto" ? "default" : "outline"}
+                  onClick={() => setAdminMode("auto")}
+                >
+                  Automatic
+                </Button>
+                <Button
+                  size="sm"
+                  variant={adminParkingMode === "truck" ? "default" : "outline"}
+                  onClick={() => setAdminMode("truck")}
+                >
+                  Food truck
+                </Button>
+                <Button
+                  size="sm"
+                  variant={adminParkingMode === "host" ? "default" : "outline"}
+                  onClick={() => setAdminMode("host")}
+                >
+                  Host
+                </Button>
+              </div>
+            </details>
           )}
         </div>
 
         <Tabs value={topTab} onValueChange={(value) => setTopTab(value as any)}>
-          <TabsList className="w-full justify-start pp-glass-muted rounded-xl p-1">
-            <TabsTrigger value="book" className="text-sm">
+          <TabsList
+            className="grid w-full rounded-xl p-1 pp-glass-muted"
+            style={{
+              gridTemplateColumns: `repeat(${availableTabs.length}, minmax(0, 1fr))`,
+            }}
+          >
+            <TabsTrigger value="book" className="text-xs sm:text-sm">
               Find & Book
             </TabsTrigger>
             {canScheduleTab && (
-              <TabsTrigger value="schedule" className="text-sm">
+              <TabsTrigger value="schedule" className="text-xs sm:text-sm">
                 My Schedule
               </TabsTrigger>
             )}
             {canHostTab && (
-              <TabsTrigger value="host" className="text-sm">
+              <TabsTrigger value="host" className="text-xs sm:text-sm">
                 Host tools
               </TabsTrigger>
             )}
           </TabsList>
         </Tabs>
 
-        {((topTab === "book" && isTruckViewUser) ||
-          (topTab === "host" && canHostTab)) && (
-          <div className="grid gap-3 md:grid-cols-2">
-            {topTab === "book" && isTruckViewUser && (
-              <Card className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)]">
-                <CardContent className="p-4 space-y-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-semibold text-[color:var(--text-primary)]">
-                        Find & Book
-                      </p>
-                      <p className="text-xs text-[color:var(--text-muted)]">
-                        Map + list search, date and slot selection, and checkout for
-                        paid host spots.
-                      </p>
-                    </div>
-                    <Truck className="h-5 w-5 text-orange-500" />
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 text-[11px]">
-                    <span className="rounded-lg border border-[var(--border-subtle)] px-2 py-1">
-                      {bookedSchedule.length} booked stop
-                      {bookedSchedule.length === 1 ? "" : "s"}
-                    </span>
-                    <span className="rounded-lg border border-[var(--border-subtle)] px-2 py-1">
-                      {manualSchedules.length} manual stop
-                      {manualSchedules.length === 1 ? "" : "s"}
-                    </span>
-                    <span className="rounded-lg border border-[var(--border-subtle)] px-2 py-1">
-                      {parkingReports.length} day report
-                      {parkingReports.length === 1 ? "" : "s"}
-                    </span>
-                    <span className="rounded-lg border border-[var(--border-subtle)] px-2 py-1">
-                      {truck?.isVerified === false
-                        ? "Verification pending"
-                        : "Booking ready"}
-                    </span>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <Button size="sm" onClick={() => setTopTab("book")}>
-                      Open Find & Book
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => setTopTab("schedule")}
-                    >
-                      Open My Schedule
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
+        {isAdminOrStaff && <AdminRouteConversionCard />}
 
-            {topTab === "host" && canHostTab && (
-              <Card className="rounded-2xl border border-orange-200 bg-orange-50/70">
+        {topTab === "host" && canHostTab && (
+          <div className="grid gap-3 md:grid-cols-2">
+              <HostRouteDemandCard />
+              <Card className="rounded-2xl border border-[color:var(--border-subtle)] pp-glass">
                 <CardContent className="p-4 space-y-3">
                   <div>
-                    <p className="text-sm font-semibold text-orange-950">
+                    <p className="text-sm font-semibold text-[color:var(--text-primary)]">
                         Host tools
                       </p>
-                    <p className="text-xs text-orange-800">
+                    <p className="text-xs text-[color:var(--text-muted)]">
                       Publish where trucks can park, set pricing and
                       availability, block blackout dates, and manage payout
                       readiness.
                     </p>
                   </div>
-                  <div className="grid grid-cols-2 gap-2 text-[11px] text-orange-950">
-                    <span className="rounded-lg border border-orange-200 bg-white/60 px-2 py-1">
+                  <div className="grid grid-cols-2 gap-2 text-[11px] text-[color:var(--text-primary)]">
+                    <span className="rounded-lg pp-glass-muted px-2 py-1">
                       {hosts.length} host location
                       {hosts.length === 1 ? "" : "s"}
                     </span>
-                    <span className="rounded-lg border border-orange-200 bg-white/60 px-2 py-1">
+                    <span className="rounded-lg pp-glass-muted px-2 py-1">
                       {hostPassListings.length} pass listing
                       {hostPassListings.length === 1 ? "" : "s"}
                     </span>
-                    <span className="rounded-lg border border-orange-200 bg-white/60 px-2 py-1">
+                    <span className="rounded-lg pp-glass-muted px-2 py-1">
                       {hasActiveParkingPass
                         ? "Availability live"
                         : "No active pass"}
                     </span>
-                    <span className="rounded-lg border border-orange-200 bg-white/60 px-2 py-1">
+                    <span className="rounded-lg pp-glass-muted px-2 py-1">
                       {host?.stripeConnectAccountId &&
                       host?.stripePayoutsEnabled
                         ? "Payouts enabled"
@@ -4413,7 +4996,6 @@ export default function ParkingPassPage() {
                   </div>
                 </CardContent>
               </Card>
-            )}
           </div>
         )}
 
@@ -5645,27 +6227,16 @@ export default function ParkingPassPage() {
                         </div>
                       </div>
 
-                      <div className="flex items-center space-x-4 border p-4 rounded-xl border-[var(--border-subtle)] bg-[var(--bg-surface)]">
-                        <Switch
-                          id="hard-cap"
-                          checked={hardCapEnabled}
-                          onCheckedChange={setHardCapEnabled}
-                        />
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2">
-                            <Label htmlFor="hard-cap" className="font-semibold">
-                              Capacity Guard v2.2
-                            </Label>
-                            <Badge variant="secondary" className="text-xs">
-                              New
-                            </Badge>
-                          </div>
-                          <p className="text-sm text-slate-500">
-                            Strictly enforces the max trucks limit. Once you
-                            accept enough trucks to hit the limit, no further
-                            approvals will be allowed.
-                          </p>
-                        </div>
+                      <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4">
+                        <p className="text-sm font-semibold text-slate-900">
+                          {maxTrucks} truck{" "}
+                          {maxTrucks === 1 ? "spot" : "spots"} available per
+                          time slot
+                        </p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          Booking closes automatically when every spot is
+                          reserved.
+                        </p>
                       </div>
 
                       <div className="flex flex-col gap-2 pt-2 sm:flex-row sm:items-center sm:justify-between">
@@ -5752,17 +6323,6 @@ export default function ParkingPassPage() {
                                         {formatCents(listing.weeklyPriceCents)}{" "}
                                         / Monthly{" "}
                                         {formatCents(listing.monthlyPriceCents)}
-                                      </span>
-                                    )}
-                                    {listing.hardCapEnabled && (
-                                      <span
-                                        title="Capacity Guard v2.2 Enabled"
-                                        className="flex items-center gap-1 text-xs bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100"
-                                      >
-                                        <AlertCircle className="h-3 w-3 text-emerald-600" />
-                                        <span className="text-emerald-700 font-medium">
-                                          Strict Cap
-                                        </span>
                                       </span>
                                     )}
                                   </div>
@@ -5895,10 +6455,8 @@ export default function ParkingPassPage() {
               <CardContent className="p-5 space-y-4">
                 {!hasPremiumTruckTools && (
                   <div className="rounded-xl border border-[color:var(--accent-text)]/25 bg-[color:var(--accent-text)]/8 p-4 text-sm text-[color:var(--text-secondary)]">
-                    Parking pass bookings and your booking calendar are always
-                    free. Upgrade to Premium to unlock off-platform schedule
-                    stops, one-tap live location sharing, and social share
-                    controls.
+                    Ask the business owner to grant schedule and profile
+                    permissions for this truck.
                   </div>
                 )}
                 {hasPremiumTruckTools && !canManageTruckProfile && (
@@ -6679,9 +7237,12 @@ export default function ParkingPassPage() {
 
           {topTab === "book" && (
             <div
-              className={`space-y-5 pb-24 lg:pb-10${isTruckViewUser ? " order-first" : ""}`}
+              className={`space-y-4 pb-24 lg:pb-10${isTruckViewUser ? " order-first" : ""}`}
             >
-              {isTruckViewUser && truck && truck.isVerified === false && (
+              {!isAdminOrStaff &&
+                isTruckViewUser &&
+                truck &&
+                truck.isVerified === false && (
                 <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
                   <p className="font-semibold">Verification pending</p>
                   <p className="text-[11px]">
@@ -6695,8 +7256,8 @@ export default function ParkingPassPage() {
                     Complete verification
                   </a>
                 </div>
-              )}
-              {!canStartTruckCheckout && (
+                )}
+              {!canStartTruckCheckout && !isAdminOrStaff && (
                 <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-3 text-sm text-[color:var(--text-primary)]">
                   <p className="font-semibold">Food truck profile required</p>
                   <p className="text-xs text-[color:var(--text-muted)]">
@@ -6707,11 +7268,12 @@ export default function ParkingPassPage() {
               <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                 <div>
                   <p className="text-lg font-semibold text-[color:var(--text-primary)] font-display">
-                    Find spots and book now
+                    Find a parking spot
                   </p>
                   <p className="max-w-2xl text-sm text-[color:var(--text-muted)]">
-                    Search by city or address. Pick a spot first, then choose
-                    from its open dates.
+                    Search any city or address, then choose a host location,
+                    date, and available time. Results are not limited to your
+                    current location.
                   </p>
                 </div>
                 <div className="hidden rounded-2xl pp-glass-muted px-4 py-3 text-xs text-[color:var(--text-muted)] shadow-clean lg:grid lg:grid-cols-3 lg:gap-5">
@@ -6725,11 +7287,11 @@ export default function ParkingPassPage() {
                   </div>
                   <div>
                     <p className="text-[10px] font-semibold uppercase tracking-wide">
-                      Map pins
+                      Host pins
                     </p>
                     <p className="mt-1 text-lg font-semibold text-[color:var(--text-primary)]">
                       {viewMode === "map"
-                        ? mapPins.length + supplierOverlayPins.length + gasPricePins.length
+                        ? parkingPassHostPinCount
                         : filteredLocations.length}
                     </p>
                   </div>
@@ -6745,128 +7307,468 @@ export default function ParkingPassPage() {
               </div>
               <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_380px] xl:grid-cols-[minmax(0,1fr)_430px]">
                 <div className="min-w-0 space-y-4 order-1 lg:order-none">
-                  <div className="rounded-2xl pp-glass p-4 shadow-clean space-y-3 lg:p-5">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-xs font-semibold text-slate-800">
-                          Search + availability
-                        </p>
-                        <p className="text-[11px] text-slate-500">
-                          Choose a spot, then pick an open date and time slot.
-                        </p>
-                      </div>
-                      <div className="hidden sm:flex items-center gap-2">
-                        <Button
-                          size="sm"
-                          variant={viewMode === "map" ? "default" : "outline"}
-                          onClick={() => setViewMode("map")}
-                        >
-                          Map
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant={viewMode === "list" ? "default" : "outline"}
-                          onClick={() => setViewMode("list")}
-                        >
-                          List
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant={showParkingScoutHeat ? "default" : "outline"}
-                          onClick={() =>
-                            setShowParkingScoutHeat((value) => !value)
-                          }
-                          disabled={viewMode !== "map"}
-                        >
-                          Scout heat
-                        </Button>
-                      </div>
-                    </div>
-                    <div className="space-y-1 lg:max-w-2xl">
-                      <p className="text-[11px] font-semibold text-[color:var(--text-muted)]">
+                  <div className="space-y-3 rounded-2xl pp-glass p-3 shadow-clean sm:p-4 lg:p-5">
+                    <div className="flex items-center justify-between gap-3">
+                      <Label
+                        htmlFor="parking-pass-location-search"
+                        className="text-xs font-semibold text-[color:var(--text-primary)]"
+                      >
                         City or address
-                      </p>
+                      </Label>
+                      <span className="text-[11px] text-[color:var(--text-muted)]">
+                        {filteredLocations.length} of {locationGroups.length} locations
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
                       <Input
-                        type="text"
+                        id="parking-pass-location-search"
+                        type="search"
                         className="pp-field"
-                        placeholder="Austin, TX or 123 Main St"
+                        placeholder="City, state, or street address"
                         value={cityQuery}
                         onChange={(event) => setCityQuery(event.target.value)}
                       />
+                      {normalizedCityQuery && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="shrink-0"
+                          onClick={() => setCityQuery("")}
+                        >
+                          View all
+                        </Button>
+                      )}
                     </div>
-                    <div className="flex sm:hidden items-center gap-2">
+                    <div className="grid grid-cols-2 gap-2 sm:max-w-sm">
                       <Button
+                        type="button"
                         size="sm"
-                        className="flex-1"
                         variant={viewMode === "map" ? "default" : "outline"}
                         onClick={() => setViewMode("map")}
                       >
                         Map
                       </Button>
                       <Button
+                        type="button"
                         size="sm"
-                        className="flex-1"
                         variant={viewMode === "list" ? "default" : "outline"}
                         onClick={() => setViewMode("list")}
                       >
                         List
                       </Button>
                     </div>
-                    <Button
-                      size="sm"
-                      variant={showParkingScoutHeat ? "default" : "outline"}
-                      onClick={() =>
-                        setShowParkingScoutHeat((value) => !value)
-                      }
-                      disabled={viewMode !== "map"}
-                      className="w-full sm:hidden"
-                    >
-                      Foot traffic
-                    </Button>
-                    <div className="grid grid-cols-3 gap-2 sm:w-auto">
-                      <Button
-                        size="sm"
-                        variant={showPropaneLayer ? "default" : "outline"}
-                        onClick={() => setShowPropaneLayer((value) => !value)}
-                        disabled={supplierLayerCounts.propane === 0}
-                        className="w-full"
-                      >
-                        {`Propane (${supplierLayerSummary.propane})`}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant={showSupplyLayer ? "default" : "outline"}
-                        onClick={() => setShowSupplyLayer((value) => !value)}
-                        disabled={supplierLayerCounts.supply === 0}
-                        className="w-full"
-                      >
-                        {`Supply (${supplierLayerSummary.supply})`}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant={showSupportLayer ? "default" : "outline"}
-                        onClick={() => setShowSupportLayer((value) => !value)}
-                        disabled={supplierLayerCounts.support === 0}
-                        className="w-full"
-                      >
-                        {`Support (${supplierLayerSummary.support})`}
-                      </Button>
-                    </div>
-                    <div className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)]/85 px-3 py-2 text-[11px] text-[color:var(--text-muted)]">
-                      <p className="font-medium text-[color:var(--text-primary)]">
-                        Layer availability
-                      </p>
-                      <p className="mt-1">
-                        {`Propane: ${supplierLayerSummary.propane} · Supply: ${supplierLayerSummary.supply} · Support: ${supplierLayerSummary.support}`}
-                      </p>
-                      <p className="mt-1">
-                        {bookingWeatherData?.available
-                          ? "Weather: available for selected booking window."
-                          : "Weather: unavailable or not yet in provider forecast window."}
-                      </p>
-                      <p className="mt-1">{`Gas: ${selectedSpotGasPriceSummary}`}</p>
+                    {viewMode === "map" && (
+                      <details className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface-muted)] px-3 py-2 text-xs text-[color:var(--text-secondary)]">
+                        <summary className="cursor-pointer font-semibold text-[color:var(--text-primary)]">
+                          Map tools
+                        </summary>
+                        <div className="mt-3 space-y-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant={showParkingScoutHeat ? "default" : "outline"}
+                            onClick={() =>
+                              setShowParkingScoutHeat((value) => !value)
+                            }
+                            className="w-full sm:w-auto"
+                          >
+                            Area activity
+                          </Button>
+                          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant={showGasLayer ? "default" : "outline"}
+                              onClick={() => setShowGasLayer((value) => !value)}
+                              disabled={supplierLayerCounts.gas === 0}
+                              className="w-full"
+                            >
+                              {`Gas (${supplierLayerSummary.gas})`}
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant={showPropaneLayer ? "default" : "outline"}
+                              onClick={() => setShowPropaneLayer((value) => !value)}
+                              disabled={supplierLayerCounts.propane === 0}
+                              className="w-full"
+                            >
+                              {`Propane (${supplierLayerSummary.propane})`}
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant={showSupplyLayer ? "default" : "outline"}
+                              onClick={() => setShowSupplyLayer((value) => !value)}
+                              disabled={supplierLayerCounts.supply === 0}
+                              className="w-full"
+                            >
+                              {`Supply (${supplierLayerSummary.supply})`}
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant={showSupportLayer ? "default" : "outline"}
+                              onClick={() => setShowSupportLayer((value) => !value)}
+                              disabled={supplierLayerCounts.support === 0}
+                              className="w-full"
+                            >
+                              {`Support (${supplierLayerSummary.support})`}
+                            </Button>
+                          </div>
+                          <p className="text-[11px] text-[color:var(--text-muted)]">
+                            Blue is MealScout movement, orange is scheduled
+                            host/truck activity, and purple is nearby food
+                            destination density. These are opportunity signals,
+                            not measured pedestrian counts. {" "}
+                            {bookingWeatherData?.available
+                              ? "Weather is available for the selected booking window."
+                              : "Weather is not available for this booking window."}{" "}
+                            Gas: {selectedSpotGasPriceSummary}.
+                          </p>
+                        </div>
+                      </details>
+                    )}
+                    <div className="rounded-xl border border-orange-200/80 bg-orange-50/70 p-3 sm:p-4">
+                      <div className="flex items-start gap-3">
+                        <span className="mt-0.5 rounded-full bg-orange-600 p-2 text-white">
+                          <Navigation className="h-4 w-4" />
+                        </span>
+                        <div>
+                          <p className="text-sm font-semibold text-orange-950">
+                            Plan along your route
+                          </p>
+                          <p className="mt-0.5 text-xs text-orange-800">
+                            Travel is a food truck’s advantage. Find Parking
+                            Pass hosts, fuel, propane, supplies, and repairs
+                            anywhere between start and destination.
+                          </p>
+                        </div>
+                      </div>
+                      <div className="mt-3 grid gap-3 md:grid-cols-2">
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between gap-2">
+                            <Label
+                              htmlFor="parking-pass-journey-origin"
+                              className="text-xs font-semibold text-orange-950"
+                            >
+                              Start
+                            </Label>
+                            <button
+                              type="button"
+                              className="text-[11px] font-semibold text-orange-700 underline underline-offset-2"
+                              onClick={handleUseJourneyCurrentLocation}
+                            >
+                              Use my location
+                            </button>
+                          </div>
+                          <PlaceAutocompleteInput
+                            id="parking-pass-journey-origin"
+                            value={journeyOriginLabel}
+                            onChange={(value) => {
+                              journeyOriginInitializedRef.current = true;
+                              setJourneyOriginLabel(value);
+                              setJourneyOriginCoords(null);
+                              setJourneyResult(null);
+                              setJourneyError("");
+                            }}
+                            onSelect={(suggestion) =>
+                              void handleJourneyPlaceSelect(
+                                "origin",
+                                suggestion,
+                              )
+                            }
+                            intent="destination"
+                            placeholder="Starting address or city"
+                            inputClassName="bg-white"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label
+                            htmlFor="parking-pass-journey-destination"
+                            className="text-xs font-semibold text-orange-950"
+                          >
+                            Destination
+                          </Label>
+                          <PlaceAutocompleteInput
+                            id="parking-pass-journey-destination"
+                            value={journeyDestinationLabel}
+                            onChange={(value) => {
+                              setJourneyDestinationLabel(value);
+                              setJourneyDestinationCoords(null);
+                              setJourneyResult(null);
+                              setJourneyError("");
+                            }}
+                            onSelect={(suggestion) =>
+                              void handleJourneyPlaceSelect(
+                                "destination",
+                                suggestion,
+                              )
+                            }
+                            intent="destination"
+                            placeholder="Where are you headed?"
+                            inputClassName="bg-white"
+                          />
+                        </div>
+                      </div>
+                      <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <p className="text-[11px] text-orange-800">
+                          Select a suggested place so the route uses exact map
+                          coordinates.
+                        </p>
+                        <Button
+                          type="button"
+                          size="sm"
+                          className="shrink-0"
+                          onClick={() => void handlePlanJourney()}
+                          disabled={
+                            isJourneyPlanning ||
+                            !journeyOriginCoords ||
+                            !journeyDestinationCoords
+                          }
+                        >
+                          {isJourneyPlanning ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Finding stops…
+                            </>
+                          ) : (
+                            "Find stops on my route"
+                          )}
+                        </Button>
+                      </div>
+                      {journeyError && (
+                        <p className="mt-2 text-xs font-medium text-red-700">
+                          {journeyError}
+                        </p>
+                      )}
                     </div>
                   </div>
+
+                  {journeyResult && (
+                    <div className="overflow-hidden rounded-2xl border border-orange-200 pp-glass shadow-clean">
+                      <div className="flex flex-col gap-3 border-b border-orange-200/70 bg-orange-50/60 p-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <p className="text-sm font-semibold text-orange-950">
+                            Your mobile service corridor
+                          </p>
+                          <p className="mt-1 text-xs text-orange-800">
+                            {formatJourneyDuration(
+                              journeyResult.route.durationSeconds,
+                            )}
+                            {" · "}
+                            {formatJourneyMiles(
+                              journeyResult.route.distanceMeters,
+                            )}
+                            {" · "}
+                            {journeyResult.parkingPassHosts.length} Parking Pass
+                            {journeyResult.parkingPassHosts.length === 1
+                              ? " host"
+                              : " hosts"}{" "}
+                            near this route
+                          </p>
+                        </div>
+                        <a
+                          href={journeyResult.route.directionsUri}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex shrink-0 items-center justify-center rounded-md border border-orange-300 bg-white px-3 py-2 text-xs font-semibold text-orange-800 hover:bg-orange-50"
+                        >
+                          Open full trip
+                        </a>
+                      </div>
+                      <div className="h-[320px] w-full bg-slate-100/60 sm:h-[400px]">
+                        <GoogleMapPicker
+                          center={journeyMapCenter}
+                          zoom={9}
+                          fitPins
+                          pins={journeyMapPins}
+                          routePath={journeyResult.route.path}
+                          className="h-full w-full"
+                        />
+                      </div>
+                      <div className="space-y-4 border-t border-[color:var(--border-subtle)] p-4">
+                        <ParkingPassTripPlanner
+                          hosts={journeyPlannerHosts}
+                          origin={journeyOriginLabel}
+                          destination={journeyDestinationLabel}
+                          routeMiles={journeyResult.route.distanceMeters / 1609.344}
+                          routeDurationSeconds={journeyResult.route.durationSeconds}
+                          originCoords={journeyOriginCoords!}
+                          destinationCoords={journeyDestinationCoords!}
+                          selectedDate={selectedDate}
+                          onSeeAvailability={(host) => {
+                            const matchingGroup = locationGroups.find(
+                              (group) => String(group.host.id) === String(host.hostId),
+                            );
+                            if (!matchingGroup) return;
+                            setCityQuery([host.city, host.state].filter(Boolean).join(", "));
+                            setActiveLocationKey(matchingGroup.key);
+                            setViewMode("list");
+                          }}
+                        />
+                        <div>
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <p className="text-sm font-semibold text-[color:var(--text-primary)]">
+                              Parking Pass hosts along the way
+                            </p>
+                            <span className="text-[11px] text-[color:var(--text-muted)]">
+                              Within {journeyResult.corridor.hostRadiusMiles} mi
+                              of the route
+                            </span>
+                          </div>
+                          {journeyResult.parkingPassHosts.length > 0 ? (
+                            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                              {journeyResult.parkingPassHosts.map((host) => {
+                                const matchingGroup = locationGroups.find(
+                                  (group) =>
+                                    String(group.host.id) ===
+                                    String(host.hostId),
+                                );
+                                return (
+                                  <div
+                                    key={host.locationId}
+                                    className="rounded-xl border border-orange-200/70 bg-white/80 p-3"
+                                  >
+                                    <div className="flex items-start justify-between gap-3">
+                                      <div className="min-w-0">
+                                        <p className="truncate text-sm font-semibold text-[color:var(--text-primary)]">
+                                          {host.name}
+                                        </p>
+                                        <p className="mt-0.5 text-[11px] text-[color:var(--text-muted)]">
+                                          {buildAddressLabel(
+                                            host.address,
+                                            host.city,
+                                            host.state,
+                                          )}
+                                        </p>
+                                      </div>
+                                      <span className="shrink-0 rounded-full bg-orange-100 px-2 py-1 text-[11px] font-semibold text-orange-800">
+                                        {formatJourneyDetour(
+                                          host.addedDurationSeconds,
+                                        )}
+                                      </span>
+                                    </div>
+                                    <div className="mt-2 flex flex-wrap items-center gap-3 text-[11px]">
+                                      <span className="text-[color:var(--text-muted)]">
+                                        {host.distanceFromRouteMiles.toFixed(1)}{" "}
+                                        mi from route
+                                      </span>
+                                      {matchingGroup ? (
+                                        <button
+                                          type="button"
+                                          className="font-semibold text-orange-700 underline underline-offset-2"
+                                          onClick={() => {
+                                            setCityQuery(
+                                              [host.city, host.state]
+                                                .filter(Boolean)
+                                                .join(", "),
+                                            );
+                                            setActiveLocationKey(
+                                              matchingGroup.key,
+                                            );
+                                            setViewMode("list");
+                                          }}
+                                        >
+                                          See availability
+                                        </button>
+                                      ) : (
+                                        <span className="font-medium text-[color:var(--text-muted)]">
+                                          Host pin · no open pass yet
+                                        </span>
+                                      )}
+                                      <a
+                                        href={host.directionsUri}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="font-semibold text-orange-700 underline underline-offset-2"
+                                      >
+                                        Add stop
+                                      </a>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <p className="mt-2 rounded-xl bg-[var(--bg-surface-muted)] p-3 text-xs text-[color:var(--text-muted)]">
+                              No current Parking Pass host pins fall within this
+                              route corridor yet. Essential stops are still
+                              shown below.
+                            </p>
+                          )}
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-[color:var(--text-primary)]">
+                            Truck essentials by added time
+                          </p>
+                          <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-5">
+                            {(
+                              [
+                                { key: "all", label: "All stops" },
+                                { key: "gas", label: "⛽ Gas" },
+                                { key: "propane", label: "🔥 Propane" },
+                                { key: "supply", label: "📦 Supply" },
+                                { key: "support", label: "🛠️ Repairs" },
+                              ] as const
+                            ).map((option) => (
+                              <Button
+                                key={option.key}
+                                type="button"
+                                size="sm"
+                                variant={
+                                  journeySupportFilter === option.key
+                                    ? "default"
+                                    : "outline"
+                                }
+                                onClick={() =>
+                                  setJourneySupportFilter(option.key)
+                                }
+                                className="w-full"
+                              >
+                                {option.label}
+                              </Button>
+                            ))}
+                          </div>
+                          {journeyVisibleSupport.length > 0 ? (
+                            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                              {journeyVisibleSupport.map((place) => (
+                                <a
+                                  key={place.kind + ":" + place.placeId}
+                                  href={place.directionsUri}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-3 transition hover:border-orange-300 hover:bg-orange-50/50"
+                                >
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div className="min-w-0">
+                                      <p className="truncate text-sm font-semibold text-[color:var(--text-primary)]">
+                                        {place.name}
+                                      </p>
+                                      <p className="mt-0.5 line-clamp-2 text-[11px] text-[color:var(--text-muted)]">
+                                        {place.address}
+                                      </p>
+                                    </div>
+                                    <span className="shrink-0 rounded-full bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-700">
+                                      {formatJourneyDetour(
+                                        place.addedDurationSeconds,
+                                      )}
+                                    </span>
+                                  </div>
+                                </a>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="mt-2 text-xs text-[color:var(--text-muted)]">
+                              No provider-backed stops were found in this
+                              category along the route.
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {isLoading ? (
                     <div className="flex flex-col items-center justify-center py-8 space-y-3">
@@ -6879,10 +7781,11 @@ export default function ParkingPassPage() {
                     viewMode === "map" && fallbackHostPins.length > 0 ? (
                       <div className="space-y-3">
                         <div className="rounded-2xl pp-glass shadow-clean overflow-hidden">
-                          <div className="relative h-[430px] w-full bg-slate-100/60 lg:h-[min(68vh,640px)] xl:h-[min(72vh,720px)]">
+                          <div className="relative h-[320px] w-full bg-slate-100/60 sm:h-[380px] lg:h-[min(68vh,640px)] xl:h-[min(72vh,720px)]">
                             <GoogleMapPicker
                               center={fallbackMapCenter}
                               zoom={13}
+                              fitPins
                               interactionsEnabled={mapInteractionsEnabled}
                               trafficCells={spotFootTrafficCells}
                               pins={[
@@ -6922,16 +7825,18 @@ export default function ParkingPassPage() {
                                       ),
                                     }) satisfies MapPickerPin,
                                 ),
-                                ...supplierOverlayPins.map((pin) => ({
+                                ...operationalSupportPins.map((pin) => ({
                                   key: pin.key,
                                   position: pin.position,
                                   occupied: true,
                                   popup: (
                                     <div className="space-y-1.5 text-xs">
                                       <p className="font-semibold text-orange-600">
-                                        {pin.isPropane
+                                        {pin.kind === "gas"
+                                          ? "⛽ "
+                                          : pin.kind === "propane"
                                           ? "🔥 "
-                                          : pin.isSupply
+                                          : pin.kind === "supply"
                                             ? "📦 "
                                             : "🛠️ "}
                                         {pin.name}
@@ -6952,10 +7857,30 @@ export default function ParkingPassPage() {
                                           {pin.contactEmail}
                                         </p>
                                       )}
+                                      <p className="text-[11px] text-[color:var(--text-muted)]">
+                                        {pin.source === "google_places"
+                                          ? "Nearby place from Google"
+                                          : "MealScout partner"}
+                                        {pin.driveDurationSeconds
+                                          ? ` · ${Math.max(1, Math.round(pin.driveDurationSeconds / 60))} min drive`
+                                          : pin.distanceMiles !== null
+                                            ? ` · ${pin.distanceMiles.toFixed(1)} mi away`
+                                            : ""}
+                                      </p>
+                                      {pin.googleMapsUri && (
+                                        <a
+                                          href={pin.googleMapsUri}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          className="font-semibold text-orange-600 underline"
+                                        >
+                                          Open directions
+                                        </a>
+                                      )}
                                     </div>
                                   ),
                                 })),
-                                ...gasPricePins.map((pin) => ({
+                                ...(showGasLayer ? gasPricePins : []).map((pin) => ({
                                   key: pin.key,
                                   position: pin.position,
                                   occupied: true,
@@ -6987,35 +7912,32 @@ export default function ParkingPassPage() {
                               <div className="pointer-events-none absolute bottom-3 left-3 max-w-[min(270px,calc(100%-1.5rem))] rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)]/95 px-3 py-2 text-xs text-[color:var(--text-primary)] shadow-clean backdrop-blur">
                                 <p className="font-semibold">
                                   {isScheduleFootTrafficFetching
-                                    ? "Loading foot traffic"
+                                    ? "Loading area activity"
                                     : spotFootTrafficCellCount > 0
-                                    ? "Spot foot traffic"
+                                    ? spotActivityTitle
                                       : activeLocation
-                                        ? "No spot traffic signals yet"
-                                        : "Select a spot to view foot traffic"}
+                                        ? "No area activity signals yet"
+                                        : "Select a spot to view area activity"}
                                 </p>
                                 <p className="mt-1 text-[color:var(--text-muted)]">
                                   {spotFootTrafficCellCount > 0
-                                    ? `${spotFootTrafficCellCount} cells - ${spotFootTrafficSignalLabel || "sparse"} signal - ${Math.round(
-                                        (scheduleFootTrafficData?.windowMinutes ||
-                                          720) / 60,
-                                      )}h spot window`
+                                    ? spotActivitySummary
                                     : activeLocation
-                                      ? "Foot traffic data is not available for this spot yet."
-                                      : "Select a spot to view foot traffic."}
+                                      ? "No provider or MealScout activity signals were found for this spot yet."
+                                      : "Select a spot to view area activity."}
                                 </p>
-                                <div className="mt-2 flex items-center gap-3 text-[11px]">
+                                <div className="mt-2 flex flex-wrap items-center gap-3 text-[11px]">
                                   <span className="inline-flex items-center gap-1">
-                                    <span className="h-2.5 w-2.5 rounded-full bg-green-500" />
-                                    Green stronger
+                                    <span className="h-2.5 w-2.5 rounded-full bg-blue-600" />
+                                    MealScout movement
                                   </span>
                                   <span className="inline-flex items-center gap-1">
-                                    <span className="h-2.5 w-2.5 rounded-full bg-yellow-500" />
-                                    Yellow moderate
+                                    <span className="h-2.5 w-2.5 rounded-full bg-orange-500" />
+                                    Scheduled activity
                                   </span>
                                   <span className="inline-flex items-center gap-1">
-                                    <span className="h-2.5 w-2.5 rounded-full bg-red-500" />
-                                    Red weaker
+                                    <span className="h-2.5 w-2.5 rounded-full bg-violet-500" />
+                                    Food destinations
                                   </span>
                                 </div>
                                 {spotFootTrafficCellCount === 0 && (
@@ -7024,8 +7946,8 @@ export default function ParkingPassPage() {
                                       intelligenceStatusData?.layers?.footTraffic?.status ||
                                         "unavailable",
                                     ) === "available"
-                                      ? "Foot traffic data is not available for this spot yet."
-                                      : "Foot traffic is not configured or unavailable right now."}
+                                      ? "Area activity is available when MealScout or provider signals exist."
+                                      : "Area activity providers are unavailable right now."}
                                   </p>
                                 )}
                               </div>
@@ -7048,10 +7970,11 @@ export default function ParkingPassPage() {
                   ) : viewMode === "map" ? (
                     <div className="space-y-3">
                       <div className="rounded-2xl pp-glass shadow-clean overflow-hidden">
-                        <div className="relative h-[430px] w-full bg-slate-100/60 lg:h-[min(68vh,640px)] xl:h-[min(72vh,720px)]">
+                        <div className="relative h-[320px] w-full bg-slate-100/60 sm:h-[380px] lg:h-[min(68vh,640px)] xl:h-[min(72vh,720px)]">
                           <GoogleMapPicker
                             center={mapCenter}
                             zoom={13}
+                            fitPins
                             interactionsEnabled={mapInteractionsEnabled}
                             trafficCells={spotFootTrafficCells}
                             onPinClick={(pinKey) => {
@@ -7360,16 +8283,44 @@ export default function ParkingPassPage() {
                                   } satisfies MapPickerPin;
                                 },
                               ),
-                              ...supplierOverlayPins.map((pin) => ({
+                              ...unlistedHostPins.map((pin) => ({
+                                key: pin.key,
+                                position: pin.coords,
+                                popup: (
+                                  <div className="space-y-2 text-xs">
+                                    <p className="font-semibold text-orange-600">
+                                      {pin.name}
+                                    </p>
+                                    <p className="text-[color:var(--text-muted)]">
+                                      {pin.addressLabel}
+                                    </p>
+                                    {pin.spotImageUrl && (
+                                      <img
+                                        src={pin.spotImageUrl}
+                                        alt={`${pin.name} parking spot`}
+                                        className="h-24 w-full rounded-lg border border-border/50 object-cover"
+                                        loading="lazy"
+                                      />
+                                    )}
+                                    <p className="text-[11px] text-[color:var(--text-muted)]">
+                                      Parking Pass host location. Open dates appear
+                                      in the list when inventory is available.
+                                    </p>
+                                  </div>
+                                ),
+                              } satisfies MapPickerPin)),
+                              ...operationalSupportPins.map((pin) => ({
                                 key: pin.key,
                                 position: pin.position,
                                 occupied: true,
                                 popup: (
                                   <div className="space-y-1.5 text-xs">
                                     <p className="font-semibold text-orange-600">
-                                      {pin.isPropane
+                                      {pin.kind === "gas"
+                                        ? "⛽ "
+                                        : pin.kind === "propane"
                                         ? "🔥 "
-                                        : pin.isSupply
+                                        : pin.kind === "supply"
                                           ? "📦 "
                                           : "🛠️ "}
                                       {pin.name}
@@ -7390,10 +8341,30 @@ export default function ParkingPassPage() {
                                         {pin.contactEmail}
                                       </p>
                                     )}
+                                    <p className="text-[11px] text-[color:var(--text-muted)]">
+                                      {pin.source === "google_places"
+                                        ? "Nearby place from Google"
+                                        : "MealScout partner"}
+                                      {pin.driveDurationSeconds
+                                        ? ` · ${Math.max(1, Math.round(pin.driveDurationSeconds / 60))} min drive`
+                                        : pin.distanceMiles !== null
+                                          ? ` · ${pin.distanceMiles.toFixed(1)} mi away`
+                                          : ""}
+                                    </p>
+                                    {pin.googleMapsUri && (
+                                      <a
+                                        href={pin.googleMapsUri}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="font-semibold text-orange-600 underline"
+                                      >
+                                        Open directions
+                                      </a>
+                                    )}
                                   </div>
                                 ),
                               })),
-                              ...gasPricePins.map((pin) => ({
+                              ...(showGasLayer ? gasPricePins : []).map((pin) => ({
                                 key: pin.key,
                                 position: pin.position,
                                 occupied: true,
@@ -7425,35 +8396,32 @@ export default function ParkingPassPage() {
                             <div className="pointer-events-none absolute bottom-3 left-3 max-w-[min(270px,calc(100%-1.5rem))] rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)]/95 px-3 py-2 text-xs text-[color:var(--text-primary)] shadow-clean backdrop-blur">
                               <p className="font-semibold">
                                 {isScheduleFootTrafficFetching
-                                  ? "Loading foot traffic"
+                                  ? "Loading area activity"
                                   : spotFootTrafficCellCount > 0
-                                    ? "Spot foot traffic"
+                                    ? spotActivityTitle
                                     : activeLocation
-                                      ? "No spot traffic signals yet"
-                                      : "Select a spot to view foot traffic"}
+                                      ? "No area activity signals yet"
+                                      : "Select a spot to view area activity"}
                               </p>
                               <p className="mt-1 text-[color:var(--text-muted)]">
                                 {spotFootTrafficCellCount > 0
-                                  ? `${spotFootTrafficCellCount} cells - ${spotFootTrafficSignalLabel || "sparse"} signal - ${Math.round(
-                                      (scheduleFootTrafficData?.windowMinutes ||
-                                        720) / 60,
-                                    )}h spot window`
+                                  ? spotActivitySummary
                                   : activeLocation
-                                    ? "Foot traffic data is not available for this spot yet."
-                                    : "Select a spot to view foot traffic."}
+                                    ? "No provider or MealScout activity signals were found for this spot yet."
+                                    : "Select a spot to view area activity."}
                               </p>
-                              <div className="mt-2 flex items-center gap-3 text-[11px]">
+                              <div className="mt-2 flex flex-wrap items-center gap-3 text-[11px]">
                                 <span className="inline-flex items-center gap-1">
-                                  <span className="h-2.5 w-2.5 rounded-full bg-green-500" />
-                                  Green stronger
+                                  <span className="h-2.5 w-2.5 rounded-full bg-blue-600" />
+                                  MealScout movement
                                 </span>
                                 <span className="inline-flex items-center gap-1">
-                                  <span className="h-2.5 w-2.5 rounded-full bg-yellow-500" />
-                                  Yellow moderate
+                                  <span className="h-2.5 w-2.5 rounded-full bg-orange-500" />
+                                  Scheduled activity
                                 </span>
                                 <span className="inline-flex items-center gap-1">
-                                  <span className="h-2.5 w-2.5 rounded-full bg-red-500" />
-                                  Red weaker
+                                  <span className="h-2.5 w-2.5 rounded-full bg-violet-500" />
+                                  Food destinations
                                 </span>
                               </div>
                               {spotFootTrafficCellCount === 0 && (
@@ -7462,13 +8430,13 @@ export default function ParkingPassPage() {
                                     intelligenceStatusData?.layers?.footTraffic?.status ||
                                       "unavailable",
                                   ) === "available"
-                                    ? "Foot traffic data is not available for this spot yet."
-                                    : "Foot traffic is not configured or unavailable right now."}
+                                    ? "Area activity is available when MealScout or provider signals exist."
+                                    : "Area activity providers are unavailable right now."}
                                 </p>
                               )}
                             </div>
                           )}
-                          {mapPins.length === 0 && (
+                          {parkingPassHostPinCount === 0 && (
                             <div className="absolute inset-0 flex items-center justify-center text-sm text-[color:var(--text-muted)] pointer-events-none">
                               No mappable locations yet.
                             </div>
@@ -8204,8 +9172,19 @@ export default function ParkingPassPage() {
                         );
                       })}
                       {filteredLocations.length === 0 && (
-                        <div className="rounded-2xl pp-glass-muted p-6 text-center text-sm text-slate-700">
-                          No host spots match that search.
+                        <div className="rounded-2xl pp-glass-muted p-6 text-center text-sm text-[color:var(--text-secondary)]">
+                          <p>No parking spots match that search.</p>
+                          {normalizedCityQuery && (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="mt-3"
+                              onClick={() => setCityQuery("")}
+                            >
+                              View all {locationGroups.length} locations
+                            </Button>
+                          )}
                         </div>
                       )}
                     </div>
@@ -8291,7 +9270,7 @@ export default function ParkingPassPage() {
 
                   <Card
                     id="parking-pass-details"
-                    className="rounded-2xl pp-glass shadow-clean"
+                    className="hidden rounded-2xl pp-glass shadow-clean lg:block"
                   >
                     <CardContent className="p-5 space-y-3">
                       <div>
@@ -8311,7 +9290,7 @@ export default function ParkingPassPage() {
                               {activeListing.host.locationType || "Location"}
                             </span>
                             <span className="rounded-full pp-chip px-2 py-1">
-                              Foot traffic:{" "}
+                              Host traffic estimate:{" "}
                               {activeListing.host.expectedFootTraffic ||
                                 "Not shared"}
                             </span>
@@ -8347,12 +9326,15 @@ export default function ParkingPassPage() {
                                   : "Weather unavailable"}{" "}
                               ·{" "}
                               {isScheduleFootTrafficFetching
-                                ? "Foot traffic loading..."
+                                ? "Area activity loading..."
                                 : typeof scheduleFootTrafficData?.cells?.length ===
                                       "number" &&
                                     scheduleFootTrafficData.cells.length > 0
-                                  ? `Foot traffic: ${scheduleFootTrafficData.cells.length} nearby cells`
-                                  : "Foot traffic unavailable"}
+                                  ? `Area activity: ${spotActivitySummary}`
+                                  : "Area activity unavailable"}
+                              <span className="block pt-1">
+                                Travel: {selectedSpotTravelSummary}
+                              </span>
                             </div>
                           </div>
                           {showSpotInsights && (
@@ -8387,16 +9369,70 @@ export default function ParkingPassPage() {
                               </div>
                               <div className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2 text-xs">
                                 <p className="font-semibold text-[color:var(--text-primary)]">
+                                  Provider-backed place details
+                                </p>
+                                {isPlaceIntelligenceFetching ? (
+                                  <p className="mt-1 text-[color:var(--text-muted)]">
+                                    Matching this host with Google Places…
+                                  </p>
+                                ) : placeIntelligenceData?.available &&
+                                  placeIntelligenceData.place ? (
+                                  <div className="mt-1 space-y-1 text-[color:var(--text-muted)]">
+                                    <p>
+                                      {placeIntelligenceData.place.name ||
+                                        selectedSpotHost?.businessName}
+                                      {placeIntelligenceData.place.businessStatus
+                                        ? ` · ${placeIntelligenceData.place.businessStatus.toLowerCase().replace(/_/g, " ")}`
+                                        : ""}
+                                      {typeof placeIntelligenceData.place.openNow ===
+                                      "boolean"
+                                        ? placeIntelligenceData.place.openNow
+                                          ? " · open now"
+                                          : " · closed now"
+                                        : ""}
+                                    </p>
+                                    <p>
+                                      Parking: {placeIntelligenceData.place.parkingOptions
+                                        ? Object.entries(
+                                            placeIntelligenceData.place.parkingOptions,
+                                          )
+                                            .filter(([, enabled]) => enabled)
+                                            .map(([key]) =>
+                                              key.replace(/([A-Z])/g, " $1").toLowerCase(),
+                                            )
+                                            .join(", ") || "not listed"
+                                        : "not listed"}
+                                      {" · "}Restroom: {placeIntelligenceData.place.restroom ===
+                                      true
+                                        ? "yes"
+                                        : placeIntelligenceData.place.restroom === false
+                                          ? "no"
+                                          : "not listed"}
+                                    </p>
+                                    <p>
+                                      Source: Google Places · refreshed {formatRelativeTime(
+                                        placeIntelligenceData.fetchedAt,
+                                      )}
+                                    </p>
+                                  </div>
+                                ) : (
+                                  <p className="mt-1 text-[color:var(--text-muted)]">
+                                    No provider profile matched this host yet.
+                                  </p>
+                                )}
+                              </div>
+                              <div className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2 text-xs">
+                                <p className="font-semibold text-[color:var(--text-primary)]">
                                   Intelligence layers
                                 </p>
                                 <div className="mt-1 space-y-1 text-[color:var(--text-muted)]">
                                   <p>
-                                    Foot traffic:{" "}
+                                    Area activity:{" "}
                                     {isScheduleFootTrafficFetching
                                       ? "loading"
                                       : typeof scheduleFootTrafficData?.cells?.length === "number"
                                         ? scheduleFootTrafficData.cells.length > 0
-                                          ? `${scheduleFootTrafficData.cells.length} nearby cells`
+                                          ? spotActivitySummary
                                           : "unavailable for this schedule window"
                                         : String(
                                             intelligenceStatusData?.layers?.footTraffic?.status ||
@@ -8408,24 +9444,15 @@ export default function ParkingPassPage() {
                                   </p>
                                   <p>
                                     Propane suppliers:{" "}
-                                    {String(
-                                      intelligenceStatusData?.layers?.propaneSuppliers?.status ||
-                                        "unavailable",
-                                    )}
+                                    {supplierLayerSummary.propane}
                                   </p>
                                   <p>
                                     Restaurant supply stores:{" "}
-                                    {String(
-                                      intelligenceStatusData?.layers?.restaurantSupplyStores
-                                        ?.status || "unavailable",
-                                    )}
+                                    {supplierLayerSummary.supply}
                                   </p>
                                   <p>
                                     Operator-support POIs:{" "}
-                                    {String(
-                                      intelligenceStatusData?.layers?.operatorSupportPois?.status ||
-                                        "unavailable",
-                                    )}
+                                    {supplierLayerSummary.support}
                                   </p>
                                 </div>
                               </div>
@@ -8737,12 +9764,12 @@ export default function ParkingPassPage() {
               footTraffic: {
                 loading: isScheduleFootTrafficFetching,
                 summary: isScheduleFootTrafficFetching
-                  ? "Loading nearby traffic cells..."
+                  ? "Loading area activity signals..."
                   : typeof scheduleFootTrafficData?.cells?.length === "number"
                     ? scheduleFootTrafficData.cells.length > 0
-                      ? `${scheduleFootTrafficData.cells.length} nearby traffic cells detected`
-                      : "No nearby cells detected for this schedule window"
-                    : "Foot traffic unavailable",
+                      ? `${spotActivitySummary}. This is opportunity context, not measured pedestrian traffic.`
+                      : "No area activity signals detected for this schedule window"
+                    : "Area activity unavailable",
               },
               truckActivity: {
                 summary:
@@ -8765,4 +9792,3 @@ export default function ParkingPassPage() {
     </div>
   );
 }
-

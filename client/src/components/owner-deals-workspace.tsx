@@ -43,7 +43,6 @@ type OwnerDealsWorkspaceProps = {
   restaurantId: string;
   businessName: string;
   canManageDeals: boolean;
-  hasPublishingAccess: boolean;
   stats?: {
     totalClaims?: number | null;
   } | null;
@@ -118,7 +117,6 @@ export default function OwnerDealsWorkspace({
   restaurantId,
   businessName,
   canManageDeals,
-  hasPublishingAccess,
   stats,
 }: OwnerDealsWorkspaceProps) {
   const { toast } = useToast();
@@ -162,13 +160,6 @@ export default function OwnerDealsWorkspace({
     stats?.totalClaims ??
     deals.reduce((sum, deal) => sum + Number(deal.currentUses || 0), 0);
   const createHref = `/deal-creation?restaurantId=${encodeURIComponent(restaurantId)}`;
-  const subscribeParams = new URLSearchParams({
-    next: createHref,
-    reason: "create_deals",
-  });
-  const primaryActionHref = hasPublishingAccess
-    ? createHref
-    : `/subscribe?${subscribeParams.toString()}`;
 
   const refreshDeals = async () => {
     await Promise.all([
@@ -257,9 +248,9 @@ export default function OwnerDealsWorkspace({
             </p>
           </div>
           <Button asChild className="shrink-0" data-testid="button-create-first-deal">
-            <Link href={primaryActionHref}>
+            <Link href={createHref}>
               <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
-              {hasPublishingAccess ? "New special" : "Unlock deals"}
+              New special
             </Link>
           </Button>
         </div>
@@ -347,9 +338,7 @@ export default function OwnerDealsWorkspace({
             </p>
             {deals.length === 0 ? (
               <Button asChild className="mt-5">
-                <Link href={primaryActionHref}>
-                  {hasPublishingAccess ? "New special" : "Unlock deals"}
-                </Link>
+                <Link href={createHref}>New special</Link>
               </Button>
             ) : null}
           </CardContent>

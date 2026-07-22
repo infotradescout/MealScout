@@ -6,6 +6,10 @@ import type {
   MapTrafficCell,
 } from "./map-adapter.types";
 import mealScoutIcon from "@assets/meal-scout-icon.png";
+import {
+  createGoogleMarkerInstance,
+  resolveGoogleMarkerRenderer,
+} from "./google-marker-runtime";
 
 type GeoPoint = { lat: number; lng: number };
 type ScreenPoint = { x: number; y: number };
@@ -17,6 +21,7 @@ type GoogleMapSurfaceProps = {
   center: GeoPoint;
   zoom: number;
   markers: MapAdapterMarker[];
+  selectedMarkerId?: string | null;
   trafficCells?: MapTrafficCell[];
   showRoadTrafficLayer?: boolean;
   userLocation: GeoPoint | null;
@@ -494,11 +499,21 @@ const svgDataUrl = (svg: string) =>
   `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
 
 /* ─── Glowing SVG dot marker (AdvancedMarker content) ───────────────────── */
-const buildGlowDotElement = (marker: MapAdapterMarker): HTMLElement => {
+const buildGlowDotElement = (
+  marker: MapAdapterMarker,
+  selected = false,
+): HTMLElement => {
   if (marker.kind === "parking") {
     const wrapper = document.createElement("div");
+    wrapper.className = selected
+      ? "ms-google-marker ms-google-marker--selected"
+      : "ms-google-marker";
     wrapper.style.cssText =
-      "position:relative;width:38px;height:38px;display:flex;align-items:center;justify-content:center;cursor:pointer;";
+      `position:relative;width:38px;height:38px;display:flex;align-items:center;justify-content:center;cursor:pointer;${
+        selected
+          ? "transform:translateY(-5px) scale(1.22);filter:drop-shadow(0 0 8px rgba(255,255,255,.95)) drop-shadow(0 0 18px rgba(249,115,22,.8));outline:3px solid #fff7ed;outline-offset:4px;border-radius:999px;"
+          : ""
+      }`;
     const img = document.createElement("img");
     img.src = mealScoutIcon;
     img.alt = marker.title || "Host location";
@@ -538,6 +553,9 @@ const buildGlowDotElement = (marker: MapAdapterMarker): HTMLElement => {
   const glowSpread = isUser ? 14 : 10;
 
   const wrapper = document.createElement("div");
+  wrapper.className = selected
+    ? "ms-google-marker ms-google-marker--selected"
+    : "ms-google-marker";
   wrapper.style.cssText = `
     position:relative;
     width:${outerSize}px;
@@ -546,6 +564,11 @@ const buildGlowDotElement = (marker: MapAdapterMarker): HTMLElement => {
     align-items:center;
     justify-content:center;
     cursor:pointer;
+    ${
+      selected
+        ? "transform:translateY(-5px) scale(1.28);filter:drop-shadow(0 0 8px rgba(255,255,255,.95));outline:3px solid #fff7ed;outline-offset:3px;border-radius:999px;"
+        : ""
+    }
   `;
 
   // Pulse ring (CSS animation via injected keyframes)
@@ -597,54 +620,17 @@ const buildGlowDotElement = (marker: MapAdapterMarker): HTMLElement => {
         70%  { transform:scale(1.8); opacity:0; }
         100% { transform:scale(0.5); opacity:0; }
       }
+      @media (prefers-reduced-motion: reduce) {
+        .ms-google-marker, .ms-google-marker * {
+          animation: none !important;
+          transition: none !important;
+        }
+      }
     `;
     document.head.appendChild(style);
   }
 
   return wrapper;
-};
-
-/* ─── Legacy Marker icon (fallback when no Map ID) ──────────────────────── */
-const buildLegacyIcon = (googleMaps: any, marker: MapAdapterMarker) => {
-  const color = markerColor(marker);
-  if (marker.kind !== "user") {
-    const glyph = markerGlyph(marker);
-    const parkedTruckCount = marker.parkedTrucks?.length || 0;
-    const parkedTruckBadge =
-      parkedTruckCount > 0
-        ? `<circle cx="40" cy="14" r="9" fill="#fb923c" stroke="#fff7ed" stroke-width="2"/>
-         <text x="40" y="18" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="900" fill="#1b0b02">T</text>`
-        : "";
-    const svg = `
-      <svg width="54" height="66" viewBox="0 0 54 66" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-          <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
-            <feGaussianBlur stdDeviation="4" result="blur"/>
-            <feColorMatrix in="blur" type="matrix" values="1 0 0 0 1 0 0.38 0 0 0.32 0 0 0.08 0 0 0 0 0.75 0"/>
-            <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
-          </filter>
-        </defs>
-        <ellipse cx="27" cy="59" rx="12" ry="4" fill="#000" opacity="0.42"/>
-        <path filter="url(#glow)" d="M27 3C15.4 3 6 12.4 6 24c0 15.8 21 38 21 38s21-22.2 21-38C48 12.4 38.6 3 27 3z" fill="${color}" stroke="#ffd08a" stroke-width="2"/>
-        <circle cx="27" cy="24" r="13" fill="#1b0d05" opacity="0.9" stroke="#fff3d6" stroke-width="1.5"/>
-        <text x="27" y="29" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="900" fill="#fff3d6">${glyph}</text>
-        ${parkedTruckBadge}
-      </svg>
-    `;
-    return {
-      url: svgDataUrl(svg),
-      scaledSize: new googleMaps.Size(42, 52),
-      anchor: new googleMaps.Point(21, 52),
-    };
-  }
-  return {
-    path: googleMaps.SymbolPath.CIRCLE,
-    scale: 10,
-    fillColor: color,
-    fillOpacity: 0.95,
-    strokeColor: "#dbeafe",
-    strokeWeight: 3,
-  };
 };
 
 const removeMarkerFromMap = (instance: any) => {
@@ -735,6 +721,7 @@ export function GoogleMapSurface({
   center,
   zoom,
   markers,
+  selectedMarkerId = null,
   trafficCells = [],
   showRoadTrafficLayer = false,
   userLocation,
@@ -888,7 +875,13 @@ export function GoogleMapSurface({
                 : "cooperative"
               : "none",
           };
-          if (useNativeMapStyle) {
+          const configuredMapId = String(mapId || "").trim();
+          if (configuredMapId) {
+            // AdvancedMarkerElement requires a map ID. A map ID also owns its
+            // cloud style, so legacy JSON styles must not be supplied.
+            mapOptions.mapId = configuredMapId;
+            mapOptions.mapTypeId = "roadmap";
+          } else if (useNativeMapStyle) {
             mapOptions.mapTypeId = "roadmap";
             mapOptions.styles = null;
           } else if (isNightTheme) {
@@ -991,7 +984,9 @@ export function GoogleMapSurface({
             }, delay),
           );
         } else {
-          if (useNativeMapStyle) {
+          if (mapId) {
+            // mapId is immutable after construction; retain its cloud style.
+          } else if (useNativeMapStyle) {
             mapRef.current.setOptions({
               mapId: undefined,
               styles: null,
@@ -1098,15 +1093,34 @@ export function GoogleMapSurface({
     const googleMaps = (window as GoogleMapsWindow).google?.maps;
     if (!googleMaps || !mapRef.current || mapReadyVersion === 0) return;
 
-    // AdvancedMarkerElement requires a mapId — since we strip mapId for
-    // neon style support, we always use classic Markers on this surface.
     const AdvancedMarkerElement = googleMaps.marker?.AdvancedMarkerElement;
-    const useAdvanced = false;
+    const markerRenderer = resolveGoogleMarkerRenderer({
+      mapId,
+      AdvancedMarkerElement,
+    });
+    const useAdvanced = markerRenderer === "advanced";
+    const failMarkerRuntime = (detail?: string) => {
+      const msg = detail
+        ? `Google Maps marker rendering failed (${detail}). Falling back to the local map.`
+        : "Google Maps loaded without a supported marker renderer. Falling back to the local map.";
+      setLoadError(msg);
+      if (!hasReportedFatalErrorRef.current) {
+        hasReportedFatalErrorRef.current = true;
+        onFatalErrorRef.current?.(msg);
+      }
+    };
+    if (markerRenderer === "unavailable" && renderedMarkers.length > 0) {
+      failMarkerRuntime();
+      return;
+    }
     const usedIds = new Set<string>();
+    let markerRuntimeFailed = false;
 
     renderedMarkers.forEach((marker) => {
+      if (markerRuntimeFailed) return;
       usedIds.add(marker.id);
       const existing = markerRefs.current.get(marker.id);
+      const isSelected = marker.id === selectedMarkerId;
       const signature = [
         marker.kind,
         marker.lat.toFixed(6),
@@ -1115,6 +1129,7 @@ export function GoogleMapSurface({
         marker.title || "",
         marker.subtitle || "",
         marker.parkingStatus || "",
+        isSelected ? "selected" : "idle",
         (marker.parkedTrucks || [])
           .map((truck) => `${truck.id || ""}:${truck.name}`)
           .join(","),
@@ -1132,27 +1147,35 @@ export function GoogleMapSurface({
         }
         // Update icon
         if (useAdvanced && "content" in existing) {
-          existing.content = buildGlowDotElement(marker);
-        } else if (typeof existing.setIcon === "function") {
-          existing.setIcon(buildLegacyIcon(googleMaps, marker));
+          existing.content = buildGlowDotElement(marker, isSelected);
+          existing.zIndex = isSelected ? 1000 : undefined;
         }
         markerSignatureRefs.current.set(marker.id, signature);
         return;
       }
 
-      const instance = useAdvanced
-        ? new AdvancedMarkerElement({
+      let instance: any | null = null;
+      try {
+        instance = createGoogleMarkerInstance({
+          renderer: markerRenderer,
+          AdvancedMarkerElement,
+          advancedOptions: {
             map: mapRef.current,
             position: { lat: marker.lat, lng: marker.lng },
             title: marker.title || marker.subtitle || marker.kind,
-            content: buildGlowDotElement(marker),
-          })
-        : new googleMaps.Marker({
-            map: mapRef.current,
-            position: { lat: marker.lat, lng: marker.lng },
-            title: marker.title || marker.subtitle || marker.kind,
-            icon: buildLegacyIcon(googleMaps, marker),
-          });
+            content: buildGlowDotElement(marker, isSelected),
+            gmpClickable: interactive && marker.id !== "__user-location",
+            zIndex: isSelected ? 1000 : undefined,
+          },
+        });
+      } catch (error) {
+        markerRuntimeFailed = true;
+        failMarkerRuntime(
+          error instanceof Error ? error.message : "constructor unavailable",
+        );
+        return;
+      }
+      if (!instance) return;
 
       if (typeof instance.addEventListener === "function") {
         instance.addEventListener("gmp-click", () => {
@@ -1195,7 +1218,14 @@ export function GoogleMapSurface({
       markerRefs.current.delete(id);
       markerSignatureRefs.current.delete(id);
     });
-  }, [renderedMarkers, markerIndex, mapReadyVersion, interactive]);
+  }, [
+    renderedMarkers,
+    markerIndex,
+    mapReadyVersion,
+    interactive,
+    selectedMarkerId,
+    mapId,
+  ]);
 
   // Traffic cells
   useEffect(() => {

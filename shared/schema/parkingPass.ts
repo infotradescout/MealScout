@@ -7,6 +7,7 @@ export {
   truckManualSchedulesRelations,
   truckParkingReportsRelations,
   insertParkingPassBlackoutDateSchema,
+  parkingRoutePlans,
 } from "./legacy";
 
 export type {
@@ -14,4 +15,6 @@ export type {
   InsertParkingPassBlackoutDate,
   TruckManualSchedule,
   TruckParkingReport,
+  ParkingRoutePlan,
+  InsertParkingRoutePlan,
 } from "./legacy";
