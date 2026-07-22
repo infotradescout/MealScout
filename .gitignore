@@ -35,6 +35,9 @@ ios/App/App.xcodeproj/xcuserdata/
 test-results/
 playwright-report/
 
+# Private operator intake binaries and normalized evidence packages
+/artifacts/manual-intake/
+
 .env*.local
 
 # Runtime integration logs
