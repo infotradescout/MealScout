@@ -61,6 +61,18 @@ jobs:
       - name: Recommendation Photo Proof Contract
         run: npm run test:recommend-photo-only-proof
 
+      - name: Manual Profile Asset Intake Contract
+        run: npm run test:manual-asset-intake
+
+      - name: Leaflet Removal Contract
+        run: npm run test:leaflet-removal
+
+      - name: Event Date Normalization Contract
+        run: npm run test:event-date-normalization
+
+      - name: Action Availability Contract
+        run: npm run test:action-availability
+
       - name: Runtime Safety Contracts
         run: |
           npx --yes tsx scripts/parking-pass-google-api-capabilities.contract.test.ts
