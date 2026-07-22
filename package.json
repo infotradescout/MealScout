@@ -42,6 +42,8 @@
     "test:3d-eats-frui-tea-sauce": "npx --yes tsx scripts/3d-eats-frui-tea-sauce-update.contract.test.ts",
     "test:profile-action-policy": "npx --yes tsx scripts/mealscout-profile-action-policy.contract.test.ts",
     "test:business-type-taxonomy": "npx --yes tsx scripts/mealscout-business-type-taxonomy.contract.test.ts",
+    "test:business-signup-attachment": "node --import tsx scripts/business-signup-menu-attachment.contract.test.ts",
+    "test:truck-availability-truth": "node --import tsx scripts/truck-availability-truth.behavior.test.ts",
     "test:quick-review-score-validation": "npx --yes tsx scripts/quick-review-score-validation.contract.test.ts",
     "test:quick-review-idempotency": "npx --yes tsx scripts/quick-review-idempotency.contract.test.ts",
     "test:recommend-photo-only-proof": "npx --yes tsx scripts/recommend-photo-only-proof.contract.test.ts",

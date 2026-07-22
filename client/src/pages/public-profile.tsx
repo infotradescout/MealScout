@@ -2355,6 +2355,7 @@ function RestaurantSchedule({ profile }: { profile: PublicRestaurantProfile }) {
   const upcomingStops = scheduleRows.upcomingStops.slice(0, 6);
   const closedStops = scheduleRows.closedStops.slice(0, 7);
   const hasTruckSchedule = scheduleRows.hasActionableSchedule;
+  const hasTruckScheduleInfo = hasTruckSchedule || closedStops.length > 0;
   const scheduleEmptyState = getTruckScheduleEmptyStateLabel();
   const scheduleStatusBadge = getTruckScheduleStatusBadgeLabel(schedule);
   const truckEmptyScheduleLabel =
@@ -2428,7 +2429,7 @@ function RestaurantSchedule({ profile }: { profile: PublicRestaurantProfile }) {
             {profile.operatingHoursSummary}
           </p>
         ) : null}
-        {profile.profileType === "truck" && hasTruckSchedule ? (
+        {profile.profileType === "truck" && hasTruckScheduleInfo ? (
           <div className="space-y-3">
             {scheduleStatusBadge ? (
               <Badge
@@ -2507,7 +2508,7 @@ function RestaurantSchedule({ profile }: { profile: PublicRestaurantProfile }) {
             ) : null}
           </div>
         ) : null}
-        {profile.profileType === "truck" && !hasTruckSchedule ? (
+        {profile.profileType === "truck" && !hasTruckScheduleInfo ? (
           <p className="rounded-md border border-white/15 bg-white/5 px-3 py-2 text-xs text-white/75">
             {truckEmptyScheduleLabel}
           </p>

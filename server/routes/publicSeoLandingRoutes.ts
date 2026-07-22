@@ -1,10 +1,21 @@
 import type { Express } from "express";
-import { and, desc, eq, gte, ilike, isNotNull, isNull, lte, ne, or } from "drizzle-orm";
+import { and, desc, eq, gte, ilike, inArray, isNull, lte, or } from "drizzle-orm";
 
 import { db } from "../db";
-import { cities, deals, events, hosts, restaurants } from "@shared/schema";
+import {
+  cities,
+  deals,
+  eventBookings,
+  events,
+  hosts,
+  restaurants,
+} from "@shared/schema";
 import { isTruckBusinessType } from "@shared/businessTypes";
 import { assertPublicResponseSafe } from "../publicProfiles";
+import { resolveCityTimeZoneSync } from "../services/cityTimeZone";
+import { buildSlotDateTimes } from "../services/timeIntent";
+import { dateKeyInZone } from "../services/dateKeys";
+import { isSlotPublic } from "../services/publicSlotGate";
 
 const toSlug = (value: string | null | undefined) =>
   String(value || "")
@@ -29,6 +40,14 @@ const resolveCityBySlug = async (citySlug: string) => {
 };
 
 const cityLike = (cityName: string) => `%${String(cityName || "").trim()}%`;
+
+const truckBusinessTypeAliases = [
+  "food_truck",
+  "truck",
+  "food-truck",
+  "foodtruck",
+  "mobile_food_vendor",
+];
 
 const buildPublicProfilePath = (input: {
   profileType: "restaurant" | "truck" | "location";
@@ -124,7 +143,10 @@ export function registerPublicSeoLandingRoutes(app: Express) {
         .where(
           and(
             eq(restaurants.isActive, true),
-            or(eq(restaurants.isFoodTruck, true), eq(restaurants.businessType, "food_truck")),
+            or(
+              eq(restaurants.isFoodTruck, true),
+              inArray(restaurants.businessType, truckBusinessTypeAliases),
+            ),
             or(ilike(restaurants.city, cityLike(city.name)), ilike(restaurants.address, cityLike(city.name))),
           ),
         )
@@ -212,10 +234,14 @@ export function registerPublicSeoLandingRoutes(app: Express) {
       const city = await resolveCityBySlug(citySlug);
       if (!city) return res.status(404).json({ message: "City not found" });
       const now = new Date();
+      const queryStart = new Date(now);
+      queryStart.setUTCHours(0, 0, 0, 0);
+      queryStart.setUTCDate(queryStart.getUTCDate() - 1);
       const end = new Date(now.getTime() + 24 * 60 * 60 * 1000);
 
       const rows = await db
-        .select({
+        .selectDistinct({
+          eventId: events.id,
           id: restaurants.id,
           name: restaurants.name,
           businessType: restaurants.businessType,
@@ -227,15 +253,32 @@ export function registerPublicSeoLandingRoutes(app: Express) {
           logoUrl: restaurants.logoUrl,
           eventName: events.name,
           eventDate: events.date,
+          eventStartTime: events.startTime,
+          eventEndTime: events.endTime,
+          bookingConfirmedAt: eventBookings.bookingConfirmedAt,
+          hostCity: hosts.city,
+          hostState: hosts.state,
           updatedAt: events.updatedAt,
         })
-        .from(events)
+        .from(eventBookings)
+        .innerJoin(events, eq(eventBookings.eventId, events.id))
         .innerJoin(hosts, eq(events.hostId, hosts.id))
-        .innerJoin(restaurants, eq(events.bookedRestaurantId, restaurants.id))
+        .innerJoin(restaurants, eq(eventBookings.truckId, restaurants.id))
         .where(
           and(
-            ne(events.status, "cancelled"),
-            gte(events.date, now),
+            eq(eventBookings.status, "confirmed"),
+            inArray(events.status, ["open", "booked", "filled"]),
+            or(eq(events.requiresPayment, false), isNull(events.requiresPayment)),
+            or(
+              isNull(events.requiresPayment),
+              eq(events.requiresPayment, false),
+            ),
+            eq(restaurants.isActive, true),
+            or(
+              eq(restaurants.isFoodTruck, true),
+              inArray(restaurants.businessType, truckBusinessTypeAliases),
+            ),
+            gte(events.date, queryStart),
             lte(events.date, end),
             or(ilike(hosts.city, cityLike(city.name)), ilike(hosts.address, cityLike(city.name))),
           ),
@@ -243,10 +286,43 @@ export function registerPublicSeoLandingRoutes(app: Express) {
         .orderBy(desc(events.updatedAt))
         .limit(60);
 
-      const items = rows.map((row: any) => ({
-        ...buildCard(row),
-        summary: row.eventName ? `Event today: ${cleanLabel(String(row.eventName))}` : "Event happening today",
-      }));
+      const items = rows
+        .filter((row: any) => {
+          const timeZone = resolveCityTimeZoneSync({
+            city: row.hostCity || null,
+            state: row.hostState || null,
+          });
+          const interval = buildSlotDateTimes({
+            timeZone,
+            date: row.eventDate,
+            startTime: String(row.eventStartTime || ""),
+            endTime: String(row.eventEndTime || ""),
+          });
+          return Boolean(
+            interval &&
+              row.bookingConfirmedAt &&
+              interval.endUtc.getTime() >= now.getTime() &&
+              dateKeyInZone(interval.startUtc, timeZone) ===
+                dateKeyInZone(now, timeZone) &&
+              isSlotPublic({
+                slot: {
+                  source: "parking_pass_booking",
+                  status: "confirmed",
+                  startsAtUtc: interval.startUtc,
+                  endsAtUtc: interval.endUtc,
+                  lastConfirmedAtUtc: row.bookingConfirmedAt,
+                },
+                now,
+                ttlHours: 24 * 365 * 100,
+              }),
+          );
+        })
+        .map((row: any) => ({
+          ...buildCard(row),
+          summary: row.eventName
+            ? `Event today: ${cleanLabel(String(row.eventName))}`
+            : "Event happening today",
+        }));
 
       return res.json(
         buildSeoPayload({
@@ -370,10 +446,13 @@ export function registerPublicSeoLandingRoutes(app: Express) {
       const city = await resolveCityBySlug(citySlug);
       if (!city) return res.status(404).json({ message: "City not found" });
       const now = new Date();
+      const queryStart = new Date(now);
+      queryStart.setUTCHours(0, 0, 0, 0);
+      queryStart.setUTCDate(queryStart.getUTCDate() - 1);
       const end = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
 
       const hostRows = await db
-        .select({
+        .selectDistinct({
           hostId: hosts.id,
           hostName: hosts.businessName,
           hostCity: hosts.city,
@@ -381,32 +460,78 @@ export function registerPublicSeoLandingRoutes(app: Express) {
           hostAddress: hosts.address,
           hostUpdatedAt: hosts.updatedAt,
           eventId: events.id,
+          eventDate: events.date,
+          eventStartTime: events.startTime,
+          eventEndTime: events.endTime,
+          bookingConfirmedAt: eventBookings.bookingConfirmedAt,
+          truckId: eventBookings.truckId,
         })
-        .from(hosts)
-        .leftJoin(
-          events,
+        .from(eventBookings)
+        .innerJoin(events, eq(eventBookings.eventId, events.id))
+        .innerJoin(hosts, eq(events.hostId, hosts.id))
+        .innerJoin(restaurants, eq(eventBookings.truckId, restaurants.id))
+        .where(
           and(
-            eq(events.hostId, hosts.id),
-            isNotNull(events.bookedRestaurantId),
-            ne(events.status, "cancelled"),
-            gte(events.date, now),
+            eq(eventBookings.status, "confirmed"),
+            inArray(events.status, ["open", "booked", "filled"]),
+            or(eq(events.requiresPayment, false), isNull(events.requiresPayment)),
+            eq(restaurants.isActive, true),
+            or(
+              eq(restaurants.isFoodTruck, true),
+              inArray(restaurants.businessType, truckBusinessTypeAliases),
+            ),
+            gte(events.date, queryStart),
             lte(events.date, end),
+            or(
+              ilike(hosts.city, cityLike(city.name)),
+              ilike(hosts.address, cityLike(city.name)),
+            ),
           ),
         )
-        .where(or(ilike(hosts.city, cityLike(city.name)), ilike(hosts.address, cityLike(city.name))))
         .orderBy(desc(hosts.updatedAt))
         .limit(120);
 
-      const counts = new Map<string, { row: any; count: number }>();
+      const counts = new Map<string, { row: any; stopKeys: Set<string> }>();
       for (const row of hostRows as any[]) {
         const key = String(row.hostId || "");
         if (!key) continue;
-        if (!counts.has(key)) counts.set(key, { row, count: 0 });
-        if (row.eventId) counts.get(key)!.count += 1;
+        const timeZone = resolveCityTimeZoneSync({
+          city: row.hostCity || null,
+          state: row.hostState || null,
+        });
+        const interval = buildSlotDateTimes({
+          timeZone,
+          date: row.eventDate,
+          startTime: String(row.eventStartTime || ""),
+          endTime: String(row.eventEndTime || ""),
+        });
+        if (
+          !interval ||
+          !row.bookingConfirmedAt ||
+          !isSlotPublic({
+            slot: {
+              source: "parking_pass_booking",
+              status: "confirmed",
+              startsAtUtc: interval.startUtc,
+              endsAtUtc: interval.endUtc,
+              lastConfirmedAtUtc: row.bookingConfirmedAt,
+            },
+            now,
+            ttlHours: 24 * 365 * 100,
+          })
+        ) {
+          continue;
+        }
+        if (!counts.has(key)) counts.set(key, { row, stopKeys: new Set() });
+        if (row.eventId && row.truckId) {
+          counts
+            .get(key)!
+            .stopKeys.add(`${String(row.eventId)}:${String(row.truckId)}`);
+        }
       }
 
       const items = Array.from(counts.values())
-        .filter((entry) => entry.count > 0)
+        .filter((entry) => entry.stopKeys.size > 0)
         .map((entry) => {
           const id = String(entry.row.hostId);
           const slug = toSlug(entry.row.hostName) || id;
@@ -425,8 +550,8 @@ export function registerPublicSeoLandingRoutes(app: Express) {
             state: entry.row.hostState || null,
             imageUrl: null,
             cuisineTags: [],
-            statusLabel: "Active this week",
-            summary: `${entry.count} upcoming truck stop${entry.count === 1 ? "" : "s"}`,
+            statusLabel: "Confirmed this week",
+            summary: `${entry.stopKeys.size} confirmed truck stop${entry.stopKeys.size === 1 ? "" : "s"}`,
             primaryCtaPath: profilePath,
           };
         });

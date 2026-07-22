@@ -64,6 +64,12 @@ function StopRow({ label, stop, isCurrent = false }: StopRowProps) {
       ) : null}
 
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-[color:var(--profile-muted)]">
+        {stop.date ? (
+          <span className="flex items-center gap-1">
+            <CalendarDays className="h-3.5 w-3.5 flex-none text-[color:var(--profile-accent)]" />
+            {stop.date}
+          </span>
+        ) : null}
         {timeLabel ? (
           <span className="flex items-center gap-1">
             <Clock3 className="h-3.5 w-3.5 flex-none text-[color:var(--profile-accent)]" />
@@ -116,6 +122,7 @@ export function TruckSchedulePanel({
   } = getTruckScheduleRows(schedule);
 
   const statusBadge = getTruckScheduleStatusBadgeLabel(schedule);
+  const hasClosedSchedule = closedStops.length > 0;
 
   return (
     <section aria-label="Truck schedule" className="space-y-3">
@@ -175,6 +182,17 @@ export function TruckSchedulePanel({
               {schedule.notice}
             </p>
           ) : null}
+        </div>
+      ) : hasClosedSchedule ? (
+        <div className="space-y-2 rounded-2xl border border-[color:var(--profile-border)] bg-[color:var(--profile-surface-soft)] p-4">
+          <p className="profile-section-label text-[10px]">Closed days</p>
+          {closedStops.map((stop, index) => (
+            <StopRow
+              key={`${stop.stopId || stop.date || "closed"}:${index}`}
+              label="Closed"
+              stop={stop}
+            />
+          ))}
         </div>
       ) : (
         /* Thin state — no schedule posted */

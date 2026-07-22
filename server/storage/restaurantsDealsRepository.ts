@@ -20,6 +20,7 @@ import {
 } from "drizzle-orm";
 import { getBusinessAccessContext } from "../services/businessTeamAccess";
 import { isPublicBusinessVisible } from "../utils/publicBusinessVisibility";
+import { applyRestaurantCreationPolicy } from "../services/restaurantCreationPolicy";
 
 type RestaurantsDealsRepositoryDependencies = {
   ensureCityExists: (name: string, state: string | null) => Promise<void>;
@@ -57,19 +58,7 @@ export function createRestaurantsDealsRepository(
     async createRestaurant(restaurant: InsertRestaurant): Promise<Restaurant> {
       // NORTH STAR RULE: Apply pricing lock for restaurants (not trucks) created before April 1, 2026
       const now = new Date();
-      const priceLockCutoff = new Date("2026-04-01");
-      const isRestaurant = !restaurant.isFoodTruck;
-
-      let restaurantData = { ...restaurant };
-
-      if (isRestaurant && now < priceLockCutoff && !restaurant.lockedPriceCents) {
-        restaurantData = {
-          ...restaurantData,
-          lockedPriceCents: 2500,
-          priceLockDate: now,
-          priceLockReason: "early_rollout",
-        };
-      }
+      const restaurantData = applyRestaurantCreationPolicy(restaurant, now);
 
       const [newRestaurant] = await db
         .insert(restaurants)

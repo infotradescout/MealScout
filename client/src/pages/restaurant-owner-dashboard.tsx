@@ -1,5 +1,9 @@
 import { useState, useEffect, useRef } from "react";
-import { isBarBusinessType, isTruckBusinessType } from "@shared/businessTypes";
+import {
+  isBarBusinessType,
+  isTruckBusinessType,
+  resolveStoredFoodBusinessType,
+} from "@shared/businessTypes";
 import {
   DEFAULT_TRUCK_BROADCAST_FRESHNESS_MS,
   deriveTruckPresence,
@@ -1065,7 +1069,8 @@ export default function RestaurantOwnerDashboard() {
       name: String(row?.name || ""),
       description: String(row?.description || ""),
       cuisineType: String(row?.cuisineType || ""),
-      businessType: String(row?.businessType || ""),
+      businessType:
+        resolveStoredFoodBusinessType(row) || "restaurant",
       address: String(row?.address || ""),
       city: String(row?.city || ""),
       state: String(row?.state || ""),
@@ -1729,6 +1734,7 @@ export default function RestaurantOwnerDashboard() {
       const {
         logoUrl: _logoUrl,
         coverImageUrl: _coverImageUrl,
+        businessType: _businessType,
         ...profileBasics
       } = payload;
       return await apiRequest(

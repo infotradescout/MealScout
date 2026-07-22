@@ -223,6 +223,116 @@ assert.equal(
   "The deprecated hours alias must remain compatible during migration",
 );
 
+const serializedCanonicalHours = toPublicRestaurantProfile({
+  row: {
+    id: "restaurant-canonical-hours",
+    name: "Canonical Hours Restaurant",
+    operatingHours: {
+      mon: [{ open: "09:00", close: "17:00" }],
+      tue: [{ open: "09:00", close: "17:00" }],
+      wed: [{ open: "09:00", close: "17:00" }],
+      thu: [{ open: "09:00", close: "17:00" }],
+      fri: [{ open: "09:00", close: "17:00" }],
+      sat: [{ open: "10:30", close: "14:00" }],
+      sun: [],
+    },
+  },
+  baseUrl: "https://www.mealscout.us",
+  profileType: "restaurant",
+});
+assert.equal(
+  serializedCanonicalHours.operatingHoursSummary,
+  "Mon–Fri 9:00 AM–5:00 PM; Sat 10:30 AM–2:00 PM",
+  "Owner-saved canonical operatingHours must reach the public profile",
+);
+
+const clearedCanonicalHours = toPublicRestaurantProfile({
+  row: {
+    id: "restaurant-cleared-hours",
+    name: "Cleared Hours Restaurant",
+    operatingHours: {
+      mon: [],
+      tue: [],
+      wed: [],
+      thu: [],
+      fri: [],
+      sat: [],
+      sun: [],
+    },
+    hoursSummary: "Mon-Fri 9-5",
+  },
+  baseUrl: "https://www.mealscout.us",
+  profileType: "restaurant",
+});
+assert.equal(
+  clearedCanonicalHours.operatingHoursSummary,
+  null,
+  "Clearing canonical hours must not resurrect stale legacy hours",
+);
+
+for (const [label, operatingHours] of [
+  [
+    "a mixed valid and malformed day",
+    {
+      mon: [
+        { open: "09:00", close: "17:00" },
+        { open: "not-a-time", close: "18:00" },
+      ],
+    },
+  ],
+  [
+    "an equal open and close time",
+    { mon: [{ open: "09:00", close: "09:00" }] },
+  ],
+  [
+    "more than three windows in one day",
+    {
+      mon: [
+        { open: "06:00", close: "07:00" },
+        { open: "08:00", close: "09:00" },
+        { open: "10:00", close: "11:00" },
+        { open: "12:00", close: "13:00" },
+      ],
+    },
+  ],
+] as const) {
+  const malformedHours = toPublicRestaurantProfile({
+    row: {
+      id: `restaurant-malformed-${String(label).replace(/\s+/g, "-")}`,
+      name: "Malformed Hours Restaurant",
+      operatingHours,
+      hoursSummary: "Mon-Fri 9-5",
+    },
+    baseUrl: "https://www.mealscout.us",
+    profileType: "restaurant",
+  });
+  assert.equal(
+    malformedHours.operatingHoursSummary,
+    null,
+    `Canonical hours with ${label} must fail closed as a whole`,
+  );
+}
+
+const serializedMultiWindowOvernightHours = toPublicRestaurantProfile({
+  row: {
+    id: "restaurant-multi-window-overnight-hours",
+    name: "Multi-window Overnight Restaurant",
+    operatingHours: {
+      fri: [
+        { open: "11:00", close: "14:00" },
+        { open: "22:00", close: "02:00" },
+      ],
+    },
+  },
+  baseUrl: "https://www.mealscout.us",
+  profileType: "restaurant",
+});
+assert.equal(
+  serializedMultiWindowOvernightHours.operatingHoursSummary,
+  "Fri 11:00 AM–2:00 PM, 10:00 PM–2:00 AM",
+  "Valid multiple and overnight windows must remain visible",
+);
+
 for (const path of [
   "client/src/pages/public-profile.tsx",
   "client/src/components/public-profile/RestaurantHoursPanel.tsx",

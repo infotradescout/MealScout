@@ -479,14 +479,14 @@ export default function OwnerProfileWorkspace({
               </FieldLabel>
               <FieldLabel
                 label="Service type"
-                hint="Keep this aligned with how your business operates."
+                hint="Business type changes require a reviewed identity update so schedules, permissions, and location privacy stay aligned."
               >
-                <Input
-                  value={draft.businessType}
-                  onChange={(event) =>
-                    update("businessType", event.target.value)
-                  }
-                />
+                <div
+                  data-testid="select-business-type"
+                  className="flex min-h-11 w-full items-center rounded-xl border border-input bg-[var(--bg-surface-muted)] px-3 py-2 text-sm font-semibold capitalize text-[color:var(--text-primary)]"
+                >
+                  {draft.businessType.replace(/_/g, " ") || "Food business"}
+                </div>
               </FieldLabel>
               <FieldLabel label="Public phone">
                 <Input

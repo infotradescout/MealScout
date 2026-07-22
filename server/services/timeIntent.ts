@@ -103,7 +103,20 @@ export function buildSlotDateTimes(params: {
   const sm = Number(matchStart[2]);
   const eh = Number(matchEnd[1]);
   const em = Number(matchEnd[2]);
-  if (![sh, sm, eh, em].every((n) => Number.isFinite(n))) return null;
+  if (
+    ![sh, sm, eh, em].every((n) => Number.isInteger(n)) ||
+    sh < 0 ||
+    sh > 23 ||
+    eh < 0 ||
+    eh > 23 ||
+    sm < 0 ||
+    sm > 59 ||
+    em < 0 ||
+    em > 59 ||
+    (sh === eh && sm === em)
+  ) {
+    return null;
+  }
 
   const dateKey = (() => {
     const raw = params.date as any;
@@ -122,11 +135,14 @@ export function buildSlotDateTimes(params: {
   // IMPORTANT: treat schedule date as a *local calendar day* for the target timezone.
   // Never derive the day by converting a JS Date from UTC -> local, or you'll get off-by-one around midnight.
   const base = DateTime.fromISO(dateKey, { zone: params.timeZone }).startOf("day");
+  if (!base.isValid) return null;
 
   let start = base.set({ hour: sh, minute: sm });
   let end = base.set({ hour: eh, minute: em });
-  if (end <= start) {
+  if (!start.isValid || !end.isValid) return null;
+  if (end < start) {
     end = end.plus({ days: 1 });
   }
+  if (end <= start) return null;
   return { startUtc: start.toUTC().toJSDate(), endUtc: end.toUTC().toJSDate() };
 }

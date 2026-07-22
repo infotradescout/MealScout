@@ -1,10 +1,26 @@
-import { and, eq } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import { db } from "../db";
 import { storage } from "../storage";
-import { menus, menuItems } from "@shared/schema";
+import { menus, menuItems, restaurants } from "@shared/schema";
+import {
+  resolveStoredFoodBusinessType,
+  toCanonicalFoodBusinessType,
+  type FoodBusinessType,
+} from "@shared/businessTypes";
 import { getBusinessAccessContext } from "./businessTeamAccess";
+import { buildTruckProfileLocationEvidence } from "../utils/truckLocationSemantics";
+import { applyRestaurantCreationPolicy } from "./restaurantCreationPolicy";
 
-type PromotionInput = {
+export type PromotionPlaceEvidence = {
+  placeId?: string | null;
+  formattedAddress?: string | null;
+  latitude?: number | string | null;
+  longitude?: number | string | null;
+};
+
+export type PromotionInput = {
+  onboardingAttemptId?: string | null;
+  targetRestaurantId?: string | null;
   businessName?: string | null;
   businessType?: string | null;
   address?: string | null;
@@ -19,7 +35,32 @@ type PromotionInput = {
   logoUrl?: string | null;
   coverImageUrl?: string | null;
   menuItems?: unknown;
+  placeEvidence?: PromotionPlaceEvidence | null;
 };
+
+export type BusinessPromotionDependencies = {
+  getUser: (userId: string) => Promise<any>;
+  getRestaurant: (restaurantId: string) => Promise<any>;
+  createRestaurantWithMenu: (
+    restaurant: Record<string, unknown>,
+    rawMenuItems: unknown,
+  ) => Promise<{ restaurant: any; insertedCount: number; created: boolean }>;
+  hydrateMenuItems: (
+    restaurantId: string,
+    rawMenuItems: unknown,
+  ) => Promise<{ insertedCount: number }>;
+  getAccessContext: (userId: string) => Promise<any>;
+};
+
+export class BusinessPromotionError extends Error {
+  constructor(
+    message: string,
+    readonly statusCode: 400 | 404 | 409,
+  ) {
+    super(message);
+    this.name = "BusinessPromotionError";
+  }
+}
 
 const toCents = (value: unknown) => {
   const raw = String(value ?? "").trim();
@@ -52,12 +93,54 @@ const normalizeMenuItems = (raw: unknown) => {
   }>;
 };
 
-const normalizeType = (value: unknown) => {
-  const raw = String(value || "").trim().toLowerCase();
-  if (raw === "food_truck" || raw === "food-truck" || raw === "truck") {
-    return "food_truck" as const;
+export const resolvePromotionBusinessType = (
+  value: unknown,
+  userType?: unknown,
+): FoodBusinessType => {
+  const supplied = String(value || "").trim();
+  if (supplied) {
+    const canonical = toCanonicalFoodBusinessType(supplied);
+    if (!canonical) {
+      throw new BusinessPromotionError("Unsupported food business type", 400);
+    }
+    return canonical;
   }
-  return "restaurant" as const;
+
+  const role = String(userType || "")
+    .trim()
+    .toLowerCase();
+  if (role === "food_truck") return "food_truck";
+  if (role === "bar_owner") return "bar";
+  return "restaurant";
+};
+
+const normalizePlaceEvidence = (value: PromotionPlaceEvidence | null | undefined) => {
+  if (!value || typeof value !== "object") return null;
+  const placeId = String(value.placeId || "").trim() || null;
+  const formattedAddress = String(value.formattedAddress || "").trim() || null;
+  const latitudeRaw = String(value.latitude ?? "").trim();
+  const longitudeRaw = String(value.longitude ?? "").trim();
+  const latitude = latitudeRaw ? Number(latitudeRaw) : null;
+  const longitude = longitudeRaw ? Number(longitudeRaw) : null;
+  const validCoordinates =
+    typeof latitude === "number" &&
+    Number.isFinite(latitude) &&
+    typeof longitude === "number" &&
+    Number.isFinite(longitude) &&
+    latitude >= -90 &&
+    latitude <= 90 &&
+    longitude >= -180 &&
+    longitude <= 180;
+  if (!placeId && !formattedAddress && !validCoordinates) return null;
+  return {
+    source: "client_place_prefill",
+    placeId,
+    formattedAddress,
+    latitude: validCoordinates ? latitude : null,
+    longitude: validCoordinates ? longitude : null,
+    publicLocationApproved: false,
+    capturedAt: new Date().toISOString(),
+  };
 };
 
 const readSetupDraftFromUser = (user: any): PromotionInput => {
@@ -127,23 +210,57 @@ const coalesce = (...values: Array<unknown>) => {
   return null;
 };
 
+const normalizeIdentityText = (value: unknown) =>
+  String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const targetMatchesSetupIdentity = (
+  restaurant: any,
+  setup: PromotionInput,
+) =>
+  [
+    [restaurant?.name, setup.businessName],
+    [restaurant?.address, setup.address],
+    [restaurant?.city, setup.city],
+    [restaurant?.state, setup.state],
+  ].every(
+    ([current, proposed]) =>
+      normalizeIdentityText(current) === normalizeIdentityText(proposed),
+  );
+
 const ensureRestaurantMenuItems = async (
   restaurantId: string,
   rawMenuItems: unknown,
+  queryRunner: any = db,
 ) => {
   const normalizedItems = normalizeMenuItems(rawMenuItems);
   if (normalizedItems.length === 0) return { insertedCount: 0 };
 
-  const [existingMenu] = await db
+  await queryRunner.execute(
+    sql`SELECT pg_advisory_xact_lock(hashtext(${`onboarding_menu:${restaurantId}`}))`,
+  );
+
+  const [existingMenu] = await queryRunner
     .select({ id: menus.id })
     .from(menus)
-    .where(and(eq(menus.restaurantId, restaurantId), eq(menus.isActive, true)))
+    .where(
+      and(
+        eq(menus.restaurantId, restaurantId),
+        eq(menus.serviceType, "all"),
+        eq(menus.isActive, true),
+      ),
+    )
+    .orderBy(asc(menus.createdAt), asc(menus.id))
     .limit(1);
 
   const menuId =
     existingMenu?.id ||
     (
-      await db
+      await queryRunner
         .insert(menus)
         .values({
           restaurantId,
@@ -155,18 +272,30 @@ const ensureRestaurantMenuItems = async (
         .returning({ id: menus.id })
     )[0]?.id;
 
-  if (!menuId) return { insertedCount: 0 };
+  if (!menuId) {
+    throw new Error("Unable to create the onboarding menu");
+  }
 
-  const existingRows = await db
+  const existingRows = await queryRunner
     .select({ name: menuItems.name })
     .from(menuItems)
-    .where(eq(menuItems.restaurantId, restaurantId));
+    .where(
+      and(
+        eq(menuItems.restaurantId, restaurantId),
+        eq(menuItems.menuId, menuId),
+      ),
+    );
   const existingNames = new Set(
     existingRows.map((row: any) => String(row.name || "").trim().toLowerCase()),
   );
 
   const toInsert = normalizedItems
-    .filter((item) => !existingNames.has(item.name.toLowerCase()))
+    .filter((item) => {
+      const key = item.name.toLowerCase();
+      if (existingNames.has(key)) return false;
+      existingNames.add(key);
+      return true;
+    })
     .map((item) => ({
       menuId,
       restaurantId,
@@ -179,23 +308,93 @@ const ensureRestaurantMenuItems = async (
     }));
 
   if (toInsert.length > 0) {
-    await db.insert(menuItems).values(toInsert as any);
+    await queryRunner.insert(menuItems).values(toInsert as any);
   }
 
   return { insertedCount: toInsert.length };
 };
 
+const defaultDependencies: BusinessPromotionDependencies = {
+  getUser: (userId) => storage.getUser(userId),
+  getRestaurant: (restaurantId) => storage.getRestaurant(restaurantId),
+  createRestaurantWithMenu: async (restaurant, rawMenuItems) => {
+    const result = await db.transaction(async (tx: any) => {
+      const requestedId = String(restaurant.id || "").trim() || null;
+      const insert = tx
+        .insert(restaurants)
+        .values(applyRestaurantCreationPolicy(restaurant));
+      const [createdRestaurant] = requestedId
+        ? await insert.onConflictDoNothing({ target: restaurants.id }).returning()
+        : await insert.returning();
+      if (!createdRestaurant && requestedId) {
+        const [existingRestaurant] = await tx
+          .select()
+          .from(restaurants)
+          .where(eq(restaurants.id, requestedId))
+          .limit(1);
+        if (!existingRestaurant) {
+          throw new Error("Unable to recover the onboarding business profile");
+        }
+        if (
+          String(existingRestaurant.ownerId || "") !==
+          String(restaurant.ownerId || "")
+        ) {
+          throw new BusinessPromotionError(
+            "Onboarding attempt belongs to a different owner",
+            409,
+          );
+        }
+        return {
+          restaurant: existingRestaurant,
+          insertedCount: 0,
+          created: false,
+        };
+      }
+      if (!createdRestaurant) {
+        throw new Error("Unable to create the business profile");
+      }
+      const menu = await ensureRestaurantMenuItems(
+        String(createdRestaurant.id),
+        rawMenuItems,
+        tx,
+      );
+      return {
+        restaurant: createdRestaurant,
+        insertedCount: menu.insertedCount,
+        created: true,
+      };
+    });
+    try {
+      if (result.restaurant?.city) {
+        await storage.ensureCityExists(
+          String(result.restaurant.city),
+          result.restaurant.state ? String(result.restaurant.state) : null,
+        );
+      }
+    } catch (error) {
+      console.warn("ensureCityExists failed for onboarding business", error);
+    }
+    return result;
+  },
+  hydrateMenuItems: (restaurantId, rawMenuItems) =>
+    db.transaction((tx: any) =>
+      ensureRestaurantMenuItems(restaurantId, rawMenuItems, tx),
+    ),
+  getAccessContext: (userId) => getBusinessAccessContext(userId),
+};
+
 export async function promoteBusinessSetupToProfile(
   userId: string,
   input?: PromotionInput,
+  dependencies: BusinessPromotionDependencies = defaultDependencies,
 ) {
-  const user = await storage.getUser(userId);
-  if (!user) throw new Error("User not found");
+  const user = await dependencies.getUser(userId);
+  if (!user) throw new BusinessPromotionError("User not found", 404);
 
   const draft = readSetupDraftFromUser(user);
   const merged: PromotionInput = {
     businessName: coalesce(input?.businessName, draft.businessName),
-    businessType: coalesce(input?.businessType, draft.businessType, user.userType),
+    businessType: coalesce(input?.businessType, draft.businessType),
     address: coalesce(input?.address, draft.address),
     city: coalesce(input?.city, draft.city),
     state: coalesce(input?.state, draft.state),
@@ -212,16 +411,70 @@ export async function promoteBusinessSetupToProfile(
   };
 
   if (!merged.businessName || !merged.address || !merged.city || !merged.state) {
-    throw new Error("Missing required business setup fields");
+    throw new BusinessPromotionError("Missing required business setup fields", 400);
   }
 
-  const owned = await storage.getRestaurantsByOwner(userId);
-  const businessType = normalizeType(merged.businessType);
-  let restaurant = (Array.isArray(owned) ? owned[0] : null) as any;
+  const businessType = resolvePromotionBusinessType(
+    merged.businessType,
+    user.userType,
+  );
+  const targetRestaurantId = String(input?.targetRestaurantId || "").trim();
+  let restaurant: any = null;
   let created = false;
+  let menuInsertedCount = 0;
+  let menuHandled = false;
 
-  if (!restaurant) {
-    restaurant = await storage.createRestaurant({
+  if (targetRestaurantId) {
+    restaurant = await dependencies.getRestaurant(targetRestaurantId);
+    if (!restaurant || String(restaurant.ownerId || "") !== userId) {
+      throw new BusinessPromotionError(
+        "Target business does not belong to this owner",
+        409,
+      );
+    }
+    const targetBusinessType = resolveStoredFoodBusinessType(restaurant);
+    if (
+      !targetBusinessType ||
+      targetBusinessType !== businessType
+    ) {
+      throw new BusinessPromotionError(
+        "Target business identity does not match this setup",
+        409,
+      );
+    }
+    if (!targetMatchesSetupIdentity(restaurant, merged)) {
+      throw new BusinessPromotionError(
+        "Target business identity does not match this setup",
+        409,
+      );
+    }
+  } else {
+    const onboardingPlaceEvidence = normalizePlaceEvidence(input?.placeEvidence);
+    const profileLocations =
+      businessType === "food_truck"
+        ? buildTruckProfileLocationEvidence({
+            businessName: String(merged.businessName),
+            address: String(merged.address),
+            serviceArea: [merged.city, merged.state]
+              .map((value) => String(value || "").trim())
+              .filter(Boolean)
+              .join(", "),
+            source: onboardingPlaceEvidence
+              ? "client_place_prefill"
+              : "owner_onboarding",
+          })
+        : null;
+    const rawData =
+      onboardingPlaceEvidence || profileLocations
+        ? {
+            ...(onboardingPlaceEvidence ? { onboardingPlaceEvidence } : {}),
+            ...(profileLocations ? { profileLocations } : {}),
+          }
+        : null;
+    const creation = await dependencies.createRestaurantWithMenu({
+      ...(input?.onboardingAttemptId
+        ? { id: String(input.onboardingAttemptId) }
+        : {}),
       ownerId: userId,
       name: String(merged.businessName),
       address: String(merged.address),
@@ -238,20 +491,32 @@ export async function promoteBusinessSetupToProfile(
       businessType,
       isFoodTruck: businessType === "food_truck",
       isActive: true,
-    } as any);
-    created = true;
+      rawData,
+    } as any, merged.menuItems);
+    restaurant = creation.restaurant;
+    menuInsertedCount = creation.insertedCount;
+    created = creation.created;
+    menuHandled = true;
   }
 
-  const menuHydration = await ensureRestaurantMenuItems(
-    String(restaurant.id),
-    merged.menuItems,
-  );
-  const accessContext = await getBusinessAccessContext(userId);
+  if (!menuHandled) {
+    const menuHydration = await dependencies.hydrateMenuItems(
+      String(restaurant.id),
+      merged.menuItems,
+    );
+    menuInsertedCount = menuHydration.insertedCount;
+  }
+  let accessContext: any = null;
+  try {
+    accessContext = await dependencies.getAccessContext(userId);
+  } catch (error) {
+    console.warn("Unable to refresh business access after onboarding", error);
+  }
 
   return {
     created,
     restaurant,
     accessContext,
-    menuInsertedCount: menuHydration.insertedCount,
+    menuInsertedCount,
   };
 }

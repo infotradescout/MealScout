@@ -88,6 +88,15 @@ const restaurantSchema = z
     hasParking: z.boolean().default(false),
     hasWifi: z.boolean().default(false),
     hasOutdoorSeating: z.boolean().default(false),
+    placeEvidence: z
+      .object({
+        placeId: z.string().max(240).optional().nullable(),
+        formattedAddress: z.string().max(500).optional().nullable(),
+        latitude: z.number().min(-90).max(90).optional().nullable(),
+        longitude: z.number().min(-180).max(180).optional().nullable(),
+      })
+      .optional()
+      .nullable(),
     acceptTerms: z
       .boolean()
       .refine(
@@ -220,11 +229,55 @@ const BLANK_RESTAURANT_FORM_VALUES: RestaurantFormData = {
   hasParking: false,
   hasWifi: false,
   hasOutdoorSeating: false,
+  placeEvidence: null,
   acceptTerms: false,
 };
 
 const SIGNUP_TERMS_ACCEPTANCE_KEY =
   "mealscout:restaurant-signup-accepted-terms";
+const RESTAURANT_ONBOARDING_ATTEMPT_KEY =
+  "mealscout:restaurant-onboarding-attempt-id";
+
+function createOnboardingAttemptId() {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  const bytes = new Uint8Array(16);
+  if (typeof crypto !== "undefined" && crypto.getRandomValues) {
+    crypto.getRandomValues(bytes);
+  } else {
+    for (let index = 0; index < bytes.length; index += 1) {
+      bytes[index] = Math.floor(Math.random() * 256);
+    }
+  }
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0"));
+  return [
+    hex.slice(0, 4).join(""),
+    hex.slice(4, 6).join(""),
+    hex.slice(6, 8).join(""),
+    hex.slice(8, 10).join(""),
+    hex.slice(10, 16).join(""),
+  ].join("-");
+}
+
+function getOrCreateOnboardingAttemptId() {
+  if (typeof window === "undefined") return createOnboardingAttemptId();
+  try {
+    const stored = String(
+      window.localStorage.getItem(RESTAURANT_ONBOARDING_ATTEMPT_KEY) || "",
+    ).trim();
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(stored)) {
+      return stored;
+    }
+    const created = createOnboardingAttemptId();
+    window.localStorage.setItem(RESTAURANT_ONBOARDING_ATTEMPT_KEY, created);
+    return created;
+  } catch {
+    return createOnboardingAttemptId();
+  }
+}
 
 function getStoredSignupTermsAccepted() {
   if (typeof window === "undefined") return false;
@@ -300,6 +353,21 @@ export default function RestaurantSignup() {
     } as HostOnboardingState,
   );
   const [createdRestaurant, setCreatedRestaurant] = useState<any>(null);
+  const [onboardingAttemptId, setOnboardingAttemptId] = useState(
+    getOrCreateOnboardingAttemptId,
+  );
+  const rotateOnboardingAttemptId = () => {
+    const nextAttemptId = createOnboardingAttemptId();
+    setOnboardingAttemptId(nextAttemptId);
+    try {
+      window.localStorage.setItem(
+        RESTAURANT_ONBOARDING_ATTEMPT_KEY,
+        nextAttemptId,
+      );
+    } catch {
+      // The in-memory attempt remains safe for this page session.
+    }
+  };
   const [verificationDocuments, setVerificationDocuments] = useState<string[]>(
     [],
   );
@@ -466,11 +534,47 @@ export default function RestaurantSignup() {
         ).trim();
         const prefillCity = String(params.get("prefillCity") || "").trim();
         const prefillState = String(params.get("prefillState") || "").trim();
+        const prefillPlaceId = String(
+          params.get("prefillPlaceId") || "",
+        ).trim();
+        const prefillLatitudeRaw = String(params.get("prefillLat") || "").trim();
+        const prefillLongitudeRaw = String(
+          params.get("prefillLng") || "",
+        ).trim();
+        const prefillLatitude = prefillLatitudeRaw
+          ? Number(prefillLatitudeRaw)
+          : null;
+        const prefillLongitude = prefillLongitudeRaw
+          ? Number(prefillLongitudeRaw)
+          : null;
 
         if (prefillName) form.setValue("name", prefillName);
         if (prefillAddress) form.setValue("address", prefillAddress);
         if (prefillCity) form.setValue("city", prefillCity);
         if (prefillState) form.setValue("state", prefillState);
+        if (
+          prefillPlaceId ||
+          prefillAddress ||
+          (typeof prefillLatitude === "number" &&
+            Number.isFinite(prefillLatitude) &&
+            typeof prefillLongitude === "number" &&
+            Number.isFinite(prefillLongitude))
+        ) {
+          form.setValue("placeEvidence", {
+            placeId: prefillPlaceId || null,
+            formattedAddress: prefillAddress || null,
+            latitude:
+              typeof prefillLatitude === "number" &&
+              Number.isFinite(prefillLatitude)
+              ? prefillLatitude
+              : null,
+            longitude:
+              typeof prefillLongitude === "number" &&
+              Number.isFinite(prefillLongitude)
+              ? prefillLongitude
+              : null,
+          });
+        }
         window.setTimeout(() => {
           const input = document.querySelector<HTMLInputElement>(
             '[data-testid="input-claim-search"]',
@@ -618,6 +722,7 @@ export default function RestaurantSignup() {
       // differs between an already-authenticated owner and a brand new
       // signup. Building it once here avoids the two branches drifting.
       const restaurantData = {
+        onboardingAttemptId,
         name: data.name,
         address: data.address,
         city: data.city,
@@ -635,6 +740,7 @@ export default function RestaurantSignup() {
           wifi: data.hasWifi,
           outdoor_seating: data.hasOutdoorSeating,
         },
+        placeEvidence: data.placeEvidence || null,
       };
 
       const signupData = signupForm.getValues();
@@ -701,6 +807,7 @@ export default function RestaurantSignup() {
         // restaurant profile, so drop the local draft to avoid stale prefill
         // on a future signup.
         window.localStorage.removeItem(RESTAURANT_DRAFT_KEY);
+        window.localStorage.removeItem(RESTAURANT_ONBOARDING_ATTEMPT_KEY);
       } catch {}
       setCreatedRestaurant(restaurant);
       dispatchOnboarding({ type: "GO_TO_VERIFICATION" });
@@ -710,6 +817,13 @@ export default function RestaurantSignup() {
       });
     },
     onError: (error) => {
+      if (
+        String(error.message || "").includes(
+          "Onboarding attempt belongs to a different owner",
+        )
+      ) {
+        rotateOnboardingAttemptId();
+      }
       if (isUnauthorizedError(error)) {
         toast({
           title: COPY.notifications.restaurant.unauthorizedTitle,
@@ -1701,6 +1815,7 @@ export default function RestaurantSignup() {
                           } catch {
                             // ignore
                           }
+                          rotateOnboardingAttemptId();
                           form.reset(BLANK_RESTAURANT_FORM_VALUES);
                           setRestoredDraftAt(null);
                         }}

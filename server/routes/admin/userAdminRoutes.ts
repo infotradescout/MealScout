@@ -10,7 +10,10 @@ import { emailService } from "../../emailService";
 import { db } from "../../db";
 import { logAudit } from "../../auditLogger";
 import { ensurePremiumTrialForUserId } from "../../services/premiumTrial";
-import { promoteBusinessSetupToProfile } from "../../services/businessOnboardingPromotion";
+import {
+  BusinessPromotionError,
+  promoteBusinessSetupToProfile,
+} from "../../services/businessOnboardingPromotion";
 import {
   computeParkingPassQualityFlags,
   isParkingPassPublicReady,
@@ -265,7 +268,9 @@ export function registerUserAdminRoutes(
         });
       } catch (error: any) {
         console.error("Error creating and attaching business profile:", error);
-        res.status(500).json({
+        res.status(
+          error instanceof BusinessPromotionError ? error.statusCode : 500,
+        ).json({
           message: error?.message || "Failed to create and attach business profile",
         });
       }
@@ -2535,6 +2540,20 @@ export function registerUserAdminRoutes(
             delete updates[key];
           }
         });
+
+        if (
+          String(updates.status || "")
+            .trim()
+            .toLowerCase() === "confirmed"
+        ) {
+          updates.status = "confirmed";
+          updates.bookingConfirmedAt = sql<Date>`case
+            when ${eventBookings.status} = 'confirmed'
+              and ${eventBookings.bookingConfirmedAt} is not null
+            then ${eventBookings.bookingConfirmedAt}
+            else now()
+          end`;
+        }
 
         const [updated] = await db
           .update(eventBookings)

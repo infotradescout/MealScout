@@ -19,6 +19,11 @@ import {
   isTruckBusinessType,
   toCanonicalFoodBusinessType,
 } from "@shared/businessTypes";
+import { loadConfirmedEventTrucks } from "../services/confirmedEventTrucks";
+import { resolveCityTimeZoneSync } from "../services/cityTimeZone";
+import { buildSlotDateTimes } from "../services/timeIntent";
+import { isSlotPublic } from "../services/publicSlotGate";
+import { canExposeAnonymousEventDetail } from "../publicProfiles/publicEventDetailAccess";
 
 type PageLink = { label: string; href: string };
 
@@ -583,20 +588,57 @@ async function eventPage(baseUrl: string, eventId: string) {
       startTime: events.startTime,
       endTime: events.endTime,
       status: events.status,
+      requiresPayment: events.requiresPayment,
       updatedAt: events.updatedAt,
       hostId: events.hostId,
-      bookedRestaurantId: events.bookedRestaurantId,
       hostName: hosts.businessName,
       hostCity: hosts.city,
       hostState: hosts.state,
-      truckName: restaurants.name,
     })
     .from(events)
     .innerJoin(hosts, eq(events.hostId, hosts.id))
-    .leftJoin(restaurants, eq(events.bookedRestaurantId, restaurants.id))
     .where(eq(events.id, eventId))
     .limit(1);
-  if (!row || row.eventType === "private_event") return null;
+  if (!row || row.eventType === "private_event" || row.requiresPayment) {
+    return null;
+  }
+  const confirmedTrucks =
+    (await loadConfirmedEventTrucks([String(row.id)])).get(String(row.id)) ||
+    [];
+  const primaryTruck = confirmedTrucks[0] || null;
+  const timeZone = resolveCityTimeZoneSync({
+    city: row.hostCity || null,
+    state: row.hostState || null,
+  });
+  const eventInterval = buildSlotDateTimes({
+    timeZone,
+    date: row.date,
+    startTime: String(row.startTime || ""),
+    endTime: String(row.endTime || ""),
+  });
+  const slotIsPublic = Boolean(
+    primaryTruck?.bookingConfirmedAt &&
+      eventInterval &&
+      isSlotPublic({
+        slot: {
+          source: "parking_pass_booking",
+          status: "confirmed",
+          startsAtUtc: eventInterval.startUtc,
+          endsAtUtc: eventInterval.endUtc,
+          lastConfirmedAtUtc: primaryTruck.bookingConfirmedAt,
+        },
+        ttlHours: 24 * 365 * 100,
+      }),
+  );
+  if (
+    !canExposeAnonymousEventDetail({
+      requiresPayment: row.requiresPayment,
+      status: row.status,
+      slotIsPublic,
+    })
+  ) {
+    return null;
+  }
 
   const title = cleanText(
     row.name || row.hostName,
@@ -612,10 +654,10 @@ async function eventPage(baseUrl: string, eventId: string) {
     row.description,
     `${title}${cityState ? ` in ${cityState}` : ""} on MealScout. See event details, host location, and food truck availability.`,
   );
-  const eventDate = row.date ? new Date(row.date as any) : null;
-  const ended = eventDate
-    ? eventDate.getTime() < Date.now() - 24 * 60 * 60 * 1000
-    : false;
+  const eventDate = eventInterval?.startUtc || null;
+  const ended = eventInterval
+    ? eventInterval.endUtc.getTime() < Date.now()
+    : true;
 
   return {
     title: `${title}${cityState ? ` in ${cityState}` : ""} | MealScout`,
@@ -633,9 +675,8 @@ async function eventPage(baseUrl: string, eventId: string) {
         name: title,
         description,
         url: absoluteUrl(baseUrl, canonicalPath),
-        startDate: row.date
-          ? new Date(row.date as any).toISOString()
-          : undefined,
+        startDate: eventInterval?.startUtc.toISOString(),
+        endDate: eventInterval?.endUtc.toISOString(),
         eventStatus:
           row.status === "cancelled"
             ? "https://schema.org/EventCancelled"
@@ -645,9 +686,13 @@ async function eventPage(baseUrl: string, eventId: string) {
           name: row.hostName || undefined,
           address: cityState || undefined,
         },
-        performer: row.truckName
-          ? { "@type": "FoodTruck", name: row.truckName }
-          : undefined,
+        performer:
+          confirmedTrucks.length > 0
+            ? confirmedTrucks.map((truck) => ({
+                "@type": "FoodTruck",
+                name: truck.name,
+              }))
+            : undefined,
       },
       ...videoSchemas(baseUrl, videos, title),
     ],
@@ -657,11 +702,22 @@ async function eventPage(baseUrl: string, eventId: string) {
       { label: "Find food trucks", href: "/truck-discovery" },
     ],
     body: [
-      eventDate ? `Date: ${eventDate.toDateString()}` : "",
+      eventDate
+        ? `Date: ${new Intl.DateTimeFormat("en-US", {
+            timeZone,
+            year: "numeric",
+            month: "long",
+            day: "numeric",
+          }).format(eventDate)}`
+        : "",
       row.startTime && row.endTime
         ? `Time: ${row.startTime} - ${row.endTime}`
         : "",
-      row.truckName ? `Booked truck: ${row.truckName}` : "",
+      confirmedTrucks.length > 0
+        ? `Confirmed truck${confirmedTrucks.length === 1 ? "" : "s"}: ${confirmedTrucks
+            .map((truck) => truck.name)
+            .join(", ")}`
+        : "",
     ].filter(Boolean),
   } satisfies PrerenderPage;
 }

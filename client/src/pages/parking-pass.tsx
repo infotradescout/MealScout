@@ -2092,6 +2092,15 @@ export default function ParkingPassPage() {
       });
       return;
     }
+    if (!scheduleForm.city || !scheduleForm.state) {
+      toast({
+        title: "Missing city/state",
+        description:
+          "City and state are required so MealScout can show the stop in the correct local time.",
+        variant: "destructive",
+      });
+      return;
+    }
 
     setIsSavingSchedule(true);
     try {
@@ -6950,11 +6959,12 @@ export default function ParkingPassPage() {
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-2">
-                      <Label htmlFor="schedule-city">City</Label>
+                      <Label htmlFor="schedule-city">City *</Label>
                       <Input
                         id="schedule-city"
                         placeholder="City"
                         value={scheduleForm.city}
+                        required
                         disabled={!hasPremiumTruckTools}
                         onChange={(event) =>
                           handleScheduleFieldChange("city", event.target.value)
@@ -6962,11 +6972,12 @@ export default function ParkingPassPage() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="schedule-state">State</Label>
+                      <Label htmlFor="schedule-state">State *</Label>
                       <Input
                         id="schedule-state"
                         placeholder="State"
                         value={scheduleForm.state}
+                        required
                         disabled={!hasPremiumTruckTools}
                         onChange={(event) =>
                           handleScheduleFieldChange("state", event.target.value)

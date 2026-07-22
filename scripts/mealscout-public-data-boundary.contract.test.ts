@@ -177,6 +177,33 @@ assert.deepEqual(
   { id: "series-1", name: "Friday series" },
   "toPublicEventListing must preserve only the public series identity",
 );
+const canonicalTruckEvent = toPublicEventListing({
+  id: "event-canonical-truck",
+  bookedRestaurantId: "legacy-canceled-pointer",
+  trucks: [
+    {
+      id: "confirmed-truck",
+      name: "Confirmed Truck",
+      ownerId: "SECRET_owner",
+    },
+  ],
+});
+assert.equal(
+  canonicalTruckEvent.bookedRestaurantId,
+  "confirmed-truck",
+  "The singular compatibility alias must derive from canonical trucks[]",
+);
+assert.deepEqual(canonicalTruckEvent.trucks, [
+  {
+    id: "confirmed-truck",
+    name: "Confirmed Truck",
+    cuisineType: null,
+    city: null,
+    state: null,
+    logoUrl: null,
+    coverImageUrl: null,
+  },
+]);
 
 const publicEventArray = toPublicEventListingArray([rawEvent]);
 assert.equal(publicEventArray.length, 1);
@@ -498,14 +525,14 @@ assert.match(
   "eventRoutes.ts must import the public event DTO",
 );
 assert.match(
-  sliceAfter(eventRoutesSource, 'app.get("/api/events/public"'),
-  /toPublicEventListingArray/,
-  "GET /api/events/public must return sanitized event DTOs",
+  sliceAfter(eventRoutesSource, 'app.get("/api/events/public"', 900),
+  /attachConfirmedPublicEventTrucks[\s\S]*toPublicEventListingArray/,
+  "GET /api/events/public must canonicalize truck bookings before returning sanitized event DTOs",
 );
 assert.match(
-  sliceAfter(eventRoutesSource, 'app.get("/api/events/upcoming"'),
-  /toPublicEventListingArray/,
-  "GET /api/events/upcoming must return sanitized event DTOs",
+  sliceAfter(eventRoutesSource, 'app.get("/api/events/upcoming"', 900),
+  /attachConfirmedPublicEventTrucks[\s\S]*toPublicEventListingArray/,
+  "GET /api/events/upcoming must canonicalize truck bookings before returning sanitized event DTOs",
 );
 const authenticatedEventsRoute = sliceAfter(
   eventRoutesSource,
@@ -524,8 +551,8 @@ assert.match(
 );
 assert.match(
   authenticatedEventsRoute,
-  /res\.json\(toPublicEventListingArray\(filtered\)\)/,
-  "GET /api/events without a host filter must sanitize its cross-host feed",
+  /toPublicEventListingArray\([\s\S]*attachConfirmedPublicEventTrucks\(filtered\)/,
+  "GET /api/events without a host filter must canonicalize and sanitize its cross-host feed",
 );
 const publicEventDetailRoute = sliceAfter(
   eventRoutesSource,

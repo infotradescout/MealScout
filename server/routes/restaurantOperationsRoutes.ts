@@ -566,7 +566,6 @@ export function registerRestaurantOperationsRoutes(
           name: z.string().trim().min(1).max(160).optional(),
           description: z.string().trim().max(4000).optional().nullable(),
           cuisineType: z.string().trim().max(160).optional().nullable(),
-          businessType: z.string().trim().max(80).optional().nullable(),
           address: z.string().trim().max(240).optional().nullable(),
           city: z.string().trim().max(120).optional().nullable(),
           state: z.string().trim().max(120).optional().nullable(),

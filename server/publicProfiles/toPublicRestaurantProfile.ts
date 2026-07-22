@@ -1,4 +1,5 @@
 import type { PublicRestaurantProfile } from "@shared/publicProfiles";
+import { operatingHoursSchema } from "@shared/schema";
 import {
   DEFAULT_TRUCK_BROADCAST_FRESHNESS_MS,
   deriveTruckPresence,
@@ -16,6 +17,74 @@ import {
   toSlug,
 } from "./publicProfileUtils";
 import { shouldExposeStaticTruckProfileLocation } from "../utils/truckLocationSemantics";
+
+const OPERATING_HOUR_DAYS = [
+  ["mon", "Mon"],
+  ["tue", "Tue"],
+  ["wed", "Wed"],
+  ["thu", "Thu"],
+  ["fri", "Fri"],
+  ["sat", "Sat"],
+  ["sun", "Sun"],
+] as const;
+
+const formatOperatingHourTime = (value: unknown) => {
+  const match = String(value || "")
+    .trim()
+    .match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return null;
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+  if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
+  const suffix = hour >= 12 ? "PM" : "AM";
+  const displayHour = hour % 12 || 12;
+  return `${displayHour}:${String(minute).padStart(2, "0")} ${suffix}`;
+};
+
+export function formatOperatingHoursSummary(value: unknown): string | null {
+  const parsed = operatingHoursSchema.safeParse(value);
+  if (!parsed.success) return null;
+  const operatingHours = parsed.data;
+  const rows = OPERATING_HOUR_DAYS.map(([key, label]) => {
+    const slots = operatingHours[key] || [];
+    const slotLabel = slots
+      .map((slot) => {
+        const open = formatOperatingHourTime(slot?.open);
+        const close = formatOperatingHourTime(slot?.close);
+        return open && close ? `${open}–${close}` : null;
+      })
+      .filter(Boolean)
+      .join(", ");
+    return { label, slotLabel };
+  }).filter((row) => row.slotLabel);
+  if (rows.length === 0) return null;
+
+  const groups: Array<{ start: string; end: string; slotLabel: string }> = [];
+  for (const row of rows) {
+    const last = groups[groups.length - 1];
+    const currentDayIndex = OPERATING_HOUR_DAYS.findIndex(
+      ([, label]) => label === row.label,
+    );
+    const lastDayIndex = last
+      ? OPERATING_HOUR_DAYS.findIndex(([, label]) => label === last.end)
+      : -1;
+    if (
+      last &&
+      last.slotLabel === row.slotLabel &&
+      currentDayIndex === lastDayIndex + 1
+    ) {
+      last.end = row.label;
+    } else {
+      groups.push({ start: row.label, end: row.label, slotLabel: row.slotLabel });
+    }
+  }
+
+  return groups
+    .map((group) =>
+      `${group.start}${group.end !== group.start ? `–${group.end}` : ""} ${group.slotLabel}`,
+    )
+    .join("; ");
+}
 
 export function toPublicRestaurantProfile(input: {
   row: any;
@@ -314,10 +383,17 @@ export function toPublicRestaurantProfile(input: {
     (hidePublicTrustFields && !isAccepted("social_links"))
       ? null
       : String(row.xUrl || "").trim() || null;
-  const hoursValue =
-    String(
-      row.hours || row.businessHours || row.hoursSummary || row.openHours || "",
-    ).trim() || null;
+  const hasCanonicalOperatingHours =
+    row.operatingHours !== undefined && row.operatingHours !== null;
+  const hoursValue = hasCanonicalOperatingHours
+    ? formatOperatingHoursSummary(row.operatingHours)
+    : String(
+        row.hours ||
+          row.businessHours ||
+          row.hoursSummary ||
+          row.openHours ||
+          "",
+      ).trim() || null;
   const openStatusValue =
     String(
       row.openStatus ||
