@@ -14,6 +14,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useQuery } from "@tanstack/react-query";
 import mealScoutIcon from "@assets/meal-scout-icon.png";
+import { createGoogleMapWithRasterFallback } from "@/lib/google-map-runtime";
 import type { MapBoundsLike, MapTrafficCell } from "./map-adapter.types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -187,6 +188,7 @@ function GoogleMapRenderer({
   const circleRef = useRef<any>(null);
   const routePolylineRef = useRef<any>(null);
   const infoWindowRef = useRef<any>(null);
+  const mapIdAppliedRef = useRef(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [mapReadyVersion, setMapReadyVersion] = useState(0);
   // Portal state: the DOM node injected into the InfoWindow + the ReactNode to render there
@@ -209,15 +211,21 @@ function GoogleMapRenderer({
         if (cancelled || !containerRef.current) return;
         const g = (window as GoogleMapsWindow).google;
         if (!g?.maps) return;
-        const map = new g.maps.Map(containerRef.current, {
+        const mapOptions = {
           center: { lat: center.lat, lng: center.lng },
           zoom,
           disableDefaultUI: true,
           zoomControl: true,
           gestureHandling: interactionsEnabled ? "auto" : "none",
           mapTypeId: "roadmap",
-          ...(mapId ? { mapId } : {}),
+        };
+        const { map, mapIdApplied } = createGoogleMapWithRasterFallback<any>({
+          MapConstructor: g.maps.Map,
+          container: containerRef.current,
+          options: mapOptions,
+          mapId,
         });
+        mapIdAppliedRef.current = mapIdApplied;
         mapRef.current = map;
         setMapReadyVersion((version) => version + 1);
         const refreshLayout = () => {
@@ -302,6 +310,7 @@ function GoogleMapRenderer({
       resizeObserverRef.current?.disconnect();
       resizeObserverRef.current = null;
       infoWindowRef.current?.close?.();
+      mapIdAppliedRef.current = false;
       mapRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -342,7 +351,9 @@ function GoogleMapRenderer({
         });
       } else {
         const AdvancedMarkerElement = g.maps.marker?.AdvancedMarkerElement;
-        const useAdvanced = Boolean(AdvancedMarkerElement && mapId);
+        const useAdvanced = Boolean(
+          AdvancedMarkerElement && mapIdAppliedRef.current,
+        );
         let marker: any;
         if (useAdvanced) {
           const img = document.createElement("img");
