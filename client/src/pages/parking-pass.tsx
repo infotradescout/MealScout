@@ -7582,7 +7582,7 @@ export default function ParkingPassPage() {
                         <GoogleMapPicker
                           center={journeyMapCenter}
                           zoom={9}
-                          fitToPins
+                          fitPins
                           pins={journeyMapPins}
                           routePath={journeyResult.route.path}
                           className="h-full w-full"
@@ -7785,7 +7785,7 @@ export default function ParkingPassPage() {
                             <GoogleMapPicker
                               center={fallbackMapCenter}
                               zoom={13}
-                              fitToPins
+                              fitPins
                               interactionsEnabled={mapInteractionsEnabled}
                               trafficCells={spotFootTrafficCells}
                               pins={[
@@ -7974,7 +7974,7 @@ export default function ParkingPassPage() {
                           <GoogleMapPicker
                             center={mapCenter}
                             zoom={13}
-                            fitToPins
+                            fitPins
                             interactionsEnabled={mapInteractionsEnabled}
                             trafficCells={spotFootTrafficCells}
                             onPinClick={(pinKey) => {

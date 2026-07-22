@@ -5,7 +5,6 @@ const read = (path: string) => readFileSync(path, "utf8");
 const navigation = read("client/src/components/navigation.tsx");
 const scout = read("client/src/pages/explore-preview-v2.tsx");
 const quarantinedScout = read("client/src/pages/explore-preview.tsx");
-const map = read("client/src/pages/map.tsx");
 const publicProfile = read("client/src/pages/public-profile.tsx");
 const app = read("client/src/App.tsx");
 
@@ -81,32 +80,9 @@ assert(
   "Scout account action must send guests to login with a Scout redirect.",
 );
 
-const mapExploreLinks = sliceBetween(map, "const mapExploreLinks = [", "];");
 assert(
-  mapExploreLinks.includes('href: "/scout"') && mapExploreLinks.includes('href: "/search"'),
-  "Map explore links must preserve Scout and Browse nearby exits.",
-);
-for (const blockedMapLink of ['href: "/events"', "Search Food Deals", "Food Truck Events"]) {
-  assert(
-    !mapExploreLinks.includes(blockedMapLink),
-    `Map explore links must not promote red destination: ${blockedMapLink}`,
-  );
-}
-assert(
-  map.includes("const trendingLinks: Array") && map.includes("= [];"),
-  "Map trending search exits must remain suppressed during containment.",
-);
-assert(
-  map.includes("const showContainedMapExtendedSections = false;"),
-  "Map event/supplier/deal list sections must stay runtime-suppressed.",
-);
-assert(
-  !map.includes("`/restaurant/${"),
-  "Map truck CTAs must not use restaurant-shaped profile URLs during containment.",
-);
-assert(
-  map.includes('entityType: "truck"'),
-  "Map truck CTAs must route through public truck profile path building.",
+  app.includes('<Route path="/map" component={RedirectToScout} />'),
+  "The retired standalone map entry must stay contained by canonical Scout.",
 );
 
 for (const blockedProfileLink of [

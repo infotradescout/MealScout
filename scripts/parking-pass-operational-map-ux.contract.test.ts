@@ -25,7 +25,7 @@ const requiredUiSnippets = [
   "parkingPassMapLocations",
   "Show every active, mappable host.",
   "Host pins",
-  "fitToPins",
+  "fitPins",
   "Results are not limited to your",
   'apiUrl("/api/map/locations")',
 ];
@@ -52,8 +52,8 @@ const requiredMapSnippets = [
   "? 0.1",
   "? 0.14",
   ": 0.12",
-  "map.fitBounds(bounds, 48)",
-  "LeafletPinFitter",
+  "map.fitBounds(bounds, 72)",
+  "new g.maps.Polyline",
 ];
 
 for (const snippet of requiredMapSnippets) {

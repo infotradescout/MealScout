@@ -1,8 +1,7 @@
 /**
  * GoogleMapPicker
  *
- * A reusable map component that renders Google Maps when a key is available
- * and automatically falls back to Leaflet/OpenStreetMap when no key is present.
+ * A reusable Google Maps component for pin editing and Parking Pass browsing.
  *
  * Supports:
  *  - Click-to-place a draggable pin
@@ -13,17 +12,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import {
-  MapContainer,
-  TileLayer,
-  Marker,
-  Popup,
-  Circle,
-  Polyline,
-  useMap,
-  useMapEvents,
-} from "react-leaflet";
-import L from "leaflet";
 import { useQuery } from "@tanstack/react-query";
 import mealScoutIcon from "@assets/meal-scout-icon.png";
 import type { MapBoundsLike, MapTrafficCell } from "./map-adapter.types";
@@ -37,7 +25,7 @@ export interface MapPickerPin {
   position: GeoPoint;
   /** If provided the pin is draggable and calls onPinDrag when released */
   draggable?: boolean;
-  /** Popup content rendered inside a Leaflet Popup / Google InfoWindow */
+  /** Popup content rendered inside a Google Maps InfoWindow */
   popup?: React.ReactNode;
   /** Whether this pin uses the "occupied" (dot) variant */
   occupied?: boolean;
@@ -54,14 +42,8 @@ export interface GoogleMapPickerProps {
   onPinClick?: (key: string) => void;
   /** Pins to render on the map */
   pins?: MapPickerPin[];
-  /** Fit the viewport whenever the rendered pin set changes */
-  fitToPins?: boolean;
-  /** Fan out markers that would otherwise occupy the same screen pixels */
-  separateOverlappingPins?: boolean;
   /** Optional owner planning heat cells rendered above the map */
   trafficCells?: MapTrafficCell[];
-  /** Optional route geometry rendered as a connected path */
-  routePath?: GeoPoint[];
   /** Called after viewport changes so callers can fetch viewport-scoped overlays */
   onBoundsChanged?: (bounds: MapBoundsLike) => void;
   /** If set, draws a circle around `center` with this radius in metres */
@@ -72,161 +54,9 @@ export interface GoogleMapPickerProps {
   interactionsEnabled?: boolean;
   /** Google Maps Map ID — required for Advanced Markers; from VITE_GOOGLE_MAPS_MAP_ID */
   mapId?: string;
-}
-
-// ─── Shared assets ────────────────────────────────────────────────────────────
-
-const pinIcon = new L.Icon({
-  iconUrl: mealScoutIcon,
-  iconSize: [36, 36],
-  iconAnchor: [18, 36],
-  popupAnchor: [0, -30],
-});
-
-const pinIconOccupied = new L.DivIcon({
-  className: "pp-pin",
-  html: `<div class="pp-pin__wrap"><img class="pp-pin__img" src="${mealScoutIcon}" alt="" /><span class="pp-pin__dot" aria-hidden="true"></span></div>`,
-  iconSize: [36, 36],
-  iconAnchor: [18, 36],
-  popupAnchor: [0, -30],
-});
-
-// ─── Leaflet helpers ──────────────────────────────────────────────────────────
-
-const detachGoogleMarker = (marker: any) => {
-  if (!marker) return;
-  if (typeof marker.setMap === "function") {
-    marker.setMap(null);
-    return;
-  }
-  marker.map = null;
-};
-
-const updateGoogleMarkerPosition = (marker: any, position: GeoPoint) => {
-  if (!marker) return;
-  if (typeof marker.setPosition === "function") {
-    marker.setPosition(position);
-    return;
-  }
-  marker.position = position;
-};
-
-function LeafletCenterer({
-  center,
-  zoom,
-}: {
-  center: GeoPoint;
-  zoom?: number;
-}) {
-  const map = useMap();
-  useEffect(() => {
-    map.setView([center.lat, center.lng], zoom ?? map.getZoom(), {
-      animate: true,
-    });
-  }, [center.lat, center.lng, map, zoom]);
-  return null;
-}
-
-function LeafletClickHandler({
-  onMapClick,
-}: {
-  onMapClick: (p: GeoPoint) => void;
-}) {
-  useMapEvents({
-    click: (e) => onMapClick({ lat: e.latlng.lat, lng: e.latlng.lng }),
-  });
-  return null;
-}
-
-function LeafletBoundsWatcher({
-  onBoundsChanged,
-}: {
-  onBoundsChanged: (bounds: MapBoundsLike) => void;
-}) {
-  const map = useMap();
-  useEffect(() => {
-    const emitBounds = () => {
-      const bounds = map.getBounds();
-      const north = bounds.getNorth();
-      const south = bounds.getSouth();
-      const east = bounds.getEast();
-      const west = bounds.getWest();
-      onBoundsChanged({
-        north,
-        south,
-        east,
-        west,
-        contains: ([lat, lng]) => {
-          const withinLat = lat <= north && lat >= south;
-          const crossesDateLine = west > east;
-          const withinLng = crossesDateLine
-            ? lng >= west || lng <= east
-            : lng >= west && lng <= east;
-          return withinLat && withinLng;
-        },
-      });
-    };
-    emitBounds();
-    map.on("moveend zoomend", emitBounds);
-    return () => {
-      map.off("moveend zoomend", emitBounds);
-    };
-  }, [map, onBoundsChanged]);
-  return null;
-}
-
-function LeafletPinFitter({
-  enabled,
-  pins,
-  zoom,
-}: {
-  enabled: boolean;
-  pins: MapPickerPin[];
-  zoom?: number;
-}) {
-  const map = useMap();
-  const lastSignatureRef = useRef("");
-
-  useEffect(() => {
-    if (!enabled) {
-      lastSignatureRef.current = "";
-      return;
-    }
-
-    const validPins = pins.filter(
-      (pin) =>
-        Number.isFinite(pin.position.lat) && Number.isFinite(pin.position.lng),
-    );
-    if (validPins.length === 0) return;
-
-    const signature = validPins
-      .map(
-        (pin) =>
-          `${pin.key}:${pin.position.lat.toFixed(6)}:${pin.position.lng.toFixed(6)}`,
-      )
-      .sort()
-      .join("|");
-    if (signature === lastSignatureRef.current) return;
-    lastSignatureRef.current = signature;
-
-    if (validPins.length === 1) {
-      map.setView(
-        [validPins[0].position.lat, validPins[0].position.lng],
-        Math.min(zoom ?? 13, 14),
-        { animate: true },
-      );
-      return;
-    }
-
-    map.fitBounds(
-      L.latLngBounds(
-        validPins.map((pin) => [pin.position.lat, pin.position.lng]),
-      ),
-      { animate: true, maxZoom: 14, padding: [28, 28] },
-    );
-  }, [enabled, map, pins, zoom]);
-
-  return null;
+  fitPins?: boolean;
+  /** Optional route geometry rendered on parking browse maps. */
+  routePath?: GeoPoint[];
 }
 
 // ─── Google Maps loader (shared singleton) ────────────────────────────────────
@@ -304,15 +134,14 @@ function GoogleMapRenderer({
   center,
   zoom = 13,
   pins = [],
-  fitToPins = false,
-  separateOverlappingPins = false,
   trafficCells = [],
-  routePath = [],
   circleRadiusMetres,
   onMapClick,
   onPinDrag,
   onPinClick,
   onBoundsChanged,
+  fitPins = false,
+  routePath = [],
   interactionsEnabled = true,
   onLoadError,
 }: {
@@ -321,15 +150,14 @@ function GoogleMapRenderer({
   center: GeoPoint;
   zoom?: number;
   pins?: MapPickerPin[];
-  fitToPins?: boolean;
-  separateOverlappingPins?: boolean;
   trafficCells?: MapTrafficCell[];
-  routePath?: GeoPoint[];
   circleRadiusMetres?: number;
   onMapClick?: (p: GeoPoint) => void;
   onPinDrag?: (key: string, p: GeoPoint) => void;
   onPinClick?: (key: string) => void;
   onBoundsChanged?: (bounds: MapBoundsLike) => void;
+  fitPins?: boolean;
+  routePath?: GeoPoint[];
   interactionsEnabled?: boolean;
   onLoadError?: () => void;
 }) {
@@ -341,14 +169,11 @@ function GoogleMapRenderer({
   const circleRef = useRef<any>(null);
   const routePolylineRef = useRef<any>(null);
   const infoWindowRef = useRef<any>(null);
-  const lastFittedPinSignatureRef = useRef("");
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [mapInstanceVersion, setMapInstanceVersion] = useState(0);
+  const [mapReadyVersion, setMapReadyVersion] = useState(0);
   // Portal state: the DOM node injected into the InfoWindow + the ReactNode to render there
-  const [infoPortalContainer, setInfoPortalContainer] =
-    useState<HTMLDivElement | null>(null);
-  const [infoPortalContent, setInfoPortalContent] =
-    useState<React.ReactNode>(null);
+  const [infoPortalContainer, setInfoPortalContainer] = useState<HTMLDivElement | null>(null);
+  const [infoPortalContent, setInfoPortalContent] = useState<React.ReactNode>(null);
 
   // Load SDK + initialise map
   useEffect(() => {
@@ -368,7 +193,7 @@ function GoogleMapRenderer({
           ...(mapId ? { mapId } : {}),
         });
         mapRef.current = map;
-        setMapInstanceVersion((version) => version + 1);
+        setMapReadyVersion((version) => version + 1);
         const refreshLayout = () => {
           const currentMap = mapRef.current;
           if (!currentMap) return;
@@ -435,7 +260,7 @@ function GoogleMapRenderer({
     return () => {
       cancelled = true;
       Array.from(markersRef.current.values()).forEach((marker) => {
-        detachGoogleMarker(marker);
+        marker.setMap?.(null);
       });
       markersRef.current.clear();
       Array.from(trafficCircleRefs.current.values()).forEach((circle) => {
@@ -446,13 +271,12 @@ function GoogleMapRenderer({
         circleRef.current.setMap?.(null);
         circleRef.current = null;
       }
-      if (routePolylineRef.current) {
-        routePolylineRef.current.setMap?.(null);
-        routePolylineRef.current = null;
-      }
+      routePolylineRef.current?.setMap?.(null);
+      routePolylineRef.current = null;
       resizeObserverRef.current?.disconnect();
       resizeObserverRef.current = null;
       infoWindowRef.current?.close?.();
+      mapRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apiKey]);
@@ -464,7 +288,7 @@ function GoogleMapRenderer({
     if (!g?.maps) return;
     mapRef.current.panTo({ lat: center.lat, lng: center.lng });
     mapRef.current.setZoom(zoom ?? 13);
-  }, [center.lat, center.lng, mapInstanceVersion, zoom]);
+  }, [center.lat, center.lng, mapReadyVersion, zoom]);
 
   // Sync pins
   useEffect(() => {
@@ -478,7 +302,7 @@ function GoogleMapRenderer({
     const incomingKeys = new Set(pins.map((p) => p.key));
     for (const [key, marker] of existing) {
       if (!incomingKeys.has(key)) {
-        detachGoogleMarker(marker);
+        marker.setMap(null);
         existing.delete(key);
       }
     }
@@ -486,7 +310,7 @@ function GoogleMapRenderer({
     // Add / update markers
     for (const pin of pins) {
       if (existing.has(pin.key)) {
-        updateGoogleMarkerPosition(existing.get(pin.key), pin.position);
+        existing.get(pin.key).setPosition({ lat: pin.position.lat, lng: pin.position.lng });
       } else {
         const AdvancedMarkerElement = g.maps.marker?.AdvancedMarkerElement;
         const useAdvanced = Boolean(AdvancedMarkerElement && mapId);
@@ -540,136 +364,49 @@ function GoogleMapRenderer({
         existing.set(pin.key, marker);
       }
     }
-  }, [mapInstanceVersion, onPinDrag, pins]);
+  }, [mapReadyVersion, pins, onPinDrag]);
 
-  // A statewide fit can place several distinct addresses within the same
-  // 36px marker footprint. Keep their real coordinates for bounds and data,
-  // but fan the rendered markers into a compact ring so every host remains
-  // visible and clickable. Recalculate after pan/zoom so markers return to
-  // their true positions as soon as there is enough screen space.
   useEffect(() => {
     const g = (window as GoogleMapsWindow).google;
     const map = mapRef.current;
-    if (!(separateOverlappingPins || fitToPins) || !g?.maps || !map) return;
-
-    const layoutMarkers = () => {
-      const projection = map.getProjection?.();
-      const zoomLevel = Number(map.getZoom?.());
-      if (!projection || !Number.isFinite(zoomLevel)) return;
-
-      const scale = 2 ** zoomLevel;
-      const positioned = pins
-        .map((pin) => {
-          const marker = markersRef.current.get(pin.key);
-          const worldPoint = projection.fromLatLngToPoint(
-            new g.maps.LatLng(pin.position.lat, pin.position.lng),
-          );
-          if (!marker || !worldPoint) return null;
-          return {
-            pin,
-            marker,
-            x: worldPoint.x * scale,
-            y: worldPoint.y * scale,
-          };
-        })
-        .filter(Boolean) as Array<{
-          pin: MapPickerPin;
-          marker: any;
-          x: number;
-          y: number;
-        }>;
-
-      const remaining = new Set(positioned.map((_, index) => index));
-      const groups: number[][] = [];
-      while (remaining.size > 0) {
-        const seed = remaining.values().next().value as number;
-        remaining.delete(seed);
-        const group = [seed];
-        const queue = [seed];
-        while (queue.length > 0) {
-          const current = positioned[queue.shift()!];
-          for (const candidateIndex of Array.from(remaining)) {
-            const candidate = positioned[candidateIndex];
-            if (Math.hypot(current.x - candidate.x, current.y - candidate.y) < 42) {
-              remaining.delete(candidateIndex);
-              group.push(candidateIndex);
-              queue.push(candidateIndex);
-            }
-          }
-        }
-        groups.push(group);
-      }
-
-      groups.forEach((group) => {
-        if (group.length === 1) {
-          const item = positioned[group[0]];
-          updateGoogleMarkerPosition(item.marker, item.pin.position);
-          return;
-        }
-        const centerX =
-          group.reduce((sum, index) => sum + positioned[index].x, 0) /
-          group.length;
-        const centerY =
-          group.reduce((sum, index) => sum + positioned[index].y, 0) /
-          group.length;
-        const radius = Math.max(28, Math.min(76, group.length * 7));
-        group.forEach((positionedIndex, ringIndex) => {
-          const angle = -Math.PI / 2 + (2 * Math.PI * ringIndex) / group.length;
-          const worldPoint = new g.maps.Point(
-            (centerX + Math.cos(angle) * radius) / scale,
-            (centerY + Math.sin(angle) * radius) / scale,
-          );
-          const latLng = projection.fromPointToLatLng(worldPoint);
-          if (!latLng) return;
-          updateGoogleMarkerPosition(positioned[positionedIndex].marker, {
-            lat: latLng.lat(),
-            lng: latLng.lng(),
-          });
-        });
-      });
-    };
-
-    const listener = map.addListener("idle", layoutMarkers);
-    window.setTimeout(layoutMarkers, 0);
-    return () => listener.remove?.();
-  }, [fitToPins, mapInstanceVersion, pins, separateOverlappingPins]);
-
-  useEffect(() => {
-    if (!fitToPins) {
-      lastFittedPinSignatureRef.current = "";
-      return;
-    }
-
-    const g = (window as GoogleMapsWindow).google;
-    const map = mapRef.current;
-    if (!g?.maps || !map) return;
-
+    if (!fitPins || !g?.maps || !map || pins.length === 0) return;
     const validPins = pins.filter(
-      (pin) =>
-        Number.isFinite(pin.position.lat) && Number.isFinite(pin.position.lng),
+      (pin) => Number.isFinite(pin.position.lat) && Number.isFinite(pin.position.lng),
     );
     if (validPins.length === 0) return;
-
-    const signature = validPins
-      .map(
-        (pin) =>
-          `${pin.key}:${pin.position.lat.toFixed(6)}:${pin.position.lng.toFixed(6)}`,
-      )
-      .sort()
-      .join("|");
-    if (signature === lastFittedPinSignatureRef.current) return;
-    lastFittedPinSignatureRef.current = signature;
-
     if (validPins.length === 1) {
-      map.panTo(validPins[0].position);
-      map.setZoom(Math.min(zoom ?? 13, 14));
+      map.setCenter(validPins[0].position);
+      if (Number(map.getZoom?.() || 0) < 15) map.setZoom(15);
       return;
     }
-
     const bounds = new g.maps.LatLngBounds();
     validPins.forEach((pin) => bounds.extend(pin.position));
-    map.fitBounds(bounds, 48);
-  }, [fitToPins, mapInstanceVersion, pins, zoom]);
+    map.fitBounds(bounds, 72);
+  }, [fitPins, mapReadyVersion, pins]);
+
+  useEffect(() => {
+    routePolylineRef.current?.setMap?.(null);
+    routePolylineRef.current = null;
+    const g = (window as GoogleMapsWindow).google;
+    const map = mapRef.current;
+    const validPath = routePath.filter(
+      (point) => Number.isFinite(point.lat) && Number.isFinite(point.lng),
+    );
+    if (!g?.maps || !map || validPath.length < 2) return;
+    routePolylineRef.current = new g.maps.Polyline({
+      map,
+      path: validPath,
+      geodesic: true,
+      strokeColor: "#f97316",
+      strokeOpacity: 0.9,
+      strokeWeight: 5,
+      zIndex: 20,
+    });
+    return () => {
+      routePolylineRef.current?.setMap?.(null);
+      routePolylineRef.current = null;
+    };
+  }, [mapReadyVersion, routePath]);
 
   // Circle overlay
   useEffect(() => {
@@ -691,30 +428,7 @@ function GoogleMapRenderer({
         fillOpacity: 0.15,
       });
     }
-  }, [center.lat, center.lng, circleRadiusMetres, mapInstanceVersion]);
-
-  useEffect(() => {
-    const g = (window as GoogleMapsWindow).google;
-    if (!g?.maps || !mapRef.current) return;
-    if (routePolylineRef.current) {
-      routePolylineRef.current.setMap(null);
-      routePolylineRef.current = null;
-    }
-    const validPath = routePath.filter(
-      (point) => Number.isFinite(point.lat) && Number.isFinite(point.lng),
-    );
-    if (validPath.length < 2) return;
-    routePolylineRef.current = new g.maps.Polyline({
-      map: mapRef.current,
-      path: validPath,
-      clickable: false,
-      geodesic: true,
-      strokeColor: "#ea580c",
-      strokeOpacity: 0.92,
-      strokeWeight: 5,
-      zIndex: 2,
-    });
-  }, [mapInstanceVersion, routePath]);
+  }, [center.lat, center.lng, circleRadiusMetres, mapReadyVersion]);
 
   useEffect(() => {
     const g = (window as GoogleMapsWindow).google;
@@ -760,16 +474,14 @@ function GoogleMapRenderer({
       trafficCircleRefs.current.set(cell.id, circle);
     });
 
-    Array.from(trafficCircleRefs.current.entries()).forEach(
-      ([id, instance]) => {
+    Array.from(trafficCircleRefs.current.entries()).forEach(([id, instance]) => {
       if (usedIds.has(id)) return;
       instance.setMap(null);
       trafficCircleRefs.current.delete(id);
-      },
-    );
-  }, [mapInstanceVersion, trafficCells]);
+    });
+  }, [mapReadyVersion, trafficCells]);
 
-  if (loadError) return null; // caller falls back to Leaflet
+  if (loadError) return null;
 
   return (
     <>
@@ -779,231 +491,6 @@ function GoogleMapRenderer({
         ? createPortal(infoPortalContent, infoPortalContainer)
         : null}
     </>
-  );
-}
-
-// ─── Leaflet fallback renderer ────────────────────────────────────────────────
-
-function LeafletPins({
-  pins,
-  separateOverlappingPins,
-  onPinClick,
-  onPinDrag,
-}: {
-  pins: MapPickerPin[];
-  separateOverlappingPins: boolean;
-  onPinClick?: (key: string) => void;
-  onPinDrag?: (key: string, point: GeoPoint) => void;
-}) {
-  const map = useMap();
-  const [layoutVersion, setLayoutVersion] = useState(0);
-
-  useEffect(() => {
-    if (!separateOverlappingPins) return;
-    const refresh = () => setLayoutVersion((version) => version + 1);
-    map.on("moveend zoomend", refresh);
-    return () => {
-      map.off("moveend zoomend", refresh);
-    };
-  }, [map, separateOverlappingPins]);
-
-  const displayedPins = (() => {
-    if (!separateOverlappingPins) return pins;
-    const zoomLevel = map.getZoom();
-    const positioned = pins.map((pin) => {
-      const point = map.project([pin.position.lat, pin.position.lng], zoomLevel);
-      return { pin, x: point.x, y: point.y };
-    });
-    const remaining = new Set(positioned.map((_, index) => index));
-    const displayPositions = new Map<string, GeoPoint>();
-
-    while (remaining.size > 0) {
-      const seed = remaining.values().next().value as number;
-      remaining.delete(seed);
-      const group = [seed];
-      const queue = [seed];
-      while (queue.length > 0) {
-        const current = positioned[queue.shift()!];
-        for (const candidateIndex of Array.from(remaining)) {
-          const candidate = positioned[candidateIndex];
-          if (Math.hypot(current.x - candidate.x, current.y - candidate.y) < 42) {
-            remaining.delete(candidateIndex);
-            group.push(candidateIndex);
-            queue.push(candidateIndex);
-          }
-        }
-      }
-
-      if (group.length === 1) continue;
-      const centerX =
-        group.reduce((sum, index) => sum + positioned[index].x, 0) /
-        group.length;
-      const centerY =
-        group.reduce((sum, index) => sum + positioned[index].y, 0) /
-        group.length;
-      const radius = Math.max(28, Math.min(76, group.length * 7));
-      group.forEach((positionedIndex, ringIndex) => {
-        const angle = -Math.PI / 2 + (2 * Math.PI * ringIndex) / group.length;
-        const latLng = map.unproject(
-          L.point(
-            centerX + Math.cos(angle) * radius,
-            centerY + Math.sin(angle) * radius,
-          ),
-          zoomLevel,
-        );
-        displayPositions.set(positioned[positionedIndex].pin.key, {
-          lat: latLng.lat,
-          lng: latLng.lng,
-        });
-      });
-    }
-
-    return pins.map((pin) => ({
-      ...pin,
-      position: displayPositions.get(pin.key) || pin.position,
-    }));
-  })();
-  void layoutVersion;
-
-  return (
-    <>
-      {displayedPins.map((pin) => (
-        <Marker
-          key={pin.key}
-          position={[pin.position.lat, pin.position.lng]}
-          icon={pin.occupied ? pinIconOccupied : pinIcon}
-          draggable={pin.draggable ?? false}
-          eventHandlers={{
-            click: () => onPinClick?.(pin.key),
-            ...(pin.draggable && onPinDrag
-              ? {
-                  dragend: (e: any) => {
-                    const marker = e.target as L.Marker;
-                    const latLng = marker.getLatLng();
-                    onPinDrag(pin.key, { lat: latLng.lat, lng: latLng.lng });
-                  },
-                }
-              : {}),
-          }}
-        >
-          {pin.popup && (
-            <Popup maxWidth={320} minWidth={240} keepInView autoPan autoPanPadding={[16, 16]}>
-              {pin.popup}
-            </Popup>
-          )}
-        </Marker>
-      ))}
-    </>
-  );
-}
-
-function LeafletRenderer({
-  center,
-  zoom = 13,
-  pins = [],
-  fitToPins = false,
-  separateOverlappingPins = false,
-  trafficCells = [],
-  routePath = [],
-  circleRadiusMetres,
-  onMapClick,
-  onPinDrag,
-  onPinClick,
-  onBoundsChanged,
-  interactionsEnabled = true,
-}: {
-  center: GeoPoint;
-  zoom?: number;
-  pins?: MapPickerPin[];
-  fitToPins?: boolean;
-  separateOverlappingPins?: boolean;
-  trafficCells?: MapTrafficCell[];
-  routePath?: GeoPoint[];
-  circleRadiusMetres?: number;
-  onMapClick?: (p: GeoPoint) => void;
-  onPinDrag?: (key: string, p: GeoPoint) => void;
-  onPinClick?: (key: string) => void;
-  onBoundsChanged?: (bounds: MapBoundsLike) => void;
-  interactionsEnabled?: boolean;
-}) {
-  const isNightTheme =
-    typeof document !== "undefined" &&
-    document.documentElement.classList.contains("theme-night");
-  const tileUrl = isNightTheme
-    ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-    : "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png";
-  const attribution =
-    '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
-
-  return (
-    <MapContainer
-      center={[center.lat, center.lng]}
-      zoom={zoom}
-      zoomControl={false}
-      scrollWheelZoom={interactionsEnabled}
-      dragging={interactionsEnabled}
-      touchZoom={interactionsEnabled}
-      doubleClickZoom={interactionsEnabled}
-      boxZoom={interactionsEnabled}
-      keyboard={interactionsEnabled}
-      className="h-full w-full"
-    >
-      <TileLayer attribution={attribution} url={tileUrl} />
-      <LeafletCenterer center={center} zoom={zoom} />
-      <LeafletPinFitter enabled={fitToPins} pins={pins} zoom={zoom} />
-      {onMapClick && <LeafletClickHandler onMapClick={onMapClick} />}
-      {onBoundsChanged && (
-        <LeafletBoundsWatcher onBoundsChanged={onBoundsChanged} />
-      )}
-      {routePath.length >= 2 && (
-        <Polyline
-          positions={routePath.map((point) => [point.lat, point.lng])}
-          interactive={false}
-          pathOptions={{ color: "#ea580c", opacity: 0.92, weight: 5 }}
-        />
-      )}
-      {trafficCells.map((cell) => (
-        <Circle
-          key={cell.id}
-          center={[cell.lat, cell.lng]}
-          radius={Math.max(110, Math.min(1200, (cell.weight || 1) * 10))}
-          interactive={false}
-          pathOptions={{
-            stroke: false,
-            fillColor:
-              cell.color ||
-              (cell.source === "google_places"
-                ? "#60a5fa"
-                : cell.source === "supply_signal"
-                  ? "#ef4444"
-                  : "#f97316"),
-            fillOpacity:
-              cell.source === "google_places"
-                ? 0.1
-                : cell.source === "supply_signal"
-                  ? 0.14
-                  : 0.12,
-          }}
-        />
-      ))}
-      <LeafletPins
-        pins={pins}
-        separateOverlappingPins={separateOverlappingPins || fitToPins}
-        onPinClick={onPinClick}
-        onPinDrag={onPinDrag}
-      />
-      {circleRadiusMetres && circleRadiusMetres > 0 && (
-        <Circle
-          center={[center.lat, center.lng]}
-          radius={circleRadiusMetres}
-          pathOptions={{
-            color: "#f97316",
-            fillColor: "#f97316",
-            fillOpacity: 0.15,
-          }}
-        />
-      )}
-    </MapContainer>
   );
 }
 
@@ -1023,17 +510,17 @@ export function GoogleMapPicker({
   onPinDrag,
   onPinClick,
   pins = [],
-  fitToPins = false,
-  separateOverlappingPins = false,
   trafficCells = [],
-  routePath = [],
   onBoundsChanged,
   circleRadiusMetres,
   className = "",
   interactionsEnabled = true,
   mapId: mapIdProp,
+  fitPins = false,
+  routePath = [],
 }: GoogleMapPickerProps) {
-  const { data: mapRuntime } = useQuery<MapRuntimeResponse>({
+  const { data: mapRuntime, isLoading: mapRuntimeLoading } =
+    useQuery<MapRuntimeResponse>({
     queryKey: ["/api/map/runtime"],
     queryFn: async () => {
       const res = await fetch("/api/map/runtime");
@@ -1042,7 +529,7 @@ export function GoogleMapPicker({
     },
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
-  });
+    });
 
   // Build-time key takes priority; runtime key is a fallback for server-injected keys
   const buildTimeKey = String(
@@ -1065,7 +552,6 @@ export function GoogleMapPicker({
 
   const [googleFailed, setGoogleFailed] = useState(false);
   const useGoogle = apiKey.length > 0 && !googleFailed;
-
   return (
     <div className={`relative h-full w-full ${className}`}>
       {useGoogle ? (
@@ -1075,34 +561,25 @@ export function GoogleMapPicker({
           center={center}
           zoom={zoom}
           pins={pins}
-          fitToPins={fitToPins}
-          separateOverlappingPins={separateOverlappingPins}
           trafficCells={trafficCells}
-          routePath={routePath}
           circleRadiusMetres={circleRadiusMetres}
           onMapClick={onMapClick}
           onPinDrag={onPinDrag}
           onPinClick={onPinClick}
           onBoundsChanged={onBoundsChanged}
+          fitPins={fitPins}
+          routePath={routePath}
           interactionsEnabled={interactionsEnabled}
           onLoadError={() => setGoogleFailed(true)}
         />
+      ) : mapRuntimeLoading && !googleFailed ? (
+        <div className="flex h-full items-center justify-center bg-[var(--bg-surface-muted)] text-sm text-[color:var(--text-muted)]">
+          Loading Google map...
+        </div>
       ) : (
-        <LeafletRenderer
-          center={center}
-          zoom={zoom}
-          pins={pins}
-          fitToPins={fitToPins}
-          separateOverlappingPins={separateOverlappingPins}
-          trafficCells={trafficCells}
-          routePath={routePath}
-          circleRadiusMetres={circleRadiusMetres}
-          onMapClick={onMapClick}
-          onPinDrag={onPinDrag}
-          onPinClick={onPinClick}
-          onBoundsChanged={onBoundsChanged}
-          interactionsEnabled={interactionsEnabled}
-        />
+        <div className="flex h-full items-center justify-center bg-[var(--bg-surface-muted)] px-6 text-center text-sm text-[color:var(--text-muted)]">
+          Google Maps is temporarily unavailable.
+        </div>
       )}
     </div>
   );

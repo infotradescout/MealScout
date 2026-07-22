@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 const shareLib = readFileSync("client/src/lib/share.ts", "utf8");
-const mapPage = readFileSync("client/src/pages/map.tsx", "utf8");
 const cityLanding = readFileSync("client/src/pages/city-landing.tsx", "utf8");
 const dealsCity = readFileSync("client/src/pages/deals-city.tsx", "utf8");
 const dealDetail = readFileSync("client/src/pages/deal-detail.tsx", "utf8");
@@ -34,7 +33,6 @@ assert(
 );
 
 for (const file of [
-  mapPage,
   cityLanding,
   dealsCity,
   dealDetail,
@@ -83,12 +81,6 @@ assert(
   "Owner dashboard public-profile copy action must resolve canonical attributed URL before copying and must not regress to raw fullUrl clipboard writes.",
 );
 
-assert(
-  !mapPage.includes("const url = window.location.href;") &&
-    !mapPage.includes("navigator.clipboard.writeText(window.location.href)"),
-  "Map native share must not use raw window.location.href as final payload.",
-);
-
 for (const file of [cityLanding, dealsCity, dealDetail]) {
   assert(
     !file.includes("window.location.origin}/") ||
@@ -98,7 +90,6 @@ for (const file of [cityLanding, dealsCity, dealDetail]) {
 }
 
 const finalShareSurfaces = [
-  mapPage,
   cityLanding,
   dealsCity,
   dealDetail,

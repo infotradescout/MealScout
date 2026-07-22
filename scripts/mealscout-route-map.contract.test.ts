@@ -53,12 +53,11 @@ function requireMatch(pattern: RegExp, label: string) {
 [
   "`/scout`, `/scout/:refTag`, `/directory`, `/directory/:refTag`, `/scout-v2` | `client/src/pages/explore-preview-v2.tsx`",
   "`/map` | `RedirectToScout` in `client/src/App.tsx`, then `client/src/pages/explore-preview-v2.tsx`",
-  "Production `/map` does not mount `client/src/pages/map.tsx`.",
+  "The obsolete standalone map page has been retired.",
   "`/sitemap` | `client/src/pages/sitemap.tsx`",
   "`/restaurant/:id`, `/restaurant/:id/:profileSlug`, `/truck/:slug`, `/bar/:slug`, `/location/:slug`, `/p/:profileType/:profileId`, `/p/:profileType/:profileId/:profileSlug` | `client/src/pages/public-profile.tsx`",
   "`/city/:city/food`, `/food-trucks-today/:city`, `/deals-today/:city`, `/events-today/:city`, `/locations-with-trucks/:city`, `/cuisine/:cuisine/:city` | `client/src/pages/public-seo-landing.tsx`",
   "`/profile-setup` | `client/src/pages/profile-setup.tsx`",
-  "`client/src/pages/map.tsx` currently exists but is not mounted by `client/src/App.tsx`",
   "`client/src/pages/explore-preview.tsx` is legacy/quarantined",
   "`client/src/pages/trending.tsx` exists, but `/trending` redirects to `/scout`",
 ].forEach((snippet) => requireIncludes(snippet, `public route source inventory ${snippet}`));
@@ -69,6 +68,7 @@ function requireMatch(pattern: RegExp, label: string) {
   '<Route path="/scout/:refTag" component={ScoutPageV2} />',
   '<Route path="/directory" component={ScoutPageV2} />',
   '<Route path="/scout-v2" component={ScoutPageV2} />',
+  '<Route path="/scout-prototype" component={RedirectToScout} />',
   '<Route path="/map" component={RedirectToScout} />',
   '<Route path="/trending" component={RedirectToScout} />',
   '<Route path="/sitemap" component={Sitemap} />',

@@ -1,6 +1,5 @@
 import { createRoot } from "react-dom/client";
 import App from "./App";
-import "leaflet/dist/leaflet.css";
 import "./index.css";
 import { LocaleProvider } from "@/lib/i18n";
 
