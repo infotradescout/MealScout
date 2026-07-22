@@ -76,6 +76,9 @@ jobs:
       - name: Post-Merge Safety Contract
         run: npm run test:post-merge-safety
 
+      - name: About Explainer Truth Contract
+        run: npm run test:about-explainer
+
       - name: 3D Eats FRUI-TEA Evidence Contract
         run: npm run test:3d-eats-frui-tea-sauce
 
