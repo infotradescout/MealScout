@@ -82,8 +82,12 @@ assert.match(picker, /typeof marker\.setPosition === "function"/);
 assert.match(picker, /marker\.position = position/);
 
 const navigation = readFileSync("client/src/components/navigation.tsx", "utf8");
-assert.match(navigation, /if \(!isGlobalScope\) return null/);
-assert.doesNotMatch(navigation, /hasGlobalNavigation/);
+assert.match(navigation, /GlobalNavigationOwnerContext/);
+assert.match(navigation, /!isGlobalScope && hasGlobalNavigationOwner/);
+assert.doesNotMatch(navigation, /let hasGlobalNavigation\s*=/);
+
+const appShell = readFileSync("client/src/App.tsx", "utf8");
+assert.match(appShell, /GlobalNavigationOwnerProvider/);
 
 const mapFallback = readFileSync(
   "client/src/components/maps/themed-scout-map-v2.tsx",

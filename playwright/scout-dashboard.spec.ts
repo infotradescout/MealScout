@@ -253,12 +253,11 @@ test.describe("Scout local dashboard", () => {
   test("restaurant with menu items shows menu preview", async ({ page }) => {
     await page.goto(`${FRONTEND}/scout`, { waitUntil: "domcontentloaded" });
 
-    // Second Spot / Third Spot each surface in multiple Scout lanes (Places
-    // to Try, Worth a Look, ...), so scope to one lane's list rather than
-    // using an unscoped .first() across every duplicate.
-    const placesToTry = page.getByRole("list", { name: "Places to Try" });
-    await expect(placesToTry.getByTestId("scout-menu-preview").first()).toBeVisible();
-    await expect(placesToTry.getByText("Brisket Tacos").first()).toBeVisible();
+    // Business cards are claimed once across all Scout rails. The exact rail
+    // is ranking-dependent, so assert the menu micro-card on its one assigned
+    // business card instead of requiring a duplicate in Places to Try.
+    await expect(page.getByTestId("scout-menu-preview").first()).toBeVisible();
+    await expect(page.getByText("Brisket Tacos").first()).toBeVisible();
   });
 
   test("regular customer navigation does not link to standalone map", async ({ page }) => {
