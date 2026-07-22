@@ -158,6 +158,8 @@ for (const forbiddenClaim of [
   "cuisine, and business context",
   "moderation, appeal",
   "property, permit, and suitability requirements before confirmation",
+  "directions QR assets",
+  "Understand and reach the people",
 ]) {
   assert.doesNotMatch(
     combined,
