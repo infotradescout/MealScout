@@ -132,12 +132,22 @@ requireIncludes(
 );
 requireIncludes(".onConflictDoNothing()", "booking upsert onConflictDoNothing");
 
-// Pickup-order payouts can be retried after the order transition committed.
-// Stripe receives a stable idempotency key, preventing a second transfer if
-// the first transfer succeeded but the local payout-status write failed.
+// Pickup-order payouts can be retried after the order transition committed,
+// but only while the order is confirmed (or was atomically changed from
+// pending to confirmed by this delivery). Stripe receives a stable
+// idempotency key, preventing a second transfer if the first transfer
+// succeeded but the local payout-status write failed.
 requireIncludes(
-  'order.payoutStatus !== "transferred"',
-  "pickup payout replay guard",
+  'eq(pickupOrders.status, "pending")',
+  "pickup transition is restricted to a still-pending row",
+);
+requireIncludes(
+  "shouldAttemptPickupWebhookPayoutTransfer({",
+  "pickup payout state eligibility guard",
+);
+requireIncludes(
+  "transitionedToConfirmed: Boolean(updated)",
+  "pickup payout requires proof of the pending-to-confirmed transition",
 );
 requireIncludes(
   "idempotencyKey: `pickup-order:${order.id}:transfer`",

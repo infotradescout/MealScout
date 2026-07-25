@@ -24,6 +24,7 @@ import {
   utcDateFromDateKey,
 } from "../services/dateKeys";
 import { storage } from "../storage";
+import { shouldAttemptPickupWebhookPayoutTransfer } from "../utils/pickupWebhookPayout";
 import { decideStripeWebhookVerificationMode } from "../utils/stripeWebhookVerification";
 const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY)
@@ -40,6 +41,58 @@ type StripeWebhookRouteDependencies = {
     params: NotifyHostCapacityWarningParams,
   ) => Promise<void>;
 };
+
+function getSubscriptionCustomerId(
+  customer: Stripe.Subscription["customer"],
+): string | null {
+  if (typeof customer === "string") return customer;
+  return customer?.id || null;
+}
+
+async function deactivateSubscriptionEntitlements(params: {
+  userId: string;
+  subscriptionId: string;
+}) {
+  // Revoke the durable access rows before clearing the user lookup key.
+  // If either entitlement write fails, Stripe's retry can still resolve the
+  // same user by subscription id and safely repeat these idempotent updates.
+  try {
+    await db
+      .update(restaurantSubscriptions)
+      .set({
+        status: "canceled",
+        canceledAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(
+        eq(
+          restaurantSubscriptions.stripeSubscriptionId,
+          params.subscriptionId,
+        ),
+      );
+  } catch (deactivateError) {
+    console.error(
+      "[WEBHOOK] Error deactivating restaurantSubscriptions:",
+      deactivateError,
+    );
+    throw deactivateError;
+  }
+
+  try {
+    await storage.deactivateUserDeals(params.userId);
+  } catch (dealsError) {
+    console.error(
+      "[WEBHOOK] Error deactivating deals for canceled subscription:",
+      dealsError,
+    );
+    throw dealsError;
+  }
+
+  await storage.updateUser(params.userId, {
+    stripeSubscriptionId: null,
+  });
+}
+
 export function registerStripeWebhookRoutes(
   app: Express,
   { notifyHostCapacityWarning }: StripeWebhookRouteDependencies,
@@ -339,7 +392,12 @@ export function registerStripeWebhookRoutes(
                       confirmedAt: new Date(),
                       updatedAt: new Date(),
                     })
-                    .where(eq(pickupOrders.id, order.id))
+                    .where(
+                      and(
+                        eq(pickupOrders.id, order.id),
+                        eq(pickupOrders.status, "pending"),
+                      ),
+                    )
                     .returning();
                 }
 
@@ -347,10 +405,17 @@ export function registerStripeWebhookRoutes(
                 // update fails. Retry confirmed orders whose payout is still
                 // pending, and give Stripe a stable idempotency key so replaying
                 // the webhook cannot create a second transfer.
-                if (
-                  order.stripeTransferGroupId &&
-                  order.payoutStatus !== "transferred"
-                ) {
+                const transferGroupId = String(
+                  order.stripeTransferGroupId || "",
+                ).trim();
+                const shouldTransferPayout =
+                  shouldAttemptPickupWebhookPayoutTransfer({
+                    statusBeforeWebhook: order.status,
+                    transitionedToConfirmed: Boolean(updated),
+                    stripeTransferGroupId: transferGroupId,
+                    payoutStatus: order.payoutStatus,
+                  });
+                if (shouldTransferPayout) {
                   if (!stripe) {
                     throw new Error(
                       "Stripe client unavailable for pickup order transfer",
@@ -379,7 +444,7 @@ export function registerStripeWebhookRoutes(
                         amount: transferAmount,
                         currency: "usd",
                         destination: connectAccountId,
-                        transfer_group: order.stripeTransferGroupId,
+                        transfer_group: transferGroupId,
                         metadata: { pickupOrderId: order.id },
                       },
                       {
@@ -1682,8 +1747,13 @@ export function registerStripeWebhookRoutes(
             subscriptionUpdated.id,
           );
           if (!userForUpdate && subscriptionUpdated.customer) {
-            const customerId = String(subscriptionUpdated.customer);
-            userForUpdate = await storage.getUserByStripeCustomerId(customerId);
+            const customerId = getSubscriptionCustomerId(
+              subscriptionUpdated.customer,
+            );
+            if (customerId) {
+              userForUpdate =
+                await storage.getUserByStripeCustomerId(customerId);
+            }
           }
 
           if (userForUpdate) {
@@ -1698,9 +1768,9 @@ export function registerStripeWebhookRoutes(
               console.log(
                 `[WEBHOOK] Subscription ${subscriptionUpdated.id} is now ${subscriptionUpdated.status} for user ${userForUpdate.id}`,
               );
-              // Clear the subscription ID so access checks fail immediately
-              await storage.updateUser(userForUpdate.id, {
-                stripeSubscriptionId: null,
+              await deactivateSubscriptionEntitlements({
+                userId: userForUpdate.id,
+                subscriptionId: subscriptionUpdated.id,
               });
               db.insert(lisaClaims).values({
                 app: "mealscout",
@@ -1815,53 +1885,29 @@ export function registerStripeWebhookRoutes(
             `[WEBHOOK] Subscription ${subscriptionDeleted.id} was deleted`,
           );
 
-          // Find user and clear their subscription
-          const userForDeletion = await storage.getUserByStripeSubscriptionId(
+          // Resolve by subscription first, then by customer so deletion still
+          // revokes entitlements if an earlier canceled update already cleared
+          // the subscription lookup key.
+          let userForDeletion = await storage.getUserByStripeSubscriptionId(
             subscriptionDeleted.id,
           );
+          if (!userForDeletion && subscriptionDeleted.customer) {
+            const customerId = getSubscriptionCustomerId(
+              subscriptionDeleted.customer,
+            );
+            if (customerId) {
+              userForDeletion =
+                await storage.getUserByStripeCustomerId(customerId);
+            }
+          }
 
           if (userForDeletion) {
             console.log(
               `[WEBHOOK] Clearing subscription for user ${userForDeletion.id}`,
             );
-            // Deactivate restaurantSubscriptions rows so access gates immediately
-            // reflect the cancellation without waiting for the next Stripe API call.
-            try {
-              await db
-                .update(restaurantSubscriptions)
-                .set({
-                  status: "canceled",
-                  canceledAt: new Date(),
-                  updatedAt: new Date(),
-                })
-                .where(
-                  eq(
-                    restaurantSubscriptions.stripeSubscriptionId,
-                    subscriptionDeleted.id,
-                  ),
-                );
-            } catch (deactivateError) {
-              console.error(
-                "[WEBHOOK] Error deactivating restaurantSubscriptions on deletion:",
-                deactivateError,
-              );
-              throw deactivateError;
-            }
-            // Deactivate any active deals for this user.
-            try {
-              await storage.deactivateUserDeals(userForDeletion.id);
-            } catch (dealsError) {
-              console.error(
-                "[WEBHOOK] Error deactivating deals on subscription deletion:",
-                dealsError,
-              );
-              throw dealsError;
-            }
-            // Clear the lookup key last. If an earlier entitlement write
-            // fails, Stripe's retry can still resolve this user by the
-            // subscription id and finish the revocation.
-            await storage.updateUser(userForDeletion.id, {
-              stripeSubscriptionId: null,
+            await deactivateSubscriptionEntitlements({
+              userId: userForDeletion.id,
+              subscriptionId: subscriptionDeleted.id,
             });
             console.log(
               `[WEBHOOK] Subscription cleared for user ${userForDeletion.id} (${userForDeletion.email})`,

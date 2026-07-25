@@ -123,7 +123,7 @@ Unhandled event types are logged and acknowledged without mutation.
 
 `payment_intent.succeeded`:
 
-- Pickup order metadata confirms pending pickup orders, emits kitchen updates only on the state transition, and may create a transfer to the restaurant connected account. Payout retries use a stable Stripe idempotency key and can reconcile an already-confirmed order whose payout status was not stored.
+- Pickup order metadata confirms still-pending pickup orders, emits kitchen updates only on the state transition, and may create a transfer to the restaurant connected account. A transfer is attempted only for a pending order atomically transitioned to confirmed by that delivery, or an already-confirmed order whose payout status still needs reconciliation; canceled, preparing, ready, completed, and other states are ineligible. Payout retries use a stable Stripe idempotency key.
 - Supplier order metadata marks supplier orders paid if the stored PaymentIntent matches.
 - Single event booking metadata marks booking confirmed, updates event fill state, records host earnings, sends confirmation emails, and triggers capacity notifications. A replay of an already-confirmed booking reconciles the idempotent host-earnings entry before acknowledgment.
 - Parking Pass metadata confirms booking holds, writes payment success fields, updates events/fill state, records host earnings, debits credits, records booking affiliate commissions, and sends host/truck notifications. Credited cancellation and booking-credit ledger writes are PaymentIntent-keyed; replays reconcile idempotent host-earnings and credit-debit writes before acknowledgment.
@@ -135,8 +135,8 @@ Unhandled event types are logged and acknowledged without mutation.
 
 Subscription events:
 
-- `customer.subscription.updated` clears `stripeSubscriptionId` for canceled/incomplete-expired subscriptions, restores it for active reactivations, and inserts LISA subscription claims.
-- `customer.subscription.deleted` clears the user subscription ID, deactivates matching `restaurantSubscriptions`, and deactivates user deals.
+- `customer.subscription.updated` deactivates matching `restaurantSubscriptions` and user deals for canceled/incomplete-expired subscriptions, then clears `stripeSubscriptionId` last; it restores the ID and subscription rows for active reactivations and inserts LISA subscription claims.
+- `customer.subscription.deleted` resolves the user by subscription ID with a customer-ID fallback, deactivates matching `restaurantSubscriptions` and user deals, then clears the user subscription ID last. This remains recoverable when an earlier canceled update already cleared the subscription lookup key.
 
 Connect account events:
 
