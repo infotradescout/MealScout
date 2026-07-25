@@ -91,13 +91,16 @@ The intended supplier order lifecycle is:
 
 Current verification behavior:
 
-- In development, unsigned JSON payloads are accepted unless `STRIPE_WEBHOOK_FORCE_VERIFY=true`.
+- In development, signatures are verified by default; unsigned JSON payloads are accepted only when the operator explicitly sets `STRIPE_WEBHOOK_DEV_ALLOW_UNSIGNED=true` (and `STRIPE_WEBHOOK_FORCE_VERIFY` is not true). This is opt-in so a misconfigured `NODE_ENV` cannot silently accept unsigned payloads.
 - Outside development, `STRIPE_WEBHOOK_SECRET` and `STRIPE_SECRET_KEY` are required and events are built with `stripe.webhooks.constructEvent(req.body, sig, endpointSecret)`.
-- Verification failures return 400 and do not process the event.
+- Signature verification requires a raw `Buffer`; a JSON-parsed body is rejected even when the signature would otherwise be valid.
+- Missing server-side verification configuration returns 503. Malformed, missing, tampered, or invalid signatures return a generic 400 without exposing verifier diagnostics.
+- After verification, a primary processing failure returns 500 so Stripe can retry instead of receiving a false `received: true` acknowledgment.
 
 Handled event types:
 
 - `invoice.payment_succeeded`
+- `invoice.payment_failed`
 - `payment_intent.succeeded`
 - `payment_intent.payment_failed`
 - `customer.subscription.updated`
@@ -120,15 +123,15 @@ Unhandled event types are logged and acknowledged without mutation.
 
 `payment_intent.succeeded`:
 
-- Pickup order metadata confirms pending pickup orders, emits kitchen updates, and may create a transfer to the restaurant connected account.
+- Pickup order metadata confirms pending pickup orders, emits kitchen updates only on the state transition, and may create a transfer to the restaurant connected account. Payout retries use a stable Stripe idempotency key and can reconcile an already-confirmed order whose payout status was not stored.
 - Supplier order metadata marks supplier orders paid if the stored PaymentIntent matches.
-- Single event booking metadata marks booking confirmed, updates event fill state, records host earnings, sends confirmation emails, and triggers capacity notifications.
-- Parking Pass metadata confirms booking holds, writes payment success fields, updates events/fill state, records host earnings, debits credits, records booking affiliate commissions, and sends host/truck notifications.
+- Single event booking metadata marks booking confirmed, updates event fill state, records host earnings, sends confirmation emails, and triggers capacity notifications. A replay of an already-confirmed booking reconciles the idempotent host-earnings entry before acknowledgment.
+- Parking Pass metadata confirms booking holds, writes payment success fields, updates events/fill state, records host earnings, debits credits, records booking affiliate commissions, and sends host/truck notifications. Credited cancellation and booking-credit ledger writes are PaymentIntent-keyed; replays reconcile idempotent host-earnings and credit-debit writes before acknowledgment.
 
 `payment_intent.payment_failed`:
 
-- Supplier order metadata marks matching supplier orders unpaid.
-- Booking rows matching `stripePaymentIntentId` are cancelled with `stripePaymentStatus: "failed"`.
+- Supplier order metadata marks matching supplier orders unpaid unless a succeeded event already marked the order paid.
+- Only pending booking rows matching `stripePaymentIntentId` are cancelled with `stripePaymentStatus: "failed"`; an out-of-order failure event cannot regress an already-confirmed booking.
 
 Subscription events:
 
@@ -190,12 +193,15 @@ Gate behavior:
 
 - `scripts/preLaunchGate.mjs` treats `STRIPE_SECRET_KEY`, `VITE_STRIPE_PUBLIC_KEY`, and `STRIPE_WEBHOOK_SECRET` as required and fails production bypass/test flags.
 - `scripts/productionReadinessGate.mjs` treats Stripe env vars as strict-production requirements when payments are enabled, and as local-audit warnings otherwise.
-- `.env.example` and `.env.production.example` do not currently enumerate the Stripe/payment env vars listed above.
+- `.env.example` and `.env.production.example` now enumerate the Stripe/payment env vars listed above (see C9-F1 below).
 
 ## Test And Smoke Coverage
 
 Existing payment/webhook coverage:
 
+- `scripts/mealscout-stripe-webhook-verification-mode.contract.test.ts`
+- `scripts/mealscout-stripe-webhook-signature-verification.behavior.test.ts`
+- `scripts/mealscout-stripe-webhook-idempotency-guards.contract.test.ts`
 - `scripts/testEventSpotBookingPaymentContract.ts`
 - `scripts/smokeParkingPassStripeFlow.ts`
 - `scripts/auditParkingPassWebhookReconciliation.ts`
@@ -205,7 +211,7 @@ Existing payment/webhook coverage:
 - `scripts/testMoneyButton.ts`
 - `scripts/preLaunchGate.mjs`
 - `scripts/productionReadinessGate.mjs`
-- Package scripts include `smoke:parking-pass-stripe`, `audit:parking-pass-webhooks`, `test:parking-pass-webhook-replay`, `test:supplier-payments`, and `test:supplier-pay-intent-switch`.
+- Package scripts include `test:stripe-webhook-safety`, `smoke:parking-pass-stripe`, `audit:parking-pass-webhooks`, `test:parking-pass-webhook-replay`, `test:supplier-payments`, and `test:supplier-pay-intent-switch`.
 
 Coverage shape:
 
@@ -213,22 +219,25 @@ Coverage shape:
 - Parking Pass Stripe smoke is stateful and requires explicit test fixture env vars.
 - Webhook replay is stateful and requires `API_BASE`, `STRIPE_SECRET_KEY`, and `STRIPE_WEBHOOK_SECRET`.
 - Supplier intent method-switch tests are static/unit style around reuse/cancel/conflict decisions.
+- Webhook verification behavior uses fabricated local-only Stripe fixture strings and the real Stripe SDK HMAC implementation; it makes no Stripe API calls.
+- Webhook processing failure behavior uses an intentionally unreachable fixture database and proves a primary write failure returns 500.
+- Mutation-level database idempotency remains behind an approved isolated database fixture; the focused contract locks the current replay, advisory-lock, stored-intent, and out-of-order guards without claiming live database proof.
 
 ## Audit Findings And Follow-Ups
 
-No runtime payment or webhook repair was performed in C9. The following are follow-up tickets only:
+The original C9 map made no runtime repair. The dedicated payment-safety lane subsequently applied only the signature, retry acknowledgment, payout replay, and idempotency/out-of-order guards documented above.
 
-- C9-F1: Add Stripe/payment env vars to `.env.example` and `.env.production.example` so deployers see all payment prerequisites before launch.
+- C9-F1: DONE. Stripe/payment env vars are enumerated in `.env.example` and `.env.production.example` so deployers see all payment prerequisites before launch. The webhook dev bypass was also flipped to opt-in (`STRIPE_WEBHOOK_DEV_ALLOW_UNSIGNED`, default off) so a misconfigured `NODE_ENV` cannot accept unsigned payloads.
 - C9-F2: In a future payment modernization slice, evaluate current raw PaymentIntent plus Payment Element flows against Stripe's current Checkout Sessions/Payment Element guidance; do not rewrite during cleanup.
 - C9-F3: In a future Connect modernization slice, evaluate host/supplier `stripe.accounts.create({ type: "express" })` usage against Stripe's newer Accounts v2/controller-properties guidance; do not change existing Connect accounts during cleanup.
-- C9-F4: Before extracting payment code, add a narrower static contract around every intended payment status write path so accidental duplicate writes or non-webhook confirmation drift are caught.
+- C9-F4: PARTIAL. Focused webhook contracts now lock signature mode, raw-body behavior, primary-error propagation, stored-intent checks, replay reconciliation, advisory locks, and failure-event non-regression. A broader contract around every non-webhook payment status writer remains future work.
 - C9-F5: Keep stateful payment smokes behind explicit fixture/env approval; C10 remains responsible for the production smoke fixture plan.
 
 ## Do-Not-Touch Rules
 
-- Do not change Stripe runtime calls from this C9 map.
-- Do not change webhook verification or event handling from this C9 map.
-- Do not change payment, booking, order, supplier, subscription, payout, affiliate, or credit mutation behavior from this C9 map.
-- Do not change payment env semantics, test-mode behavior, bypass behavior, route auth, schema, or provider configuration from this C9 map.
+- Do not broaden this payment-safety lane into a provider, Checkout, Connect-account, pricing, subscription, or schema redesign.
+- Do not weaken raw-body verification, the opt-in-only unsigned development mode, primary-error 500 behavior, or PaymentIntent-backed replay guards.
+- Do not change unrelated booking, order, supplier, subscription, payout, affiliate, credit, route-auth, or provider behavior under the guise of webhook hardening.
+- Do not enable production test/bypass flags or copy real credentials into examples or tests.
 - Do not add sample users, fake payments, fake bookings, fake suppliers, fake hosts, or production test records.
 - Do not mark C10 complete from C9.
