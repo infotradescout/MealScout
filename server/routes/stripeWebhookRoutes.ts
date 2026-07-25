@@ -1,6 +1,16 @@
 import type { Express } from "express";
 import Stripe from "stripe";
-import { and, asc, eq, gte, inArray, lt, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  eq,
+  gte,
+  inArray,
+  isNull,
+  lt,
+  or,
+  sql,
+} from "drizzle-orm";
 import {
   PARKING_PASS_BOOKING_DAYS,
   PARKING_PASS_SLOT_TYPES,
@@ -13,7 +23,10 @@ import {
   lisaClaims,
   LISA_CLAIM_TYPES,
   LISA_CLAIM_SOURCES,
+  deals,
   restaurantSubscriptions,
+  restaurants,
+  users,
 } from "@shared/schema";
 import { db } from "../db";
 import { emailService } from "../emailService";
@@ -25,6 +38,7 @@ import {
 } from "../services/dateKeys";
 import { storage } from "../storage";
 import { shouldAttemptPickupWebhookPayoutTransfer } from "../utils/pickupWebhookPayout";
+import { shouldRevokeUserSubscriptionEntitlements } from "../utils/stripeSubscriptionEntitlements";
 import { decideStripeWebhookVerificationMode } from "../utils/stripeWebhookVerification";
 const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY)
@@ -53,11 +67,20 @@ async function deactivateSubscriptionEntitlements(params: {
   userId: string;
   subscriptionId: string;
 }) {
-  // Revoke the durable access rows before clearing the user lookup key.
-  // If either entitlement write fails, Stripe's retry can still resolve the
-  // same user by subscription id and safely repeat these idempotent updates.
-  try {
-    await db
+  await db.transaction(async (tx: any) => {
+    // Serialize delayed cancellation A against activation of replacement B.
+    // The second event observes the committed current subscription before it
+    // can change user-level access.
+    const [lockedUser] = await tx
+      .select({ stripeSubscriptionId: users.stripeSubscriptionId })
+      .from(users)
+      .where(eq(users.id, params.userId))
+      .limit(1)
+      .for("update");
+
+    // The event-specific row can always be retired. Deals and the user lookup
+    // key belong to whichever subscription is current under the row lock.
+    await tx
       .update(restaurantSubscriptions)
       .set({
         status: "canceled",
@@ -70,26 +93,55 @@ async function deactivateSubscriptionEntitlements(params: {
           params.subscriptionId,
         ),
       );
-  } catch (deactivateError) {
-    console.error(
-      "[WEBHOOK] Error deactivating restaurantSubscriptions:",
-      deactivateError,
-    );
-    throw deactivateError;
-  }
 
-  try {
-    await storage.deactivateUserDeals(params.userId);
-  } catch (dealsError) {
-    console.error(
-      "[WEBHOOK] Error deactivating deals for canceled subscription:",
-      dealsError,
-    );
-    throw dealsError;
-  }
+    if (
+      !lockedUser ||
+      !shouldRevokeUserSubscriptionEntitlements({
+        currentSubscriptionId: lockedUser.stripeSubscriptionId,
+        eventSubscriptionId: params.subscriptionId,
+      })
+    ) {
+      return;
+    }
 
-  await storage.updateUser(params.userId, {
-    stripeSubscriptionId: null,
+    const userRestaurants = await tx
+      .select({ id: restaurants.id })
+      .from(restaurants)
+      .where(eq(restaurants.ownerId, params.userId));
+    const restaurantIds = userRestaurants.map(
+      (restaurant: { id: string }) => restaurant.id,
+    );
+    if (restaurantIds.length > 0) {
+      await tx
+        .update(deals)
+        .set({
+          isActive: false,
+          updatedAt: new Date(),
+        })
+        .where(inArray(deals.restaurantId, restaurantIds));
+    }
+
+    const clearedUsers = await tx
+      .update(users)
+      .set({
+        stripeSubscriptionId: null,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(users.id, params.userId),
+          or(
+            isNull(users.stripeSubscriptionId),
+            eq(users.stripeSubscriptionId, params.subscriptionId),
+          ),
+        ),
+      )
+      .returning({ id: users.id });
+    if (clearedUsers.length !== 1) {
+      throw new Error(
+        `Subscription changed while revoking ${params.subscriptionId}`,
+      );
+    }
   });
 }
 

@@ -163,10 +163,16 @@ requireIncludes(
   "throw pastDueError;",
   "throw reactivateError;",
   "throw pastDueSyncError;",
-  "throw deactivateError;",
-  "throw dealsError;",
 ].forEach((snippet) =>
   requireIncludes(snippet, `primary processing failure propagation: ${snippet}`),
+);
+requireIncludes(
+  "await db.transaction(async (tx: any)",
+  "subscription entitlement transaction failures propagate",
+);
+requireIncludes(
+  'res.status(500).json({ error: "Webhook processing failed" })',
+  "route-level retryable processing failure response",
 );
 
 console.log("mealscout-stripe-webhook-idempotency-guards: PASS");

@@ -22,21 +22,31 @@ const revocationHelper = sliceBetween(
 const subscriptionRowsIndex = revocationHelper.indexOf(
   ".update(restaurantSubscriptions)",
 );
-const dealsIndex = revocationHelper.indexOf(
-  "storage.deactivateUserDeals(params.userId)",
+const userLockIndex = revocationHelper.indexOf('.for("update")');
+const currentSubscriptionGuardIndex = revocationHelper.indexOf(
+  "shouldRevokeUserSubscriptionEntitlements({",
 );
-const lookupClearIndex = revocationHelper.indexOf(
-  "storage.updateUser(params.userId",
-);
+const dealsIndex = revocationHelper.indexOf(".update(deals)");
+const lookupClearIndex = revocationHelper.indexOf(".update(users)");
 assert.ok(
-  subscriptionRowsIndex >= 0 &&
-    dealsIndex > subscriptionRowsIndex &&
+  userLockIndex >= 0 &&
+    subscriptionRowsIndex > userLockIndex &&
+    currentSubscriptionGuardIndex > subscriptionRowsIndex &&
+    dealsIndex > currentSubscriptionGuardIndex &&
     lookupClearIndex > dealsIndex,
-  "subscription rows and deals must be deactivated before the subscription lookup key is cleared",
+  "revocation must lock current subscription state, retire the event row, then change deals and the lookup key in order",
 );
 assert.ok(
   revocationHelper.includes("stripeSubscriptionId: null"),
   "revocation helper must clear the user subscription lookup key last",
+);
+assert.ok(
+  revocationHelper.includes("await db.transaction(async (tx: any)") &&
+    revocationHelper.includes("isNull(users.stripeSubscriptionId)") &&
+    revocationHelper.includes(
+      "eq(users.stripeSubscriptionId, params.subscriptionId)",
+    ),
+  "stale replacement-subscription events must be serialized and conditionally blocked inside one transaction",
 );
 
 const updatedCase = sliceBetween(
