@@ -2648,9 +2648,18 @@ export default function PublicProfilePage() {
     if (pathname.startsWith("/restaurant/")) return "restaurant";
     return String(params.profileType || "").trim();
   })();
-  const cleanBusinessSlug = cleanBusinessRoute?.businessSlug || null;
+  const typedRouteSlug = String(params.slug || "").trim();
+  const typedSlugNeedsResolution =
+    Boolean(inferredProfileType) &&
+    inferredProfileType !== "restaurant" &&
+    Boolean(typedRouteSlug) &&
+    !extractUuidFromSlug(typedRouteSlug);
+  const cleanBusinessSlug =
+    cleanBusinessRoute?.businessSlug ||
+    (typedSlugNeedsResolution ? typedRouteSlug : null);
   const isCleanBusinessRoute =
-    !inferredProfileType && Boolean(cleanBusinessSlug);
+    (!inferredProfileType || typedSlugNeedsResolution) &&
+    Boolean(cleanBusinessSlug);
   const { data: cleanBusinessResolution, isLoading: cleanBusinessLoading } =
     useQuery<{
       entityType: "restaurant" | "truck" | "bar" | "location" | "supplier";
@@ -2675,7 +2684,7 @@ export default function PublicProfilePage() {
   const rawProfileId = String(
     params.profileId ||
       params.id ||
-      params.slug ||
+      (typedSlugNeedsResolution ? cleanBusinessResolution?.id : params.slug) ||
       cleanBusinessResolution?.id ||
       "",
   ).trim();
@@ -2683,6 +2692,11 @@ export default function PublicProfilePage() {
   const normalizedProfileType = normalizePublicProfileEntity(
     inferredProfileType || cleanBusinessResolution?.entityType,
   );
+  const typedSlugResolvedToWrongType =
+    typedSlugNeedsResolution &&
+    Boolean(cleanBusinessResolution) &&
+    normalizePublicProfileEntity(cleanBusinessResolution?.entityType) !==
+      normalizedProfileType;
   const invalidRestaurantRoute =
     normalizedProfileType === "restaurant" &&
     Boolean(rawProfileId) &&
@@ -2698,7 +2712,10 @@ export default function PublicProfilePage() {
       locationSearch,
     ],
     enabled:
-      !!normalizedProfileType && !!resolvedProfileId && !invalidRestaurantRoute,
+      !!normalizedProfileType &&
+      !!resolvedProfileId &&
+      !invalidRestaurantRoute &&
+      !typedSlugResolvedToWrongType,
     queryFn: async () => {
       const res = await fetch(
         apiUrl(
