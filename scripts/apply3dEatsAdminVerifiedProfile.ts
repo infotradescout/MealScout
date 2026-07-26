@@ -35,6 +35,8 @@ const LOGO_REPO_PATH = "client/public/business-assets/3d-eats-and-tea/logo.jpg";
 const LOGO_PUBLIC_URL =
   "https://www.mealscout.us/business-assets/3d-eats-and-tea/logo.jpg";
 const ADMIN_APPROVAL_STATUS = "admin_verified";
+const MEALSCOUT_SOURCE_TYPE = "mealscout_sourced";
+const MEALSCOUT_SOURCE_SCOPE = "inserted_menu_items";
 
 const apply = process.argv.includes("--apply");
 const rollback = process.argv.includes("--rollback");
@@ -522,6 +524,7 @@ const buildAdminApproval = (
   currentApproval: JsonRecord,
   menuRevision: string,
   appliedAt: string,
+  preservedNonMealScoutItemCount: number,
 ) => ({
   ...currentApproval,
   status: ADMIN_APPROVAL_STATUS,
@@ -537,6 +540,22 @@ const buildAdminApproval = (
   approvedMenuRevisionAlgorithm: MENU_REVISION_ALGORITHM,
   rejectedMenuRevision: null,
   rejectedMenuRevisionAlgorithm: null,
+  sourceAttribution: {
+    sourceType: MEALSCOUT_SOURCE_TYPE,
+    scope: MEALSCOUT_SOURCE_SCOPE,
+    sourceLabel: `${approvedMenuRows.length} menu items sourced by MealScout`,
+    sourceRevision: menuRevision,
+    sourceRevisionAlgorithm: MENU_REVISION_ALGORITHM,
+    evidenceArtifact: MENU_EVIDENCE_ARTIFACT,
+    evidenceSha256: sha256File(MENU_EVIDENCE_ARTIFACT),
+    sourcedItemCount: approvedMenuRows.length,
+    preservedNonMealScoutItemCount,
+    ownerAuthored: false,
+    descriptionTreatment:
+      "transcribed_and_normalized_from_source_material",
+    aiGeneratedDescriptions: false,
+    recordedAt: appliedAt,
+  },
 });
 
 const exactAppliedApproval = (approval: JsonRecord, lane: JsonRecord) =>
@@ -547,6 +566,9 @@ const exactAppliedApproval = (approval: JsonRecord, lane: JsonRecord) =>
   approval.adminApproved === true &&
   approval.ownerApproved === false &&
   normalizedText(approval.approvedMenuRevision) ===
+    normalizedText(lane.menuRevision) &&
+  sameJson(approval.sourceAttribution, lane.sourceAttribution) &&
+  normalizedText(asRecord(approval.sourceAttribution).sourceRevision) ===
     normalizedText(lane.menuRevision);
 
 const idsFromLane = (lane: JsonRecord, key: string) =>
@@ -857,6 +879,7 @@ async function applyVerifiedProfile() {
           currentApproval,
           reactivatedRevision,
           reappliedAt,
+          Number(lane.canonicalMenuItemCount),
         );
         const nextLane = {
           ...lane,
@@ -865,6 +888,7 @@ async function applyVerifiedProfile() {
           reappliedAt,
           appliedOwnerMenuApproval,
           appliedOwnerMenuApprovalSha256: sha256Json(appliedOwnerMenuApproval),
+          sourceAttribution: appliedOwnerMenuApproval.sourceAttribution,
         };
         const logoApplied = lane.logoApplied === true;
         await tx
@@ -984,6 +1008,7 @@ async function applyVerifiedProfile() {
         currentApproval,
         afterRevision,
         appliedAt,
+        canonicalRows.length,
       );
       const snapshots = insertedSnapshots(
         afterState,
@@ -1012,6 +1037,7 @@ async function applyVerifiedProfile() {
         previousOwnerMenuApprovalWasPresent: currentApprovalWasPresent,
         appliedOwnerMenuApproval,
         appliedOwnerMenuApprovalSha256: sha256Json(appliedOwnerMenuApproval),
+        sourceAttribution: appliedOwnerMenuApproval.sourceAttribution,
         previousLogoUrl: normalizedText(locked.logoUrl) || null,
         logoApplied,
         logoPublicUrl: logoApplied ? LOGO_PUBLIC_URL : locked.logoUrl,

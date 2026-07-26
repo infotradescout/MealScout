@@ -18,6 +18,7 @@
     "existingMealScoutProfile": "authoritative",
     "businessIdentity": "verified",
     "menuEvidence": "admin_approved_for_reversible_apply",
+    "menuProvenance": "mealscout_sourced",
     "logoEvidence": "admin_approved",
     "conflictingImportedFields": "must_not_overwrite_existing_verified_profile",
     "staticAddress": "business_or_admin_evidence_only",
@@ -62,6 +63,7 @@
   "applyDecision": {
     "menu": "Add the 74 approved rows to the existing active menu without replacing its menu or item IDs. Record every inserted row and make rollback deactivate only those inserted rows; do not delete anything.",
     "menuApproval": "Bind MealScout admin verification to the exact structured-menu revision hash without representing it as direct owner approval.",
+    "menuSourceAttribution": "Mark the 74 inserted rows as sourced by MealScout, keep the preserved Classic Burger outside that attribution, and expose sourcing separately from verification authority.",
     "logo": "Set the website-sourced logo only when the verified profile has no logo. Preserve any later nonblank logo.",
     "address": "Do not change the verified profile address from imported evidence and never project a static address as a live truck stop.",
     "youtube": "Do not change the verified profile YouTube value from conflicting imported evidence.",

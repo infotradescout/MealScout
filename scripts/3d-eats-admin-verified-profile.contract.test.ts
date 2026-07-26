@@ -91,6 +91,14 @@ test("Thomas's admin verification targets the canonical 3D Eats profile", () => 
     verification.canonicalTruth.menuEvidence,
     "admin_approved_for_reversible_apply",
   );
+  assert.equal(
+    verification.canonicalTruth.menuProvenance,
+    "mealscout_sourced",
+  );
+  assert.match(
+    verification.applyDecision.menuSourceAttribution,
+    /74 inserted rows as sourced by MealScout/,
+  );
 });
 
 test("the approved evidence contains 74 priced menu rows in 12 categories", () => {
@@ -179,6 +187,11 @@ test("the apply path is target-locked, guarded, and revision-bound", () => {
   assert.match(applySource, /approvedMenuRevision: menuRevision/);
   assert.match(applySource, /MENU_REVISION_ALGORITHM/);
   assert.match(applySource, /appliedOwnerMenuApprovalSha256/);
+  assert.match(applySource, /sourceType: MEALSCOUT_SOURCE_TYPE/);
+  assert.match(applySource, /scope: MEALSCOUT_SOURCE_SCOPE/);
+  assert.match(applySource, /sourcedItemCount: approvedMenuRows\.length/);
+  assert.match(applySource, /ownerAuthored: false/);
+  assert.match(applySource, /aiGeneratedDescriptions: false/);
   assert.match(applySource, /insertedCategorySnapshots/);
   assert.match(applySource, /insertedItemSnapshots/);
 });
@@ -241,4 +254,12 @@ test("the production mutation is additive, reversible, and truthful", () => {
   assert.match(applySource, /const ADMIN_APPROVAL_STATUS = "admin_verified"/);
   assert.match(publicProjectionSource, /label: "MealScout-verified menu"/);
   assert.match(publicProjectionSource, /adminVerified: true/);
+  assert.match(
+    publicProjectionSource,
+    /sourced by MealScout/,
+  );
+  assert.match(
+    publicProjectionSource,
+    /sourceRevisionAlgorithm === "structured-menu-sha256-v1"/,
+  );
 });

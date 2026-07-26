@@ -144,6 +144,8 @@ test("food is presented before menu provenance and update details", () => {
   assert.ok(itemsIndex >= 0 && trustIndex > itemsIndex);
   assert.match(menu, /Limited menu/);
   assert.match(menu, /menuApproval\.label/);
+  assert.match(menu, /data-public-menu-source="mealscout_sourced"/);
+  assert.match(menu, /menuApproval\.sourceAttribution\.label/);
   assert.match(menu, /Updated \{updatedLabel\}/);
 });
 

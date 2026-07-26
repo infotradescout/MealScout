@@ -150,6 +150,12 @@ export type PublicMenuApprovalState = {
   adminVerified?: boolean;
   ownerApprovalRequired: boolean;
   reviewedAt: string | null;
+  sourceAttribution: {
+    sourceType: "mealscout_sourced";
+    scope: "inserted_menu_items";
+    label: string;
+    sourcedItemCount: number;
+  } | null;
 };
 
 export type PublicTruckScheduleSummary = {
