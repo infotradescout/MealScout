@@ -146,6 +146,14 @@ const resolveMenuApproval = (
   if (
     currentMenuRevision &&
     approvedMenuRevision === currentMenuRevision &&
+    status === "admin_verified" &&
+    approval.adminApproved === true
+  ) {
+    return "admin_verified";
+  }
+  if (
+    currentMenuRevision &&
+    approvedMenuRevision === currentMenuRevision &&
     (status === "approved" || approval.ownerApproved === true)
   ) {
     return "owner_approved";
