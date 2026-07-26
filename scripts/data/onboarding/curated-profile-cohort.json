@@ -1,0 +1,124 @@
+{
+  "schemaVersion": 1,
+  "scope": "issue-302-curated-real-profile-cohort",
+  "canonicalTargetCount": 11,
+  "targets": [
+    {
+      "restaurantId": "95c4e656-f3cc-46ab-ae18-53f549cecfd1",
+      "name": "3D Eats & Tea",
+      "expectedSlug": "3d-eats-tea",
+      "classificationExpectation": "food_truck"
+    },
+    {
+      "restaurantId": "6ca08365-f8af-4c1d-9754-6c998c803869",
+      "name": "All Gas No Brakes Reloaded",
+      "expectedSlug": "all-gas-no-brakes-reloaded",
+      "classificationExpectation": "food_truck"
+    },
+    {
+      "restaurantId": "0a5ef5b8-852a-4bfd-8626-f06218d83b31",
+      "name": "Around The Table Catrring",
+      "expectedSlug": "around-the-table-catrring",
+      "classificationExpectation": "unresolved"
+    },
+    {
+      "restaurantId": "75dd470e-2692-4579-bde0-a64dcc3f6fcb",
+      "name": "CREATIVBOWLS",
+      "expectedSlug": "creativbowls",
+      "classificationExpectation": "food_truck"
+    },
+    {
+      "restaurantId": "96cc9541-c39a-47e9-ba9f-2e15e0d0a6f2",
+      "name": "Jays Southern Cuisine",
+      "expectedSlug": "jays-southern-cuisine",
+      "classificationExpectation": "food_truck"
+    },
+    {
+      "restaurantId": "d0fd61f5-4181-4216-a000-3dc08bd9a348",
+      "name": "Pie Faced",
+      "expectedSlug": "pie-faced",
+      "classificationExpectation": "food_truck"
+    },
+    {
+      "restaurantId": "f3b76054-f355-43b0-a2d3-901277748557",
+      "name": "Sweet Love",
+      "expectedSlug": "sweet-love",
+      "classificationExpectation": "food_truck"
+    },
+    {
+      "restaurantId": "bfe24073-7362-4975-83ba-43c096f782e3",
+      "name": "The Spot Tavern",
+      "expectedSlug": "the-spot-tavern",
+      "classificationExpectation": "bar"
+    },
+    {
+      "restaurantId": "e77ac77a-c432-42d0-ac0f-22c48b6306c9",
+      "name": "Blessed Berry Bowls",
+      "expectedSlug": "blessed-berry-bowls",
+      "classificationExpectation": "food_truck"
+    },
+    {
+      "restaurantId": "60475d81-2ef7-4de9-bfbc-a009f097cbd6",
+      "name": "MOROCCO'S TACO'S",
+      "expectedSlug": "moroccos-tacos",
+      "classificationExpectation": "food_truck"
+    },
+    {
+      "restaurantId": "f1ed3d1d-3ea8-4f54-85b9-af48d1d884e0",
+      "name": "The Florida Kitchen Island Cuisine",
+      "expectedSlug": "the-florida-kitchen-island-cuisine",
+      "classificationExpectation": "food_truck"
+    }
+  ],
+  "duplicateCandidates": [
+    {
+      "canonicalRestaurantId": "95c4e656-f3cc-46ab-ae18-53f549cecfd1",
+      "candidateRestaurantId": "271878aa-082c-4990-a0ae-4da1d665ca0a",
+      "name": "3-D EATS",
+      "reason": "known historical duplicate candidate recorded by the frozen merge script; capture current existence and dependencies without deleting"
+    },
+    {
+      "canonicalRestaurantId": "95c4e656-f3cc-46ab-ae18-53f549cecfd1",
+      "candidateRestaurantId": "7ff7ba14-8e0a-48cf-b20a-e663e8d9d9e1",
+      "name": "3-D EATS",
+      "reason": "known historical duplicate candidate recorded by the frozen merge script; capture current existence and dependencies without deleting"
+    },
+    {
+      "canonicalRestaurantId": "95c4e656-f3cc-46ab-ae18-53f549cecfd1",
+      "candidateRestaurantId": "4c39db22-6c2f-4312-820f-45ad79aa9998",
+      "name": "3-D EATS",
+      "reason": "known historical duplicate candidate recorded by the frozen merge script; capture current existence and dependencies without deleting"
+    },
+    {
+      "canonicalRestaurantId": "95c4e656-f3cc-46ab-ae18-53f549cecfd1",
+      "candidateRestaurantId": "53de3f22-ebb6-4726-81c3-b2eba7c4ebc8",
+      "name": "3-D EATS",
+      "reason": "known active duplicate candidate recorded by the frozen merge script; capture current existence and dependencies without deleting"
+    },
+    {
+      "canonicalRestaurantId": "75dd470e-2692-4579-bde0-a64dcc3f6fcb",
+      "candidateRestaurantId": "c07e668e-63a9-4c1f-8a10-95bd15978df3",
+      "name": "CREATIVBOWLS",
+      "reason": "known historical duplicate candidate recorded by the frozen merge script; capture current existence and dependencies without deleting"
+    },
+    {
+      "canonicalRestaurantId": "75dd470e-2692-4579-bde0-a64dcc3f6fcb",
+      "candidateRestaurantId": "16f4f038-6e85-4448-a03d-0669cc6e2876",
+      "name": "CREATIVBOWLS",
+      "reason": "known historical duplicate candidate recorded by the frozen merge script; capture current existence and dependencies without deleting"
+    },
+    {
+      "canonicalRestaurantId": "f1ed3d1d-3ea8-4f54-85b9-af48d1d884e0",
+      "candidateRestaurantId": "7e36413b-6396-454e-a3c2-e93c00bad2bf",
+      "name": "The Florida Kitchen - Island Cuisine",
+      "reason": "active searchable imported record currently competes with the verified canonical profile"
+    }
+  ],
+  "explicitExclusions": [
+    {
+      "restaurantId": "ea23bd89-c674-4fe2-b581-e13a6d130752",
+      "name": "Tropiq Fuel LLC",
+      "reason": "public imported record outside the July 14 curated real-account cohort; reconcile under issue 303 rather than issue 302"
+    }
+  ]
+}

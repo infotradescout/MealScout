@@ -1,4 +1,13 @@
-# Real-account profile completion — status tracker
+# Real-account profile completion — historical status tracker
+
+> Truth correction (2026-07-26): these are historical working notes, not
+> current production proof. The canonical cohort contains all 11 accounts
+> listed below, including 3D Eats. Historical 5/5-style scores do not prove a
+> current schedule, public route, menu count, or live production state.
+> Production baseline capture remains blocked until
+> `captureCuratedProfileCohortBaseline.ts` is run against the authorized
+> production database and its ignored `backups/` output is reviewed. No
+> production evidence snapshot is committed here.
 
 Working through the 11 real accounts flagged incomplete in the 2026-07-14
 completeness audit (excluding "N/A" [deleted], Giles/Levon's Lamb
@@ -9,10 +18,11 @@ don't need to block progress now, just need to survive until that review.
 
 ## Done
 
-- **All Gas No Brakes Reloaded** — 5/5. Logo + 3 menu items (real Cloudinary
+- **All Gas No Brakes Reloaded** — historical 5/5-style pass. Logo + 3 menu items (real Cloudinary
   photos) + weekly hours + 4 dated schedule stops + socials. Still don't
   have their actual food menu (wings/egg rolls) with prices, only the
-  retail sauce line from their Shopify store — flag for owner review.
+  retail sauce line from their Shopify store — flag for owner review. The
+  July 15-18 stops are expired and do not prove a current schedule.
 
 ## In progress
 
@@ -53,8 +63,9 @@ don't need to block progress now, just need to survive until that review.
   Still need everything else: menu + prices, logo/cover, hours pattern —
   screenshots needed.
 
-- **Pie Faced** — still 2/5 (description/website/FB set). Already has 29
-  real menu items in the system (no menu work needed). Established truck,
+- **Pie Faced** — still 2/5 (description/website/FB set). The 2026-07-26
+  public audit observed 24 public menu items, correcting the prior claim of
+  29; the production baseline must reconcile the stored/public counts. Established truck,
   Fort Walton Beach, since 2018, pizza + sandwiches + desserts.
   Still need: photos, hours, schedule — all screenshot-only, Square site
   didn't render for fetching and Facebook blocked as usual.
@@ -111,7 +122,9 @@ don't need to block progress now, just need to survive until that review.
   nobody there.
   Still need: real hours, from the owner directly.
 
-- **3D Eats & Tea** — still 4/5, deliberately untouched. Found a Facebook
+- **3D Eats & Tea** — admin verification and the guarded menu/logo apply lane
+  are now recorded in the repository. This still does not prove the current
+  production database state or a current schedule. An older Facebook
   weekly-schedule post (Drive Thru @ 3200 Pace Blvd Mon-Sat 11-5, "3-D
   Eats X" @ 6881 US 98 Tue-Sat 11-8, MessHaul @ The Tristan Tue 5-7, plus
   Thu/Fri event spots) but user confirmed (2026-07-15) it's likely an old
@@ -124,15 +137,19 @@ don't need to block progress now, just need to survive until that review.
   overriding that guardrail. Needs current dated stops directly from the
   owner via the eventual review link.
 
-- **The Florida Kitchen Island Cuisine** — still 4/5, untouched. Already
+- **The Florida Kitchen Island Cuisine** — canonical verified ID
+  `f1ed3d1d-3ea8-4f54-85b9-af48d1d884e0` currently competes with active
+  imported duplicate `7e36413b-6396-454e-a3c2-e93c00bad2bf`; route and
+  dependency reconciliation is required before content mutation. Already
   has correct-format hours (Mon-Fri 11-4, closed weekends), 1 menu item,
   cover photo. Only "schedule" is missing. No usable current schedule info
   found via search (not listed in any of the major Pensacola food-truck
   directories checked) — needs the owner directly via the review link.
 
-## All 11 accounts: pass complete
+## Historical first pass across all 11 accounts
 
-Every account on the original list has been touched at least once. None
+Every account on the original list was touched at least once. This is not a
+production-completion claim. None
 were force-completed with guessed or stale data — remaining gaps are
 either genuinely owner-only info (menu prices, current schedules, logo/
 cover photos — all blocked by Facebook/Instagram/Square/DoorDash/Toast/

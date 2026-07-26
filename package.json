@@ -41,6 +41,8 @@
     "test:about-explainer": "npx --yes tsx scripts/mealscout-about-explainer.contract.test.ts",
     "test:3d-eats-frui-tea-sauce": "npx --yes tsx scripts/3d-eats-frui-tea-sauce-update.contract.test.ts",
     "test:3d-eats-admin-verified-profile": "node --import tsx scripts/3d-eats-admin-verified-profile.contract.test.ts",
+    "capture:curated-profile-cohort-baseline": "tsx scripts/captureCuratedProfileCohortBaseline.ts",
+    "test:curated-profile-cohort-baseline": "node --import tsx scripts/curated-profile-cohort-baseline.contract.test.ts",
     "test:profile-action-policy": "npx --yes tsx scripts/mealscout-profile-action-policy.contract.test.ts",
     "test:business-type-taxonomy": "npx --yes tsx scripts/mealscout-business-type-taxonomy.contract.test.ts",
     "test:business-signup-attachment": "node --import tsx scripts/business-signup-menu-attachment.contract.test.ts",
