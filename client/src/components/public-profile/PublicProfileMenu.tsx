@@ -318,10 +318,15 @@ export function PublicProfileMenu({
     menuApproval.status !== "unavailable" &&
     menuCompleteness.state !== "unavailable",
   );
+  const showMenuSourceAttribution = Boolean(
+    menuApproval?.sourceAttribution?.label &&
+    menuCompleteness.state !== "unavailable",
+  );
   const hasTrustDetails = Boolean(
     menuCompleteness.state === "partial" ||
     profile.menuContextNote ||
     showMenuApproval ||
+    showMenuSourceAttribution ||
     updatedLabel,
   );
 
@@ -586,6 +591,12 @@ export function PublicProfileMenu({
               {updatedLabel ? <span>Updated {updatedLabel}</span> : null}
             </div>
             {profile.menuContextNote ? <p>{profile.menuContextNote}</p> : null}
+            {showMenuSourceAttribution &&
+            menuApproval?.sourceAttribution?.label ? (
+              <p data-public-menu-source="mealscout_sourced">
+                {menuApproval.sourceAttribution.label}
+              </p>
+            ) : null}
             {showMenuApproval && menuApproval?.label ? (
               <p
                 className={

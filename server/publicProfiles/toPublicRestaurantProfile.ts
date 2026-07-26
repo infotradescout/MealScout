@@ -493,6 +493,58 @@ export function toPublicRestaurantProfile(input: {
     menuPdfUrl ||
     featuredMenuItems.length > 0,
   );
+  const rawMenuSourceAttribution =
+    rawMenuApproval &&
+    typeof rawMenuApproval.sourceAttribution === "object" &&
+    rawMenuApproval.sourceAttribution
+      ? (rawMenuApproval.sourceAttribution as Record<string, any>)
+      : {};
+  const sourcedItemCount = Number(
+    rawMenuSourceAttribution.sourcedItemCount,
+  );
+  const sourceRevisionAlgorithm = String(
+    rawMenuSourceAttribution.sourceRevisionAlgorithm || "",
+  ).trim();
+  const approvedMenuRevisionAlgorithm = String(
+    rawMenuApproval.approvedMenuRevisionAlgorithm || "",
+  ).trim();
+  const sourceEvidenceArtifact = String(
+    rawMenuSourceAttribution.evidenceArtifact || "",
+  ).trim();
+  const sourceEvidenceSha256 = String(
+    rawMenuSourceAttribution.evidenceSha256 || "",
+  )
+    .trim()
+    .toLowerCase();
+  const menuSourceAttribution =
+    !ownerMenuRejected &&
+    menuRevisionCoversRenderedMenu &&
+    hasAnyMenuSurface &&
+    Boolean(currentMenuRevision) &&
+    String(rawMenuSourceAttribution.sourceType || "")
+      .trim()
+      .toLowerCase() === "mealscout_sourced" &&
+    String(rawMenuSourceAttribution.scope || "")
+      .trim()
+      .toLowerCase() === "inserted_menu_items" &&
+    rawMenuSourceAttribution.ownerAuthored === false &&
+    String(rawMenuSourceAttribution.sourceRevision || "").trim() ===
+      currentMenuRevision &&
+    sourceRevisionAlgorithm === "structured-menu-sha256-v1" &&
+    sourceRevisionAlgorithm === approvedMenuRevisionAlgorithm &&
+    Boolean(sourceEvidenceArtifact) &&
+    /^[a-f0-9]{64}$/.test(sourceEvidenceSha256) &&
+    Number.isSafeInteger(sourcedItemCount) &&
+    sourcedItemCount > 0
+      ? {
+          sourceType: "mealscout_sourced" as const,
+          scope: "inserted_menu_items" as const,
+          label: `${sourcedItemCount} menu ${
+            sourcedItemCount === 1 ? "item" : "items"
+          } sourced by MealScout`,
+          sourcedItemCount,
+        }
+      : null;
   const menuApproval =
     profileType === "truck" && ownerMenuRejected
       ? {
@@ -502,6 +554,7 @@ export function toPublicRestaurantProfile(input: {
           adminVerified: false,
           ownerApprovalRequired: false,
           reviewedAt: String(rawMenuApproval.reviewedAt || "").trim() || null,
+          sourceAttribution: null,
         }
       : profileType === "truck" && adminMenuVerified
         ? {
@@ -511,6 +564,7 @@ export function toPublicRestaurantProfile(input: {
             adminVerified: true,
             ownerApprovalRequired: false,
             reviewedAt: String(rawMenuApproval.reviewedAt || "").trim() || null,
+            sourceAttribution: menuSourceAttribution,
           }
         : profileType === "truck" && ownerMenuApproved
           ? {
@@ -521,6 +575,7 @@ export function toPublicRestaurantProfile(input: {
               ownerApprovalRequired: false,
               reviewedAt:
                 String(rawMenuApproval.reviewedAt || "").trim() || null,
+              sourceAttribution: menuSourceAttribution,
             }
           : profileType === "truck" && hasAnyMenuSurface
             ? {
@@ -532,6 +587,7 @@ export function toPublicRestaurantProfile(input: {
                 ownerApprovalRequired: true,
                 reviewedAt:
                   String(rawMenuApproval.reviewedAt || "").trim() || null,
+                sourceAttribution: menuSourceAttribution,
               }
             : {
                 status: "unavailable" as const,
@@ -540,6 +596,7 @@ export function toPublicRestaurantProfile(input: {
                 adminVerified: false,
                 ownerApprovalRequired: false,
                 reviewedAt: null,
+                sourceAttribution: menuSourceAttribution,
               };
   const publicMenuSections =
     menuApproval.status === "rejected" ? [] : menuSections;
