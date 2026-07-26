@@ -33,7 +33,7 @@ const MENU_EVIDENCE_ARTIFACT =
   "docs/evidence/3d-eats-tea-append-only-profile-read-2026-06-07.json";
 const LOGO_REPO_PATH = "client/public/business-assets/3d-eats-and-tea/logo.jpg";
 const LOGO_PUBLIC_URL =
-  "https://mealscout.onrender.com/business-assets/3d-eats-and-tea/logo.jpg";
+  "https://www.mealscout.us/business-assets/3d-eats-and-tea/logo.jpg";
 const ADMIN_APPROVAL_STATUS = "admin_verified";
 
 const apply = process.argv.includes("--apply");

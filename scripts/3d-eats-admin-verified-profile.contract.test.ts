@@ -147,7 +147,7 @@ test("the official website logo is exact, public, and reproducible", () => {
   });
   assert.equal(
     verification.approvedSources.logoPublicUrl,
-    "https://mealscout.onrender.com/business-assets/3d-eats-and-tea/logo.jpg",
+    "https://www.mealscout.us/business-assets/3d-eats-and-tea/logo.jpg",
   );
   assert.equal(
     verification.approvedSources.menuEvidenceSha256,

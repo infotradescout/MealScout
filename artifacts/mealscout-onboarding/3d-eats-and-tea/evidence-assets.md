@@ -31,7 +31,7 @@ artifacts/mealscout-onboarding/3d-eats-and-tea/images/logo.jpg
 client/public/business-assets/3d-eats-and-tea/logo.jpg
 sha256: f1791c958039b2b7437b86824295baf59f0bb123241a0c83cd388bcdc4fd9692
 dimensions: 2560x1793
-public_url: https://mealscout.onrender.com/business-assets/3d-eats-and-tea/logo.jpg
+public_url: https://www.mealscout.us/business-assets/3d-eats-and-tea/logo.jpg
 ```
 
 The remaining conversation-supplied menu images are historical evidence
