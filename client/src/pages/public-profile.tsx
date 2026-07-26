@@ -1706,7 +1706,7 @@ function MenuSection({
         {profile.profileType === "truck" && menuApproval?.label ? (
           <p
             className={`rounded-md border px-3 py-2 text-xs ${
-              menuApproval.ownerApproved
+              menuApproval.ownerApproved || menuApproval.adminVerified
                 ? "border-emerald-300/35 bg-emerald-500/10 text-emerald-100"
                 : menuRejected
                   ? "border-white/15 bg-white/5 text-white/75"

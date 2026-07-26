@@ -589,7 +589,7 @@ export function PublicProfileMenu({
             {showMenuApproval && menuApproval?.label ? (
               <p
                 className={
-                  menuApproval.ownerApproved
+                  menuApproval.ownerApproved || menuApproval.adminVerified
                     ? "text-[color:var(--profile-success)]"
                     : menuApproval.status === "rejected"
                       ? "text-[color:var(--profile-muted)]"

@@ -1,6 +1,6 @@
 # 3D Eats & Tea Evidence Assets
 
-Status: `PARTIAL_IMAGES_CAPTURED`
+Status: `ADMIN_VERIFIED_LOGO_CAPTURED`
 
 GitHub tracker: issue `#113`
 
@@ -16,9 +16,27 @@ public_url: /business-assets/3d-eats-and-tea/cover-photo.png
 storage_mode: local_public_asset_cloudinary_unconfigured
 ```
 
-## Important limitation
+## Current authority and logo source
 
-The images were supplied directly in the ChatGPT conversation. This artifact records the image evidence and extraction handling. The raw binary image files still need to be committed by a local shell/Codex session that has access to the uploaded files, or re-uploaded through the repository/UI asset flow.
+Thomas, the MealScout admin who created and managed the 3D Eats profile, has
+verified the business and approved its menu and official website logo. The
+decision is recorded in
+`docs/evidence/3d-eats-admin-verification-2026-07-26.json`.
+
+The approved logo was retrieved from `https://3deats.us/` and is now captured
+at:
+
+```text
+artifacts/mealscout-onboarding/3d-eats-and-tea/images/logo.jpg
+client/public/business-assets/3d-eats-and-tea/logo.jpg
+sha256: f1791c958039b2b7437b86824295baf59f0bb123241a0c83cd388bcdc4fd9692
+dimensions: 2560x1793
+public_url: https://mealscout.onrender.com/business-assets/3d-eats-and-tea/logo.jpg
+```
+
+The remaining conversation-supplied menu images are historical evidence
+references. The structured, hashed 74-item menu evidence is sufficient for the
+guarded apply and does not require those raw screenshots to be republished.
 
 ## Source image references from conversation
 
@@ -41,7 +59,7 @@ artifacts/mealscout-onboarding/3d-eats-and-tea/images/details-contact.png
 artifacts/mealscout-onboarding/3d-eats-and-tea/images/menu-front.png
 artifacts/mealscout-onboarding/3d-eats-and-tea/images/menu-back.png
 artifacts/mealscout-onboarding/3d-eats-and-tea/images/menu-duplicate-reference.png
-artifacts/mealscout-onboarding/3d-eats-and-tea/images/logo.png
+artifacts/mealscout-onboarding/3d-eats-and-tea/images/logo.jpg
 artifacts/mealscout-onboarding/3d-eats-and-tea/images/cover-photo.png
 ```
 
@@ -50,7 +68,9 @@ Captured locally in this repo:
 ```text
 artifacts/mealscout-onboarding/3d-eats-and-tea/images/details-contact.png
 artifacts/mealscout-onboarding/3d-eats-and-tea/images/cover-photo.png
+artifacts/mealscout-onboarding/3d-eats-and-tea/images/logo.jpg
 client/public/business-assets/3d-eats-and-tea/cover-photo.png
+client/public/business-assets/3d-eats-and-tea/logo.jpg
 ```
 
 The cover photo has a public app path and an `image_uploads` row matching the normal restaurant cover upload shape:
@@ -60,13 +80,12 @@ The cover photo has a public app path and an `image_uploads` row matching the no
 image_uploads.id = 5f663d13-88d5-41ca-9021-97873c591732
 ```
 
-Still missing as local binaries:
+Historical source binaries still unavailable locally:
 
 ```text
 artifacts/mealscout-onboarding/3d-eats-and-tea/images/menu-front.png
 artifacts/mealscout-onboarding/3d-eats-and-tea/images/menu-back.png
 artifacts/mealscout-onboarding/3d-eats-and-tea/images/menu-duplicate-reference.png
-artifacts/mealscout-onboarding/3d-eats-and-tea/images/logo.png
 ```
 
 ## Local/Codex copy command
@@ -79,7 +98,6 @@ cp /mnt/data/ae8d5163-7ae3-4209-82e6-34c745024b4f.png artifacts/mealscout-onboar
 cp /mnt/data/64d94199-31d1-409e-a235-1e47cff56d3b.png artifacts/mealscout-onboarding/3d-eats-and-tea/images/menu-front.png
 cp /mnt/data/55f312e0-5e30-49e4-8ad2-4a94deecec90.png artifacts/mealscout-onboarding/3d-eats-and-tea/images/menu-back.png
 cp /mnt/data/fa37b17e-7f80-47c2-8931-6b7c47e4684a.png artifacts/mealscout-onboarding/3d-eats-and-tea/images/menu-duplicate-reference.png
-cp /mnt/data/31b28e7d-76dd-481d-9986-e0b99645e4bc.png artifacts/mealscout-onboarding/3d-eats-and-tea/images/logo.png
 git add artifacts/mealscout-onboarding/3d-eats-and-tea/images
 git commit -m "docs: add 3d eats evidence images"
 git push origin main
@@ -87,4 +105,6 @@ git push origin main
 
 ## Apply rule reminder
 
-Do not publish or overwrite existing 3D Eats & Tea account data from these assets automatically. Use append-only enrichment, fill blanks only, and queue conflicts for review.
+Use the recorded admin-verification decision and guarded apply script. Preserve
+existing account/menu/item identifiers, fill the logo only if blank, add only
+the 74 approved menu rows, and never infer a current stop from these assets.

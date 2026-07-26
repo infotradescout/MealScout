@@ -470,8 +470,16 @@ export function toPublicRestaurantProfile(input: {
     (currentMenuRevision
       ? rejectedMenuRevision === currentMenuRevision
       : !rejectedMenuRevision);
+  const adminMenuVerified =
+    !ownerMenuRejected &&
+    menuRevisionCoversRenderedMenu &&
+    Boolean(currentMenuRevision) &&
+    approvedMenuRevision === currentMenuRevision &&
+    ownerMenuApprovalStatus === "admin_verified" &&
+    rawMenuApproval.adminApproved === true;
   const ownerMenuApproved =
     !ownerMenuRejected &&
+    !adminMenuVerified &&
     menuRevisionCoversRenderedMenu &&
     Boolean(currentMenuRevision) &&
     approvedMenuRevision === currentMenuRevision &&
@@ -491,34 +499,48 @@ export function toPublicRestaurantProfile(input: {
           status: "rejected" as const,
           label: "Menu unavailable / pending update",
           ownerApproved: false,
+          adminVerified: false,
           ownerApprovalRequired: false,
           reviewedAt: String(rawMenuApproval.reviewedAt || "").trim() || null,
         }
-      : profileType === "truck" && ownerMenuApproved
+      : profileType === "truck" && adminMenuVerified
         ? {
-            status: "owner_approved" as const,
-            label: "Owner-approved menu",
-            ownerApproved: true,
+            status: "admin_verified" as const,
+            label: "MealScout-verified menu",
+            ownerApproved: false,
+            adminVerified: true,
             ownerApprovalRequired: false,
             reviewedAt: String(rawMenuApproval.reviewedAt || "").trim() || null,
           }
-        : profileType === "truck" && hasAnyMenuSurface
+        : profileType === "truck" && ownerMenuApproved
           ? {
-              status: "needs_owner_confirmation" as const,
-              label:
-                "Menu added from available source — needs owner confirmation",
-              ownerApproved: false,
-              ownerApprovalRequired: true,
+              status: "owner_approved" as const,
+              label: "Owner-approved menu",
+              ownerApproved: true,
+              adminVerified: false,
+              ownerApprovalRequired: false,
               reviewedAt:
                 String(rawMenuApproval.reviewedAt || "").trim() || null,
             }
-          : {
-              status: "unavailable" as const,
-              label: "Menu unavailable / pending update",
-              ownerApproved: false,
-              ownerApprovalRequired: false,
-              reviewedAt: null,
-            };
+          : profileType === "truck" && hasAnyMenuSurface
+            ? {
+                status: "needs_owner_confirmation" as const,
+                label:
+                  "Menu added from available source — needs owner confirmation",
+                ownerApproved: false,
+                adminVerified: false,
+                ownerApprovalRequired: true,
+                reviewedAt:
+                  String(rawMenuApproval.reviewedAt || "").trim() || null,
+              }
+            : {
+                status: "unavailable" as const,
+                label: "Menu unavailable / pending update",
+                ownerApproved: false,
+                adminVerified: false,
+                ownerApprovalRequired: false,
+                reviewedAt: null,
+              };
   const publicMenuSections =
     menuApproval.status === "rejected" ? [] : menuSections;
   const publicMenuVariants =
@@ -527,11 +549,15 @@ export function toPublicRestaurantProfile(input: {
     menuApproval.status === "rejected" ? [] : featuredMenuItems;
   const publicMenuUrl = menuApproval.status === "rejected" ? null : menuUrl;
   const publicMenuImageUrl =
-    menuApproval.status === "rejected" || ownerMenuApproved
+    menuApproval.status === "rejected" ||
+    ownerMenuApproved ||
+    adminMenuVerified
       ? null
       : menuImageUrl;
   const publicMenuPdfUrl =
-    menuApproval.status === "rejected" || ownerMenuApproved
+    menuApproval.status === "rejected" ||
+    ownerMenuApproved ||
+    adminMenuVerified
       ? null
       : menuPdfUrl;
   const dealCount = Math.max(

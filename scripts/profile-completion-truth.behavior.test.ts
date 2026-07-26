@@ -548,6 +548,46 @@ assert.equal(isSafePublicMediaUrl("/placeholder.png"), false);
   assert.equal(approvedStructuredProfile.menuImageUrl, null);
   assert.equal(approvedStructuredProfile.menuPdfUrl, null);
 
+  const adminVerifiedStructuredProfile = toPublicRestaurantProfile({
+    baseUrl: "https://www.mealscout.us",
+    row: {
+      id: "truck-admin-verified-menu",
+      name: "Admin Verified Menu Truck",
+      businessType: "food_truck",
+      isFoodTruck: true,
+      isActive: true,
+      menuRevision: MENU_REVISION,
+      menuRevisionCoversRenderedMenu: true,
+      menuSections: [
+        { name: "Menu", items: [{ name: "Taco", priceCents: 900 }] },
+      ],
+      menuVariants: [],
+      menuUrl: "https://menu.example/admin-verified",
+      rawData: {
+        ownerMenuApproval: {
+          status: "admin_verified",
+          ownerApproved: false,
+          adminApproved: true,
+          approvedMenuRevision: MENU_REVISION,
+        },
+      },
+    },
+  });
+  assert.equal(
+    adminVerifiedStructuredProfile.menuApproval.status,
+    "admin_verified",
+  );
+  assert.equal(
+    adminVerifiedStructuredProfile.menuApproval.label,
+    "MealScout-verified menu",
+  );
+  assert.equal(adminVerifiedStructuredProfile.menuApproval.ownerApproved, false);
+  assert.equal(adminVerifiedStructuredProfile.menuApproval.adminVerified, true);
+  assert.equal(
+    adminVerifiedStructuredProfile.menuUrl,
+    "https://menu.example/admin-verified",
+  );
+
   const changedUnboundExternal = toPublicRestaurantProfile({
     baseUrl: "https://www.mealscout.us",
     row: {
