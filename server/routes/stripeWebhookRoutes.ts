@@ -1,12 +1,33 @@
 import type { Express } from "express";
 import Stripe from "stripe";
-import { and, asc, eq, gte, inArray, lt, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  eq,
+  gte,
+  inArray,
+  isNull,
+  lt,
+  or,
+  sql,
+} from "drizzle-orm";
 import {
   PARKING_PASS_BOOKING_DAYS,
   PARKING_PASS_SLOT_TYPES,
   isSlotWithinHours,
 } from "@shared/parkingPassSlots";
-import { hosts, suppliers, lisaClaims, LISA_CLAIM_TYPES, LISA_CLAIM_SOURCES, restaurantSubscriptions } from "@shared/schema";
+import {
+  creditLedger,
+  hosts,
+  suppliers,
+  lisaClaims,
+  LISA_CLAIM_TYPES,
+  LISA_CLAIM_SOURCES,
+  deals,
+  restaurantSubscriptions,
+  restaurants,
+  users,
+} from "@shared/schema";
 import { db } from "../db";
 import { emailService } from "../emailService";
 import { resolveCityTimeZoneSync } from "../services/cityTimeZone";
@@ -16,6 +37,9 @@ import {
   utcDateFromDateKey,
 } from "../services/dateKeys";
 import { storage } from "../storage";
+import { shouldAttemptPickupWebhookPayoutTransfer } from "../utils/pickupWebhookPayout";
+import { shouldRevokeUserSubscriptionEntitlements } from "../utils/stripeSubscriptionEntitlements";
+import { decideStripeWebhookVerificationMode } from "../utils/stripeWebhookVerification";
 const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY)
   : null;
@@ -31,6 +55,96 @@ type StripeWebhookRouteDependencies = {
     params: NotifyHostCapacityWarningParams,
   ) => Promise<void>;
 };
+
+function getSubscriptionCustomerId(
+  customer: Stripe.Subscription["customer"],
+): string | null {
+  if (typeof customer === "string") return customer;
+  return customer?.id || null;
+}
+
+async function deactivateSubscriptionEntitlements(params: {
+  userId: string;
+  subscriptionId: string;
+}) {
+  await db.transaction(async (tx: any) => {
+    // Serialize delayed cancellation A against activation of replacement B.
+    // The second event observes the committed current subscription before it
+    // can change user-level access.
+    const [lockedUser] = await tx
+      .select({ stripeSubscriptionId: users.stripeSubscriptionId })
+      .from(users)
+      .where(eq(users.id, params.userId))
+      .limit(1)
+      .for("update");
+
+    // The event-specific row can always be retired. Deals and the user lookup
+    // key belong to whichever subscription is current under the row lock.
+    await tx
+      .update(restaurantSubscriptions)
+      .set({
+        status: "canceled",
+        canceledAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(
+        eq(
+          restaurantSubscriptions.stripeSubscriptionId,
+          params.subscriptionId,
+        ),
+      );
+
+    if (
+      !lockedUser ||
+      !shouldRevokeUserSubscriptionEntitlements({
+        currentSubscriptionId: lockedUser.stripeSubscriptionId,
+        eventSubscriptionId: params.subscriptionId,
+      })
+    ) {
+      return;
+    }
+
+    const userRestaurants = await tx
+      .select({ id: restaurants.id })
+      .from(restaurants)
+      .where(eq(restaurants.ownerId, params.userId));
+    const restaurantIds = userRestaurants.map(
+      (restaurant: { id: string }) => restaurant.id,
+    );
+    if (restaurantIds.length > 0) {
+      await tx
+        .update(deals)
+        .set({
+          isActive: false,
+          updatedAt: new Date(),
+        })
+        .where(inArray(deals.restaurantId, restaurantIds));
+    }
+
+    const clearedUsers = await tx
+      .update(users)
+      .set({
+        stripeSubscriptionId: null,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(users.id, params.userId),
+          or(
+            isNull(users.stripeSubscriptionId),
+            eq(users.stripeSubscriptionId, params.subscriptionId),
+          ),
+        ),
+      )
+      .returning({ id: users.id });
+    if (clearedUsers.length !== 1) {
+      throw new Error(
+        `Subscription changed while revoking ${params.subscriptionId}`,
+      );
+    }
+  });
+}
+
 export function registerStripeWebhookRoutes(
   app: Express,
   { notifyHostCapacityWarning }: StripeWebhookRouteDependencies,
@@ -45,26 +159,39 @@ export function registerStripeWebhookRoutes(
         ? req.body.toString("utf8")
         : req.body;
       const forceVerify =
-        String(process.env.STRIPE_WEBHOOK_FORCE_VERIFY || "").toLowerCase() ===
-        "true";
+        String(process.env.STRIPE_WEBHOOK_FORCE_VERIFY || "")
+          .trim()
+          .toLowerCase() === "true";
+      const allowUnsignedDev =
+        String(
+          process.env.STRIPE_WEBHOOK_DEV_ALLOW_UNSIGNED || "",
+        )
+          .trim()
+          .toLowerCase() === "true";
 
-      // Default behavior:
-      // - development: accept JSON payloads without signature verification (fast local iteration)
-      // - non-development: require Stripe signature verification
-      // Optional hardening: set STRIPE_WEBHOOK_FORCE_VERIFY=true to require signatures in development too.
-      if (process.env.NODE_ENV === "development" && !forceVerify) {
+      const verificationMode = decideStripeWebhookVerificationMode({
+        nodeEnv: process.env.NODE_ENV,
+        forceVerify,
+        allowUnsignedDev,
+      });
+      if (verificationMode === "accept_unsigned_dev") {
         event = typeof payload === "string" ? JSON.parse(payload) : payload;
       } else {
         const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
         if (!stripe || !endpointSecret) {
-          return res.status(400).send("Webhook secret not configured");
+          return res
+            .status(503)
+            .send("Webhook signature verification unavailable");
+        }
+        if (!Buffer.isBuffer(req.body)) {
+          throw new Error("Stripe webhook request body was not raw bytes");
         }
         event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
       }
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
       console.error(`Webhook signature verification failed:`, errMsg);
-      return res.status(400).send(`Webhook Error: ${errMsg}`);
+      return res.status(400).send("Webhook Error: signature verification failed");
     }
 
     console.log(`[WEBHOOK] Received event: ${event.type}`);
@@ -104,6 +231,7 @@ export function registerStripeWebhookRoutes(
                     "[WEBHOOK] Error processing affiliate commissions:",
                     commissionError,
                   );
+                  throw commissionError;
                 }
               }
 
@@ -196,6 +324,7 @@ export function registerStripeWebhookRoutes(
                     "[WEBHOOK] Error syncing restaurantSubscriptions:",
                     syncError,
                   );
+                  throw syncError;
                 }
 
                 try {
@@ -267,6 +396,7 @@ export function registerStripeWebhookRoutes(
                   "[WEBHOOK] Error marking restaurantSubscriptions past_due:",
                   pastDueError,
                 );
+                throw pastDueError;
               }
             } else {
               console.log(
@@ -299,74 +429,106 @@ export function registerStripeWebhookRoutes(
                     eq(pickupOrders.stripePaymentIntentId, paymentIntent.id),
                   )
                   .limit(1);
-                if (order && order.status === "pending") {
-                  const [updated] = await db
+                if (!order) {
+                  throw new Error(
+                    `Pickup order not found for PaymentIntent ${paymentIntent.id}`,
+                  );
+                }
+
+                let updated: typeof order | undefined;
+                if (order.status === "pending") {
+                  [updated] = await db
                     .update(pickupOrders)
                     .set({
                       status: "confirmed",
                       confirmedAt: new Date(),
                       updatedAt: new Date(),
                     })
-                    .where(eq(pickupOrders.id, order.id))
+                    .where(
+                      and(
+                        eq(pickupOrders.id, order.id),
+                        eq(pickupOrders.status, "pending"),
+                      ),
+                    )
                     .returning();
+                }
 
-                  // Transfer subtotal to the business when the customer paid fees.
-                  // If the merchant absorbs customer fees, reduce the transfer by
-                  // the combined MealScout + processing fee stored on the order.
-                  if (order.stripeTransferGroupId && stripe) {
-                    try {
-                      const [restaurant] = await db
-                        .select()
-                        .from(restaurants)
-                        .where(eq(restaurants.id, order.restaurantId))
-                        .limit(1);
-                      const connectAccountId = (restaurant as any)
-                        ?.stripeConnectAccountId;
-                      if (connectAccountId) {
-                        const transferAmount = order.feePaidByBusiness
-                          ? order.subtotalCents -
-                            Math.max(0, Number(order.platformFeeCents || 0) || 0)
-                          : order.subtotalCents;
-                        if (transferAmount > 0) {
-                          await stripe.transfers.create({
-                            amount: transferAmount,
-                            currency: "usd",
-                            destination: connectAccountId,
-                            transfer_group: order.stripeTransferGroupId,
-                            metadata: { pickupOrderId: order.id },
-                          });
-                          await db
-                            .update(pickupOrders)
-                            .set({
-                              payoutStatus: "transferred",
-                              updatedAt: new Date(),
-                            })
-                            .where(eq(pickupOrders.id, order.id));
-                        }
-                      }
-                    } catch (transferError) {
-                      console.error(
-                        "[WEBHOOK] Pickup order transfer failed:",
-                        transferError,
-                      );
-                    }
+                // A Stripe transfer can succeed while the following database
+                // update fails. Retry confirmed orders whose payout is still
+                // pending, and give Stripe a stable idempotency key so replaying
+                // the webhook cannot create a second transfer.
+                const transferGroupId = String(
+                  order.stripeTransferGroupId || "",
+                ).trim();
+                const shouldTransferPayout =
+                  shouldAttemptPickupWebhookPayoutTransfer({
+                    statusBeforeWebhook: order.status,
+                    transitionedToConfirmed: Boolean(updated),
+                    stripeTransferGroupId: transferGroupId,
+                    payoutStatus: order.payoutStatus,
+                  });
+                if (shouldTransferPayout) {
+                  if (!stripe) {
+                    throw new Error(
+                      "Stripe client unavailable for pickup order transfer",
+                    );
+                  }
+                  const [restaurant] = await db
+                    .select()
+                    .from(restaurants)
+                    .where(eq(restaurants.id, order.restaurantId))
+                    .limit(1);
+                  const connectAccountId = (restaurant as any)
+                    ?.stripeConnectAccountId;
+                  if (!connectAccountId) {
+                    throw new Error(
+                      `Stripe Connect account missing for pickup order ${order.id}`,
+                    );
                   }
 
-                  // Emit kitchen update via WebSocket
-                  const wsIo = getWebSocketServer();
-                  if (wsIo && updated) {
-                    wsIo
-                      .to(`kitchen:${order.restaurantId}`)
-                      .emit("kitchen:order_update", {
-                        order: updated as Record<string, unknown>,
-                      });
+                  const transferAmount = order.feePaidByBusiness
+                    ? order.subtotalCents -
+                      Math.max(0, Number(order.platformFeeCents || 0) || 0)
+                    : order.subtotalCents;
+                  if (transferAmount > 0) {
+                    await stripe.transfers.create(
+                      {
+                        amount: transferAmount,
+                        currency: "usd",
+                        destination: connectAccountId,
+                        transfer_group: transferGroupId,
+                        metadata: { pickupOrderId: order.id },
+                      },
+                      {
+                        idempotencyKey: `pickup-order:${order.id}:transfer`,
+                      },
+                    );
+                    await db
+                      .update(pickupOrders)
+                      .set({
+                        payoutStatus: "transferred",
+                        updatedAt: new Date(),
+                      })
+                      .where(eq(pickupOrders.id, order.id));
                   }
+                }
+
+                // Emit a kitchen update only for the state transition. A replay
+                // that is reconciling a payout must not duplicate the message.
+                const wsIo = getWebSocketServer();
+                if (wsIo && updated) {
+                  wsIo
+                    .to(`kitchen:${order.restaurantId}`)
+                    .emit("kitchen:order_update", {
+                      order: updated as Record<string, unknown>,
+                    });
                 }
               } catch (pickupError) {
                 console.error(
                   "[WEBHOOK] Pickup order payment confirmation failed:",
                   pickupError,
                 );
+                throw pickupError;
               }
               break;
             }
@@ -403,8 +565,8 @@ export function registerStripeWebhookRoutes(
                       .where(eq(supplierOrders.id, String(supplierOrderId)));
                   }
                 } else {
-                  console.warn(
-                    `[WEBHOOK] Supplier order ${supplierOrderId} not found for PaymentIntent ${paymentIntent.id}`,
+                  throw new Error(
+                    `Supplier order ${supplierOrderId} not found for PaymentIntent ${paymentIntent.id}`,
                   );
                 }
               } catch (supplierError) {
@@ -412,6 +574,7 @@ export function registerStripeWebhookRoutes(
                   "[WEBHOOK] Supplier order update failed:",
                   supplierError,
                 );
+                throw supplierError;
               }
               break;
             }
@@ -427,12 +590,35 @@ export function registerStripeWebhookRoutes(
                   .limit(1);
 
                 if (!booking) {
-                  console.warn(`[WEBHOOK] Booking ${bookingId} not found`);
-                  break;
+                  throw new Error(`Booking ${bookingId} not found`);
+                }
+                const bookingIntentId = String(
+                  booking.stripePaymentIntentId || "",
+                ).trim();
+                if (
+                  bookingIntentId &&
+                  bookingIntentId !== paymentIntent.id
+                ) {
+                  throw new Error(
+                    `Booking ${bookingId} expected PaymentIntent ${bookingIntentId}, received ${paymentIntent.id}`,
+                  );
                 }
 
-                // Idempotent
+                // Idempotent: a retry may be reconciling a host-earnings
+                // write that failed after the booking itself was confirmed.
                 if (booking.status === "confirmed") {
+                  const { recordHostBookingEarnings } =
+                    await import("../hostEarningsService");
+                  if (Number(booking.hostPriceCents || 0) > 0) {
+                    await recordHostBookingEarnings([
+                      {
+                        hostId: booking.hostId,
+                        bookingId: booking.id,
+                        amountCents: Number(booking.hostPriceCents),
+                        stripePaymentIntentId: paymentIntent.id,
+                      },
+                    ]);
+                  }
                   console.log(
                     `[WEBHOOK] Booking ${bookingId} already confirmed`,
                   );
@@ -517,6 +703,7 @@ export function registerStripeWebhookRoutes(
                   }
                 } catch (ledgerErr) {
                   console.error("[WEBHOOK] Host earnings error:", ledgerErr);
+                  throw ledgerErr;
                 }
 
                 // Send confirmation email to truck owner
@@ -572,6 +759,7 @@ export function registerStripeWebhookRoutes(
                   "[WEBHOOK] Error confirming event booking:",
                   bookingError,
                 );
+                throw bookingError;
               }
               break;
             }
@@ -604,7 +792,64 @@ export function registerStripeWebhookRoutes(
                 row.status === "confirmed" ||
                 (row.status === "cancelled" && row.refundStatus === "credit"),
             );
+
+            const reconcileHostEarnings = async (
+              rows: typeof intentRows,
+            ) => {
+              const entries = rows
+                .filter(
+                  (row: (typeof rows)[number]) =>
+                    row.status === "confirmed" &&
+                    Number(row.hostPriceCents || 0) > 0,
+                )
+                .map((row: (typeof rows)[number]) => ({
+                  hostId: row.hostId,
+                  bookingId: row.id,
+                  amountCents: Number(row.hostPriceCents),
+                  stripePaymentIntentId: paymentIntent.id,
+                }));
+              if (entries.length === 0) return;
+              const { recordHostBookingEarnings } =
+                await import("../hostEarningsService");
+              await recordHostBookingEarnings(entries);
+            };
+
+            const reconcileCommittedCreditDebit = async () => {
+              const creditAppliedCents = Number(
+                metadata.creditAppliedCents || 0,
+              );
+              if (creditAppliedCents <= 0) return;
+
+              const [truck] = await db
+                .select({ ownerId: restaurants.ownerId })
+                .from(restaurants)
+                .where(eq(restaurants.id, truckId));
+              if (!truck?.ownerId) {
+                throw new Error(
+                  `Truck owner missing while reconciling booking credit for ${truckId}`,
+                );
+              }
+
+              const { debitCredit } = await import("../creditService");
+              // Stripe has already honored the metadata discount. Record that
+              // exact committed value. debitCredit is idempotent on this
+              // PaymentIntent-backed reference.
+              await debitCredit(
+                truck.ownerId,
+                creditAppliedCents / 100,
+                "booking_credit",
+                paymentIntent.id,
+                "booking",
+                { externalValueAlreadyCommitted: true },
+              );
+            };
+
             if (alreadyProcessed) {
+              // A prior delivery may have committed the booking/credit state
+              // and then failed during a ledger write. Reconcile idempotent
+              // financial side effects before acknowledging the replay.
+              await reconcileHostEarnings(intentRows);
+              await reconcileCommittedCreditDebit();
               break;
             }
 
@@ -744,14 +989,26 @@ export function registerStripeWebhookRoutes(
                   .from(restaurants)
                   .where(eq(restaurants.id, truckId));
 
-                if (truck?.ownerId) {
-                  const { addCredit } = await import("../creditService");
-                  await addCredit(
-                    truck.ownerId,
-                    amountCents / 100,
-                    reason,
-                    paymentIntent.id,
-                  );
+                if (truck?.ownerId && amountCents > 0) {
+                  const [existingCredit] = await tx
+                    .select({ id: creditLedger.id })
+                    .from(creditLedger)
+                    .where(
+                      and(
+                        eq(creditLedger.userId, truck.ownerId),
+                        eq(creditLedger.sourceId, paymentIntent.id),
+                        sql`${creditLedger.amount} > 0`,
+                      ),
+                    )
+                    .limit(1);
+                  if (!existingCredit) {
+                    await tx.insert(creditLedger).values({
+                      userId: truck.ownerId,
+                      amount: (amountCents / 100).toFixed(2),
+                      sourceType: reason,
+                      sourceId: paymentIntent.id,
+                    });
+                  }
                 }
 
                 // If we created pending holds ahead of payment, update them instead of inserting,
@@ -777,37 +1034,30 @@ export function registerStripeWebhookRoutes(
                   return;
                 }
 
-                try {
-                  await tx
-                    .insert(eventBookings)
-                    .values({
-                      eventId: passId,
-                      truckId,
-                      hostId: eventRow.hostId,
-                      hostPriceCents: metadataHostPriceCents,
-                      platformFeeCents: metadataPlatformFeeCents,
-                      totalCents: amountCents,
-                      status: "cancelled",
-                      stripePaymentIntentId: paymentIntent.id,
-                      stripePaymentStatus: "succeeded",
-                      stripeApplicationFeeAmount: metadataPlatformFeeCents,
-                      stripeTransferDestination:
-                        host?.stripeConnectAccountId || null,
-                      slotType: normalizedSlotTypes.join(","),
-                      refundStatus: "credit",
-                      refundAmountCents: amountCents,
-                      refundedAt: new Date(),
-                      refundReason: "Overbooked",
-                      cancelledAt: new Date(),
-                      cancellationReason: "Overbooked - credit issued",
-                    })
-                    .onConflictDoNothing();
-                } catch (error) {
-                  console.warn(
-                    "[WEBHOOK] Unable to insert cancelled booking row after credit:",
-                    error,
-                  );
-                }
+                await tx
+                  .insert(eventBookings)
+                  .values({
+                    eventId: passId,
+                    truckId,
+                    hostId: eventRow.hostId,
+                    hostPriceCents: metadataHostPriceCents,
+                    platformFeeCents: metadataPlatformFeeCents,
+                    totalCents: amountCents,
+                    status: "cancelled",
+                    stripePaymentIntentId: paymentIntent.id,
+                    stripePaymentStatus: "succeeded",
+                    stripeApplicationFeeAmount: metadataPlatformFeeCents,
+                    stripeTransferDestination:
+                      host?.stripeConnectAccountId || null,
+                    slotType: normalizedSlotTypes.join(","),
+                    refundStatus: "credit",
+                    refundAmountCents: amountCents,
+                    refundedAt: new Date(),
+                    refundReason: "Overbooked",
+                    cancelledAt: new Date(),
+                    cancellationReason: "Overbooked - credit issued",
+                  })
+                  .onConflictDoNothing();
               });
             };
 
@@ -1263,6 +1513,7 @@ export function registerStripeWebhookRoutes(
                   "[WEBHOOK] Error recording host earnings ledger entries:",
                   ledgerError,
                 );
+                throw ledgerError;
               }
 
               try {
@@ -1342,37 +1593,7 @@ export function registerStripeWebhookRoutes(
               }
             }
 
-            try {
-              const creditAppliedCents = Number(
-                metadata.creditAppliedCents || 0,
-              );
-              if (creditAppliedCents > 0) {
-                const [truck] = await db
-                  .select({ ownerId: restaurants.ownerId })
-                  .from(restaurants)
-                  .where(eq(restaurants.id, truckId));
-
-                if (truck?.ownerId) {
-                  const { debitCredit } = await import("../creditService");
-                  // Stripe has already honored the metadata discount. Record
-                  // that exact committed value instead of silently shrinking
-                  // the debit when another concurrent spend changed balance.
-                  await debitCredit(
-                    truck.ownerId,
-                    creditAppliedCents / 100,
-                    "booking_credit",
-                    paymentIntent.id,
-                    "booking",
-                    { externalValueAlreadyCommitted: true },
-                  );
-                }
-              }
-            } catch (creditError) {
-              console.error(
-                "[WEBHOOK] Error debiting booking credits:",
-                creditError,
-              );
-            }
+            await reconcileCommittedCreditDebit();
 
             try {
               const [truckOwner] = await db
@@ -1485,6 +1706,7 @@ export function registerStripeWebhookRoutes(
             }
           } catch (error) {
             console.error("[WEBHOOK] Error confirming booking:", error);
+            throw error;
           }
           break;
 
@@ -1516,17 +1738,23 @@ export function registerStripeWebhookRoutes(
                     );
                     break;
                   }
-                  await db
-                    .update(supplierOrders)
-                    .set({
-                      paymentStatus: "unpaid",
-                      stripePaymentIntentId: storedIntentId || failedIntent.id,
-                      updatedAt: new Date(),
-                    } as any)
-                    .where(eq(supplierOrders.id, String(supplierOrderId)));
+                  // Stripe may deliver events out of order. Never let an older
+                  // failure event regress an order that a succeeded event has
+                  // already marked paid.
+                  if (String((order as any).paymentStatus || "") !== "paid") {
+                    await db
+                      .update(supplierOrders)
+                      .set({
+                        paymentStatus: "unpaid",
+                        stripePaymentIntentId:
+                          storedIntentId || failedIntent.id,
+                        updatedAt: new Date(),
+                      } as any)
+                      .where(eq(supplierOrders.id, String(supplierOrderId)));
+                  }
                 } else {
-                  console.warn(
-                    `[WEBHOOK] Supplier order ${supplierOrderId} not found for failed PaymentIntent ${failedIntent.id}`,
+                  throw new Error(
+                    `Supplier order ${supplierOrderId} not found for failed PaymentIntent ${failedIntent.id}`,
                   );
                 }
               } catch (supplierError) {
@@ -1534,6 +1762,7 @@ export function registerStripeWebhookRoutes(
                   "[WEBHOOK] Supplier order failure update failed:",
                   supplierError,
                 );
+                throw supplierError;
               }
               break;
             }
@@ -1547,9 +1776,15 @@ export function registerStripeWebhookRoutes(
                 cancelledAt: new Date(),
                 updatedAt: new Date(),
               })
-              .where(eq(eventBookings.stripePaymentIntentId, failedIntent.id));
+              .where(
+                and(
+                  eq(eventBookings.stripePaymentIntentId, failedIntent.id),
+                  inArray(eventBookings.status, ["pending"]),
+                ),
+              );
           } catch (error) {
             console.error("[WEBHOOK] Error updating failed booking:", error);
+            throw error;
           }
           break;
 
@@ -1564,8 +1799,13 @@ export function registerStripeWebhookRoutes(
             subscriptionUpdated.id,
           );
           if (!userForUpdate && subscriptionUpdated.customer) {
-            const customerId = String(subscriptionUpdated.customer);
-            userForUpdate = await storage.getUserByStripeCustomerId(customerId);
+            const customerId = getSubscriptionCustomerId(
+              subscriptionUpdated.customer,
+            );
+            if (customerId) {
+              userForUpdate =
+                await storage.getUserByStripeCustomerId(customerId);
+            }
           }
 
           if (userForUpdate) {
@@ -1580,11 +1820,9 @@ export function registerStripeWebhookRoutes(
               console.log(
                 `[WEBHOOK] Subscription ${subscriptionUpdated.id} is now ${subscriptionUpdated.status} for user ${userForUpdate.id}`,
               );
-              // Clear the subscription ID so access checks fail immediately
-              await storage.updateUser(userForUpdate.id, {
-                stripeSubscriptionId: null,
-              }).catch((err: unknown) => {
-                console.error("[WEBHOOK] Failed to clear stripeSubscriptionId:", err);
+              await deactivateSubscriptionEntitlements({
+                userId: userForUpdate.id,
+                subscriptionId: subscriptionUpdated.id,
               });
               db.insert(lisaClaims).values({
                 app: "mealscout",
@@ -1604,8 +1842,6 @@ export function registerStripeWebhookRoutes(
               if (userForUpdate.stripeSubscriptionId !== subscriptionUpdated.id) {
                 await storage.updateUser(userForUpdate.id, {
                   stripeSubscriptionId: subscriptionUpdated.id,
-                }).catch((err: unknown) => {
-                  console.error("[WEBHOOK] Failed to sync stripeSubscriptionId on reactivation:", err);
                 });
               }
               // A subscription can return to "active" from past_due without a
@@ -1636,6 +1872,7 @@ export function registerStripeWebhookRoutes(
                   "[WEBHOOK] Error reactivating restaurantSubscriptions:",
                   reactivateError,
                 );
+                throw reactivateError;
               }
               db.insert(lisaClaims).values({
                 app: "mealscout",
@@ -1684,6 +1921,7 @@ export function registerStripeWebhookRoutes(
                   "[WEBHOOK] Error marking restaurantSubscriptions past_due on subscription.updated:",
                   pastDueSyncError,
                 );
+                throw pastDueSyncError;
               }
             }
           } else {
@@ -1699,49 +1937,30 @@ export function registerStripeWebhookRoutes(
             `[WEBHOOK] Subscription ${subscriptionDeleted.id} was deleted`,
           );
 
-          // Find user and clear their subscription
-          const userForDeletion = await storage.getUserByStripeSubscriptionId(
+          // Resolve by subscription first, then by customer so deletion still
+          // revokes entitlements if an earlier canceled update already cleared
+          // the subscription lookup key.
+          let userForDeletion = await storage.getUserByStripeSubscriptionId(
             subscriptionDeleted.id,
           );
+          if (!userForDeletion && subscriptionDeleted.customer) {
+            const customerId = getSubscriptionCustomerId(
+              subscriptionDeleted.customer,
+            );
+            if (customerId) {
+              userForDeletion =
+                await storage.getUserByStripeCustomerId(customerId);
+            }
+          }
 
           if (userForDeletion) {
             console.log(
               `[WEBHOOK] Clearing subscription for user ${userForDeletion.id}`,
             );
-            await storage.updateUser(userForDeletion.id, {
-              stripeSubscriptionId: null,
+            await deactivateSubscriptionEntitlements({
+              userId: userForDeletion.id,
+              subscriptionId: subscriptionDeleted.id,
             });
-            // Deactivate restaurantSubscriptions rows so access gates immediately
-            // reflect the cancellation without waiting for the next Stripe API call.
-            try {
-              await db
-                .update(restaurantSubscriptions)
-                .set({
-                  status: "canceled",
-                  canceledAt: new Date(),
-                  updatedAt: new Date(),
-                })
-                .where(
-                  eq(
-                    restaurantSubscriptions.stripeSubscriptionId,
-                    subscriptionDeleted.id,
-                  ),
-                );
-            } catch (deactivateError) {
-              console.error(
-                "[WEBHOOK] Error deactivating restaurantSubscriptions on deletion:",
-                deactivateError,
-              );
-            }
-            // Deactivate any active deals for this user.
-            try {
-              await storage.deactivateUserDeals(userForDeletion.id);
-            } catch (dealsError) {
-              console.error(
-                "[WEBHOOK] Error deactivating deals on subscription deletion:",
-                dealsError,
-              );
-            }
             console.log(
               `[WEBHOOK] Subscription cleared for user ${userForDeletion.id} (${userForDeletion.email})`,
             );

@@ -25,6 +25,9 @@ jobs:
       - name: Typecheck
         run: npm run check
 
+      - name: Stripe Webhook Safety
+        run: npm run test:stripe-webhook-safety
+
       - name: Consumer Entity Foundation Contract
         run: npm run test:consumer-entity-foundation
 
