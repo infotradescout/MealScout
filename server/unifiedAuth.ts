@@ -290,7 +290,7 @@ export async function setupUnifiedAuth(app: Express) {
       case "duper_admin":
       case "admin":
       case "super_admin":
-        return "/admin/dashboard";
+        return "/admin";
       case "customer":
       default:
         return "/scout";
@@ -2736,3 +2736,4 @@ export const verifyResourceOwnership = (
     }
   };
 };
+

@@ -574,41 +574,41 @@ const buildRecommendedActions = (entity: {
     entity.canonicalPath,
     "public",
   );
-  add("open_admin", "Open admin workspace", "/admin/dashboard", "admin");
+  add("open_admin", "Open admin workspace", "/admin", "admin");
 
   for (const gap of entity.knowledgeGaps) {
     switch (gap) {
       case "missing_description":
-        add("add_description", "Add description", "/admin/dashboard");
+        add("add_description", "Add description", "/admin");
         break;
       case "missing_website":
-        add("add_website", "Add website link", "/admin/dashboard");
+        add("add_website", "Add website link", "/admin");
         break;
       case "missing_location_context":
-        add("complete_location", "Complete location data", "/admin/dashboard");
+        add("complete_location", "Complete location data", "/admin");
         break;
       case "missing_cuisine":
-        add("set_cuisine", "Set cuisine/category", "/admin/dashboard");
+        add("set_cuisine", "Set cuisine/category", "/admin");
         break;
       case "unverified_profile":
       case "unverified_host":
-        add("verify_entity", "Verify entity", "/admin/dashboard");
+        add("verify_entity", "Verify entity", "/admin");
         break;
       case "missing_pricing":
-        add("set_pricing", "Set pricing", "/admin/dashboard");
+        add("set_pricing", "Set pricing", "/admin");
         break;
       case "stripe_not_ready":
-        add("complete_stripe", "Complete Stripe setup", "/admin/dashboard");
+        add("complete_stripe", "Complete Stripe setup", "/admin");
         break;
       case "missing_spot_capacity":
-        add("set_capacity", "Set capacity", "/admin/dashboard");
+        add("set_capacity", "Set capacity", "/admin");
         break;
       case "missing_restaurant_link":
-        add("link_restaurant", "Link restaurant", "/admin/dashboard");
+        add("link_restaurant", "Link restaurant", "/admin");
         break;
       case "missing_start_date":
       case "missing_end_date":
-        add("fix_schedule", "Fix schedule/timing", "/admin/dashboard");
+        add("fix_schedule", "Fix schedule/timing", "/admin");
         break;
       case "no_usage_signals":
         add(
@@ -619,12 +619,12 @@ const buildRecommendedActions = (entity: {
         );
         break;
       case "missing_host_link":
-        add("link_host", "Link host", "/admin/dashboard");
+        add("link_host", "Link host", "/admin");
         break;
       case "missing_event_type":
       case "missing_event_date":
       case "missing_event_name":
-        add("repair_event", "Repair event metadata", "/admin/dashboard");
+        add("repair_event", "Repair event metadata", "/admin");
         break;
       default:
         break;
@@ -634,7 +634,7 @@ const buildRecommendedActions = (entity: {
   for (const opportunity of entity.opportunities) {
     switch (opportunity) {
       case "activate_live_location":
-        add("go_live", "Activate live location", "/admin/dashboard");
+        add("go_live", "Activate live location", "/admin");
         break;
       case "grow_authority_signals":
         add(
@@ -648,10 +648,10 @@ const buildRecommendedActions = (entity: {
       case "refresh_host_record":
       case "review_deal_freshness":
       case "review_event_status":
-        add("refresh_data", "Refresh stale data", "/admin/dashboard");
+        add("refresh_data", "Refresh stale data", "/admin");
         break;
       case "review_for_publish":
-        add("publish_ready", "Review for publish", "/admin/dashboard");
+        add("publish_ready", "Review for publish", "/admin");
         break;
       case "promote_deal_visibility":
         add(
@@ -5816,3 +5816,4 @@ export function registerAdminManagementRoutes(app: Express) {
     requireAdminUser,
   });
 }
+
