@@ -647,7 +647,7 @@ export default function StaffDashboard() {
               <CardTitle>Admin Quick Links</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-wrap gap-3">
-              <Link href="/admin/dashboard">
+              <Link href="/admin">
                 <Button variant="outline">Admin Dashboard</Button>
               </Link>
               <Link href="/admin/control-center">
@@ -663,3 +663,4 @@ export default function StaffDashboard() {
     </div>
   );
 }
+

@@ -196,14 +196,14 @@ export default function SettingsPage() {
   const handleBusinessChange = (businessId: string) => {
     const next = new URLSearchParams(search);
     next.set("restaurantId", businessId);
-    setLocation(`/profile/settings?${next.toString()}`);
+    setLocation(`/settings?${next.toString()}`);
   };
 
   const handleTabChange = (value: string) => {
     const next = new URLSearchParams(search);
     next.set("tab", value);
     if (currentBusiness?.id) next.set("restaurantId", currentBusiness.id);
-    setLocation(`/profile/settings?${next.toString()}`);
+    setLocation(`/settings?${next.toString()}`);
   };
 
   const saveVisibility = async () => {
@@ -363,13 +363,13 @@ export default function SettingsPage() {
                 description="Review the name and identity attached to this account."
               />
               <SettingsLinkCard
-                href="/profile/notifications"
+                href="/settings?tab=notifications"
                 icon={Bell}
                 title="Notification center"
                 description="Review account notification history and delivery status."
               />
               <SettingsLinkCard
-                href="/profile/help"
+                href="/help"
                 icon={CircleHelp}
                 title="Help and support"
                 description="Open a support request or review existing tickets."

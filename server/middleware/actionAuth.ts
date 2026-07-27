@@ -1,56 +1,77 @@
 import type { Request, Response, NextFunction } from "express";
 
 /**
- * Middleware to verify TradeScout API token
- * Validates Bearer token from Authorization header
+ * Middleware to verify MealScout action API token.
+ * Accepts model-agnostic Bearer or action-token headers.
  */
-export function verifyTradeScoutToken(
+export function verifyActionApiToken(
   req: Request,
   res: Response,
   next: NextFunction
 ) {
-  // Extract token from Authorization header
-  const authHeader = req.headers.authorization;
-  const token = authHeader?.replace("Bearer ", "");
+  const authHeader = req.header("Authorization");
+  const token =
+    authHeader?.match(/^Bearer\s+(.+)$/i)?.[1] ??
+    req.header("x-action-token") ??
+    req.header("x-mealscout-action-token") ??
+    req.header("x-mealscout-token");
 
-  // Check if token exists
   if (!token) {
     return res.status(401).json({
       error: "Unauthorized",
-      message: "Missing or invalid Authorization header. Use: Authorization: Bearer <token>",
+      message:
+        "Missing or invalid action token. Use Authorization: Bearer <token> or X-Action-Token: <token>.",
     });
   }
 
-  // Verify token matches expected token(s)
-  // Rotation support:
-  // - TRADESCOUT_API_TOKENS="tokenA,tokenB"
-  // - TRADESCOUT_API_TOKEN="tokenA" (legacy / single-token)
-  const tokenList = String(
-    process.env.TRADESCOUT_API_TOKENS || process.env.TRADESCOUT_API_TOKEN || ""
-  )
-    .split(/[\n,;]+/)
-    .map((t) => t.trim())
-    .filter(Boolean);
+  const tokenList = collectConfiguredActionTokens();
 
   if (tokenList.length === 0) {
-    console.error(
-      "⚠️  WARNING: TRADESCOUT_API_TOKEN(S) not configured in environment"
-    );
+    console.error("⚠️  WARNING: Action token env var not configured in environment");
     return res.status(500).json({
       error: "Server configuration error",
-      message: "API token not configured",
+      message:
+        "MEALSCOUT_ACTION_TOKEN(S) (or legacy TRADESCOUT_API_TOKEN(S)) not configured",
     });
   }
 
   if (!tokenList.includes(String(token))) {
     return res.status(401).json({
       error: "Unauthorized",
-      message: "Invalid API token",
+      message: "Invalid action token",
     });
   }
 
-  // Token is valid, proceed
   next();
+}
+
+function collectConfiguredActionTokens(): string[] {
+  const tokenEnvKeys = [
+    "MEALSCOUT_ACTION_TOKENS",
+    "MEALSCOUT_ACTION_TOKEN",
+    "TRADESCOUT_API_TOKENS",
+    "TRADESCOUT_API_TOKEN",
+  ] as const;
+
+  const seen = new Set<string>();
+  const values: string[] = [];
+
+  for (const key of tokenEnvKeys) {
+    const raw = String(process.env[key] || "");
+    if (!raw.trim()) continue;
+
+    raw
+      .split(/[\n,;]+/)
+      .map((entry) => entry.trim())
+      .filter(Boolean)
+      .forEach((entry) => {
+        if (seen.has(entry)) return;
+        seen.add(entry);
+        values.push(entry);
+      });
+  }
+
+  return values;
 }
 
 /**
@@ -90,3 +111,5 @@ export function rateLimitActions(
 
   next();
 }
+
+export const verifyTradeScoutToken = verifyActionApiToken;

@@ -514,7 +514,7 @@ const SubscriptionManagement = () => {
             </div>
           </div>
           <Button asChild variant="outline">
-            <Link href="/profile/help">Contact support</Link>
+            <Link href="/help">Contact support</Link>
           </Button>
         </div>
       ) : null}

@@ -7,7 +7,6 @@ import { Badge } from "@/components/ui/badge";
 import {
   User,
   Settings,
-  Bell,
   Heart,
   Receipt,
   CreditCard,
@@ -67,7 +66,7 @@ export default function ProfilePage() {
   const primaryDashboard =
     isAdminUser
       ? {
-          href: "/admin/dashboard",
+          href: "/admin",
           title: "Admin Dashboard",
           description: "Platform controls, tickets, users, markets, and ops.",
           Icon: Building2,
@@ -209,19 +208,13 @@ export default function ProfilePage() {
   ];
   const accountShortcuts = [
     {
-      href: "/profile/settings",
+      href: "/settings",
       title: "Profile Settings",
       description: "Edit preferences, privacy, profile studio, and public profile.",
       Icon: Settings,
     },
     {
-      href: "/profile/notifications",
-      title: "Notifications",
-      description: "Control email, in-app, and alert preferences.",
-      Icon: Bell,
-    },
-    {
-      href: "/profile/help",
+      href: "/help",
       title: "Help & Support",
       description: "Open tickets, message super admin, and view support history.",
       Icon: HelpCircle,
@@ -295,16 +288,10 @@ export default function ProfilePage() {
     { icon: Receipt, label: "Activity", badge: null, href: "/orders" },
     { icon: Heart, label: "Favorites", badge: null, href: "/favorites" },
     {
-      icon: Bell,
-      label: "Notifications",
-      badge: null,
-      href: "/profile/notifications",
-    },
-    {
       icon: MapPin,
       label: "Addresses",
       badge: null,
-      href: "/profile/addresses",
+      href: "/settings?tab=account",
     },
     // Only show Payment Methods for restaurant owners who need subscription billing
     ...(user?.userType === "restaurant_owner"
@@ -313,7 +300,7 @@ export default function ProfilePage() {
             icon: CreditCard,
             label: "Payment Methods",
             badge: null,
-            href: "/profile/payment",
+            href: "/settings?tab=account",
           },
         ]
       : []),
@@ -321,7 +308,7 @@ export default function ProfilePage() {
       icon: Settings,
       label: "Settings",
       badge: null,
-      href: "/profile/settings",
+      href: "/settings",
     },
     ...(!isStandalone
       ? [
@@ -337,7 +324,7 @@ export default function ProfilePage() {
       icon: HelpCircle,
       label: "Help & Support",
       badge: null,
-      href: "/profile/help",
+      href: "/help",
     },
     {
       icon: Flag,
@@ -496,7 +483,7 @@ export default function ProfilePage() {
 
         {profileMode === "user" || !hasBusinessProfile ? (
           <div className="mb-6">
-            <Link href="/profile/settings">
+            <Link href="/settings">
             <Card className="border border-[color:var(--border-subtle)] bg-[var(--bg-card)] hover:bg-[var(--bg-surface-muted)] transition-colors shadow-clean-lg">
               <CardContent className="p-5">
                 <div className="flex items-start gap-4">
@@ -593,7 +580,7 @@ export default function ProfilePage() {
             Quick Actions
           </h2>
           <div className="grid gap-3 lg:grid-cols-3">
-            {[...accountShortcuts.filter((item) => item.href !== "/profile/settings"), ...dashboardShortcuts].map((shortcut) => (
+            {[...accountShortcuts.filter((item) => item.href !== "/settings"), ...dashboardShortcuts].map((shortcut) => (
               <Link key={shortcut.href} href={shortcut.href}>
                 <Card className="h-full border border-[color:var(--border-subtle)] bg-[var(--bg-card)] hover:bg-[var(--bg-surface-muted)] transition-colors shadow-clean">
                   <CardContent className="p-4">
@@ -814,3 +801,4 @@ export default function ProfilePage() {
     </div>
   );
 }
+

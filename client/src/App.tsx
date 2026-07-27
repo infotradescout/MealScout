@@ -72,11 +72,7 @@ const DealsCityPage = lazy(() => import("@/pages/deals-city"));
 const LocationDetailPage = lazy(() => import("@/pages/location-detail"));
 const LocationDiscoveryPage = lazy(() => import("@/pages/location-discovery"));
 const PublicSeoLandingPage = lazy(() => import("@/pages/public-seo-landing"));
-const NotificationsPage = lazy(() => import("@/pages/profile/notifications"));
 const SettingsPage = lazy(() => import("@/pages/profile/settings"));
-const AddressesPage = lazy(() => import("@/pages/profile/addresses"));
-const PaymentMethodsPage = lazy(() => import("@/pages/profile/payment"));
-const HelpSupportPage = lazy(() => import("@/pages/profile/help"));
 const RestaurantOwnerDashboard = lazy(
   () => import("@/pages/restaurant-owner-dashboard"),
 );
@@ -190,6 +186,46 @@ const RedirectToLogin = () => {
   );
 };
 
+const RedirectToSettingsNotifications = () => {
+  const [, setLocation] = useLocation();
+
+  useEffect(() => {
+    setLocation("/settings?tab=notifications");
+  }, [setLocation]);
+
+  return <PageLoader />;
+};
+
+const RedirectToSettingsAccount = () => {
+  const [, setLocation] = useLocation();
+
+  useEffect(() => {
+    setLocation("/settings?tab=account");
+  }, [setLocation]);
+
+  return <PageLoader />;
+};
+
+const RedirectToHelp = () => {
+  const [, setLocation] = useLocation();
+
+  useEffect(() => {
+    setLocation("/help");
+  }, [setLocation]);
+
+  return <PageLoader />;
+};
+
+const RedirectToAdmin = () => {
+  const [, setLocation] = useLocation();
+
+  useEffect(() => {
+    setLocation("/admin");
+  }, [setLocation]);
+
+  return <PageLoader />;
+};
+
 const CleanPublicProfileRoute = () => {
   const [location] = useLocation();
   const currentPath = location.split("?")[0];
@@ -201,6 +237,8 @@ const CleanPublicProfileRoute = () => {
 const publicRoutePrefixes = [
   "/",
   "/scout",
+  "/explore",
+  "/explore-preview",
   "/directory",
   "/food-truck-rush",
   "/login",
@@ -307,7 +345,6 @@ function GuestProtectedRoutes() {
       <Route path="/orders" component={RedirectToLogin} />
       <Route path="/profile" component={RedirectToLogin} />
       <Route path="/profile/notifications" component={RedirectToLogin} />
-      <Route path="/profile/settings" component={RedirectToLogin} />
       <Route path="/settings" component={RedirectToLogin} />
       <Route path="/profile/addresses" component={RedirectToLogin} />
       <Route path="/profile/payment" component={RedirectToLogin} />
@@ -485,6 +522,8 @@ function Router() {
             <Route path="/" component={Welcome} />
             <Route path="/scout" component={ScoutPageV2} />
             <Route path="/scout/:refTag" component={ScoutPageV2} />
+            <Route path="/explore" component={RedirectToScout} />
+            <Route path="/explore-preview" component={RedirectToScout} />
             <Route path="/directory" component={ScoutPageV2} />
             <Route path="/directory/:refTag" component={ScoutPageV2} />
             <Route path="/scout-prototype" component={RedirectToScout} />
@@ -502,8 +541,8 @@ function Router() {
             <Route path="/deal/:id" component={DealDetail} />
             {SharedPublicRoutes()}
             <Route path="/admin" component={AdminLogin} />
-            <Route path="/admin/login" component={AdminLogin} />
-            <Route path="/admin/dashboard" component={AdminLogin} />
+            <Route path="/admin/login" component={RedirectToAdmin} />
+            <Route path="/admin/dashboard" component={RedirectToAdmin} />
             {GuestProtectedRoutes()}
             <Route
               path="/:businessSlug/:refTag"
@@ -516,6 +555,8 @@ function Router() {
             <Route path="/" component={RedirectToScout} />
             <Route path="/scout" component={ScoutPageV2} />
             <Route path="/scout/:refTag" component={ScoutPageV2} />
+            <Route path="/explore" component={RedirectToScout} />
+            <Route path="/explore-preview" component={RedirectToScout} />
             <Route path="/directory" component={ScoutPageV2} />
             <Route path="/directory/:refTag" component={ScoutPageV2} />
             <Route path="/scout-prototype" component={RedirectToScout} />
@@ -557,8 +598,9 @@ function Router() {
             />
             <Route path="/affiliate/earnings" component={AffiliateEarnings} />
             <Route path="/staff" component={StaffDashboard} />
-            <Route path="/admin" component={AdminLogin} />
-            <Route path="/admin/dashboard" component={AdminDashboard} />
+            <Route path="/admin" component={AdminDashboard} />
+            <Route path="/admin/dashboard" component={RedirectToAdmin} />
+            <Route path="/admin/login" component={RedirectToAdmin} />
             <Route path="/admin/incidents" component={AdminIncidents} />
             <Route
               path="/admin/control-center"
@@ -596,13 +638,12 @@ function Router() {
             <Route path="/admin/oauth-setup" component={OAuthSetupGuide} />
             <Route
               path="/profile/notifications"
-              component={NotificationsPage}
+              component={RedirectToSettingsNotifications}
             />
-            <Route path="/profile/settings" component={SettingsPage} />
             <Route path="/settings" component={SettingsPage} />
-            <Route path="/profile/addresses" component={AddressesPage} />
-            <Route path="/profile/payment" component={PaymentMethodsPage} />
-            <Route path="/profile/help" component={HelpSupportPage} />
+            <Route path="/profile/addresses" component={RedirectToSettingsAccount} />
+            <Route path="/profile/payment" component={RedirectToSettingsAccount} />
+            <Route path="/profile/help" component={RedirectToHelp} />
             <Route
               path="/profile/reporter-reputation"
               component={ReporterReputationPage}
@@ -612,7 +653,6 @@ function Router() {
               component={ReviewsPage}
             />
             {SharedPublicRoutes()}
-            <Route path="/admin/login" component={AdminLogin} />
             <Route path="/parking-pass-manage" component={ParkingPassManage} />
             <Route path="/business-team" component={BusinessTeamPage} />
             <Route path="/menu-builder" component={MenuBuilderPage} />
@@ -713,3 +753,4 @@ function App() {
 }
 
 export default App;
+

@@ -163,7 +163,7 @@ export default function DashboardSwitcher({ defaultView = 'admin' }: DashboardSw
                   Admin: {user?.email}
                 </span>
                 <Button variant="ghost" size="sm" asChild data-testid="button-exit-switcher">
-                  <Link href="/admin/dashboard">Exit Switcher</Link>
+                  <Link href="/admin">Exit Switcher</Link>
                 </Button>
               </div>
             </div>
@@ -206,5 +206,6 @@ export default function DashboardSwitcher({ defaultView = 'admin' }: DashboardSw
     </div>
   );
 }
+
 
 

@@ -12,7 +12,7 @@
  * - Food truck tracking
  * - Image uploads
  * - Real-time updates
- * - API action endpoints (TradeScout LLM integration)
+ * - API action endpoints (server-side action integrations)
  * 
  * Run: npm run stress-test
  * or: npx tsx scripts/stressTest.ts
@@ -405,9 +405,13 @@ class StressTest {
   }
 
   async testActionAPI() {
-    const token = process.env.TRADESCOUT_API_TOKEN;
+    const token =
+      process.env.MEALSCOUT_ACTION_TOKEN || process.env.TRADESCOUT_API_TOKEN;
     if (!token || token.includes('your_secure_token')) {
-      this.log('Skipping Action API (LLM Integration) - TRADESCOUT_API_TOKEN not set.', 'warn');
+      this.log(
+        'Skipping Action API (LLM Integration) - action token not set.',
+        'warn'
+      );
       return;
     }
 

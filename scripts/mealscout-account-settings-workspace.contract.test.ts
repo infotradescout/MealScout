@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 
 const settings = readFileSync(
-  "client/src/pages/profile/settings.tsx",
+  "client/src/pages/settings.tsx",
   "utf8",
 );
 const shell = readFileSync(
@@ -71,7 +71,7 @@ for (const presentationOnlySurface of [
 for (const snippet of [
   'label: "Settings"',
   'description: "Account access, visibility, and help"',
-  'href: buildWorkspaceHref("/profile/settings", business.id)',
+  'href: buildWorkspaceHref("/settings", business.id)',
 ]) {
   if (!shell.includes(snippet)) {
     throw new Error(`Business shell Settings contract missing: ${snippet}`);

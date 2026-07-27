@@ -1,5 +1,7 @@
 type EnvSpec = {
   DATABASE_URL: string;
+  MEALSCOUT_ACTION_TOKEN?: string;
+  MEALSCOUT_ACTION_TOKENS?: string;
   TRADESCOUT_API_TOKEN?: string;
   SESSION_SECRET: string;
   CLIENT_ORIGIN: string;
@@ -35,6 +37,8 @@ export function validateEnv(): EnvSpec {
   const isProduction = process.env.NODE_ENV === "production";
   const env: EnvSpec = {
     DATABASE_URL: optional("DATABASE_URL") || "",
+    MEALSCOUT_ACTION_TOKEN: optional("MEALSCOUT_ACTION_TOKEN"),
+    MEALSCOUT_ACTION_TOKENS: optional("MEALSCOUT_ACTION_TOKENS"),
     TRADESCOUT_API_TOKEN: optional("TRADESCOUT_API_TOKEN"),
     SESSION_SECRET: required("SESSION_SECRET"),
     CLIENT_ORIGIN: required("CLIENT_ORIGIN"),
@@ -54,9 +58,13 @@ export function validateEnv(): EnvSpec {
   const tradeScoutIntegrationEnabled =
     process.env.TRADESCOUT_INTEGRATION_ENABLED === "true" ||
     process.env.TRADESCOUT_API_TOKEN_REQUIRED === "true";
-  if (!env.TRADESCOUT_API_TOKEN && tradeScoutIntegrationEnabled) {
+  const actionTokenConfigured =
+    Boolean(env.MEALSCOUT_ACTION_TOKEN) ||
+    Boolean(env.MEALSCOUT_ACTION_TOKENS) ||
+    Boolean(env.TRADESCOUT_API_TOKEN);
+  if (!actionTokenConfigured && tradeScoutIntegrationEnabled) {
     console.warn(
-      "⚠️  TRADESCOUT_API_TOKEN not set - TradeScout LLM integration will be unavailable"
+      "⚠️  Action token not set - /api/actions integration will be unavailable"
     );
   }
 

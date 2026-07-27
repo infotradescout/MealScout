@@ -8,7 +8,7 @@ Applies To: All embedded access via /api/actions
 Guarantee a safe, deterministic integration when MealScout is embedded inside TradeScout (or transferred/sold) without weakening TradeScout Law.
 
 ## Authority & Auth
-- Parent-gated: All calls require `Authorization: Bearer <TRADESCOUT_API_TOKEN>` to `/api/actions`.
+- Parent-gated: All calls require `Authorization: Bearer <MEALSCOUT_ACTION_TOKEN>` (or legacy `TRADESCOUT_API_TOKEN`) to `/api/actions`.
 - End-user auth is not accepted on this endpoint. Tokens stay server-side only.
 - Scope-limited: No other surfaces are in scope for embedding unless versioned separately.
 

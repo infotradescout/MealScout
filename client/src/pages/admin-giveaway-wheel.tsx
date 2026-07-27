@@ -35,10 +35,11 @@ const mealScoutGiveawayConfig: GiveawayWheelConfig = {
 export default function AdminGiveawayWheel() {
   return (
     <GiveawayWheelExperience
-      backHref="/admin/dashboard"
+      backHref="/admin"
       backLabel="Admin"
       config={mealScoutGiveawayConfig}
       storageKey="mealscout-giveaway-wheel-v1"
     />
   );
 }
+

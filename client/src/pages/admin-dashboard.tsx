@@ -3949,7 +3949,7 @@ export default function AdminDashboard() {
   });
 
   const openAdminUserProfile = (userId: string, inNewTab = false) => {
-    const href = `/admin/dashboard?tab=users&focusUser=${encodeURIComponent(userId)}`;
+    const href = `/admin?tab=users&focusUser=${encodeURIComponent(userId)}`;
     if (inNewTab) {
       window.open(href, "_blank", "noopener,noreferrer");
       return;
@@ -10988,7 +10988,7 @@ export default function AdminDashboard() {
                                   </a>
                                   <a
                                     className="underline"
-                                    href={`/admin/dashboard?tab=users`}
+                                    href={`/admin?tab=users`}
                                     target="_blank"
                                     rel="noreferrer"
                                   >
@@ -10996,7 +10996,7 @@ export default function AdminDashboard() {
                                   </a>
                                   <a
                                     className="underline"
-                                    href={`/admin/dashboard?tab=quarantine`}
+                                    href={`/admin?tab=quarantine`}
                                     target="_blank"
                                     rel="noreferrer"
                                   >

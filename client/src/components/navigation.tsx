@@ -498,7 +498,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
       );
     } else {
       items.push(
-        { path: "/admin/dashboard", icon: Shield, label: "Admin Dashboard" },
+        { path: "/admin", icon: Shield, label: "Admin Dashboard" },
         { path: "/staff", icon: Users, label: "Staff" },
         {
           path: "/admin/control-center",
@@ -507,22 +507,22 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
         },
         { path: "/admin/geo/heatmap", icon: BarChart3, label: "Geo Heatmap" },
         {
-          path: "/admin/dashboard?tab=restaurants",
+          path: "/admin?tab=restaurants",
           icon: Store,
           label: "Businesses",
         },
         {
-          path: "/admin/dashboard?tab=trucks",
+          path: "/admin?tab=trucks",
           icon: Truck,
           label: "Food Trucks",
         },
         {
-          path: "/admin/dashboard?tab=hosts",
+          path: "/admin?tab=hosts",
           icon: ParkingSquare,
           label: "Hosts",
         },
         {
-          path: "/admin/dashboard?tab=events",
+          path: "/admin?tab=events",
           icon: Calendar,
           label: "Events",
         },
@@ -532,7 +532,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
           ? [{ path: "/orders", icon: ShoppingCart, label: "Orders" } as NavItem]
           : []),
         { path: "/share-hub", icon: Share2, label: "Share" },
-        { path: "/admin/dashboard?tab=users", icon: UserPlus, label: "Users" },
+        { path: "/admin?tab=users", icon: UserPlus, label: "Users" },
         {
           path: "/admin/giveaway-wheel",
           icon: Clapperboard,
@@ -888,3 +888,4 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
     </>
   );
 }
+

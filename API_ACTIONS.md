@@ -1,6 +1,6 @@
-# MealScout Action API - TradeScout LLM Integration
+# MealScout Action API
 
-The **Action API** is a unified endpoint designed for TradeScout LLM to safely call controlled MealScout actions. All requests require authentication and return structured JSON responses.
+The **Action API** is a unified endpoint for server-side integrations (including any LLM client) to call controlled MealScout actions. All requests require authentication and return structured JSON responses.
 
 ## Base URL
 
@@ -10,10 +10,10 @@ https://mealscout.yourdomain.com/api/actions
 
 ## Authentication
 
-Every request must include the `TRADESCOUT_API_TOKEN` via the Authorization header:
+Every request must include one of these environment tokens via the Authorization header:
 
 ```bash
-Authorization: Bearer <TRADESCOUT_API_TOKEN>
+Authorization: Bearer <MEALSCOUT_ACTION_TOKEN>
 ```
 
 **Example:**
@@ -25,8 +25,48 @@ curl -X POST https://mealscout.yourdomain.com/api/actions \
 ```
 
 Notes:
-- This is a Scout-level token (TradeScout → MealScout bridge). End-user auth is not accepted on this endpoint.
+- This is a MealScout action token used by trusted server integrations (including paid/free LLM adapters). End-user auth is not accepted on this endpoint.
 - Keep the token server-side only; never expose it in client code.
+
+### Availability
+
+The Action API is model-agnostic: it is a server API protected by `MEALSCOUT_ACTION_TOKEN(S)` (or legacy `TRADESCOUT_API_TOKEN(S)`), not a ChatGPT-only feature. Any LLM integration that can send signed HTTPS requests and include the token can use the same action surface (including free/billed model clients).
+
+### Use from Any LLM (not ChatGPT-only)
+
+The same endpoint works from free or paid models as long as the model can call an external HTTPS endpoint (most tool-enabled providers can).
+
+What to send:
+- `POST /api/actions`
+- `Authorization: Bearer <MEALSCOUT_ACTION_TOKEN>`
+- JSON body: `{ "action": "ACTION_NAME", "params": { ... } }`
+
+Provider-agnostic request pattern (same payload for every action):
+
+```json
+{
+  "action": "UPDATE_RESTAURANT_PROFILE",
+  "params": {
+    "userId": "user_abc123",
+    "restaurantId": "rest_456",
+    "updates": {
+      "description": "Updated profile description from LLM flow."
+    }
+  }
+}
+```
+
+Examples:
+
+- OpenAI-compatible tool call:
+  - `name`: `mealscout_action`
+  - `arguments`: above JSON payload
+- Anthropic tool pattern:
+  - invoke external tool/HTTPS connector with same headers + body
+- Google/Gemini custom request:
+  - execute the same `curl`-style POST with the same `Authorization` token
+- Any server-side relay:
+  - forward this request from your relay, never from browser/client secrets
 
 ## Response Format
 
@@ -390,7 +430,195 @@ Submit a community builder application (user action).
 }
 ```
 
----
+### 11. UPDATE_RESTAURANT_PROFILE
+
+Update editable owner profile metadata.
+
+**Intent:** `owner_manage`
+
+**Parameters:**
+```json
+{
+  "action": "UPDATE_RESTAURANT_PROFILE",
+  "params": {
+    "userId": "string (required)",
+    "restaurantId": "string (required)",
+    "updates": {
+      "name": "string",
+      "description": "string",
+      "cuisineType": "string",
+      "address": "string",
+      "city": "string",
+      "state": "string",
+      "phone": "string",
+      "websiteUrl": "string",
+      "facebookPageUrl": "string",
+      "instagramUrl": "string",
+      "xUrl": "string",
+      "menuUrl": "string",
+      "logoUrl": "string",
+      "coverImageUrl": "string",
+      "onlineOrderingUrl": "string",
+      "deliveryUrl": "string",
+      "doordashUrl": "string",
+      "uberEatsUrl": "string",
+      "toastUrl": "string",
+      "squareUrl": "string",
+      "chowNowUrl": "string",
+      "grubhubUrl": "string",
+      "cateringInquiryUrl": "string",
+      "truckBookingInquiryUrl": "string"
+    }
+  }
+}
+```
+
+### 12. UPDATE_RESTAURANT_LOCATION
+
+Update restaurant coordinates and optional city/state metadata.
+
+**Intent:** `owner_manage`
+
+**Parameters:**
+```json
+{
+  "action": "UPDATE_RESTAURANT_LOCATION",
+  "params": {
+    "userId": "string (required)",
+    "restaurantId": "string (required)",
+    "latitude": "number (required)",
+    "longitude": "number (required)",
+    "city": "string (optional)",
+    "state": "string (optional)",
+    "mobileOnline": "boolean (optional)"
+  }
+}
+```
+
+### 13. UPDATE_RESTAURANT_OPERATING_HOURS
+
+Replace operating hours configuration.
+
+**Intent:** `owner_manage`
+
+**Parameters:**
+```json
+{
+  "action": "UPDATE_RESTAURANT_OPERATING_HOURS",
+  "params": {
+    "userId": "string (required)",
+    "restaurantId": "string (required)",
+    "operatingHours": "object (required)"
+  }
+}
+```
+
+### 14. LIST_MENUS
+
+List all menus for a restaurant.
+
+**Intent:** `owner_manage`
+
+**Parameters:**
+```json
+{
+  "action": "LIST_MENUS",
+  "params": {
+    "userId": "string (required)",
+    "restaurantId": "string (required)"
+  }
+}
+```
+
+### 15. CREATE_MENU
+### 16. UPDATE_MENU
+### 17. DELETE_MENU
+
+Manage restaurant menu entities (create/update/delete).  
+`UPDATE_MENU` requires `menuId`; `DELETE_MENU` requires `menuId`.
+
+```json
+{
+  "action": "CREATE_MENU",
+  "params": {
+    "userId": "string (required)",
+    "restaurantId": "string (required)",
+    "name": "string",
+    "serviceType": "string",
+    "availableFrom": "HH:MM",
+    "availableTo": "HH:MM",
+    "availableDays": ["mon","tue","wed","thu","fri","sat","sun"],
+    "isActive": "boolean",
+    "acceptsCash": "boolean",
+    "hidePlatformFee": "boolean",
+    "importSource": "string"
+  }
+}
+```
+
+```json
+{
+  "action": "UPDATE_MENU",
+  "params": {
+    "userId": "string (required)",
+    "menuId": "string (required)",
+    "updates": { "...": "..." }
+  }
+}
+```
+
+```json
+{
+  "action": "DELETE_MENU",
+  "params": {
+    "userId": "string (required)",
+    "menuId": "string (required)"
+  }
+}
+```
+
+### 18. CREATE_MENU_CATEGORY
+### 19. UPDATE_MENU_CATEGORY
+### 20. DELETE_MENU_CATEGORY
+
+Menu category operations use `menuId` for create and `categoryId` for update/delete.
+
+### 21. CREATE_MENU_ITEM
+### 22. UPDATE_MENU_ITEM
+### 23. DELETE_MENU_ITEM
+
+Menu item operations use `menuId` for create and `itemId` for update/delete.
+
+### 24. GET_MANUAL_SCHEDULES
+### 25. UPSERT_MANUAL_SCHEDULE
+### 26. DELETE_MANUAL_SCHEDULE
+
+Manual parking schedule operations are scoped to a truck `truckId`.  
+`UPSERT_MANUAL_SCHEDULE` can create (no `scheduleId`) or update (`scheduleId`) one entry.
+
+### 27. BOOK_PARKING_SPOT
+
+Create a pending booking with a Stripe payment intent for a Parking Pass event.
+
+**Intent:** `save`
+
+**Parameters:**
+```json
+{
+  "action": "BOOK_PARKING_SPOT",
+  "params": {
+    "userId": "string (required)",
+    "truckId": "string (required)",
+    "eventId": "string (required if passId/spotId not provided)",
+    "passId": "string (optional)",
+    "spotId": "string (optional)"
+  }
+}
+```
+
+On success, returns a `clientSecret` plus `paymentIntentId`. If payment intent creation is temporarily unavailable, a `paymentPending` response is returned.
+
+--- 
 
 ## Unavailable Actions
 
@@ -515,7 +743,12 @@ Generate a secure token:
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
-Add to `.env`:
+Add to `.env` (or your deployment environment):
+```
+MEALSCOUT_ACTION_TOKEN=your_generated_token
+```
+
+Legacy compatibility:
 ```
 TRADESCOUT_API_TOKEN=your_generated_token
 ```
@@ -544,7 +777,7 @@ curl -X POST https://mealscout.yourdomain.com/api/actions \
 2. **Handle errors gracefully** - Implement exponential backoff for retries
 3. **Cache results** - Don't repeatedly query the same data
 4. **Paginate** - Use `limit` and `offset` for large datasets
-5. **Keep tokens secure** - Never expose `TRADESCOUT_API_TOKEN` in client code
+5. **Keep tokens secure** - Never expose `MEALSCOUT_ACTION_TOKEN` in client code
 6. **Monitor usage** - Track API calls to detect anomalies
 
 ---

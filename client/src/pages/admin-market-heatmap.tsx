@@ -330,7 +330,7 @@ export default function AdminMarketHeatmap() {
       <BackHeader
         title="Market Heatmap"
         subtitle="County-level MealScout demand, supply, and ops coverage"
-        fallbackHref="/admin/dashboard"
+        fallbackHref="/admin"
         icon={MapIcon}
       />
 
@@ -866,3 +866,4 @@ function CountyPanel({
     </Card>
   );
 }
+
