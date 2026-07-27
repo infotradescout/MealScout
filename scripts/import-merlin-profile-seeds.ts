@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { and, eq, inArray, or, sql } from "drizzle-orm";
 
 import { db } from "../server/db";
+import { reconcileBusinessIdentity } from "../server/imports/businessIdentityReconciliation";
 import { restaurants, truckImportBatches, truckImportListings, users } from "../shared/schema";
 
 export const MERLIN_EVIDENCE_SEED_MAX_BATCH_SIZE = 500;
@@ -1290,6 +1291,47 @@ const main = async () => {
       }
 
       const match = await findMatches(seed, client);
+      const identityCandidate = match.restaurant || match.listing;
+      const identityDecision = reconcileBusinessIdentity(
+        {
+          name: seed.name,
+          city: seed.city,
+          state: seed.state,
+          phone: seed.phone,
+          email: seed.email,
+          website: seed.website,
+          instagram: seed.instagram,
+          facebook: seed.facebook,
+        },
+        identityCandidate
+          ? {
+              name: identityCandidate.name,
+              city: identityCandidate.city,
+              state: identityCandidate.state,
+              phone: identityCandidate.phone,
+              email: identityCandidate.email,
+              website: identityCandidate.websiteUrl,
+              instagram: identityCandidate.instagramUrl,
+              facebook: identityCandidate.facebookPageUrl,
+            }
+          : null,
+      );
+
+      if (identityCandidate && identityDecision.disposition !== "canonical_match") {
+        decisions.push({
+          index: row,
+          name: seed.name || "(missing)",
+          action: "blocked",
+          blockedReason: `identity_${identityDecision.disposition}:${identityDecision.reasons.join(",")}`,
+          matchedBy: match.matchedBy,
+          changedFields: seed.changedFields,
+          droppedFields: seed.droppedFields,
+          batchId: classification.batchId,
+          rowId: classified.rowId,
+          sourceExportId: classified.sourceExportId || undefined,
+        });
+        continue;
+      }
 
       const willCreate = !match.restaurant && !match.listing;
       if (willCreate && !hasRequiredForCreate(seed)) {
