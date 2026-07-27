@@ -1,6 +1,6 @@
 # MealScout Payment/Webhook Safety Map
 
-Status: C9 payment/webhook safety map complete. This is a docs/contract-only cleanup slice. No payment runtime behavior, webhook behavior, Stripe calls, booking/payment mutations, route permissions, schema, environment handling, or feature logic was changed.
+Status: C9 payment/webhook safety map and focused payment-safety hardening complete. The map began as a docs/contract-only cleanup; the dedicated follow-up lane added the narrowly scoped signature, retry, replay, and out-of-order protections documented below.
 
 ## Scope
 
@@ -202,6 +202,7 @@ Existing payment/webhook coverage:
 - `scripts/mealscout-stripe-webhook-verification-mode.contract.test.ts`
 - `scripts/mealscout-stripe-webhook-signature-verification.behavior.test.ts`
 - `scripts/mealscout-stripe-webhook-idempotency-guards.contract.test.ts`
+- `scripts/mealscout-stripe-webhook-stateful-replay.integration.test.ts`
 - `scripts/testEventSpotBookingPaymentContract.ts`
 - `scripts/smokeParkingPassStripeFlow.ts`
 - `scripts/auditParkingPassWebhookReconciliation.ts`
@@ -211,7 +212,7 @@ Existing payment/webhook coverage:
 - `scripts/testMoneyButton.ts`
 - `scripts/preLaunchGate.mjs`
 - `scripts/productionReadinessGate.mjs`
-- Package scripts include `test:stripe-webhook-safety`, `smoke:parking-pass-stripe`, `audit:parking-pass-webhooks`, `test:parking-pass-webhook-replay`, `test:supplier-payments`, and `test:supplier-pay-intent-switch`.
+- Package scripts include `test:stripe-webhook-safety`, `test:stripe-webhook-stateful-replay`, `smoke:parking-pass-stripe`, `audit:parking-pass-webhooks`, `test:parking-pass-webhook-replay`, `test:supplier-payments`, and `test:supplier-pay-intent-switch`.
 
 Coverage shape:
 
@@ -221,7 +222,7 @@ Coverage shape:
 - Supplier intent method-switch tests are static/unit style around reuse/cancel/conflict decisions.
 - Webhook verification behavior uses fabricated local-only Stripe fixture strings and the real Stripe SDK HMAC implementation; it makes no Stripe API calls.
 - Webhook processing failure behavior uses an intentionally unreachable fixture database and proves a primary write failure returns 500.
-- Mutation-level database idempotency remains behind an approved isolated database fixture; the focused contract locks the current replay, advisory-lock, stored-intent, and out-of-order guards without claiming live database proof.
+- Mutation-level database idempotency remains opt-in and requires an explicitly identified disposable Neon branch and endpoint host. On 2026-07-26, the synthetic stateful replay passed signed duplicate/out-of-order delivery checks for Parking Pass host earnings and committed credit debits, pickup order confirmation and canceled-order non-regression, supplier payment non-regression, and stale/current subscription cancellation behavior.
 
 ## Audit Findings And Follow-Ups
 
@@ -231,7 +232,7 @@ The original C9 map made no runtime repair. The dedicated payment-safety lane su
 - C9-F2: In a future payment modernization slice, evaluate current raw PaymentIntent plus Payment Element flows against Stripe's current Checkout Sessions/Payment Element guidance; do not rewrite during cleanup.
 - C9-F3: In a future Connect modernization slice, evaluate host/supplier `stripe.accounts.create({ type: "express" })` usage against Stripe's newer Accounts v2/controller-properties guidance; do not change existing Connect accounts during cleanup.
 - C9-F4: PARTIAL. Focused webhook contracts now lock signature mode, raw-body behavior, primary-error propagation, stored-intent checks, replay reconciliation, advisory locks, and failure-event non-regression. A broader contract around every non-webhook payment status writer remains future work.
-- C9-F5: Keep stateful payment smokes behind explicit fixture/env approval; C10 remains responsible for the production smoke fixture plan.
+- C9-F5: DONE for isolated mutation-level replay. The reproducible stateful harness remains behind explicit disposable-branch opt-in and does not make Stripe API calls. C10 remains responsible for any production smoke fixture plan.
 
 ## Do-Not-Touch Rules
 

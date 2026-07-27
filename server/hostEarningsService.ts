@@ -88,7 +88,9 @@ export async function recordHostBookingEarnings(
   await db
     .insert(hostEarningsLedger)
     .values(rows)
-    .onConflictDoNothing({
-      target: [hostEarningsLedger.bookingId, hostEarningsLedger.entryType],
-    });
+    // Migration 074 installs this guarantee as a partial unique index
+    // (booking_id IS NOT NULL). PostgreSQL cannot infer that index from a
+    // bare column conflict target, so use target-free DO NOTHING and let the
+    // database enforce every applicable unique constraint.
+    .onConflictDoNothing();
 }
