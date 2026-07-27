@@ -201,6 +201,8 @@ const CleanPublicProfileRoute = () => {
 const publicRoutePrefixes = [
   "/",
   "/scout",
+  "/explore",
+  "/explore-preview",
   "/directory",
   "/food-truck-rush",
   "/login",
@@ -485,6 +487,8 @@ function Router() {
             <Route path="/" component={Welcome} />
             <Route path="/scout" component={ScoutPageV2} />
             <Route path="/scout/:refTag" component={ScoutPageV2} />
+            <Route path="/explore" component={RedirectToScout} />
+            <Route path="/explore-preview" component={RedirectToScout} />
             <Route path="/directory" component={ScoutPageV2} />
             <Route path="/directory/:refTag" component={ScoutPageV2} />
             <Route path="/scout-prototype" component={RedirectToScout} />
@@ -516,6 +520,8 @@ function Router() {
             <Route path="/" component={RedirectToScout} />
             <Route path="/scout" component={ScoutPageV2} />
             <Route path="/scout/:refTag" component={ScoutPageV2} />
+            <Route path="/explore" component={RedirectToScout} />
+            <Route path="/explore-preview" component={RedirectToScout} />
             <Route path="/directory" component={ScoutPageV2} />
             <Route path="/directory/:refTag" component={ScoutPageV2} />
             <Route path="/scout-prototype" component={RedirectToScout} />
