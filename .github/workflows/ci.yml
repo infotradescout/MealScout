@@ -100,6 +100,9 @@ jobs:
       - name: 3D Eats Admin-Verified Profile Contract
         run: npm run test:3d-eats-admin-verified-profile
 
+      - name: Curated Profile Cohort Read-Only Baseline Contract
+        run: npm run test:curated-profile-cohort-baseline
+
       - name: Runtime Safety Contracts
         run: |
           npx --yes tsx scripts/parking-pass-google-api-capabilities.contract.test.ts
