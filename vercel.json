@@ -66,6 +66,30 @@
   ],
   "routes": [
     {
+      "src": "/sitemap.xml",
+      "dest": "https://mealscout.onrender.com/sitemap.xml"
+    },
+    {
+      "src": "/sitemap-([\\w-]+)\\.xml",
+      "dest": "https://mealscout.onrender.com/sitemap-$1.xml"
+    },
+    {
+      "src": "/robots.txt",
+      "dest": "https://mealscout.onrender.com/robots.txt"
+    },
+    {
+      "src": "/llms.txt",
+      "dest": "https://mealscout.onrender.com/llms.txt"
+    },
+    {
+      "src": "/ai.txt",
+      "dest": "https://mealscout.onrender.com/ai.txt"
+    },
+    {
+      "src": "/([A-Za-z0-9_-]{8,128})\\.txt",
+      "dest": "https://mealscout.onrender.com/$1.txt"
+    },
+    {
       "src": "/assets/(.*\\.(?:js|css))",
       "headers": {
         "cache-control": "public, max-age=31536000, immutable"
@@ -82,10 +106,6 @@
     {
       "src": "/api/(.*)",
       "dest": "https://mealscout.onrender.com/api/$1"
-    },
-    {
-      "src": "/([A-Za-z0-9_-]{8,128})\\.txt",
-      "dest": "https://mealscout.onrender.com/$1.txt"
     },
     {
       "src": "/(restaurant|truck|bar|chef|location|event|events|deal|supplier|suppliers|p|video)/(.*)",
