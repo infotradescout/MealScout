@@ -1,4 +1,4 @@
-export type AboutStatus = "available" | "business-supplied" | "where-enabled" | "expanding";
+export type AboutStatus = "available" | "coverage-expanding" | "business-supplied" | "where-enabled" | "expanding";
 
 export type AboutAudience = {
   icon: "search" | "store" | "truck" | "building" | "calendar" | "package";
@@ -41,6 +41,7 @@ export type AboutFeatureGroup = {
 
 export const aboutStatusLabels: Record<AboutStatus, string> = {
   available: "Available now",
+  "coverage-expanding": "Available now · coverage expanding",
   "business-supplied": "Powered by the business profile",
   "where-enabled": "Available where enabled",
   expanding: "Expanding",
@@ -60,7 +61,7 @@ export const aboutAudiences: AboutAudience[] = [
     ],
     href: "/scout",
     cta: "Open Scout",
-    status: "available",
+    status: "coverage-expanding",
   },
   {
     icon: "store",
@@ -75,7 +76,7 @@ export const aboutAudiences: AboutAudience[] = [
     ],
     href: "/profile-setup",
     cta: "See profile options",
-    status: "available",
+    status: "coverage-expanding",
   },
   {
     icon: "truck",
@@ -90,7 +91,7 @@ export const aboutAudiences: AboutAudience[] = [
     ],
     href: "/parking-pass",
     cta: "Explore Parking Pass",
-    status: "available",
+    status: "coverage-expanding",
   },
   {
     icon: "building",
@@ -160,7 +161,7 @@ export const aboutFeatureGroups: AboutFeatureGroup[] = [
     icon: "compass",
     title: "Scout food discovery",
     summary: "Start with the food decision—not a directory alphabet and not a chatbot.",
-    status: "available",
+    status: "coverage-expanding",
     roles: ["Everyone"],
     items: [
       "Search by craving, dish, business, cuisine, category, or place",
@@ -172,6 +173,7 @@ export const aboutFeatureGroups: AboutFeatureGroup[] = [
     ],
     href: "/scout",
     cta: "Open Scout",
+    limitation: "MealScout is building the broadest useful local-food inventory it can verify. Legitimate restaurants, trucks, bars, caterers, chefs, pop-ups, and food sellers may appear with incomplete or claimable profiles while menus, hours, schedules, and ownership are still being confirmed.",
   },
   {
     id: "public-profiles",
@@ -493,8 +495,13 @@ export const aboutFaqs = [
       "Discovery should be driven by relevance, food intent, location, current operating context, and useful evidence—not the purchase of a better organic rank. Paid services do not convert weak relevance into a false recommendation.",
   },
   {
+    question: "How broad will MealScout coverage be?",
+    answer:
+      "As broad as trustworthy local-food discovery allows. MealScout is built for restaurants, food trucks, bars, caterers, chefs, pop-ups, food sellers, hosts, events, and selected suppliers—not only a small verified cohort. Legitimate records are retained and improved, merged when duplicated, or made claimable when incomplete. MealScout does not invent menus, hours, schedules, locations, or ownership to make coverage look complete.",
+  },
+  {
     question: "What is still growing?",
     answer:
-      "Coverage, profile completeness, supplier availability, mobile-store readiness, some ordering and payment connections, and the help library continue to expand. This page labels those boundaries instead of presenting every route as universally available.",
+      "Coverage, profile completeness, supplier availability, mobile-store readiness, some ordering and payment connections, and the help library continue to expand. The platform can be available now while verified listings, current menus, schedules, ordering, and transaction activity still vary by business and market.",
   },
 ];
