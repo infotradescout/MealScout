@@ -13,7 +13,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useQuery } from "@tanstack/react-query";
-import mealScoutIcon from "@assets/meal-scout-icon.png";
+const mealScoutIcon = "/brand/meal-scout-icon.png";
 import { createGoogleMapWithRasterFallback } from "@/lib/google-map-runtime";
 import type { MapBoundsLike, MapTrafficCell } from "./map-adapter.types";
 
