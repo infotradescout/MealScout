@@ -52,7 +52,7 @@ export default function ChangePassword() {
           user?.userType === "super_admin" ||
           user?.userType === "staff"
         ) {
-          setLocation("/admin/dashboard");
+          setLocation("/admin");
         } else {
           setLocation("/scout");
         }
@@ -209,3 +209,4 @@ export default function ChangePassword() {
     </div>
   );
 }
+

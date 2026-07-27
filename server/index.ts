@@ -13,7 +13,7 @@ import {
 } from "./bootstrap";
 import actionRoutes from "./routes/actionRoutes";
 import {
-  verifyTradeScoutToken,
+  verifyActionApiToken,
   rateLimitActions,
 } from "./middleware/actionAuth";
 import { storage } from "./storage";
@@ -1081,13 +1081,13 @@ app.use((req, res, next) => {
     }
   });
 
-  // ==================== ACTION API FOR TRADESCOUT LLM ====================
-  // Unified endpoint that TradeScout LLM calls to perform actions
-  // Requires authentication via TRADESCOUT_API_TOKEN
+  // ==================== ACTION API FOR ALL LLM CLIENTS ====================
+  // Unified endpoint for external action-capable LLMs and server-side relays
+  // Requires action API token auth via Authorization / action token header
   app.use(
     "/api/actions",
     rateLimitActions,
-    verifyTradeScoutToken,
+    verifyActionApiToken,
     actionRoutes
   );
 

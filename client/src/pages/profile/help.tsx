@@ -104,8 +104,8 @@ export default function HelpSupportPage() {
       ],
       links: [
         { label: "Profile", href: "/profile" },
-        { label: "Notifications", href: "/profile/notifications" },
-        { label: "Settings", href: "/profile/settings" },
+        { label: "Notifications", href: "/settings?tab=notifications" },
+        { label: "Settings", href: "/settings" },
       ],
     },
     {
@@ -138,7 +138,7 @@ export default function HelpSupportPage() {
         "Use profile and public business details for contact alternatives.",
         "Watch updates for future inbox release.",
       ],
-      links: [{ label: "Help & Support", href: "/profile/help" }],
+      links: [{ label: "Help & Support", href: "/help" }],
       status: "planned",
     },
     {
@@ -196,7 +196,7 @@ export default function HelpSupportPage() {
       links: [
         { label: "Restaurant Owner Dashboard", href: "/restaurant-owner-dashboard" },
         { label: "Host Dashboard", href: "/host/dashboard" },
-        { label: "Payment Methods", href: "/profile/payment" },
+        { label: "Payment Methods", href: "/settings?tab=account" },
         { label: "Post Verification", href: "/post-verification" },
       ],
     },
@@ -212,7 +212,7 @@ export default function HelpSupportPage() {
         "Mark missing features as planned/not currently available.",
         "Validate route and label accuracy before publishing.",
       ],
-      links: [{ label: "Help Home", href: "/profile/help" }],
+      links: [{ label: "Help Home", href: "/help" }],
     },
   ];
 
@@ -638,7 +638,7 @@ export default function HelpSupportPage() {
                   variant="ghost"
                   size="sm"
                   data-testid="button-user-guide"
-                  onClick={() => (window.location.href = "/profile/help#universal-getting-started")}
+                  onClick={() => (window.location.href = "/help#universal-getting-started")}
                 >
                   <ExternalLink className="w-4 h-4" />
                 </Button>
@@ -649,7 +649,7 @@ export default function HelpSupportPage() {
                   variant="ghost"
                   size="sm"
                   data-testid="button-owner-guide"
-                  onClick={() => (window.location.href = "/profile/help#owner-onboarding")}
+                  onClick={() => (window.location.href = "/help#owner-onboarding")}
                 >
                   <ExternalLink className="w-4 h-4" />
                 </Button>

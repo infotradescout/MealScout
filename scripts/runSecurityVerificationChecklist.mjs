@@ -50,13 +50,18 @@ const runRepoHygieneChecks = () => {
       }
     }
 
-    const tokenLine = lines.find((line) => line.startsWith("TRADESCOUT_API_TOKEN="));
-    if (tokenLine) {
-      const value = tokenLine.slice("TRADESCOUT_API_TOKEN=".length).trim();
+    const tokenLine = lines.find((line) => line.startsWith("MEALSCOUT_ACTION_TOKEN="));
+    const legacyTokenLine = lines.find((line) => line.startsWith("TRADESCOUT_API_TOKEN="));
+    const checkedTokenLine = tokenLine || legacyTokenLine;
+    if (checkedTokenLine) {
+      const key = checkedTokenLine.startsWith("MEALSCOUT_ACTION_TOKEN=")
+        ? "MEALSCOUT_ACTION_TOKEN"
+        : "TRADESCOUT_API_TOKEN";
+      const value = checkedTokenLine.slice(`${key}=`.length).trim();
       const looksPlaceholder = value.startsWith("<") || value.startsWith("your_");
       if (!looksPlaceholder) {
         failures.push(
-          "`.env.production.example` contains a non-placeholder `TRADESCOUT_API_TOKEN` value.",
+          "`.env.production.example` contains a non-placeholder action-token value.",
         );
       }
     }

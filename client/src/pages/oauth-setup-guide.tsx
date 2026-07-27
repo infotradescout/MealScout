@@ -78,7 +78,7 @@ export default function OAuthSetupGuide() {
 
       <BackHeader
         title="OAuth Configuration Guide"
-        fallbackHref="/admin/dashboard"
+        fallbackHref="/admin"
         icon={Settings}
         className="bg-[hsl(var(--background))/0.94] border-b border-[color:var(--border-subtle)] shadow-clean"
       />
@@ -231,6 +231,7 @@ export default function OAuthSetupGuide() {
     </div>
   );
 }
+
 
 
 

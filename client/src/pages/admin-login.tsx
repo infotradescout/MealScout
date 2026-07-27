@@ -25,7 +25,7 @@ export default function AdminLogin() {
           description: `Welcome back, ${data.user.firstName || 'Admin'}!`,
         });
         // Redirect to admin dashboard
-        window.location.href = "/admin/dashboard";
+        window.location.href = "/admin";
       } else {
         toast({
           title: "Access Denied",
@@ -197,6 +197,7 @@ export default function AdminLogin() {
     </div>
   );
 }
+
 
 
 

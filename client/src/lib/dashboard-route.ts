@@ -25,7 +25,7 @@ export const getRoleDashboardPath = (user?: DashboardRouteUser | null) => {
   }
 
   if (roles.has("admin") || roles.has("duper_admin") || roles.has("super_admin")) {
-    return "/admin/dashboard";
+    return "/admin";
   }
   if (roles.has("staff")) return "/staff";
   if (roles.has("event_coordinator")) return "/event-coordinator/dashboard";
@@ -50,3 +50,4 @@ export const getAccountContinuationPath = (user?: DashboardRouteUser | null) => 
 };
 
 export const CANONICAL_DASHBOARD_ENTRY_PATH = "/dashboard";
+
