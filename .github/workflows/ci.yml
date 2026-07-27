@@ -97,6 +97,9 @@ jobs:
       - name: 3D Eats FRUI-TEA Evidence Contract
         run: npm run test:3d-eats-frui-tea-sauce
 
+      - name: 3D Eats Admin-Verified Profile Contract
+        run: npm run test:3d-eats-admin-verified-profile
+
       - name: Runtime Safety Contracts
         run: |
           npx --yes tsx scripts/parking-pass-google-api-capabilities.contract.test.ts

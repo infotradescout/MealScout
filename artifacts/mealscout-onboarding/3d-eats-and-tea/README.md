@@ -1,32 +1,41 @@
 # 3D Eats & Tea Existing Account Enrichment
 
-Status: `PARTIAL_PUBLICATION_OWNER_APPROVAL_REQUIRED`
+Status: `ADMIN_VERIFIED_APPLY_PENDING`
 
 GitHub tracker: issue `#113`
 
-## Current checkpoint (2026-07-22)
+## Current checkpoint (2026-07-26)
 
 - The FRUI-TEA BBQ sauce classification and description are recorded on the
   public profile through merged PR `#253`.
-- The evidence packet contains a full extracted menu candidate, general-hours
-  candidate, service area, contact/social candidates, a cover image, and logo
-  evidence.
-- These candidates are not owner approval. Do not publish the full menu,
-  schedule, static address as a live location, conflicting YouTube identity,
-  or a replacement logo until the owner/admin approval is recorded.
-- Missing approvals remain: current full menu, owner-approved logo, active
-  operating schedule/location, static address handling, and YouTube identity.
+- Thomas, the MealScout admin who created and managed this profile for
+  3D Eats & Tea, has directly verified the business and approved the supplied
+  menu and official website logo for a guarded, reversible apply.
+- The authority decision and immutable evidence hashes are recorded in
+  `docs/evidence/3d-eats-admin-verification-2026-07-26.json`.
+- The approved menu contains 74 priced rows across 12 categories. The current
+  canonical `Classic Burger` row and all existing menu/account identifiers must
+  remain in place.
+- The official logo was retrieved from `https://3deats.us/`, copied to the
+  evidence and public asset paths, and may fill the currently blank logo field.
+- A fresh operating stop remains separate from profile verification. The
+  official website says truck schedules are coming soon and asks visitors to
+  message for locations, so MealScout must continue to show no current schedule
+  until dated or live evidence exists.
 
 ## Operating rule
 
 3D Eats & Tea already has a MealScout account. This artifact is **not** authorization to create a duplicate profile or overwrite existing account/profile data.
 
-Use all supplied values as append-only enrichment:
+Apply approved values as append-only enrichment:
 
 - Fill blank fields only.
 - Preserve existing owner linkage, claim status, subscription/payment status, profile/business ids, analytics, reviews, and metadata.
-- Queue conflicts for owner/admin review.
-- Do not replace an existing logo, menu, schedule, contact, or location value without approval.
+- Abort on conflicts instead of guessing.
+- Add approved menu rows to the existing canonical menu without replacing its
+  menu or item IDs.
+- Fill the logo only while it remains blank.
+- Do not replace a schedule, contact, or location value from this evidence.
 
 ## Evidence supplied by Thomas
 
@@ -42,7 +51,8 @@ The source images were supplied in the ChatGPT conversation and summarized in is
 |---|---|---|
 | Business display name | 3-D Eats & Tea Pensacola | Fill blank only / review if existing differs |
 | Brand name | 3-D Eats | Fill blank only |
-| Logo text | 3-D EATS | Candidate logo evidence only |
+| Logo text | 3-D EATS | Admin-approved official website logo; fill blank only |
+| Website | https://3deats.us/ | Official website |
 | Email | threedtea@gmail.com | Fill blank only / review if existing differs |
 | Price tier | $$ | Fill blank only |
 | Recommendation | 98% recommend | Evidence only unless platform stores external recommendation score |
@@ -143,9 +153,10 @@ Thomas supplied a logo image with:
 
 Handling:
 
-- Use as candidate profile logo only if the existing logo field is blank.
-- If an existing logo is present, queue replacement for owner/admin review.
-- The circular black logo from the menu image is an alternate brand mark candidate only; do not use unless approved.
+- Use the official website logo only if the existing logo field is still blank.
+- Preserve any nonblank logo that appears before the guarded apply.
+- The circular black logo from the menu image remains an alternate mark and is
+  not the approved public profile logo.
 
 ## Menu categories
 
@@ -315,22 +326,22 @@ Section note: Comes with choice of one side or regular drink.
 |---|---|---|---|
 | Address / ZIP | Pensacola, FL, United States, 32505 | 6881 US 98 E, Pensacola, FL 32506 | Do not overwrite; review |
 | YouTube | eatin3d | @3deats | Do not overwrite; review |
-| Logo | Colorful mascot logo supplied | Circular black logo appears on menu | Do not overwrite; review if existing logo present |
+| Logo | Official website mascot logo | Circular black logo appears on menu | Fill blank with official website logo; preserve any newer nonblank logo |
 
 ## Missing fields
 
 - Phone number
-- Website
 - Confirmed live operating location
 - Current scheduled stops
-- Confirmation that supplied menu is current
-- Confirmation that supplied logo is owner-approved
 - Decision on whether circular black logo should be stored as alternate brand mark
-- Existing MealScout account/profile field comparison
 
 ## Apply task
 
-Inspect existing MealScout account/profile for 3D Eats & Tea. Apply this evidence as append-only enrichment only.
+Apply the admin-approved menu and official website logo to the existing
+3D Eats & Tea profile through the guarded transaction. Preserve all existing
+account, menu, item, recommendation, and profile identifiers. Bind
+`admin_verified` to the exact resulting structured-menu revision and keep the
+absence of a fresh stop truthful.
 
 Return:
 

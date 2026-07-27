@@ -140,11 +140,22 @@ export type PublicMenuVariant = {
 
 export type PublicMenuApprovalState = {
   status:
-    "owner_approved" | "needs_owner_confirmation" | "rejected" | "unavailable";
+    | "owner_approved"
+    | "admin_verified"
+    | "needs_owner_confirmation"
+    | "rejected"
+    | "unavailable";
   label: string;
   ownerApproved: boolean;
+  adminVerified?: boolean;
   ownerApprovalRequired: boolean;
   reviewedAt: string | null;
+  sourceAttribution: {
+    sourceType: "mealscout_sourced";
+    scope: "inserted_menu_items";
+    label: string;
+    sourcedItemCount: number;
+  } | null;
 };
 
 export type PublicTruckScheduleSummary = {

@@ -148,6 +148,27 @@ async function main() {
     ).status,
     "owner_approved",
   );
+  const adminVerifiedApproval = {
+    ...legacyApproval,
+    rawData: {
+      ownerMenuApproval: {
+        status: "admin_verified",
+        ownerApproved: true,
+        adminApproved: true,
+        approvedMenuRevision: "current-menu-revision",
+      },
+    },
+  };
+  const adminVerifiedState = operations.buildOwnerMenuApprovalState(
+    adminVerifiedApproval,
+    2,
+    "current-menu-revision",
+  );
+  assert.equal(adminVerifiedState.status, "admin_verified");
+  assert.equal(adminVerifiedState.label, "MealScout-verified menu");
+  assert.equal(adminVerifiedState.ownerApproved, false);
+  assert.equal(adminVerifiedState.adminVerified, true);
+  assert.equal(adminVerifiedState.ownerApprovalRequired, false);
   const changedMenuApproval = operations.buildOwnerMenuApprovalState(
     exactApproval,
     2,

@@ -548,6 +548,67 @@ assert.equal(isSafePublicMediaUrl("/placeholder.png"), false);
   assert.equal(approvedStructuredProfile.menuImageUrl, null);
   assert.equal(approvedStructuredProfile.menuPdfUrl, null);
 
+  const adminVerifiedStructuredProfile = toPublicRestaurantProfile({
+    baseUrl: "https://www.mealscout.us",
+    row: {
+      id: "truck-admin-verified-menu",
+      name: "Admin Verified Menu Truck",
+      businessType: "food_truck",
+      isFoodTruck: true,
+      isActive: true,
+      menuRevision: MENU_REVISION,
+      menuRevisionCoversRenderedMenu: true,
+      menuSections: [
+        { name: "Menu", items: [{ name: "Taco", priceCents: 900 }] },
+      ],
+      menuVariants: [],
+      menuUrl: "https://menu.example/admin-verified",
+      rawData: {
+        ownerMenuApproval: {
+          status: "admin_verified",
+          ownerApproved: false,
+          adminApproved: true,
+          approvedMenuRevision: MENU_REVISION,
+          approvedMenuRevisionAlgorithm: "structured-menu-sha256-v1",
+          sourceAttribution: {
+            sourceType: "mealscout_sourced",
+            scope: "inserted_menu_items",
+            sourceRevision: MENU_REVISION,
+            sourceRevisionAlgorithm: "structured-menu-sha256-v1",
+            sourcedItemCount: 1,
+            ownerAuthored: false,
+            evidenceArtifact: "docs/evidence/example-menu.json",
+            evidenceSha256:
+              "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+          },
+        },
+      },
+    },
+  });
+  assert.equal(
+    adminVerifiedStructuredProfile.menuApproval.status,
+    "admin_verified",
+  );
+  assert.equal(
+    adminVerifiedStructuredProfile.menuApproval.label,
+    "MealScout-verified menu",
+  );
+  assert.equal(adminVerifiedStructuredProfile.menuApproval.ownerApproved, false);
+  assert.equal(adminVerifiedStructuredProfile.menuApproval.adminVerified, true);
+  assert.deepEqual(
+    adminVerifiedStructuredProfile.menuApproval.sourceAttribution,
+    {
+      sourceType: "mealscout_sourced",
+      scope: "inserted_menu_items",
+      label: "1 menu item sourced by MealScout",
+      sourcedItemCount: 1,
+    },
+  );
+  assert.equal(
+    adminVerifiedStructuredProfile.menuUrl,
+    "https://menu.example/admin-verified",
+  );
+
   const changedUnboundExternal = toPublicRestaurantProfile({
     baseUrl: "https://www.mealscout.us",
     row: {
@@ -573,6 +634,46 @@ assert.equal(isSafePublicMediaUrl("/placeholder.png"), false);
   assert.equal(
     changedUnboundExternal.menuApproval.status,
     "needs_owner_confirmation",
+  );
+
+  const staleSourceAttributionProfile = toPublicRestaurantProfile({
+    baseUrl: "https://www.mealscout.us",
+    row: {
+      id: "truck-stale-source-attribution",
+      name: "Stale Source Attribution Truck",
+      businessType: "food_truck",
+      isFoodTruck: true,
+      isActive: true,
+      menuRevision: MENU_REVISION,
+      menuRevisionCoversRenderedMenu: true,
+      menuSections: [
+        { name: "Menu", items: [{ name: "Taco", priceCents: 900 }] },
+      ],
+      rawData: {
+        ownerMenuApproval: {
+          status: "admin_verified",
+          ownerApproved: false,
+          adminApproved: true,
+          approvedMenuRevision: MENU_REVISION,
+          approvedMenuRevisionAlgorithm: "structured-menu-sha256-v1",
+          sourceAttribution: {
+            sourceType: "mealscout_sourced",
+            scope: "inserted_menu_items",
+            sourceRevision: "older-menu-revision",
+            sourceRevisionAlgorithm: "structured-menu-sha256-v1",
+            sourcedItemCount: 1,
+            ownerAuthored: false,
+            evidenceArtifact: "docs/evidence/example-menu.json",
+            evidenceSha256:
+              "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+          },
+        },
+      },
+    },
+  });
+  assert.equal(
+    staleSourceAttributionProfile.menuApproval.sourceAttribution,
+    null,
   );
 }
 

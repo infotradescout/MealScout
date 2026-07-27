@@ -264,17 +264,27 @@ export const buildOwnerMenuApprovalState = (
     (currentMenuRevision
       ? rejectedMenuRevision === currentMenuRevision
       : !rejectedMenuRevision);
+  const claimsAdminVerification =
+    status === "admin_verified" && approval.adminApproved === true;
   const claimsOwnerApproval =
     status === "approved" || approval.ownerApproved === true;
   const approvedMenuRevision = String(
     approval.approvedMenuRevision || "",
   ).trim();
-  const ownerApproved = Boolean(
+  const ownerApprovalMatchesCurrentRevision = Boolean(
     !rejected &&
-    claimsOwnerApproval &&
+      claimsOwnerApproval &&
       currentMenuRevision &&
       approvedMenuRevision === currentMenuRevision,
   );
+  const adminVerified = Boolean(
+    !rejected &&
+      claimsAdminVerification &&
+      currentMenuRevision &&
+      approvedMenuRevision === currentMenuRevision,
+  );
+  const ownerApproved =
+    ownerApprovalMatchesCurrentRevision && !adminVerified;
   const hasMenuSurface = Boolean(
     menuItemCount > 0 ||
       restaurant?.menuUrl ||
@@ -288,33 +298,42 @@ export const buildOwnerMenuApprovalState = (
       !rejected,
   );
   const ownerApprovalRequired = Boolean(
-    canApproveCurrentMenu && !ownerApproved,
+    canApproveCurrentMenu && !ownerApproved && !adminVerified,
   );
   return {
     status: rejected
       ? "rejected"
-      : ownerApproved
-        ? "owner_approved"
-        : ownerApprovalRequired
-          ? "needs_owner_confirmation"
-          : "unavailable",
+      : adminVerified
+        ? "admin_verified"
+        : ownerApproved
+          ? "owner_approved"
+          : ownerApprovalRequired
+            ? "needs_owner_confirmation"
+            : "unavailable",
     label: rejected
       ? "Menu unavailable / pending update"
-      : ownerApproved
-        ? "Owner-approved menu"
-        : ownerApprovalRequired
-          ? "Menu added from available source — needs owner confirmation"
-          : isTruckRow(restaurant) && hasMenuSurface
-            ? "Add or import structured menu items before approval"
-          : "Menu unavailable / pending update",
+      : adminVerified
+        ? "MealScout-verified menu"
+        : ownerApproved
+          ? "Owner-approved menu"
+          : ownerApprovalRequired
+            ? "Menu added from available source — needs owner confirmation"
+            : isTruckRow(restaurant) && hasMenuSurface
+              ? "Add or import structured menu items before approval"
+              : "Menu unavailable / pending update",
     ownerApproved,
+    adminVerified,
     ownerApprovalRequired,
     canApproveCurrentMenu,
     approvalBlockedReason:
       isTruckRow(restaurant) && hasMenuSurface && !canApproveCurrentMenu && !rejected
         ? "structured_menu_required"
         : null,
-    approvalStale: claimsOwnerApproval && !ownerApproved && !rejected,
+    approvalStale:
+      (claimsOwnerApproval || claimsAdminVerification) &&
+      !ownerApproved &&
+      !adminVerified &&
+      !rejected,
     reviewedAt: String(approval.reviewedAt || "").trim() || null,
     skippedAt: String(approval.skippedAt || "").trim() || null,
   };

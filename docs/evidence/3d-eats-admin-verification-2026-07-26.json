@@ -1,0 +1,73 @@
+{
+  "artifactType": "admin_verification_decision",
+  "capturedAt": "2026-07-26",
+  "business": {
+    "id": "95c4e656-f3cc-46ab-ae18-53f549cecfd1",
+    "name": "3D Eats & Tea",
+    "slug": "3d-eats-tea",
+    "publicProfilePath": "/truck/3d-eats-tea--95c4e656-f3cc-46ab-ae18-53f549cecfd1"
+  },
+  "authority": {
+    "verified": true,
+    "verifiedBy": "Thomas",
+    "role": "MealScout admin and profile creator",
+    "sourceType": "direct_admin_instruction",
+    "decision": "3D Eats and Tea is fully verified by the MealScout admin who created and managed its profile."
+  },
+  "canonicalTruth": {
+    "existingMealScoutProfile": "authoritative",
+    "businessIdentity": "verified",
+    "menuEvidence": "admin_approved_for_reversible_apply",
+    "menuProvenance": "mealscout_sourced",
+    "logoEvidence": "admin_approved",
+    "conflictingImportedFields": "must_not_overwrite_existing_verified_profile",
+    "staticAddress": "business_or_admin_evidence_only",
+    "liveOperatingLocation": "requires_current_schedule_booking_or_live_update"
+  },
+  "approvedSources": {
+    "profileAndMenuEvidence": "docs/evidence/3d-eats-tea-append-only-profile-read-2026-06-07.json",
+    "logoWebsitePage": "https://3deats.us/",
+    "logoWebsiteAsset": "https://img1.wsimg.com/isteam/ip/e3af6dad-c2ec-4958-b4e4-d7f59844b6f9/3D%20Eats%20Front%20Shirt%20Design%20white%20background.jpg",
+    "logoRepoEvidencePath": "artifacts/mealscout-onboarding/3d-eats-and-tea/images/logo.jpg",
+    "logoPublicAssetPath": "client/public/business-assets/3d-eats-and-tea/logo.jpg",
+    "logoPublicUrl": "https://www.mealscout.us/business-assets/3d-eats-and-tea/logo.jpg",
+    "logoSha256": "f1791c958039b2b7437b86824295baf59f0bb123241a0c83cd388bcdc4fd9692",
+    "logoDimensions": {
+      "width": 2560,
+      "height": 1793
+    },
+    "menuEvidenceSha256": "04f377cd4cd3d375204b15ec712373939ef7684c7f132f231de5b73c83c01992",
+    "menuCanonicalSha256": "c39d2784e40e5652bccc15ee9174983008ea2107badf32f9e4e9d6d694048e7a",
+    "menuSectionCount": 12,
+    "menuItemCount": 74,
+    "websiteScheduleState": "Website says truck schedules are coming soon and instructs visitors to message for locations; it does not publish a current stop."
+  },
+  "productionBaseline": {
+    "capturedAt": "2026-07-26",
+    "publicProfileEndpoint": "https://mealscout.onrender.com/api/public/profiles/truck/95c4e656-f3cc-46ab-ae18-53f549cecfd1",
+    "logoUrl": null,
+    "menuApprovalStatus": "needs_owner_confirmation",
+    "activeMenuId": "3dbd60f0-eb57-4052-b50e-faee1d3aabde",
+    "activeMenuItems": [
+      {
+        "menuItemId": "60e3ff75-7df4-44cd-8ffa-49577b9fe164",
+        "category": "Menu Items",
+        "name": "Classic Burger",
+        "description": "Our Custom Blend Filet Mignon Burger that's seared and seasoned on our sizzling flatop..",
+        "priceCents": 500,
+        "itemType": "food"
+      }
+    ],
+    "scheduleStatus": "No schedule posted"
+  },
+  "applyDecision": {
+    "menu": "Add the 74 approved rows to the existing active menu without replacing its menu or item IDs. Record every inserted row and make rollback deactivate only those inserted rows; do not delete anything.",
+    "menuApproval": "Bind MealScout admin verification to the exact structured-menu revision hash without representing it as direct owner approval.",
+    "menuSourceAttribution": "Mark the 74 inserted rows as sourced by MealScout, keep the preserved Classic Burger outside that attribution, and expose sourcing separately from verification authority.",
+    "logo": "Set the website-sourced logo only when the verified profile has no logo. Preserve any later nonblank logo.",
+    "address": "Do not change the verified profile address from imported evidence and never project a static address as a live truck stop.",
+    "youtube": "Do not change the verified profile YouTube value from conflicting imported evidence.",
+    "schedule": "Do not publish expired or undated stops. An absent fresh stop must remain visibly unavailable.",
+    "account": "Preserve the existing account, owner linkage, profile ID, claim and subscription state, analytics, reviews, and confirmed fields."
+  }
+}

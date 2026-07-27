@@ -33,6 +33,7 @@ export type ProfileLivePresenceState =
 
 export type ProfileMenuApprovalEvidence =
   | "owner_approved"
+  | "admin_verified"
   | "needs_owner_confirmation"
   | "rejected"
   | "unavailable"
@@ -151,7 +152,9 @@ export function computeProfileCompletionTruth(
     menuState = "rejected";
   } else if (input.menu.hasPublicSurface) {
     menuState =
-      !isTruck || input.menu.approval === "owner_approved"
+      !isTruck ||
+      input.menu.approval === "owner_approved" ||
+      input.menu.approval === "admin_verified"
         ? "approved_current"
         : "present_needs_confirmation";
   }

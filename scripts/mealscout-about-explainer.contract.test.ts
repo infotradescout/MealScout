@@ -114,6 +114,7 @@ assert.ok(
 
 for (const requiredStatus of [
   "available",
+  "coverage-expanding",
   "business-supplied",
   "where-enabled",
   "expanding",
@@ -154,6 +155,10 @@ for (const requiredBoundary of [
   "No star-rating leaderboard",
   "does not replace permits",
   "Tracking alone never guarantees payment",
+  "Available now · coverage expanding",
+  "restaurants, food trucks, bars, caterers, chefs, pop-ups, food sellers, hosts, events, and selected suppliers",
+  "Legitimate records are retained and improved",
+  "does not invent menus, hours, schedules, locations, or ownership",
 ]) {
   assert.match(
     combined,

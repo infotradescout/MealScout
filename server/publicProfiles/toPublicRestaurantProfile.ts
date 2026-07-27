@@ -470,8 +470,16 @@ export function toPublicRestaurantProfile(input: {
     (currentMenuRevision
       ? rejectedMenuRevision === currentMenuRevision
       : !rejectedMenuRevision);
+  const adminMenuVerified =
+    !ownerMenuRejected &&
+    menuRevisionCoversRenderedMenu &&
+    Boolean(currentMenuRevision) &&
+    approvedMenuRevision === currentMenuRevision &&
+    ownerMenuApprovalStatus === "admin_verified" &&
+    rawMenuApproval.adminApproved === true;
   const ownerMenuApproved =
     !ownerMenuRejected &&
+    !adminMenuVerified &&
     menuRevisionCoversRenderedMenu &&
     Boolean(currentMenuRevision) &&
     approvedMenuRevision === currentMenuRevision &&
@@ -485,40 +493,111 @@ export function toPublicRestaurantProfile(input: {
     menuPdfUrl ||
     featuredMenuItems.length > 0,
   );
+  const rawMenuSourceAttribution =
+    rawMenuApproval &&
+    typeof rawMenuApproval.sourceAttribution === "object" &&
+    rawMenuApproval.sourceAttribution
+      ? (rawMenuApproval.sourceAttribution as Record<string, any>)
+      : {};
+  const sourcedItemCount = Number(
+    rawMenuSourceAttribution.sourcedItemCount,
+  );
+  const sourceRevisionAlgorithm = String(
+    rawMenuSourceAttribution.sourceRevisionAlgorithm || "",
+  ).trim();
+  const approvedMenuRevisionAlgorithm = String(
+    rawMenuApproval.approvedMenuRevisionAlgorithm || "",
+  ).trim();
+  const sourceEvidenceArtifact = String(
+    rawMenuSourceAttribution.evidenceArtifact || "",
+  ).trim();
+  const sourceEvidenceSha256 = String(
+    rawMenuSourceAttribution.evidenceSha256 || "",
+  )
+    .trim()
+    .toLowerCase();
+  const menuSourceAttribution =
+    !ownerMenuRejected &&
+    menuRevisionCoversRenderedMenu &&
+    hasAnyMenuSurface &&
+    Boolean(currentMenuRevision) &&
+    String(rawMenuSourceAttribution.sourceType || "")
+      .trim()
+      .toLowerCase() === "mealscout_sourced" &&
+    String(rawMenuSourceAttribution.scope || "")
+      .trim()
+      .toLowerCase() === "inserted_menu_items" &&
+    rawMenuSourceAttribution.ownerAuthored === false &&
+    String(rawMenuSourceAttribution.sourceRevision || "").trim() ===
+      currentMenuRevision &&
+    sourceRevisionAlgorithm === "structured-menu-sha256-v1" &&
+    sourceRevisionAlgorithm === approvedMenuRevisionAlgorithm &&
+    Boolean(sourceEvidenceArtifact) &&
+    /^[a-f0-9]{64}$/.test(sourceEvidenceSha256) &&
+    Number.isSafeInteger(sourcedItemCount) &&
+    sourcedItemCount > 0
+      ? {
+          sourceType: "mealscout_sourced" as const,
+          scope: "inserted_menu_items" as const,
+          label: `${sourcedItemCount} menu ${
+            sourcedItemCount === 1 ? "item" : "items"
+          } sourced by MealScout`,
+          sourcedItemCount,
+        }
+      : null;
   const menuApproval =
     profileType === "truck" && ownerMenuRejected
       ? {
           status: "rejected" as const,
           label: "Menu unavailable / pending update",
           ownerApproved: false,
+          adminVerified: false,
           ownerApprovalRequired: false,
           reviewedAt: String(rawMenuApproval.reviewedAt || "").trim() || null,
+          sourceAttribution: null,
         }
-      : profileType === "truck" && ownerMenuApproved
+      : profileType === "truck" && adminMenuVerified
         ? {
-            status: "owner_approved" as const,
-            label: "Owner-approved menu",
-            ownerApproved: true,
+            status: "admin_verified" as const,
+            label: "MealScout-verified menu",
+            ownerApproved: false,
+            adminVerified: true,
             ownerApprovalRequired: false,
             reviewedAt: String(rawMenuApproval.reviewedAt || "").trim() || null,
+            sourceAttribution: menuSourceAttribution,
           }
-        : profileType === "truck" && hasAnyMenuSurface
+        : profileType === "truck" && ownerMenuApproved
           ? {
-              status: "needs_owner_confirmation" as const,
-              label:
-                "Menu added from available source — needs owner confirmation",
-              ownerApproved: false,
-              ownerApprovalRequired: true,
+              status: "owner_approved" as const,
+              label: "Owner-approved menu",
+              ownerApproved: true,
+              adminVerified: false,
+              ownerApprovalRequired: false,
               reviewedAt:
                 String(rawMenuApproval.reviewedAt || "").trim() || null,
+              sourceAttribution: menuSourceAttribution,
             }
-          : {
-              status: "unavailable" as const,
-              label: "Menu unavailable / pending update",
-              ownerApproved: false,
-              ownerApprovalRequired: false,
-              reviewedAt: null,
-            };
+          : profileType === "truck" && hasAnyMenuSurface
+            ? {
+                status: "needs_owner_confirmation" as const,
+                label:
+                  "Menu added from available source — needs owner confirmation",
+                ownerApproved: false,
+                adminVerified: false,
+                ownerApprovalRequired: true,
+                reviewedAt:
+                  String(rawMenuApproval.reviewedAt || "").trim() || null,
+                sourceAttribution: menuSourceAttribution,
+              }
+            : {
+                status: "unavailable" as const,
+                label: "Menu unavailable / pending update",
+                ownerApproved: false,
+                adminVerified: false,
+                ownerApprovalRequired: false,
+                reviewedAt: null,
+                sourceAttribution: menuSourceAttribution,
+              };
   const publicMenuSections =
     menuApproval.status === "rejected" ? [] : menuSections;
   const publicMenuVariants =
@@ -527,11 +606,15 @@ export function toPublicRestaurantProfile(input: {
     menuApproval.status === "rejected" ? [] : featuredMenuItems;
   const publicMenuUrl = menuApproval.status === "rejected" ? null : menuUrl;
   const publicMenuImageUrl =
-    menuApproval.status === "rejected" || ownerMenuApproved
+    menuApproval.status === "rejected" ||
+    ownerMenuApproved ||
+    adminMenuVerified
       ? null
       : menuImageUrl;
   const publicMenuPdfUrl =
-    menuApproval.status === "rejected" || ownerMenuApproved
+    menuApproval.status === "rejected" ||
+    ownerMenuApproved ||
+    adminMenuVerified
       ? null
       : menuPdfUrl;
   const dealCount = Math.max(
