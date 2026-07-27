@@ -13,6 +13,7 @@ import {
   users,
 } from "../shared/schema";
 import { buildTruckProfileLocationEvidence } from "../server/utils/truckLocationSemantics";
+import { reconcileBusinessIdentity } from "../server/imports/businessIdentityReconciliation";
 
 type InputRecord = {
   business_name?: string;
@@ -109,8 +110,7 @@ const normalizePhone = (value: unknown) => String(value || "").replace(/[^\d]/g,
 const slugName = (value: string) =>
   value
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
+    .replace(/[^a-z0-9]+/g, "");
 const isBlank = (value: unknown) =>
   value === null || value === undefined || String(value).trim().length === 0;
 
@@ -407,7 +407,7 @@ const findMatches = async (r: Normalized) => {
           : sql`false`,
         r.businessName && r.city
           ? and(
-              sql`lower(${restaurants.name}) = ${normalizeLower(r.businessName)}`,
+              sql`regexp_replace(lower(${restaurants.name}), '[^a-z0-9]', '', 'g') = ${slugName(r.businessName)}`,
               sql`lower(coalesce(${restaurants.city}, '')) = ${normalizeLower(r.city)}`,
             )
           : sql`false`,
@@ -441,7 +441,7 @@ const findMatches = async (r: Normalized) => {
           : sql`false`,
         r.businessName && r.city
           ? and(
-              sql`lower(${truckImportListings.name}) = ${normalizeLower(r.businessName)}`,
+              sql`regexp_replace(lower(${truckImportListings.name}), '[^a-z0-9]', '', 'g') = ${slugName(r.businessName)}`,
               sql`lower(coalesce(${truckImportListings.city}, '')) = ${normalizeLower(r.city)}`,
             )
           : sql`false`,
@@ -462,7 +462,7 @@ const findMatches = async (r: Normalized) => {
       score += 6;
     const nameMatch =
       slugName(row.restaurants.name || "") === slugName(r.businessName || "");
-    if (nameMatch && normalizeLower(row.restaurants.city) === normalizeLower(r.city)) score += 5;
+    if (nameMatch && normalizeLower(row.restaurants.city) === normalizeLower(r.city)) score += 10;
     return score;
   };
   const scoreListing = (row: any) => {
@@ -476,16 +476,67 @@ const findMatches = async (r: Normalized) => {
     if (r.facebookPageUrl && normalizeLower(row.facebookPageUrl).includes(normalizeLower(r.facebookPageUrl)))
       score += 6;
     const nameMatch = slugName(row.name || "") === slugName(r.businessName || "");
-    if (nameMatch && normalizeLower(row.city) === normalizeLower(r.city)) score += 5;
+    if (nameMatch && normalizeLower(row.city) === normalizeLower(r.city)) score += 10;
     return score;
   };
 
   const scoredRestaurants = restaurantCandidates
-    .map((row: any) => ({ row: row.restaurants, owner: row.users, score: scoreRestaurant(row) }))
+    .map((row: any) => ({
+      row: row.restaurants,
+      owner: row.users,
+      score: scoreRestaurant(row),
+      identity: reconcileBusinessIdentity(
+        {
+          name: r.businessName,
+          city: r.city,
+          state: r.state,
+          phone: r.phone,
+          email: r.email,
+          website: r.websiteUrl,
+          instagram: r.instagramUrl,
+          facebook: r.facebookPageUrl,
+        },
+        {
+          name: row.restaurants.name,
+          city: row.restaurants.city,
+          state: row.restaurants.state,
+          phone: row.restaurants.phone,
+          email: row.users?.email,
+          website: row.restaurants.websiteUrl,
+          instagram: row.restaurants.instagramUrl,
+          facebook: row.restaurants.facebookPageUrl,
+        },
+      ),
+    }))
     .filter((x: any) => x.score >= 10)
     .sort((a: any, b: any) => b.score - a.score);
   const scoredListings = listingCandidates
-    .map((row: any) => ({ row, score: scoreListing(row) }))
+    .map((row: any) => ({
+      row,
+      score: scoreListing(row),
+      identity: reconcileBusinessIdentity(
+        {
+          name: r.businessName,
+          city: r.city,
+          state: r.state,
+          phone: r.phone,
+          email: r.email,
+          website: r.websiteUrl,
+          instagram: r.instagramUrl,
+          facebook: r.facebookPageUrl,
+        },
+        {
+          name: row.name,
+          city: row.city,
+          state: row.state,
+          phone: row.phone,
+          email: row.email,
+          website: row.websiteUrl,
+          instagram: row.instagramUrl,
+          facebook: row.facebookPageUrl,
+        },
+      ),
+    }))
     .filter((x: any) => x.score >= 10)
     .sort((a: any, b: any) => b.score - a.score);
 
@@ -519,6 +570,12 @@ const run = async () => {
 
     const publishable = hasRequiredForPublish(record);
     const { scoredRestaurants, scoredListings } = await findMatches(record);
+    const identityConflicts = [...scoredRestaurants, ...scoredListings].filter(
+      (candidate: any) => candidate.identity.disposition === "review_required",
+    );
+    if (identityConflicts.length) {
+      conflicts.push("identity_conflict_review_required");
+    }
     const strongRestaurantMatches = scoredRestaurants.filter((x: any) => x.score >= 10);
     const strongListingMatches = scoredListings.filter((x: any) => x.score >= 10);
     // A restaurant and its own linked import-listing companion (restaurant.claimedFromImportId
@@ -536,6 +593,8 @@ const run = async () => {
     let action: Action = "needs_review";
     if (!record.businessName) {
       action = "reject";
+    } else if (identityConflicts.length) {
+      action = "needs_review";
     } else if (totalStrong > 1) {
       action = "needs_review";
       conflicts.push("multiple_strong_matches");

@@ -13,6 +13,7 @@ import {
 import { sendAccountSetupInvite } from "../../utils/accountSetup";
 import { parseTruckImportFile } from "../../utils/truckImport";
 import { buildTruckProfileLocationEvidence } from "../../utils/truckLocationSemantics";
+import { reconcileBusinessIdentity } from "../../imports/businessIdentityReconciliation";
 import {
   eventBookings,
   imageUploads,
@@ -1257,6 +1258,69 @@ export function registerTruckImportAdminRoutes(
             matchedRestaurant = linked || null;
           }
           }
+        }
+
+        const identityCandidate = matchedRestaurant || matchedImportListing;
+        const identityDecision = explicitRestaurant
+          ? { disposition: "canonical_match" as const, reasons: ["profile_id_exact"] }
+          : reconcileBusinessIdentity(
+              {
+                name: matchName,
+                city: matchCity,
+                state: matchState,
+                phone: matchPhone,
+                email: matchEmail,
+                website: matchWebsite,
+                facebook: matchFacebook,
+                instagram: matchInstagram,
+              },
+              identityCandidate
+                ? {
+                    name: identityCandidate.name,
+                    city: identityCandidate.city,
+                    state: identityCandidate.state,
+                    phone: identityCandidate.phone,
+                    email: identityCandidate.email,
+                    website: identityCandidate.websiteUrl,
+                    facebook: identityCandidate.facebookPageUrl,
+                    instagram: identityCandidate.instagramUrl,
+                  }
+                : null,
+            );
+        if (
+          identityCandidate &&
+          identityDecision.disposition !== "canonical_match"
+        ) {
+          return res.json({
+            status: "needs_review",
+            existingTruckId: matchedRestaurant?.id || "",
+            matchedRestaurantId: matchedRestaurant?.id || "",
+            matchedImportListingId: matchedImportListing?.id || "",
+            createdDraftId: "",
+            matchStrength,
+            matchedBy,
+            fieldsApplied: [],
+            fieldsSkipped: [],
+            conflicts: [
+              {
+                field: "identity",
+                reason: "identity_conflict_review_required",
+                details: identityDecision.reasons,
+              },
+            ],
+            menuStatus: "none",
+            scheduleStatus: "none",
+            logoStatus: "none",
+            missingInfo,
+            sourceNotes,
+            debug: buildDebug({
+              classification: "needs_review",
+              classificationReasons: [
+                "identity_conflict_review_required",
+                ...identityDecision.reasons,
+              ],
+            }),
+          });
         }
 
         if (multipleRestaurantStrongMatches) {
