@@ -5,7 +5,7 @@ import type {
   MapBoundsLike,
   MapTrafficCell,
 } from "./map-adapter.types";
-import mealScoutIcon from "@assets/meal-scout-icon.png";
+const mealScoutIcon = "/brand/meal-scout-icon.png";
 import {
   createGoogleMarkerInstance,
   resolveGoogleMarkerRenderer,

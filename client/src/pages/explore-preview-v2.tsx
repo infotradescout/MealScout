@@ -101,7 +101,7 @@ import type {
   MapAdapterMarker,
   MapBoundsLike,
 } from "@/components/maps/map-adapter.types";
-import mealScoutIcon from "@assets/meal-scout-icon.png";
+const mealScoutIcon = "/brand/meal-scout-icon.png";
 import {
   SCOUT_HORIZONTAL_ROW_REGISTRY,
   SCOUT_MIN_MENU_BUSINESS_DIVERSITY,
