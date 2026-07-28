@@ -6096,6 +6096,14 @@ export const pickupOrders = pgTable(
     customerId: varchar("customer_id").references(() => users.id, {
       onDelete: "set null",
     }),
+    promotionSourceRestaurantId: varchar("promotion_source_restaurant_id").references(
+      () => restaurants.id,
+      { onDelete: "set null" },
+    ),
+    promotionAffiliateUserId: varchar("promotion_affiliate_user_id").references(
+      () => users.id,
+      { onDelete: "set null" },
+    ),
     // Guest checkout: customerName / customerEmail / customerPhone are required
     customerName: varchar("customer_name").notNull(),
     customerEmail: varchar("customer_email"),
@@ -6137,6 +6145,9 @@ export const pickupOrders = pgTable(
   (table) => [
     index("idx_pickup_orders_restaurant").on(table.restaurantId),
     index("idx_pickup_orders_customer").on(table.customerId),
+    index("idx_pickup_orders_promotion_source").on(
+      table.promotionSourceRestaurantId,
+    ),
     index("idx_pickup_orders_status").on(table.status),
     index("idx_pickup_orders_created").on(table.createdAt),
     index("idx_pickup_orders_scheduled").on(table.scheduledFor),

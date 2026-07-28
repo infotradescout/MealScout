@@ -577,11 +577,34 @@ export function registerPickupOrderRoutes(app: Express) {
       }
 
       // Insert order
+      const promotionSourceId = String(
+        req.cookies?.crossPromotionSourceId || "",
+      ).trim();
+      let promotionSourceRestaurantId: string | null = null;
+      let promotionAffiliateUserId: string | null = null;
+      if (promotionSourceId && promotionSourceId !== body.restaurantId) {
+        const [promotionSource] = await db
+          .select({
+            id: restaurants.id,
+            ownerId: restaurants.ownerId,
+            isActive: restaurants.isActive,
+          })
+          .from(restaurants)
+          .where(eq(restaurants.id, promotionSourceId))
+          .limit(1);
+        if (promotionSource?.isActive) {
+          promotionSourceRestaurantId = promotionSource.id;
+          promotionAffiliateUserId = promotionSource.ownerId || null;
+        }
+      }
+
       const [order] = await db
         .insert(pickupOrders)
         .values({
           restaurantId: body.restaurantId,
           customerId: req.user?.id ?? null,
+          promotionSourceRestaurantId,
+          promotionAffiliateUserId,
           customerName: body.customerName,
           customerEmail: body.customerEmail ?? null,
           customerPhone: body.customerPhone ?? null,
@@ -693,6 +716,9 @@ export function registerPickupOrderRoutes(app: Express) {
             mealscoutFeeCents: mealscoutFeeCents.toString(),
             processingFeeCents: processingFeeCents.toString(),
             feePaidByBusiness: String(feePaidByBusiness),
+            promotionSourceRestaurantId:
+              promotionSourceRestaurantId || "",
+            promotionAffiliateUserId: promotionAffiliateUserId || "",
           },
           description: `MealScout order at ${restaurant.name}`,
         });

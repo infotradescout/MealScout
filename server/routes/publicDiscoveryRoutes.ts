@@ -43,6 +43,10 @@ import {
   type PublicCrossPromotionCandidate,
 } from "@shared/publicCrossPromotion";
 import {
+  crossPromotionCandidateAllowed,
+  readMerchantCrossPromotionPolicy,
+} from "@shared/merchantCrossPromotion";
+import {
   assertPublicResponseSafe,
   toPublicBarProfile,
   toPublicLocationProfile,
@@ -1117,6 +1121,15 @@ export function registerPublicDiscoveryRoutes(app: Express) {
         },
       });
 
+      if (parsed.actionType === "cross_promotion_click") {
+        res.cookie("crossPromotionSourceId", parsed.profileId, {
+          maxAge: 1000 * 60 * 60 * 24 * 30,
+          httpOnly: true,
+          sameSite: "lax",
+          secure: process.env.NODE_ENV === "production",
+        });
+      }
+
       return res.status(202).json({ ok: true });
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -2011,6 +2024,16 @@ export function registerPublicDiscoveryRoutes(app: Express) {
         .where(eq(users.id, source.ownerId))
         .limit(1);
       const affiliateTag = String(sourceOwner[0]?.affiliateTag || "").trim();
+      const promotionPolicy = readMerchantCrossPromotionPolicy(
+        source.socialAutopostSettings,
+      );
+      if (!promotionPolicy.enabled) {
+        return sendPublicJson(res, {
+          sourceProfileId: id,
+          attributionApplied: false,
+          businesses: [],
+        });
+      }
       const marketConditions = [
         eq(restaurants.isActive, true),
         sql`lower(trim(${restaurants.city})) = ${sourceCity}`,
@@ -2030,7 +2053,11 @@ export function registerPublicDiscoveryRoutes(app: Express) {
       for (const row of rows) {
         if (
           String(row.id) === id ||
-          deriveProfileEvidenceQuarantineVisibility(row).isQuarantined
+          deriveProfileEvidenceQuarantineVisibility(row).isQuarantined ||
+          !crossPromotionCandidateAllowed(
+            promotionPolicy,
+            String(row.id),
+          )
         ) {
           continue;
         }

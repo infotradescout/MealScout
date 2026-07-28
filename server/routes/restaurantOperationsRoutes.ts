@@ -19,6 +19,7 @@ import {
   insertFoodTruckLocationSchema,
   moderationEvents,
   menuItems,
+  pickupOrders,
   requestLogs,
   restaurants,
   socialPostQueue,
@@ -31,6 +32,10 @@ import {
   updateRestaurantMobileSettingsSchema,
   updateRestaurantOperatingHoursSchema,
 } from "@shared/schema";
+import {
+  DEFAULT_MERCHANT_CROSS_PROMOTION_POLICY,
+  readMerchantCrossPromotionPolicy,
+} from "@shared/merchantCrossPromotion";
 import { computeProfileCompletionStatus } from "@shared/profileCompletionStatus";
 import { getBusinessAccessContext } from "../services/businessTeamAccess";
 import { getBusinessVerificationState } from "../services/businessVerificationState";
@@ -150,6 +155,10 @@ export const sanitizeOwnerWorkspaceSettings = (
   }
   if (typeof settings.promptBeforePost === "boolean") {
     safeSettings.promptBeforePost = settings.promptBeforePost;
+  }
+  if (settings.crossPromotion && typeof settings.crossPromotion === "object") {
+    safeSettings.crossPromotion =
+      readMerchantCrossPromotionPolicy(settings);
   }
   return safeSettings;
 };
@@ -423,6 +432,165 @@ export function registerRestaurantOperationsRoutes(
     userType === "duper_admin" ||
     userType === "super_admin" ||
     userType === "staff";
+
+  const assertCrossPromotionAccess = async (req: any, restaurantId: string) => {
+    if (isAdminLikeUserType(req.user?.userType)) return;
+    const isAuthorized = await storage.verifyRestaurantOwnership(
+      restaurantId,
+      req.user.id,
+      "manageProfile",
+    );
+    if (!isAuthorized) {
+      throw Object.assign(new Error("Not authorized to manage this business"), {
+        statusCode: 403,
+      });
+    }
+  };
+
+  app.get(
+    "/api/restaurants/:restaurantId/cross-promotion",
+    isAuthenticated,
+    async (req: any, res) => {
+      try {
+        const { restaurantId } = req.params;
+        await assertCrossPromotionAccess(req, restaurantId);
+        const [restaurant] = await db
+          .select({
+            id: restaurants.id,
+            socialAutopostSettings: restaurants.socialAutopostSettings,
+          })
+          .from(restaurants)
+          .where(eq(restaurants.id, restaurantId))
+          .limit(1);
+        if (!restaurant) {
+          return res.status(404).json({ message: "Business not found" });
+        }
+        return res.json({
+          policy: readMerchantCrossPromotionPolicy(
+            restaurant.socialAutopostSettings,
+          ),
+        });
+      } catch (error: any) {
+        return res
+          .status(error?.statusCode || 500)
+          .json({ message: error?.message || "Unable to load promotion controls" });
+      }
+    },
+  );
+
+  app.patch(
+    "/api/restaurants/:restaurantId/cross-promotion",
+    isAuthenticated,
+    async (req: any, res) => {
+      try {
+        const { restaurantId } = req.params;
+        await assertCrossPromotionAccess(req, restaurantId);
+        const input = z
+          .object({
+            enabled: z.boolean(),
+            approvalMode: z.enum(["automatic", "approved_only"]),
+            approvedBusinessIds: z.array(z.string().trim().min(1)).max(250),
+            excludedBusinessIds: z.array(z.string().trim().min(1)).max(250),
+          })
+          .parse(req.body || DEFAULT_MERCHANT_CROSS_PROMOTION_POLICY);
+        const policy = readMerchantCrossPromotionPolicy({
+          crossPromotion: input,
+        });
+        const updated = await withLockedRestaurantSettings(
+          restaurantId,
+          async (tx, restaurant) => {
+            const settings = asRecord(restaurant.socialAutopostSettings);
+            const [row] = await tx
+              .update(restaurants)
+              .set({
+                socialAutopostSettings: {
+                  ...settings,
+                  crossPromotion: policy,
+                },
+                updatedAt: new Date(),
+              })
+              .where(eq(restaurants.id, restaurantId))
+              .returning({ id: restaurants.id });
+            return row;
+          },
+        );
+        if (!updated) {
+          return res.status(404).json({ message: "Business not found" });
+        }
+        return res.json({ policy });
+      } catch (error: any) {
+        if (error instanceof z.ZodError) {
+          return res.status(400).json({
+            message: "Invalid promotion controls",
+            errors: error.errors,
+          });
+        }
+        return res
+          .status(error?.statusCode || 500)
+          .json({ message: error?.message || "Unable to save promotion controls" });
+      }
+    },
+  );
+
+  app.get(
+    "/api/restaurants/:restaurantId/cross-promotion/report",
+    isAuthenticated,
+    async (req: any, res) => {
+      try {
+        const { restaurantId } = req.params;
+        await assertCrossPromotionAccess(req, restaurantId);
+        const windowDays = String(req.query.window || "30d") === "7d" ? 7 : 30;
+        const since = new Date(Date.now() - windowDays * 24 * 60 * 60 * 1000);
+        const [[clicks], [orders]] = await Promise.all([
+          db
+            .select({
+              count: sql<number>`count(*)`.mapWith(Number),
+            })
+            .from(requestLogs)
+            .where(
+              and(
+                eq(requestLogs.surface, "public_profile"),
+                eq(requestLogs.entityId, restaurantId),
+                sql`${requestLogs.metadata}->>'actionType' = 'cross_promotion_click'`,
+                gte(requestLogs.createdAt, since),
+              ),
+            ),
+          db
+            .select({
+              count: sql<number>`count(*)`.mapWith(Number),
+              completed: sql<number>`count(*) filter (where ${pickupOrders.status} = 'completed')`.mapWith(
+                Number,
+              ),
+              grossCents: sql<number>`coalesce(sum(${pickupOrders.totalCents}) filter (where ${pickupOrders.status} not in ('cancelled')), 0)`.mapWith(
+                Number,
+              ),
+            })
+            .from(pickupOrders)
+            .where(
+              and(
+                eq(pickupOrders.promotionSourceRestaurantId, restaurantId),
+                gte(pickupOrders.createdAt, since),
+              ),
+            ),
+        ]);
+        const clickCount = Number(clicks?.count || 0);
+        const orderCount = Number(orders?.count || 0);
+        return res.json({
+          window: `${windowDays}d`,
+          clicks: clickCount,
+          attributedOrders: orderCount,
+          completedOrders: Number(orders?.completed || 0),
+          attributedGrossCents: Number(orders?.grossCents || 0),
+          clickToOrderRate:
+            clickCount > 0 ? Number((orderCount / clickCount).toFixed(4)) : 0,
+        });
+      } catch (error: any) {
+        return res
+          .status(error?.statusCode || 500)
+          .json({ message: error?.message || "Unable to load promotion report" });
+      }
+    },
+  );
 
   const buildPremiumWeeklySummary = async (userId: string) => {
     const now = new Date();
