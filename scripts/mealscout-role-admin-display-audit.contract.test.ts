@@ -87,8 +87,8 @@ const requiredDashboardSnippets = [
   "profilePath",
   "canonicalMealScoutOrigin",
   'const normalizedPathname = url.pathname.replace(/\\/+$/, "") || "/";',
-  "url.pathname = `${normalizedPathname}/${encodeURIComponent(tag)}`;",
-  'url.searchParams.delete("ref");',
+  "url.pathname = normalizedPathname;",
+  'url.searchParams.set("ref", tag);',
   'url.searchParams.delete("to");',
   "Affiliate Link",
   "Copy Link",
@@ -121,11 +121,10 @@ if (
   !affiliateBuilderSlice.includes("profilePath") ||
   !affiliateBuilderSlice.includes("canonicalMealScoutOrigin") ||
   !affiliateBuilderSlice.includes(
-    "url.pathname = `${normalizedPathname}/${encodeURIComponent(tag)}`;",
+    "url.pathname = normalizedPathname;",
   ) ||
-  !affiliateBuilderSlice.includes('url.searchParams.delete("ref");') ||
+  !affiliateBuilderSlice.includes('url.searchParams.set("ref", tag);') ||
   !affiliateBuilderSlice.includes('url.searchParams.delete("to");') ||
-  affiliateBuilderSlice.includes("?ref=") ||
   affiliateBuilderSlice.includes("/ref/") ||
   affiliateBuilderSlice.includes("to=") ||
   affiliateBuilderSlice.includes("/admin/dashboard") ||
