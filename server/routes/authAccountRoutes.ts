@@ -16,17 +16,25 @@ import {
   uploadToCloudinary,
   isCloudinaryConfigured,
 } from "../imageUpload";
-import { getBusinessAccessContext } from "../services/businessTeamAccess";
+import {
+  getBusinessAccessContext,
+  hasBusinessPermissionForRestaurant,
+} from "../services/businessTeamAccess";
 import { resolveUserContinuation } from "../services/loginContinuation";
 import {
   businessStaffMemberships,
   hosts,
   insertUserAddressSchema,
+  restaurants,
   restaurantSubscriptions,
   suppliers,
 } from "@shared/schema";
 import { resolveEffectiveLocationContext } from "../services/sessionLocationContext";
 import { authLog } from "../utils/authLog";
+import {
+  isMealScoutPlatformHostname,
+  normalizeCustomProfileHostname,
+} from "../services/customProfileDomain";
 
 const FIRST_PARTNER_MESSAGE =
   "As an appreciation of being our first MealScout Partner, 3D Eats now has lifetime free access to all paid features. Keep killin it.";
@@ -295,6 +303,8 @@ const accountSettingsSchema = z.object({
   customDomain: z
     .object({
       hostname: z.string().max(255).optional(),
+      restaurantId: z.string().uuid().optional(),
+      canonicalPath: z.string().max(500).optional(),
       status: z.enum(["unverified", "verified", "mismatch", "error"]).optional(),
       lastCheckedAt: z.string().optional(),
       expectedTarget: z.string().optional(),
@@ -862,13 +872,35 @@ export function registerAuthAccountRoutes(app: Express) {
           hostname: z
             .string()
             .trim()
-            .toLowerCase()
             .regex(/^[a-z0-9.-]+\.[a-z]{2,}$/, "Invalid hostname"),
+          restaurantId: z.string().uuid(),
         });
-        const { hostname } = payloadSchema.parse(req.body || {});
+        const parsed = payloadSchema.parse(req.body || {});
+        const hostname = normalizeCustomProfileHostname(parsed.hostname);
+        if (isMealScoutPlatformHostname(hostname)) {
+          return res
+            .status(400)
+            .json({ message: "Use a domain owned by this business" });
+        }
         const user = await storage.getUser(req.user.id);
         if (!user) {
           return res.status(404).json({ message: "User not found" });
+        }
+        const [restaurant] = await db
+          .select({ id: restaurants.id })
+          .from(restaurants)
+          .where(eq(restaurants.id, parsed.restaurantId))
+          .limit(1);
+        if (!restaurant) {
+          return res.status(404).json({ message: "Business not found" });
+        }
+        const canManageProfile = await hasBusinessPermissionForRestaurant(
+          req.user.id,
+          parsed.restaurantId,
+          "manageProfile",
+        );
+        if (!canManageProfile) {
+          return res.status(403).json({ message: "Business access required" });
         }
 
         const dns = await import("dns/promises");
@@ -908,6 +940,10 @@ export function registerAuthAccountRoutes(app: Express) {
           ...(user.accountSettings || {}),
           customDomain: {
             hostname,
+            restaurantId: parsed.restaurantId,
+            canonicalPath: `/restaurant/${encodeURIComponent(
+              parsed.restaurantId,
+            )}`,
             status,
             lastCheckedAt: new Date().toISOString(),
             expectedTarget,

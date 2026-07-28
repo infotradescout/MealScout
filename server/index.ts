@@ -36,6 +36,7 @@ import { registerAcquisitionPrerenderRoutes } from "./seo/acquisitionPrerender";
 import { registerPublicProfilePrerenderRoutes } from "./seo/publicProfilePrerender";
 import { resolvePublicBusinessSlug } from "./publicProfiles/publicBusinessSlugResolver";
 import { mirrorInfinityTouch } from "./integrations/infinityShadow";
+import { customProfileDomainRootRedirect } from "./services/customProfileDomain";
 
 validateEnv();
 
@@ -952,6 +953,7 @@ app.use((req, res, next) => {
 
   // Crawler-friendly static HTML routes for Facebook/Google compliance
   // MUST be registered before any SPA routing or Vite middleware
+  app.use(customProfileDomainRootRedirect);
   registerAcquisitionPrerenderRoutes(app, canonicalBaseUrl);
   registerPublicProfilePrerenderRoutes(app, canonicalBaseUrl);
 
@@ -1328,4 +1330,3 @@ app.use((req, res, next) => {
     }
   );
 })();
-
