@@ -3240,6 +3240,13 @@ export default function PublicProfilePage() {
               profile={restaurantProfile}
               citySlug={citySlug}
               userFavoriteIds={userFavoriteIds}
+              onCrossPromotionClick={(href) =>
+                trackProfileEvent(
+                  "cross_promotion_click",
+                  "related_profile",
+                  href,
+                )
+              }
             />
           ) : (
             <PublicProfileRelatedDiscoveryLinks

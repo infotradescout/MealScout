@@ -29,6 +29,7 @@ type PersonalizedRelatedRailProps = {
   citySlug?: string | null;
   /** IDs the current user has favorited — used to promote those entries */
   userFavoriteIds?: Set<string>;
+  onCrossPromotionClick?: (href: string) => void;
 };
 
 function typeLabel(profileType: string | null | undefined): string {
@@ -53,6 +54,7 @@ export function PersonalizedRelatedRail({
   relatedBusinesses = [],
   citySlug,
   userFavoriteIds = new Set(),
+  onCrossPromotionClick,
 }: PersonalizedRelatedRailProps) {
   const city = String(profile.city || "").trim();
   if (!city && relatedBusinesses.length === 0) return null;
@@ -93,6 +95,8 @@ export function PersonalizedRelatedRail({
               <a
                 key={biz.id}
                 href={href}
+                onClick={() => onCrossPromotionClick?.(href)}
+                data-analytics-action="cross_promotion_click"
                 className="flex-none w-28 space-y-1.5 group"
               >
                 {/* Avatar */}
