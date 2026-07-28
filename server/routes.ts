@@ -63,6 +63,7 @@ import { registerTruckClaimRoutes } from "./routes/truckClaimRoutes";
 import { registerMenuRoutes } from "./routes/menuRoutes";
 import { registerPickupOrderRoutes } from "./routes/pickupOrderRoutes";
 import { registerMerchantPromotionRoutes } from "./routes/merchantPromotionRoutes";
+import { registerMerchantDeliveryRoutes } from "./routes/merchantDeliveryRoutes";
 import { registerNotificationRoutes } from "./routes/notificationRoutes";
 import { registerHiringRoutes } from "./routes/hiringRoutes";
 import { registerAdminMarketHeatmapRoutes } from "./routes/adminMarketHeatmapRoutes";
@@ -135,6 +136,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     hasBusinessDistributionAccess,
   });
   registerMerchantPromotionRoutes(app);
+  registerMerchantDeliveryRoutes(app);
   registerProfileEvidenceReviewRoutes(app);
 
   registerRestaurantSignupRoutes(app, {

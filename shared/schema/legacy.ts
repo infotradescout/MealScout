@@ -241,6 +241,25 @@ export const restaurants = pgTable("restaurants", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+export const merchantDeliverySettings = pgTable(
+  "merchant_delivery_settings",
+  {
+    restaurantId: varchar("restaurant_id")
+      .primaryKey()
+      .references(() => restaurants.id, { onDelete: "cascade" }),
+    enabled: boolean("enabled").notNull().default(false),
+    feeCents: integer("fee_cents").notNull().default(0),
+    minimumOrderCents: integer("minimum_order_cents").notNull().default(0),
+    estimatedMinutes: integer("estimated_minutes").notNull().default(45),
+    maxConcurrentOrders: integer("max_concurrent_orders").notNull().default(5),
+    postalCodes: jsonb("postal_codes").notNull().default(sql`'[]'::jsonb`),
+    deliveryHours: jsonb("delivery_hours").notNull().default(sql`'{}'::jsonb`),
+    instructions: text("instructions"),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [index("idx_merchant_delivery_enabled").on(table.enabled)],
+);
+
 export const businessStaffInvites = pgTable(
   "business_staff_invites",
   {
@@ -6228,7 +6247,7 @@ export const pickupOrders = pgTable(
     customerEmail: varchar("customer_email"),
     customerPhone: varchar("customer_phone"),
     orderType: varchar("order_type").notNull().default("pickup"),
-    // 'pickup' | 'dine_in'
+    // 'pickup' | 'dine_in' | 'delivery'
     status: varchar("status").notNull().default("pending"),
     // 'pending' | 'confirmed' | 'preparing' | 'ready' | 'completed' | 'cancelled'
     // Pricing (all in cents)
@@ -6248,6 +6267,15 @@ export const pickupOrders = pgTable(
     specialInstructions: text("special_instructions"),
     prepTimeMinutes: integer("prep_time_minutes").default(20),
     scheduledFor: timestamp("scheduled_for"),
+    deliveryAddress: text("delivery_address"),
+    deliveryCity: varchar("delivery_city"),
+    deliveryState: varchar("delivery_state"),
+    deliveryPostalCode: varchar("delivery_postal_code"),
+    deliveryFeeCents: integer("delivery_fee_cents").notNull().default(0),
+    deliveryEstimateMinutes: integer("delivery_estimate_minutes"),
+    deliveryInstructions: text("delivery_instructions"),
+    outForDeliveryAt: timestamp("out_for_delivery_at"),
+    deliveredAt: timestamp("delivered_at"),
     // null = ASAP; future timestamp = pre-order
     confirmedAt: timestamp("confirmed_at"),
     readyAt: timestamp("ready_at"),
@@ -6995,6 +7023,7 @@ export type MenuImportLog = typeof menuImportLogs.$inferSelect;
 export type MenuDraftReview = typeof menuDraftReviews.$inferSelect;
 export type MenuDraftReviewItem = typeof menuDraftReviewItems.$inferSelect;
 export type PickupOrder = typeof pickupOrders.$inferSelect;
+export type MerchantDeliverySettings = typeof merchantDeliverySettings.$inferSelect;
 export type InsertPickupOrder = z.infer<typeof insertPickupOrderSchema>;
 export type PickupOrderItem = typeof pickupOrderItems.$inferSelect;
 export type InsertPickupOrderItem = z.infer<typeof insertPickupOrderItemSchema>;

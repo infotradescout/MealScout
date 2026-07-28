@@ -71,6 +71,12 @@ export type OwnerOrder = {
   customerEmail?: string | null;
   customerPhone?: string | null;
   orderType: "pickup" | "dine_in" | string;
+  deliveryAddress?: string | null;
+  deliveryCity?: string | null;
+  deliveryState?: string | null;
+  deliveryPostalCode?: string | null;
+  deliveryFeeCents?: number | null;
+  deliveryInstructions?: string | null;
   status: string;
   subtotalCents: number;
   platformFeeCents: number;
@@ -100,7 +106,7 @@ type OwnerOrdersWorkspaceProps = {
   view: OwnerOrdersView;
 };
 
-const ACTIVE_STATUSES = ["pending", "confirmed", "preparing", "ready"];
+const ACTIVE_STATUSES = ["pending", "confirmed", "preparing", "ready", "out_for_delivery", "delivered"];
 const CANCELLABLE_STATUSES = ["pending", "confirmed", "preparing"];
 
 const STATUS_DETAILS: Record<
@@ -127,6 +133,16 @@ const STATUS_DETAILS: Record<
     className: "border-emerald-200 bg-emerald-50 text-emerald-800",
     icon: PackageCheck,
   },
+  out_for_delivery: {
+    label: "Out for delivery",
+    className: "border-violet-200 bg-violet-50 text-violet-800",
+    icon: ShoppingBag,
+  },
+  delivered: {
+    label: "Delivered",
+    className: "border-emerald-200 bg-emerald-50 text-emerald-800",
+    icon: PackageCheck,
+  },
   completed: {
     label: "Completed",
     className: "border-stone-200 bg-stone-100 text-stone-700",
@@ -144,6 +160,8 @@ const NEXT_STATUS: Record<string, { status: string; label: string }> = {
   confirmed: { status: "preparing", label: "Start preparing" },
   preparing: { status: "ready", label: "Mark ready" },
   ready: { status: "completed", label: "Complete order" },
+  out_for_delivery: { status: "delivered", label: "Mark delivered" },
+  delivered: { status: "completed", label: "Complete order" },
 };
 
 export function isBusinessOrderOperator(userType: unknown) {
@@ -235,7 +253,10 @@ function OwnerOrderCard({
   isUpdating: boolean;
   compact?: boolean;
 }) {
-  const next = NEXT_STATUS[order.status];
+  const next =
+    order.status === "ready" && order.orderType === "delivery"
+      ? { status: "out_for_delivery", label: "Send out for delivery" }
+      : NEXT_STATUS[order.status];
   const createdAt = new Date(order.createdAt);
   const createdLabel = Number.isNaN(createdAt.getTime())
     ? "Time unavailable"
@@ -322,6 +343,14 @@ function OwnerOrderCard({
           <div className="mt-4 rounded-xl border border-orange-200 bg-orange-50 p-3 text-sm text-orange-950">
             <span className="font-black">Order note:</span>{" "}
             {order.specialInstructions}
+          </div>
+        ) : null}
+
+        {order.orderType === "delivery" ? (
+          <div className="mt-4 rounded-xl border border-violet-200 bg-violet-50 p-3 text-sm text-violet-950">
+            <p className="font-black">Deliver to</p>
+            <p>{[order.deliveryAddress, order.deliveryCity, order.deliveryState, order.deliveryPostalCode].filter(Boolean).join(", ")}</p>
+            {order.deliveryInstructions ? <p className="mt-1 text-xs">{order.deliveryInstructions}</p> : null}
           </div>
         ) : null}
 
@@ -531,7 +560,7 @@ export default function OwnerOrdersWorkspace({ view }: OwnerOrdersWorkspaceProps
       id: "ready",
       title: "Ready",
       icon: PackageCheck,
-      orders: orders.filter((order) => order.status === "ready"),
+      orders: orders.filter((order) => ["ready", "out_for_delivery", "delivered"].includes(order.status)),
     },
   ];
 
