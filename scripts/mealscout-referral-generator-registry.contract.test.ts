@@ -36,7 +36,7 @@ const registry: RegistryEntry[] = [
     label: "Profile",
     source: profilePage,
     requiredSnippets: [
-      "`${window.location.origin}/directory/${encodeURIComponent(",
+      "`${window.location.origin}/directory?ref=${encodeURIComponent(",
       "handleCopyAffiliateLink",
     ],
   },
@@ -45,8 +45,7 @@ const registry: RegistryEntry[] = [
     source: adminDashboard,
     requiredSnippets: [
       "const buildCanonicalAffiliateLink = (",
-      "url.pathname = `${normalizedPathname}/${encodeURIComponent(tag)}`;",
-      'url.searchParams.delete("ref");',
+      'url.searchParams.set("ref", tag);',
       'url.searchParams.delete("to");',
     ],
   },
@@ -54,7 +53,7 @@ const registry: RegistryEntry[] = [
     label: "Admin Affiliate Management",
     source: adminAffiliateManagement,
     requiredSnippets: [
-      "return `${origin}/directory/${encodedTag}`;",
+      "return `${origin}/directory?ref=${encodedTag}`;",
       "const getAffiliateLink = (tag: string | null) =>",
     ],
   },
