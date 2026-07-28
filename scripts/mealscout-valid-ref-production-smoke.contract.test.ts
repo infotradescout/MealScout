@@ -57,20 +57,18 @@ assert(
 
 assert(
   runner.includes('shareLink.startsWith("https://www.mealscout.us/")') &&
-    runner.includes('generatedUrl.pathname.split("/").filter(Boolean)') &&
-    runner.includes("generatedBasePath === expectedBasePath") &&
+    runner.includes("generatedUrl.pathname === expectedBasePath") &&
     runner.includes(
       "generatedTag.trim().toLowerCase() === expectedTag.toLowerCase()",
     ) &&
     runner.includes('generatedUrl.searchParams.has("to")') &&
-    runner.includes('generatedUrl.searchParams.has("ref")') &&
+    runner.includes('generatedUrl.searchParams.get("ref")') &&
     runner.includes('shareLink.includes("%2F")') &&
-    runner.includes('shareLink.includes("?ref=")') &&
     runner.includes(
       "!/^https:\\/\\/meal-scout\\.vercel\\.app\\//i.test(shareLink)",
     ) &&
     runner.includes("!/\\/ref\\//i.test(shareLink)"),
-  "Valid-ref runner must require canonical host and direct clean path-segment ref links without nested destination params.",
+  "Valid-ref runner must require canonical host and direct query ref links without nested destination params.",
 );
 
 assert(
