@@ -62,6 +62,7 @@ import { registerStripeWebhookRoutes } from "./routes/stripeWebhookRoutes";
 import { registerTruckClaimRoutes } from "./routes/truckClaimRoutes";
 import { registerMenuRoutes } from "./routes/menuRoutes";
 import { registerPickupOrderRoutes } from "./routes/pickupOrderRoutes";
+import { registerMerchantPromotionRoutes } from "./routes/merchantPromotionRoutes";
 import { registerNotificationRoutes } from "./routes/notificationRoutes";
 import { registerHiringRoutes } from "./routes/hiringRoutes";
 import { registerAdminMarketHeatmapRoutes } from "./routes/adminMarketHeatmapRoutes";
@@ -133,6 +134,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     validateAnalyticsAccess,
     hasBusinessDistributionAccess,
   });
+  registerMerchantPromotionRoutes(app);
   registerProfileEvidenceReviewRoutes(app);
 
   registerRestaurantSignupRoutes(app, {

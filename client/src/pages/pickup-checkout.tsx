@@ -226,6 +226,10 @@ export default function CheckoutPage() {
         customerPhone: contact.phone.trim() || undefined,
         orderType,
         paymentMethod,
+        promotionToken:
+          window.localStorage.getItem(
+            `mealscout:promotion:${restaurantId}`,
+          ) || undefined,
         items: cart.map((i) => ({
           menuItemId: i.menuItemId,
           quantity: i.quantity,

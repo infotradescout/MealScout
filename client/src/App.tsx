@@ -32,6 +32,7 @@ const Search = lazy(() => import("@/pages/search"));
 const ReviewsPage = lazy(() => import("@/pages/reviews"));
 const Favorites = lazy(() => import("@/pages/favorites"));
 const Orders = lazy(() => import("@/pages/orders"));
+const MerchantPromotions = lazy(() => import("@/pages/merchant-promotions"));
 const Profile = lazy(() => import("@/pages/profile"));
 const AdminLogin = lazy(() => import("@/pages/admin-login"));
 const AdminDashboard = lazy(() => import("@/pages/admin-dashboard"));
@@ -343,6 +344,7 @@ function GuestProtectedRoutes() {
       <Route path="/truck-discovery" component={RedirectToLogin} />
       <Route path="/supply/orders" component={RedirectToLogin} />
       <Route path="/orders" component={RedirectToLogin} />
+      <Route path="/merchant-promotions" component={RedirectToLogin} />
       <Route path="/profile" component={RedirectToLogin} />
       <Route path="/profile/notifications" component={RedirectToLogin} />
       <Route path="/settings" component={RedirectToLogin} />
@@ -591,6 +593,7 @@ function Router() {
             <Route path="/supply/orders" component={SupplyOrdersPage} />
             <Route path="/favorites" component={Favorites} />
             <Route path="/orders" component={Orders} />
+            <Route path="/merchant-promotions" component={MerchantPromotions} />
             <Route path="/profile" component={Profile} />
             <Route
               path="/supplier/dashboard"
@@ -753,4 +756,3 @@ function App() {
 }
 
 export default App;
-

@@ -57,6 +57,10 @@ import { emailService } from "../emailService";
 import { sendSms } from "../smsService";
 import { distributedRateLimit } from "../middleware/distributedRateLimit";
 import { getWebSocketServer } from "../websocket";
+import {
+  consumePromotionAttribution,
+  updatePromotedOrderCommissionStatus,
+} from "../services/merchantPromotionService";
 
 const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY)
@@ -393,6 +397,7 @@ export function registerPickupOrderRoutes(app: Express) {
           .max(50),
         specialInstructions: z.string().max(500).optional().nullable(),
         scheduledFor: z.string().datetime().optional().nullable(),
+        promotionToken: z.string().max(200).optional().nullable(),
       });
 
       const body = bodySchema.parse(req.body);
@@ -597,6 +602,17 @@ export function registerPickupOrderRoutes(app: Express) {
           scheduledFor: body.scheduledFor ? new Date(body.scheduledFor) : null,
         })
         .returning();
+
+      if (body.promotionToken) {
+        await consumePromotionAttribution({
+          token: body.promotionToken,
+          orderId: order.id,
+          targetRestaurantId: body.restaurantId,
+          customerUserId: req.user?.id ?? null,
+          eligibleOrderCents: subtotalCents,
+          commissionEligible: body.paymentMethod === "card",
+        });
+      }
 
       // Insert line items
       await db
@@ -999,6 +1015,7 @@ export function registerPickupOrderRoutes(app: Express) {
 
       // Emit LISA claims for terminal status transitions
       if (status === ORDER_STATUS.COMPLETED) {
+        await updatePromotedOrderCommissionStatus(order.id, "completed");
         db.insert(lisaClaims).values({
           app: "mealscout",
           claimType: LISA_CLAIM_TYPES.ORDER_COMPLETED,
@@ -1010,6 +1027,7 @@ export function registerPickupOrderRoutes(app: Express) {
           payload: { totalCents: updated.totalCents, orderType: updated.orderType },
         }).catch(() => {});
       } else if (status === ORDER_STATUS.CANCELLED) {
+        await updatePromotedOrderCommissionStatus(order.id, "cancelled");
         db.insert(lisaClaims).values({
           app: "mealscout",
           claimType: LISA_CLAIM_TYPES.ORDER_CANCELLED,

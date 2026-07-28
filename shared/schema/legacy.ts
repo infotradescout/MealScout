@@ -6077,6 +6077,133 @@ export const menuDraftReviewItems = pgTable(
   ],
 );
 
+// ── MERCHANT-CONTROLLED CROSS-PROMOTION ──────────────────────────────────────
+
+export const merchantPromotionPolicies = pgTable(
+  "merchant_promotion_policies",
+  {
+    restaurantId: varchar("restaurant_id")
+      .primaryKey()
+      .references(() => restaurants.id, { onDelete: "cascade" }),
+    enabled: boolean("enabled").notNull().default(true),
+    approvalMode: varchar("approval_mode").notNull().default("automatic"),
+    updatedByUserId: varchar("updated_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+);
+
+export const merchantPromotionPartners = pgTable(
+  "merchant_promotion_partners",
+  {
+    sourceRestaurantId: varchar("source_restaurant_id")
+      .notNull()
+      .references(() => restaurants.id, { onDelete: "cascade" }),
+    targetRestaurantId: varchar("target_restaurant_id")
+      .notNull()
+      .references(() => restaurants.id, { onDelete: "cascade" }),
+    status: varchar("status").notNull(),
+    commissionBps: integer("commission_bps").notNull().default(0),
+    targetApprovedAt: timestamp("target_approved_at"),
+    updatedByUserId: varchar("updated_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({
+      columns: [table.sourceRestaurantId, table.targetRestaurantId],
+    }),
+    index("idx_promotion_partners_target").on(
+      table.targetRestaurantId,
+      table.status,
+    ),
+  ],
+);
+
+export const promotionAttributions = pgTable(
+  "promotion_attributions",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    tokenHash: varchar("token_hash").notNull().unique(),
+    sourceRestaurantId: varchar("source_restaurant_id")
+      .notNull()
+      .references(() => restaurants.id, { onDelete: "cascade" }),
+    targetRestaurantId: varchar("target_restaurant_id")
+      .notNull()
+      .references(() => restaurants.id, { onDelete: "cascade" }),
+    affiliateUserId: varchar("affiliate_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    sessionId: varchar("session_id"),
+    customerUserId: varchar("customer_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    orderId: varchar("order_id").unique(),
+    clickedAt: timestamp("clicked_at").notNull().defaultNow(),
+    expiresAt: timestamp("expires_at").notNull(),
+    convertedAt: timestamp("converted_at"),
+  },
+  (table) => [
+    index("idx_promotion_attributions_source").on(
+      table.sourceRestaurantId,
+      table.clickedAt,
+    ),
+    index("idx_promotion_attributions_target").on(
+      table.targetRestaurantId,
+      table.clickedAt,
+    ),
+  ],
+);
+
+export const promotedOrderCommissions = pgTable(
+  "promoted_order_commissions",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    orderId: varchar("order_id").notNull().unique(),
+    attributionId: varchar("attribution_id")
+      .notNull()
+      .unique()
+      .references(() => promotionAttributions.id, { onDelete: "cascade" }),
+    sourceRestaurantId: varchar("source_restaurant_id")
+      .notNull()
+      .references(() => restaurants.id, { onDelete: "cascade" }),
+    targetRestaurantId: varchar("target_restaurant_id")
+      .notNull()
+      .references(() => restaurants.id, { onDelete: "cascade" }),
+    affiliateUserId: varchar("affiliate_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    commissionBps: integer("commission_bps").notNull(),
+    eligibleOrderCents: integer("eligible_order_cents").notNull(),
+    amountCents: integer("amount_cents").notNull(),
+    status: varchar("status").notNull().default("pending"),
+    eligibleAt: timestamp("eligible_at"),
+    reversedAt: timestamp("reversed_at"),
+    paidAt: timestamp("paid_at"),
+    reversalReason: text("reversal_reason"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_promoted_commissions_affiliate").on(
+      table.affiliateUserId,
+      table.status,
+    ),
+    index("idx_promoted_commissions_source").on(
+      table.sourceRestaurantId,
+      table.createdAt,
+    ),
+  ],
+);
+
 // ── PICKUP ORDERS ────────────────────────────────────────────────────────────
 
 /**
