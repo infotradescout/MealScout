@@ -336,7 +336,7 @@ export default function ProfilePage() {
 
   const handleCopyAffiliateLink = async () => {
     if (!affiliateTag) return;
-    const shareUrl = `${window.location.origin}/directory/${encodeURIComponent(
+    const shareUrl = `${window.location.origin}/directory?ref=${encodeURIComponent(
       affiliateTag,
     )}`;
     try {
@@ -801,4 +801,3 @@ export default function ProfilePage() {
     </div>
   );
 }
-
