@@ -34,8 +34,14 @@ import {
   supplierProducts,
   suppliers,
   truckImportListings,
+  users,
   videoStories,
 } from "@shared/schema";
+import { buildCleanAffiliateBusinessPath } from "@shared/cleanAffiliateLinks";
+import {
+  rankPublicCrossPromotions,
+  type PublicCrossPromotionCandidate,
+} from "@shared/publicCrossPromotion";
 import {
   assertPublicResponseSafe,
   toPublicBarProfile,
@@ -57,6 +63,7 @@ import { isSlotPublic } from "../services/publicSlotGate";
 import { canExposeAnonymousEventDetail } from "../publicProfiles/publicEventDetailAccess";
 import { buildPublicProfilePath } from "../publicProfiles/publicProfileUtils";
 import { isAuthenticated } from "../unifiedAuth";
+import { deriveProfileEvidenceQuarantineVisibility } from "../services/profileEvidenceQuarantine";
 
 const toSlug = (value: string | null | undefined) =>
   String(value || "")
@@ -173,6 +180,7 @@ const PUBLIC_PROFILE_ANALYTICS_ACTIONS = new Set([
   "qr_specials_open",
   "catering_click",
   "truck_booking_click",
+  "cross_promotion_click",
 ]);
 
 const PUBLIC_PROFILE_ANALYTICS_SOURCES = new Set([
@@ -185,6 +193,7 @@ const PUBLIC_PROFILE_ANALYTICS_SOURCES = new Set([
   "discovery_cuisine",
   "discovery_locations_with_trucks",
   "owner_dashboard_preview",
+  "profile_cross_promotion",
   "unknown",
 ]);
 
@@ -1964,6 +1973,118 @@ export function registerPublicDiscoveryRoutes(app: Express) {
     } catch (error) {
       console.error("Error fetching public canonical entity:", error);
       res.status(500).json({ message: "Failed to fetch canonical entity" });
+    }
+  });
+
+  app.get("/api/public/profiles/:entity/:id/related", async (req, res) => {
+    try {
+      const entity = normalizePublicProfileEntity(req.params.entity);
+      const id = String(req.params.id || "").trim();
+      if (!["restaurant", "truck", "bar"].includes(entity) || !id) {
+        return res.status(400).json({ message: "Invalid profile target" });
+      }
+
+      const source = await storage.getRestaurant(id);
+      if (!source || !source.isActive) {
+        return res.status(404).json({ message: "Profile not found" });
+      }
+      if (entity === "truck" && !isTruckRestaurantRow(source)) {
+        return res.status(404).json({ message: "Profile not found" });
+      }
+      if (entity === "bar" && !isBarBusinessType(source.businessType)) {
+        return res.status(404).json({ message: "Profile not found" });
+      }
+
+      const sourceCity = String(source.city || "").trim().toLowerCase();
+      const sourceState = String(source.state || "").trim().toLowerCase();
+      if (!sourceCity) {
+        return sendPublicJson(res, {
+          sourceProfileId: id,
+          attributionApplied: false,
+          businesses: [],
+        });
+      }
+
+      const sourceOwner = await db
+        .select({ affiliateTag: users.affiliateTag })
+        .from(users)
+        .where(eq(users.id, source.ownerId))
+        .limit(1);
+      const affiliateTag = String(sourceOwner[0]?.affiliateTag || "").trim();
+      const marketConditions = [
+        eq(restaurants.isActive, true),
+        sql`lower(trim(${restaurants.city})) = ${sourceCity}`,
+      ];
+      if (sourceState) {
+        marketConditions.push(
+          sql`lower(trim(${restaurants.state})) = ${sourceState}`,
+        );
+      }
+      const rows = await db
+        .select()
+        .from(restaurants)
+        .where(and(...marketConditions))
+        .limit(32);
+
+      const candidates: PublicCrossPromotionCandidate[] = [];
+      for (const row of rows) {
+        if (
+          String(row.id) === id ||
+          deriveProfileEvidenceQuarantineVisibility(row).isQuarantined
+        ) {
+          continue;
+        }
+
+        const profileType = isTruckRestaurantRow(row)
+          ? "truck"
+          : isBarBusinessType(row.businessType)
+            ? "bar"
+            : "restaurant";
+        const profilePath = await resolveUniqueCleanBusinessPathForEntity({
+          entityType: profileType,
+          id: String(row.id),
+          name: String(row.name || row.id),
+        });
+        if (!profilePath) continue;
+        const attributedProfilePath =
+          buildCleanAffiliateBusinessPath(profilePath, affiliateTag) ||
+          profilePath;
+
+        candidates.push({
+          id: String(row.id),
+          name: String(row.name || "Local food"),
+          profileType,
+          cuisineType: row.cuisineType ? String(row.cuisineType) : null,
+          city: row.city ? String(row.city) : null,
+          state: row.state ? String(row.state) : null,
+          logoUrl: row.logoUrl ? String(row.logoUrl) : null,
+          coverImageUrl: row.coverImageUrl
+            ? String(row.coverImageUrl)
+            : null,
+          profilePath,
+          attributedProfilePath,
+          attributionApplied: attributedProfilePath !== profilePath,
+        });
+      }
+
+      const businesses = rankPublicCrossPromotions(
+        { id, cuisineType: source.cuisineType },
+        candidates,
+        8,
+      );
+      res.setHeader("Cache-Control", "public, max-age=300");
+      return sendPublicJson(res, {
+        sourceProfileId: id,
+        attributionApplied: businesses.some(
+          (business) => business.attributionApplied,
+        ),
+        businesses,
+      });
+    } catch (error) {
+      console.error("[public-profile] related businesses error:", error);
+      return res
+        .status(500)
+        .json({ message: "Unable to load related businesses" });
     }
   });
 
