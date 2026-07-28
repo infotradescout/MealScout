@@ -281,13 +281,11 @@ function normalizeShareTargetPath(input: string): string {
 
 function parseCanonicalGeneratedLink(generatedLink: string, expectedTag: string) {
   const url = new URL(generatedLink);
-  const parts = url.pathname.split("/").filter(Boolean);
-  if (parts.length < 2) {
-    throw new Error("Generated referral link is missing canonical path-segment attribution.");
+  const tag = String(url.searchParams.get("ref") || "").trim();
+  const basePath = url.pathname;
+  if (!tag) {
+    throw new Error("Generated referral link is missing canonical query attribution.");
   }
-
-  const tag = decodeURIComponent(String(parts[parts.length - 1] || "")).trim();
-  const basePath = `/${parts.slice(0, -1).join("/")}`;
 
   if (tag.toLowerCase() !== expectedTag.toLowerCase()) {
     throw new Error("Generated referral link does not use the expected affiliate tag.");
