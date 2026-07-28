@@ -29,7 +29,7 @@ import { getDishCategoryPhoto } from "@/lib/dishCategoryPhoto";
 import { ProfileFavoriteButton } from "./ProfileFavoriteButton";
 import { ProfileRecommendButton } from "./ProfileRecommendButton";
 import { getTruckSchedulePrimaryStop } from "./truckScheduleTruth";
-import { MapPin } from "lucide-react";
+import { CalendarDays, Clock3, MapPin, Navigation } from "lucide-react";
 
 type ElevatedTruckHeroProps = {
   profile: PublicRestaurantProfile & {
@@ -117,6 +117,16 @@ export function ElevatedTruckHero({
     : getDishCategoryPhoto(profile.displayName, ...(profile.cuisineTags ?? []));
 
   const primaryStop = getTruckSchedulePrimaryStop(profile.truckSchedule);
+  const stop = primaryStop.stop;
+  const stopName = String(
+    stop?.locationName || stop?.addressPublicLabel || "",
+  ).trim();
+  const stopTiming = [stop?.date, stop?.timeWindowLabel]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean)
+    .join(" · ");
+  const directionsHref = String(stop?.directionsUrl || "").trim();
+  const hasActionableStop = primaryStop.kind !== "empty" && Boolean(stop);
 
   const cuisineSummary = cleanCuisineTags(profile.cuisineTags).join(" · ");
   const description = isGenericTruckDescription(profile.description, profile)
@@ -186,11 +196,78 @@ export function ElevatedTruckHero({
           </p>
         ) : null}
 
-        <ProfileRecommendButton
-          restaurantId={profile.id}
-          isAuthenticated={isAuthenticated}
-          profilePath={profile.profilePath}
-        />
+        {hasActionableStop ? (
+          <div
+            className="rounded-2xl border border-orange-200 bg-gradient-to-br from-orange-50 to-amber-50 p-4"
+            data-testid="truck-hero-primary-stop"
+          >
+            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-orange-800">
+              {primaryStop.label}
+            </p>
+            <p className="mt-1.5 text-lg font-black text-stone-950">
+              {stopName || "Location details posted"}
+            </p>
+            {stopTiming ? (
+              <p className="mt-1.5 flex items-center gap-2 text-sm font-semibold text-stone-700">
+                <Clock3 className="h-4 w-4 shrink-0 text-orange-700" />
+                {stopTiming}
+              </p>
+            ) : null}
+            {stop?.addressPublicLabel &&
+            stop.addressPublicLabel !== stopName ? (
+              <p className="mt-1.5 flex items-start gap-2 text-sm text-stone-600">
+                <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-orange-700" />
+                {stop.addressPublicLabel}
+              </p>
+            ) : null}
+            <div className="mt-3 flex flex-wrap gap-2">
+              {directionsHref ? (
+                <a
+                  href={directionsHref}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex min-h-10 items-center gap-2 rounded-full bg-orange-600 px-4 py-2 text-sm font-black text-white hover:bg-orange-700"
+                  data-analytics-action="directions_click"
+                  data-analytics-target-type="truck_stop"
+                >
+                  <Navigation className="h-4 w-4" />
+                  Get directions
+                </a>
+              ) : null}
+              <a
+                href="#truck-schedule"
+                className="inline-flex min-h-10 items-center gap-2 rounded-full border border-orange-300 bg-white px-4 py-2 text-sm font-black text-orange-900 hover:bg-orange-50"
+              >
+                <CalendarDays className="h-4 w-4" />
+                Full schedule
+              </a>
+            </div>
+          </div>
+        ) : (
+          <a
+            href="#truck-schedule"
+            className="flex min-h-11 items-center justify-between gap-3 rounded-2xl border border-dashed border-orange-300 bg-orange-50/70 px-4 py-3 text-sm font-bold text-orange-950 hover:bg-orange-50"
+          >
+            <span>Schedule not posted yet</span>
+            <span className="inline-flex items-center gap-1 text-orange-700">
+              Follow updates <CalendarDays className="h-4 w-4" />
+            </span>
+          </a>
+        )}
+
+        <div className="flex flex-wrap items-center gap-3">
+          <ProfileRecommendButton
+            restaurantId={profile.id}
+            isAuthenticated={isAuthenticated}
+            profilePath={profile.profilePath}
+          />
+          <a
+            href="#menu"
+            className="text-sm font-black text-orange-700 hover:text-orange-900"
+          >
+            See what they serve
+          </a>
+        </div>
       </div>
     </section>
   );
