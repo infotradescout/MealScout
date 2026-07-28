@@ -62,7 +62,7 @@ assert.equal(
 );
 assert.equal(
   buildTrackedAttributedPath("traci", "/request/start"),
-  "/request/start/traci",
+  "/request/start?ref=traci",
 );
 
 const shareUrl = generateShareableUrl(
@@ -72,7 +72,7 @@ const shareUrl = generateShareableUrl(
 );
 assert.equal(
   shareUrl,
-  "https://www.mealscout.us/contractors/bobs-roofing/traci",
+  "https://www.mealscout.us/contractors/bobs-roofing?ref=traci",
 );
 
 assert.throws(() =>

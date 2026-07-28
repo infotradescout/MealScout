@@ -19,8 +19,8 @@ for (const target of canonicalTargets) {
   const path = buildTrackedAttributedPath(TAG, target);
   assert.equal(
     path,
-    `${target}/${encodeURIComponent(TAG)}`,
-    `Canonical generated link must be direct for ${target}.`,
+    `${target}?ref=${encodeURIComponent(TAG)}`,
+    `Canonical generated link must use direct query attribution for ${target}.`,
   );
 
   assert.equal(
@@ -46,7 +46,7 @@ const signupWithRole = buildTrackedAttributedPath(
 );
 assert.equal(
   signupWithRole,
-  "/customer-signup/alpha-tag",
+  "/customer-signup?ref=alpha-tag",
   "Generated signup links must not keep role=business when canonicalizing.",
 );
 
@@ -57,8 +57,8 @@ const directoryUrl = buildTrackedAttributedUrl(
 );
 assert.equal(
   directoryUrl,
-  "https://www.mealscout.us/directory/alpha-tag",
-  "Canonical generated absolute URL must use path-segment attribution.",
+  "https://www.mealscout.us/directory?ref=alpha-tag",
+  "Canonical generated absolute URL must use query attribution.",
 );
 
 const legacyCompatible = buildUniversalAttributedPath(TAG, "/claim-truck");

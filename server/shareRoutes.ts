@@ -290,7 +290,7 @@ export default function setupShareRoutes(app: Express) {
       res.json({
         shareLink,
         shortPath: finalShareTarget,
-        attributionPath: `/ref/${encodeURIComponent(attribution.attributionKey)}`,
+        attributionPath: `?ref=${encodeURIComponent(attribution.attributionKey)}`,
         attributionMode: attribution.attributionMode,
         message: "Share link generated",
       });

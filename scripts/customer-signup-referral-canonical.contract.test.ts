@@ -12,8 +12,8 @@ const canonicalBusinessPath = buildTrackedAttributedPath(
 );
 assert.equal(
   canonicalBusinessPath,
-  "/customer-signup/efpjv02e",
-  "Business signup links must be simplified to canonical /customer-signup/<code> format when role is not required.",
+  "/customer-signup?ref=efpjv02e",
+  "Business signup links must be simplified to canonical /customer-signup?ref=<code> format when role is not required.",
 );
 assert.equal(
   canonicalBusinessPath.includes("/ref/"),
@@ -32,8 +32,8 @@ const canonicalSignupPath = buildTrackedAttributedPath(
 );
 assert.equal(
   canonicalSignupPath,
-  "/customer-signup/efpjv02e",
-  "Signup links without role must append referral code as the final path segment.",
+  "/customer-signup?ref=efpjv02e",
+  "Signup links without role must use the direct ref query parameter.",
 );
 
 const canonicalUrl = buildTrackedAttributedUrl(
@@ -43,7 +43,7 @@ const canonicalUrl = buildTrackedAttributedUrl(
 );
 assert.equal(
   canonicalUrl,
-  "https://mealscout.us/customer-signup/efpjv02e",
+  "https://mealscout.us/customer-signup?ref=efpjv02e",
   "Canonical signup share URL must be direct and not wrapped.",
 );
 
@@ -54,8 +54,8 @@ const universalNonSignup = buildTrackedAttributedUrl(
 );
 assert.equal(
   universalNonSignup,
-  "https://mealscout.us/claim-truck/efpjv02e",
-  "Non-signup paths should also use direct clean path-segment ref links.",
+  "https://mealscout.us/claim-truck?ref=efpjv02e",
+  "Non-signup paths should also use direct query ref links.",
 );
 assert.equal(
   universalNonSignup.includes("/ref/"),

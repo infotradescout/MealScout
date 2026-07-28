@@ -208,9 +208,9 @@ const buildCanonicalAffiliateLink = (
   if (!profilePath || profilePath === "/") return null;
   const url = new URL(profilePath, canonicalMealScoutOrigin);
   const normalizedPathname = url.pathname.replace(/\/+$/, "") || "/";
-  url.pathname = `${normalizedPathname}/${encodeURIComponent(tag)}`;
-  url.searchParams.delete("ref");
+  url.pathname = normalizedPathname;
   url.searchParams.delete("to");
+  url.searchParams.set("ref", tag);
   return url.toString();
 };
 

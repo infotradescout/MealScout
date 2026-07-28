@@ -34,9 +34,9 @@ Doctrine note: Affiliate is not a standalone user role. Affiliate sharing is an 
 
 - The admin user card includes an `Affiliate Management` section.
 - The primary user-facing link label remains `Affiliate Link`.
-- The canonical primary affiliate link uses direct attribution: `https://www.mealscout.us/<public-profile-path>/<affiliateTag>`.
-- `Copy Link` and `Open Link` use direct public profile links with clean path referral tags, not `/admin/dashboard`.
-- Public truck, restaurant, or location profile URLs are shared directly with path-segment referral attribution.
+- The canonical primary affiliate link uses direct attribution: `https://www.mealscout.us/<public-profile-path>?ref=<affiliateTag>`.
+- `Copy Link` and `Open Link` use direct public profile links with query referral tags, not `/admin/dashboard`.
+- Public truck, restaurant, or location profile URLs are shared directly with query referral attribution.
 - For eligible users without a tag, the card shows `No affiliate link assigned`.
 - For internal admin-family accounts, the card shows `Not applicable for internal admin accounts.` and hides public `Copy Link` / `Open Link` controls.
 - The internal admin focus URL is not copied from the user card.

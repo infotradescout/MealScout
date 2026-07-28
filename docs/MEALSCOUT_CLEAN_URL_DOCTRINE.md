@@ -64,7 +64,7 @@ Invalid/default affiliate tags such as `userNNNN` must remain rejected.
 
 ## Affiliate Stage Rule
 
-The current branch preserves clean path-segment attribution and rejects invalid/default tags, but it does not yet satisfy the final no-ID affiliate URL end state because Stage 1 public profile routes still use `slug--id` migration paths.
+The current branch emits direct `?ref=` attribution and rejects invalid/default tags, but it does not yet satisfy the final no-ID affiliate URL end state because Stage 1 public profile routes still use `slug--id` migration paths.
 
 That means:
 

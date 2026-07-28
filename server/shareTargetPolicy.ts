@@ -37,14 +37,13 @@ export function buildUniversalAttributedPath(
 
 function sanitizeTrackedTargetPath(targetPath: string): {
   pathname: string;
-  search: string;
+  searchParams: URLSearchParams;
   hash: string;
 } {
   const parsed = new URL(targetPath, "https://www.mealscout.us");
 
-  // Direct tracked links never use nested destination params.
+  // Direct tracked links never use nested destination params or stale refs.
   parsed.searchParams.delete("to");
-  // Canonical generated links use path-segment refs, not query refs.
   parsed.searchParams.delete("ref");
 
   // Canonical signup sharing should stay clean unless a role is truly required.
@@ -57,7 +56,7 @@ function sanitizeTrackedTargetPath(targetPath: string): {
 
   return {
     pathname: parsed.pathname.replace(/\/+$/, "") || "/",
-    search: parsed.search,
+    searchParams: parsed.searchParams,
     hash: parsed.hash,
   };
 }
@@ -74,8 +73,9 @@ function buildDirectAttributedPath(
   if (sanitized.pathname === "/") {
     throw new Error("Invalid share target");
   }
-  const encodedTag = encodeURIComponent(normalizedTag);
-  return `${sanitized.pathname}/${encodedTag}${sanitized.search}${sanitized.hash}`;
+  sanitized.searchParams.set("ref", normalizedTag);
+  const search = sanitized.searchParams.toString();
+  return `${sanitized.pathname}${search ? `?${search}` : ""}${sanitized.hash}`;
 }
 
 export function buildTrackedAttributedPath(

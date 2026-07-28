@@ -336,27 +336,18 @@ async function main(): Promise<void> {
       ) {
         normalizedTarget.searchParams.delete("role");
       }
-      const generatedParts = generatedUrl.pathname.split("/").filter(Boolean);
-      const generatedTag =
-        generatedParts.length >= 2
-          ? decodeURIComponent(generatedParts[generatedParts.length - 1] || "")
-          : "";
-      const generatedBasePath =
-        generatedParts.length >= 2
-          ? `/${generatedParts.slice(0, -1).join("/")}`
-          : "";
+      const generatedTag = String(
+        generatedUrl.searchParams.get("ref") || "",
+      ).trim();
       const passed =
         generated.status === 200 &&
         shareLink.startsWith("https://www.mealscout.us/") &&
-        generatedBasePath === expectedBasePath &&
+        generatedUrl.pathname === expectedBasePath &&
         generatedTag.trim().toLowerCase() === expectedTag.toLowerCase() &&
-        generatedUrl.search === normalizedTarget.search &&
         generatedUrl.hash === normalizedTarget.hash &&
         !generatedUrl.searchParams.has("to") &&
-        !generatedUrl.searchParams.has("ref") &&
         !/\/ref\//i.test(shareLink) &&
         !shareLink.includes("%2F") &&
-        !shareLink.includes("?ref=") &&
         !/\/ref\/([^/?#]+)[^#]*[?&]ref=\1(?:&|#|$)/i.test(shareLink) &&
         !/^https:\/\/meal-scout\.vercel\.app\//i.test(shareLink);
       evidence.checks.push({
