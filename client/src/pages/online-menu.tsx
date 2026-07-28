@@ -42,8 +42,7 @@ import {
   MapPin,
 } from "lucide-react";
 
-const formatMoney = (cents: number) =>
-  `$${(Number(cents || 0) / 100).toFixed(2)}`;
+const formatMoney = (cents: number) => `$${(cents / 100).toFixed(2)}`;
 
 // ─────────────────────────────────── types ────────────────────────────────────
 interface Variant {
@@ -66,7 +65,7 @@ interface MenuItem {
   id: string;
   name: string;
   description: string | null;
-  priceCents: number;
+  priceCents: number | null;
   itemType: "food" | "merchandise";
   imageUrl: string | null;
   isAvailable: boolean;
@@ -631,7 +630,9 @@ function MenuItemCard({
         )}
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <span className="text-sm font-black text-[color:var(--profile-ink)]">
-            {formatMoney(item.priceCents)}
+            {item.priceCents === null
+              ? "Price unavailable"
+              : formatMoney(item.priceCents)}
           </span>
           {item.itemType !== "merchandise" && item.calories && (
             <span className="text-xs font-bold text-[color:var(--profile-muted)]">
@@ -647,7 +648,7 @@ function MenuItemCard({
             </Badge>
           ))}
         </div>
-        {orderingEnabled ? (
+        {orderingEnabled && item.priceCents !== null ? (
           <button
             type="button"
             onClick={onAdd}
@@ -720,7 +721,10 @@ function AddItemDialog({
     (sum, m) => sum + m.additionalCents,
     0,
   );
-  const unitPrice = item.priceCents + variantAddCents + modifierAddCents;
+  if (item.priceCents === null) return null;
+
+  const basePriceCents = item.priceCents;
+  const unitPrice = basePriceCents + variantAddCents + modifierAddCents;
   const lineTotal = unitPrice * qty;
 
   // Group modifiers by groupName
@@ -766,7 +770,7 @@ function AddItemDialog({
       restaurantId,
       menuItemId: item.id,
       itemName: item.name,
-      priceCents: item.priceCents,
+      priceCents: basePriceCents,
       quantity: qty,
       selectedVariantId: selectedVariantId,
       variantLabel: selectedVariant?.label ?? null,

@@ -39,6 +39,7 @@
     "test:action-availability": "npx --yes tsx scripts/mealscout-action-availability.contract.test.ts",
     "test:post-merge-safety": "npx --yes tsx scripts/post-merge-safety.contract.test.ts",
     "test:about-explainer": "npx --yes tsx scripts/mealscout-about-explainer.contract.test.ts",
+    "test:native-unpriced-menu-items": "node --import tsx scripts/native-unpriced-menu-items.contract.test.ts",
     "test:3d-eats-frui-tea-sauce": "npx --yes tsx scripts/3d-eats-frui-tea-sauce-update.contract.test.ts",
     "test:3d-eats-admin-verified-profile": "node --import tsx scripts/3d-eats-admin-verified-profile.contract.test.ts",
     "capture:curated-profile-cohort-baseline": "tsx scripts/captureCuratedProfileCohortBaseline.ts",

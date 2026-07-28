@@ -105,7 +105,7 @@ interface MenuItem {
   id: string;
   name: string;
   description: string | null;
-  priceCents: number;
+  priceCents: number | null;
   itemType: "food" | "merchandise";
   imageUrl: string | null;
   isAvailable: boolean;
@@ -1693,7 +1693,11 @@ function MenuItemRow({
           )}
         </div>
           <div className="mt-1 flex flex-wrap gap-2 text-xs text-muted-foreground">
-          <span>{formatMoney(item.priceCents)}</span>
+          <span>
+            {item.priceCents === null
+              ? "Price unavailable"
+              : formatMoney(item.priceCents)}
+          </span>
           {item.itemType !== "merchandise" && item.calories && (
             <span>· {item.calories} cal</span>
           )}
@@ -1763,7 +1767,10 @@ function MenuItemDialog({
   const [form, setForm] = useState({
     name: item?.name ?? "",
     description: item?.description ?? "",
-    priceCents: item ? String(item.priceCents / 100) : "",
+    priceCents:
+      item?.priceCents === null || item?.priceCents === undefined
+        ? ""
+        : String(item.priceCents / 100),
     itemType: item?.itemType ?? "food",
     calories: item?.calories ? String(item.calories) : "",
     isAvailable: item?.isAvailable ?? true,
@@ -1795,7 +1802,7 @@ function MenuItemDialog({
     parsedPrice >= 0;
 
   const save = async () => {
-    if (!form.name.trim() || !hasValidPrice) return;
+    if (!form.name.trim() || (form.priceCents.trim() && !hasValidPrice)) return;
     setIsSaving(true);
     try {
       const payload = {
@@ -1804,7 +1811,7 @@ function MenuItemDialog({
         restaurantId,
         name: form.name.trim(),
         description: form.description.trim() || null,
-        priceCents: Math.round(parsedPrice * 100),
+        priceCents: hasValidPrice ? Math.round(parsedPrice * 100) : null,
         itemType: form.itemType,
         calories:
           form.itemType === "merchandise"
@@ -1958,7 +1965,7 @@ function MenuItemDialog({
               />
             </div>
             <div>
-              <Label htmlFor="menu-item-price">Base price *</Label>
+              <Label htmlFor="menu-item-price">Base price</Label>
               <div className="relative">
                 <DollarSign className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
@@ -1974,6 +1981,12 @@ function MenuItemDialog({
                   step="0.01"
                 />
               </div>
+              {!form.priceCents ? (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Leave blank to show “Price unavailable.” Unpriced items cannot
+                  be ordered online.
+                </p>
+              ) : null}
               {form.priceCents && !hasValidPrice ? (
                 <p className="mt-1 text-xs text-destructive">
                   Enter a valid price of $0 or more.
