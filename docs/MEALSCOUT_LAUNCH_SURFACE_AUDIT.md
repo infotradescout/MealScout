@@ -271,7 +271,7 @@ PASS
 Existing attribution protections confirmed by code inspection and contracts:
 
 - Canonical share generation:
-  `client/src/lib/share.ts`, `server/shareRoutes.ts`, and `server/shareTargetPolicy.ts` centralize canonical attributed URL generation, reject nested `to=` / query `ref` drift in generated links, and preserve clean path-segment attribution.
+  `client/src/lib/share.ts`, `server/shareRoutes.ts`, and `server/shareTargetPolicy.ts` centralize canonical attributed URL generation, reject nested `to=` drift, replace stale refs, and emit direct `?ref=` attribution.
 - Silent fallback behavior:
   `resolveCanonicalShareUrl(...)` only falls back to a direct canonical URL when no authenticated tracked link can be generated and no stored fallback attribution ref exists. When a fallback ref exists and the target is eligible, it still produces a canonical attributed path. `server/shareRoutes.ts` fail-closes with `401 authentication_required`, `409 attribution_identity_required`, or `409 share_target_required` rather than silently assigning a default/system identity.
 - Invalid/default referral tag rejection:
