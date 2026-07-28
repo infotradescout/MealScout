@@ -141,6 +141,7 @@ const MenuBuilderPage = lazy(() => import("@/pages/menu-builder"));
 const KitchenDisplayPage = lazy(() => import("@/pages/kitchen-display"));
 const OnlineMenuPage = lazy(() => import("@/pages/online-menu"));
 const PickupCheckoutPage = lazy(() => import("@/pages/pickup-checkout"));
+const MerchantDeliveryPage = lazy(() => import("@/pages/merchant-delivery"));
 const OrderConfirmationPage = lazy(() => import("@/pages/order-confirmation"));
 const ScoutPage = lazy(() => import("@/pages/explore-preview"));
 const ScoutPageV2 = lazy(() => import("@/pages/explore-preview-v2"));
@@ -483,6 +484,7 @@ function SharedPublicRoutes() {
       <Route path="/post-verification" component={PostVerification} />
       <Route path="/menu/:restaurantId" component={OnlineMenuPage} />
       <Route path="/checkout/:restaurantId" component={PickupCheckoutPage} />
+      <Route path="/merchant-delivery" component={MerchantDeliveryPage} />
       <Route
         path="/order-confirmation/:orderId"
         component={OrderConfirmationPage}

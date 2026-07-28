@@ -486,10 +486,13 @@ export function registerStripeWebhookRoutes(
                     );
                   }
 
+                  const merchantGrossCents =
+                    order.subtotalCents +
+                    Math.max(0, Number(order.deliveryFeeCents || 0) || 0);
                   const transferAmount = order.feePaidByBusiness
-                    ? order.subtotalCents -
+                    ? merchantGrossCents -
                       Math.max(0, Number(order.platformFeeCents || 0) || 0)
-                    : order.subtotalCents;
+                    : merchantGrossCents;
                   if (transferAmount > 0) {
                     await stripe.transfers.create(
                       {

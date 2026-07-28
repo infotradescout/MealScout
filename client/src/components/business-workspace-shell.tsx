@@ -216,6 +216,14 @@ export default function BusinessWorkspaceShell({
       visible: capabilities.work !== false,
     },
     {
+      id: "delivery",
+      label: "Delivery",
+      description: "Zones, fees, minimums, and capacity",
+      href: buildWorkspaceHref("/merchant-delivery", business.id),
+      icon: ShoppingBag,
+      visible: capabilities.work !== false,
+    },
+    {
       id: "audience",
       label: "Audience",
       description: "Reach and profile activity",

@@ -61,6 +61,7 @@ import {
   consumePromotionAttribution,
   updatePromotedOrderCommissionStatus,
 } from "../services/merchantPromotionService";
+import { getDeliveryQuote } from "./merchantDeliveryRoutes";
 
 const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY)
@@ -276,10 +277,9 @@ async function sendOrderReadyNotification(order: PickupOrder) {
           "Your order is ready! 🍽️",
           `
             <p>Hi ${order.customerName},</p>
-            <p>Your MealScout order <strong>#${order.id.slice(-6).toUpperCase()}</strong> is ready for pickup!</p>
-            <p>Head over to pick it up. Thanks for ordering with MealScout.</p>
+            <p>Your MealScout order <strong>#${order.id.slice(-6).toUpperCase()}</strong> is ${order.orderType === "delivery" ? "ready and will head out for delivery soon" : "ready for pickup"}!</p>
           `,
-          `Hi ${order.customerName}, your order #${order.id.slice(-6).toUpperCase()} is ready for pickup!`,
+          `Hi ${order.customerName}, your order #${order.id.slice(-6).toUpperCase()} is ${order.orderType === "delivery" ? "ready and will head out for delivery soon" : "ready for pickup"}!`,
           "general",
         )
         .then((ok) =>
@@ -309,7 +309,7 @@ async function sendOrderReadyNotification(order: PickupOrder) {
     promises.push(
       sendSms(
         order.customerPhone,
-        `Hi ${order.customerName}! Your MealScout order #${order.id.slice(-6).toUpperCase()} is ready for pickup.`,
+        `Hi ${order.customerName}! Your MealScout order #${order.id.slice(-6).toUpperCase()} is ${order.orderType === "delivery" ? "ready and will head out soon" : "ready for pickup"}.`,
       )
         .then((ok) =>
           db.insert(orderNotifications).values({
@@ -381,7 +381,12 @@ export function registerPickupOrderRoutes(app: Express) {
         customerName: z.string().min(1).max(100),
         customerEmail: z.string().email().optional().nullable(),
         customerPhone: z.string().optional().nullable(),
-        orderType: z.enum(["pickup", "dine_in"]).default("pickup"),
+        orderType: z.enum(["pickup", "dine_in", "delivery"]).default("pickup"),
+        deliveryAddress: z.string().trim().min(5).max(400).optional().nullable(),
+        deliveryCity: z.string().trim().min(2).max(100).optional().nullable(),
+        deliveryState: z.string().trim().min(2).max(50).optional().nullable(),
+        deliveryPostalCode: z.string().trim().min(3).max(12).optional().nullable(),
+        deliveryInstructions: z.string().trim().max(500).optional().nullable(),
         paymentMethod: z.enum(["card", "cash"]).default("card"),
         items: z
           .array(
@@ -560,7 +565,7 @@ export function registerPickupOrderRoutes(app: Express) {
         mealscoutFeeCents,
         processingFeeCents,
         platformFeeCents,
-        totalCents,
+        totalCents: baseTotalCents,
       } = computePickupOrderFees(
         subtotalCents,
         body.paymentMethod,
@@ -575,6 +580,22 @@ export function registerPickupOrderRoutes(app: Express) {
       if (!restaurant || !restaurant.isActive) {
         return res.status(400).json({ message: "Restaurant not available" });
       }
+
+      let deliveryFeeCents = 0;
+      let deliveryEstimateMinutes: number | null = null;
+      if (body.orderType === "delivery") {
+        if (!body.deliveryAddress || !body.deliveryCity || !body.deliveryState || !body.deliveryPostalCode) {
+          return res.status(400).json({ message: "Delivery address, city, state, and postal code are required" });
+        }
+        const delivery = await getDeliveryQuote(
+          body.restaurantId,
+          subtotalCents,
+          body.deliveryPostalCode,
+        );
+        deliveryFeeCents = delivery.feeCents;
+        deliveryEstimateMinutes = delivery.estimatedMinutes;
+      }
+      const totalCents = baseTotalCents + deliveryFeeCents;
 
       // Verify this restaurant has an active ordering subscription
       if (restaurant.ownerId) {
@@ -600,6 +621,13 @@ export function registerPickupOrderRoutes(app: Express) {
           specialInstructions: body.specialInstructions ?? null,
           prepTimeMinutes: 20,
           scheduledFor: body.scheduledFor ? new Date(body.scheduledFor) : null,
+          deliveryAddress: body.orderType === "delivery" ? body.deliveryAddress : null,
+          deliveryCity: body.orderType === "delivery" ? body.deliveryCity : null,
+          deliveryState: body.orderType === "delivery" ? body.deliveryState : null,
+          deliveryPostalCode: body.orderType === "delivery" ? body.deliveryPostalCode : null,
+          deliveryFeeCents,
+          deliveryEstimateMinutes,
+          deliveryInstructions: body.orderType === "delivery" ? body.deliveryInstructions : null,
         })
         .returning();
 
@@ -708,6 +736,7 @@ export function registerPickupOrderRoutes(app: Express) {
             platformFeeCents: platformFeeCents.toString(),
             mealscoutFeeCents: mealscoutFeeCents.toString(),
             processingFeeCents: processingFeeCents.toString(),
+            deliveryFeeCents: deliveryFeeCents.toString(),
             feePaidByBusiness: String(feePaidByBusiness),
           },
           description: `MealScout order at ${restaurant.name}`,
@@ -857,6 +886,7 @@ export function registerPickupOrderRoutes(app: Express) {
               ORDER_STATUS.CONFIRMED,
               ORDER_STATUS.PREPARING,
               ORDER_STATUS.READY,
+              ORDER_STATUS.OUT_FOR_DELIVERY,
             ]),
           ),
         )
@@ -930,7 +960,9 @@ export function registerPickupOrderRoutes(app: Express) {
    *   pending    → confirmed | cancelled
    *   confirmed  → preparing | cancelled
    *   preparing  → ready     | cancelled
-   *   ready      → completed
+   *   ready      → completed | out_for_delivery
+   *   out_for_delivery → delivered
+   *   delivered  → completed
    */
   app.patch(
     "/api/owner/orders/:orderId/status",
@@ -943,6 +975,8 @@ export function registerPickupOrderRoutes(app: Express) {
             ORDER_STATUS.CONFIRMED,
             ORDER_STATUS.PREPARING,
             ORDER_STATUS.READY,
+            ORDER_STATUS.OUT_FOR_DELIVERY,
+            ORDER_STATUS.DELIVERED,
             ORDER_STATUS.COMPLETED,
             ORDER_STATUS.CANCELLED,
           ]),
@@ -970,7 +1004,12 @@ export function registerPickupOrderRoutes(app: Express) {
           ORDER_STATUS.CANCELLED,
         ],
         [ORDER_STATUS.PREPARING]: [ORDER_STATUS.READY, ORDER_STATUS.CANCELLED],
-        [ORDER_STATUS.READY]: [ORDER_STATUS.COMPLETED],
+        [ORDER_STATUS.READY]:
+          order.orderType === "delivery"
+            ? [ORDER_STATUS.OUT_FOR_DELIVERY]
+            : [ORDER_STATUS.COMPLETED],
+        [ORDER_STATUS.OUT_FOR_DELIVERY]: [ORDER_STATUS.DELIVERED],
+        [ORDER_STATUS.DELIVERED]: [ORDER_STATUS.COMPLETED],
       };
       const allowed = validTransitions[order.status] ?? [];
       if (!allowed.includes(status)) {
@@ -992,6 +1031,8 @@ export function registerPickupOrderRoutes(app: Express) {
         if (prepTimeMinutes) updates.prepTimeMinutes = prepTimeMinutes;
       }
       if (status === ORDER_STATUS.READY) updates.readyAt = now;
+      if (status === ORDER_STATUS.OUT_FOR_DELIVERY) updates.outForDeliveryAt = now;
+      if (status === ORDER_STATUS.DELIVERED) updates.deliveredAt = now;
       if (status === ORDER_STATUS.COMPLETED) updates.completedAt = now;
       if (status === ORDER_STATUS.CANCELLED) {
         updates.cancelledAt = now;

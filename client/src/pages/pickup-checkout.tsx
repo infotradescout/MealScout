@@ -24,6 +24,7 @@ import {
   CreditCard,
   Banknote,
   ArrowLeft,
+  MapPin,
 } from "lucide-react";
 import type { CartItem } from "./online-menu";
 import PaymentBrowserGate from "@/components/payment-browser-gate";
@@ -80,6 +81,15 @@ interface MenuInfo {
   hidePlatformFee: boolean;
 }
 
+interface DeliveryInfo {
+  enabled: boolean;
+  feeCents: number;
+  minimumOrderCents: number;
+  estimatedMinutes: number;
+  postalCodes: string[];
+  instructions?: string | null;
+}
+
 interface OrderingReadiness {
   blockingReasons: string[];
   checks: Array<{
@@ -99,7 +109,15 @@ export default function CheckoutPage() {
   const [readiness, setReadiness] = useState<OrderingReadiness | null>(null);
   const [orderingEnabled, setOrderingEnabled] = useState(true);
   const [paymentMethod, setPaymentMethod] = useState<"card" | "cash">("card");
-  const [orderType, setOrderType] = useState<"pickup" | "dine_in">("pickup");
+  const [orderType, setOrderType] = useState<"pickup" | "dine_in" | "delivery">("pickup");
+  const [deliveryInfo, setDeliveryInfo] = useState<DeliveryInfo | null>(null);
+  const [deliveryAddress, setDeliveryAddress] = useState({
+    address: "",
+    city: "",
+    state: "",
+    postalCode: "",
+    instructions: "",
+  });
   const [contact, setContact] = useState({
     name: "",
     email: "",
@@ -147,6 +165,10 @@ export default function CheckoutPage() {
         // hides the cash option with no explanation -- surface it instead
         // so a diner who expected to pay cash isn't just confused.
         .catch(() => setMenuInfoError(true));
+      fetch(`/api/restaurants/${encodeURIComponent(restaurantId)}/delivery`)
+        .then((response) => response.ok ? response.json() : null)
+        .then((payload) => setDeliveryInfo(payload))
+        .catch(() => setDeliveryInfo(null));
     }
   }, [restaurantId]);
 
@@ -198,7 +220,8 @@ export default function CheckoutPage() {
       (paymentMethod === "card"
         ? estimateProcessingFeeCents(subtotal + MEALSCOUT_ORDER_FEE_CENTS)
         : 0);
-  const total = subtotal + platformFee;
+  const deliveryFee = orderType === "delivery" ? Number(deliveryInfo?.feeCents || 0) : 0;
+  const total = subtotal + platformFee + deliveryFee;
   const displayedSubtotal = serverTotals?.subtotalCents ?? subtotal;
   const displayedFee = serverTotals?.feePaidByBusiness
     ? 0
@@ -215,6 +238,10 @@ export default function CheckoutPage() {
       setOrderError("Open this page in Chrome or Safari to complete card payment.");
       return;
     }
+    if (orderType === "delivery" && (!deliveryAddress.address.trim() || !deliveryAddress.city.trim() || !deliveryAddress.state.trim() || !deliveryAddress.postalCode.trim())) {
+      setOrderError("Enter the complete delivery address.");
+      return;
+    }
     setOrderError(null);
     setIsCreating(true);
     try {
@@ -225,6 +252,11 @@ export default function CheckoutPage() {
         customerEmail: contact.email.trim() || undefined,
         customerPhone: contact.phone.trim() || undefined,
         orderType,
+        deliveryAddress: orderType === "delivery" ? deliveryAddress.address.trim() : undefined,
+        deliveryCity: orderType === "delivery" ? deliveryAddress.city.trim() : undefined,
+        deliveryState: orderType === "delivery" ? deliveryAddress.state.trim() : undefined,
+        deliveryPostalCode: orderType === "delivery" ? deliveryAddress.postalCode.trim() : undefined,
+        deliveryInstructions: orderType === "delivery" ? deliveryAddress.instructions.trim() || undefined : undefined,
         paymentMethod,
         promotionToken:
           window.localStorage.getItem(
@@ -412,6 +444,12 @@ export default function CheckoutPage() {
                   <span>{formatMoney(platformFee)}</span>
                 </div>
               )}
+              {deliveryFee > 0 && (
+                <div className="flex justify-between text-sm text-muted-foreground">
+                  <span>Merchant delivery</span>
+                  <span>{formatMoney(deliveryFee)}</span>
+                </div>
+              )}
               <div className="flex justify-between pt-1 text-base font-black">
                 <span>Total</span>
                 <span>{formatMoney(total)}</span>
@@ -486,8 +524,8 @@ export default function CheckoutPage() {
           <CardContent>
             <RadioGroup
               value={orderType}
-              onValueChange={(v) => setOrderType(v as "pickup" | "dine_in")}
-              className="flex gap-4"
+              onValueChange={(v) => setOrderType(v as "pickup" | "dine_in" | "delivery")}
+              className="flex flex-wrap gap-4"
             >
               <div className="flex items-center gap-2">
                 <RadioGroupItem value="pickup" id="ot-pickup" />
@@ -507,9 +545,40 @@ export default function CheckoutPage() {
                   Dine In
                 </Label>
               </div>
+              {deliveryInfo?.enabled && (
+                <div className="flex items-center gap-2">
+                  <RadioGroupItem value="delivery" id="ot-delivery" />
+                  <Label htmlFor="ot-delivery" className="cursor-pointer font-normal">
+                    Delivery · {formatMoney(deliveryInfo.feeCents)}
+                  </Label>
+                </div>
+              )}
             </RadioGroup>
           </CardContent>
         </Card>
+
+        {orderType === "delivery" && (
+          <Card className="profile-surface mb-4 rounded-3xl">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-base font-black">
+                <MapPin className="h-4 w-4" /> Delivery address
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-3 sm:grid-cols-2">
+              <Input className="sm:col-span-2" placeholder="Street address" value={deliveryAddress.address} onChange={(e) => setDeliveryAddress((v) => ({ ...v, address: e.target.value }))} />
+              <Input placeholder="City" value={deliveryAddress.city} onChange={(e) => setDeliveryAddress((v) => ({ ...v, city: e.target.value }))} />
+              <div className="grid grid-cols-2 gap-3">
+                <Input placeholder="State" value={deliveryAddress.state} onChange={(e) => setDeliveryAddress((v) => ({ ...v, state: e.target.value }))} />
+                <Input placeholder="ZIP code" value={deliveryAddress.postalCode} onChange={(e) => setDeliveryAddress((v) => ({ ...v, postalCode: e.target.value }))} />
+              </div>
+              <Input className="sm:col-span-2" placeholder="Gate code or delivery note (optional)" value={deliveryAddress.instructions} onChange={(e) => setDeliveryAddress((v) => ({ ...v, instructions: e.target.value }))} />
+              <p className="sm:col-span-2 text-xs text-muted-foreground">
+                {deliveryInfo?.estimatedMinutes || 45}-minute estimate
+                {deliveryInfo?.minimumOrderCents ? ` · ${formatMoney(deliveryInfo.minimumOrderCents)} minimum` : ""}
+              </p>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Payment method */}
         <Card className="profile-surface mb-6 rounded-3xl">
