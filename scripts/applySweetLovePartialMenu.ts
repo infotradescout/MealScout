@@ -1,8 +1,14 @@
 import "dotenv/config";
-import { count, eq } from "drizzle-orm";
+import { and, count, eq } from "drizzle-orm";
 
 import { db, pool } from "../server/db";
-import { menuItems, restaurants, truckImportListings } from "../shared/schema";
+import {
+  menuCategories,
+  menuItems,
+  menus,
+  restaurants,
+  truckImportListings,
+} from "../shared/schema";
 
 const TRUCK_ID = "f3b76054-f355-43b0-a2d3-901277748557";
 const TRUCK_NAME = "Sweet Love";
@@ -212,14 +218,101 @@ const run = async () => {
     activeMenuItemCount,
     menuItemCount: menuItemsPayload.length,
     pricesProvided: false,
+    customerFacingPriceLabel: "Price unavailable",
+    orderingPolicy: "unpriced_items_are_browse_only",
     productionApplied: apply,
   };
 
   if (apply) {
-    await db
-      .update(truckImportListings)
-      .set({ rawData: nextRawData as any, updatedAt: new Date() } as any)
-      .where(eq(truckImportListings.id, listingId));
+    await db.transaction(async (tx: any) => {
+      const [guardRow] = await tx
+        .select({ value: count(menuItems.id) })
+        .from(menuItems)
+        .where(eq(menuItems.restaurantId, resolvedTargetId));
+      if (Number(guardRow?.value || 0) !== 0) {
+        throw new Error(
+          "Sweet Love menu changed after validation; transaction aborted.",
+        );
+      }
+
+      const [existingMenu] = await tx
+        .select()
+        .from(menus)
+        .where(
+          and(
+            eq(menus.restaurantId, resolvedTargetId),
+            eq(menus.isActive, true),
+          ),
+        )
+        .limit(1);
+
+      const [menu] = existingMenu
+        ? [existingMenu]
+        : await tx
+            .insert(menus)
+            .values({
+              restaurantId: resolvedTargetId,
+              name: "Sweet Love Menu",
+              serviceType: "all_day",
+              isActive: true,
+              importSource: SOURCE_TYPE,
+              importedAt: new Date(),
+            } as any)
+            .returning();
+
+      if (!menu) throw new Error("Failed to resolve Sweet Love menu.");
+
+      await tx
+        .update(menuCategories)
+        .set({ isActive: false, updatedAt: new Date() })
+        .where(eq(menuCategories.menuId, menu.id));
+
+      const sections = Array.from(
+        new Set(menuItemsPayload.map((entry) => entry.section)),
+      );
+      const categoryIds = new Map<string, string>();
+
+      for (const [sortOrder, section] of sections.entries()) {
+        const [category] = await tx
+          .insert(menuCategories)
+          .values({
+            menuId: menu.id,
+            restaurantId: resolvedTargetId,
+            name: section,
+            sortOrder,
+            isActive: true,
+          })
+          .returning();
+        if (!category) throw new Error(`Failed to create category ${section}.`);
+        categoryIds.set(section, category.id);
+      }
+
+      await tx.insert(menuItems).values(
+        menuItemsPayload.map((entry, sortOrder) => ({
+          menuId: menu.id,
+          categoryId: categoryIds.get(entry.section),
+          restaurantId: resolvedTargetId,
+          name: entry.item_name,
+          description: [
+            entry.description,
+            entry.options?.length
+              ? `Options include: ${entry.options.join(", ")}.`
+              : null,
+          ]
+            .filter(Boolean)
+            .join(" ") || null,
+          priceCents: null,
+          itemType: "food",
+          isAvailable: true,
+          sortOrder,
+        })),
+      );
+
+      await tx
+        .update(truckImportListings)
+        .set({ rawData: nextRawData as any, updatedAt: new Date() } as any)
+        .where(eq(truckImportListings.id, listingId));
+    });
   }
 
   console.log(JSON.stringify(result, null, 2));

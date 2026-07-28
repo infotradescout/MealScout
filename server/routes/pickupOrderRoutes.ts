@@ -432,9 +432,15 @@ export function registerPickupOrderRoutes(app: Express) {
 
       // Check every requested item exists and is available
       for (const reqItem of body.items) {
-        if (!itemMap.has(reqItem.menuItemId)) {
+        const item = itemMap.get(reqItem.menuItemId);
+        if (!item) {
           return res.status(400).json({
             message: `Item ${reqItem.menuItemId} is not available`,
+          });
+        }
+        if (item.priceCents === null) {
+          return res.status(400).json({
+            message: `"${item.name}" cannot be ordered until the business adds a price`,
           });
         }
       }
@@ -489,6 +495,9 @@ export function registerPickupOrderRoutes(app: Express) {
 
       for (const reqItem of body.items) {
         const item = itemMap.get(reqItem.menuItemId)!;
+        if (item.priceCents === null) {
+          throw new Error("Unpriced menu item passed checkout validation");
+        }
         let variantAddCents = 0;
         let selectedVariant: any = null;
 

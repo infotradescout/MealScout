@@ -5794,7 +5794,9 @@ export const menuItems = pgTable(
       .references(() => restaurants.id, { onDelete: "cascade" }),
     name: varchar("name").notNull(),
     description: text("description"),
-    priceCents: integer("price_cents").notNull(), // base price in cents
+    // NULL means the business has published the item without a current price.
+    // Unpriced items are browse-only and cannot enter checkout.
+    priceCents: integer("price_cents"),
     itemType: varchar("item_type").notNull().default("food"),
     imageUrl: varchar("image_url"),
     sku: varchar("sku"),
@@ -6715,7 +6717,7 @@ export const insertMenuCategorySchema = createInsertSchema(menuCategories).omit(
 );
 
 export const insertMenuItemSchema = createInsertSchema(menuItems, {
-  priceCents: z.number().int().min(0),
+  priceCents: z.number().int().min(0).nullable(),
   itemType: z.enum(["food", "merchandise"]).default("food"),
   calories: z.number().int().min(0).optional().nullable(),
 }).omit({ id: true, createdAt: true, updatedAt: true });

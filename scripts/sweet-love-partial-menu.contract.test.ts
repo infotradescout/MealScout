@@ -81,18 +81,23 @@ requireIncludes(
 );
 requireIncludes(
   applyScript,
-  "await db\n      .update(truckImportListings)",
-  "Apply path must update only Sweet Love's linked source listing menu payload.",
+  "await db.transaction(async (tx: any)",
+  "Apply path must create the native menu and evidence atomically.",
 );
-requireExcludes(
+requireIncludes(
   applyScript,
-  ".insert(menuItems)",
-  "Sweet Love menu update must not insert canonical priced menu rows.",
+  "await tx.insert(menuItems).values(",
+  "Sweet Love menu update must insert native menu rows.",
 );
-requireExcludes(
+requireIncludes(
   applyScript,
-  ".insert(menus)",
-  "Sweet Love menu update must not insert canonical menu rows.",
+  "priceCents: null",
+  "Sweet Love native items must preserve missing prices as null.",
+);
+requireIncludes(
+  applyScript,
+  'orderingPolicy: "unpriced_items_are_browse_only"',
+  "Sweet Love native items must be explicitly browse-only until priced.",
 );
 
 requireIncludes(
