@@ -71,9 +71,9 @@ function buildClientFallbackAttributedUrl(
     return parsed.toString();
   }
 
-  parsed.pathname = `${normalizedPathname}/${encodeURIComponent(ref)}`;
+  parsed.pathname = normalizedPathname;
   parsed.searchParams.delete("to");
-  parsed.searchParams.delete("ref");
+  parsed.searchParams.set("ref", ref);
   return parsed.toString();
 }
 
@@ -101,22 +101,15 @@ function isDirectAttributedShareLink(
       sanitizeTargetPathForTrackedLink(targetPath),
       window.location.origin,
     );
-    const generatedParts = generated.pathname.split("/").filter(Boolean);
-    if (generatedParts.length < 2) return false;
-    const refSegment = String(
-      generatedParts[generatedParts.length - 1] || "",
-    ).trim();
-    if (!refSegment) return false;
-    const generatedBasePath = `/${generatedParts.slice(0, -1).join("/")}`;
     const expectedBasePath = expectedTarget.pathname.replace(/\/+$/, "") || "/";
+    const ref = String(generated.searchParams.get("ref") || "").trim();
     return (
-      generatedBasePath === expectedBasePath &&
-      generated.search === expectedTarget.search &&
+      generated.pathname === expectedBasePath &&
+      Boolean(ref) &&
+      !generated.searchParams.has("to") &&
       generated.hash === expectedTarget.hash &&
       generated.pathname.toLowerCase() !== "/ref" &&
       !generated.pathname.toLowerCase().startsWith("/ref/") &&
-      !generated.searchParams.has("to") &&
-      !generated.searchParams.has("ref") &&
       !shareLink.includes("to=") &&
       !shareLink.includes("%2F") &&
       !shareLink.includes("role=business")
