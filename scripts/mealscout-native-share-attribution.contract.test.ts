@@ -28,7 +28,7 @@ assert(
     shareLib.includes("export function resolveCanonicalShareUrlSync(") &&
     shareLib.includes("buildClientFallbackAttributedUrl") &&
     shareLib.includes('parsed.searchParams.delete("to")') &&
-    shareLib.includes('parsed.searchParams.delete("ref")'),
+    shareLib.includes('parsed.searchParams.set("ref", ref)'),
   "Share library must centralize canonical tracked URL resolution for native share/copy/QR payloads.",
 );
 
