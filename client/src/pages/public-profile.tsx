@@ -2729,6 +2729,39 @@ export default function PublicProfilePage() {
     retry: false,
   });
 
+  useEffect(() => {
+    if (!data?.id || typeof window === "undefined") return;
+    const sourceRestaurantId = new URLSearchParams(window.location.search).get(
+      "promoSource",
+    );
+    if (!sourceRestaurantId || sourceRestaurantId === data.id) return;
+    const controller = new AbortController();
+    void fetch(apiUrl("/api/public/promotion-attributions"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      signal: controller.signal,
+      body: JSON.stringify({
+        sourceRestaurantId,
+        targetRestaurantId: data.id,
+      }),
+    })
+      .then(async (response) => {
+        if (!response.ok) return null;
+        return response.json();
+      })
+      .then((payload) => {
+        if (payload?.token) {
+          window.localStorage.setItem(
+            `mealscout:promotion:${data.id}`,
+            String(payload.token),
+          );
+        }
+      })
+      .catch(() => {});
+    return () => controller.abort();
+  }, [data?.id]);
+
   const safeCtas = useMemo(() => asSafeCtas(data?.cta), [data?.cta]);
 
   // Auth + personalization context

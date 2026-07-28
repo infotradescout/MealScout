@@ -36,6 +36,7 @@ export type BusinessWorkspaceModuleId =
   | "availability"
   | "media"
   | "deals"
+  | "promotions"
   | "work"
   | "audience"
   | "team"
@@ -60,6 +61,7 @@ type WorkspaceCapabilities = {
   availability?: boolean;
   media?: boolean;
   deals?: boolean;
+  promotions?: boolean;
   work?: boolean;
   audience?: boolean;
   team?: boolean;
@@ -196,6 +198,14 @@ export default function BusinessWorkspaceShell({
       }),
       icon: Tag,
       visible: capabilities.deals !== false,
+    },
+    {
+      id: "promotions",
+      label: "Cross-promotion",
+      description: "Approvals, attribution, and results",
+      href: buildWorkspaceHref("/merchant-promotions", business.id),
+      icon: BarChart3,
+      visible: capabilities.promotions !== false,
     },
     {
       id: "work",

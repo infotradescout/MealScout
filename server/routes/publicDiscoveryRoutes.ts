@@ -27,6 +27,8 @@ import {
   menuItemRecommendations,
   menuItemPhotos,
   menus,
+  merchantPromotionPartners,
+  merchantPromotionPolicies,
   requestLogs,
   restaurants,
   searchQueryEvents,
@@ -37,6 +39,7 @@ import {
   users,
   videoStories,
 } from "@shared/schema";
+import { promotionCandidateAllowed } from "@shared/merchantPromotion";
 import { buildCleanAffiliateBusinessPath } from "@shared/cleanAffiliateLinks";
 import {
   rankPublicCrossPromotions,
@@ -2011,6 +2014,39 @@ export function registerPublicDiscoveryRoutes(app: Express) {
         .where(eq(users.id, source.ownerId))
         .limit(1);
       const affiliateTag = String(sourceOwner[0]?.affiliateTag || "").trim();
+      const [promotionPolicyRows, promotionPartnerRows] = await Promise.all([
+        db
+          .select()
+          .from(merchantPromotionPolicies)
+          .where(eq(merchantPromotionPolicies.restaurantId, id))
+          .limit(1),
+        db
+          .select()
+          .from(merchantPromotionPartners)
+          .where(eq(merchantPromotionPartners.sourceRestaurantId, id)),
+      ]);
+      const promotionPolicy = promotionPolicyRows[0];
+      const partnerStatusByTarget = new Map<
+        string,
+        "approved" | "excluded" | null
+      >(
+        promotionPartnerRows.map((partner: {
+          targetRestaurantId: string;
+          status: string;
+        }) => [
+          partner.targetRestaurantId,
+          partner.status === "approved" || partner.status === "excluded"
+            ? partner.status
+            : null,
+        ] as [string, "approved" | "excluded" | null]),
+      );
+      if (promotionPolicy?.enabled === false) {
+        return sendPublicJson(res, {
+          sourceProfileId: id,
+          attributionApplied: false,
+          businesses: [],
+        });
+      }
       const marketConditions = [
         eq(restaurants.isActive, true),
         sql`lower(trim(${restaurants.city})) = ${sourceCity}`,
@@ -2030,7 +2066,15 @@ export function registerPublicDiscoveryRoutes(app: Express) {
       for (const row of rows) {
         if (
           String(row.id) === id ||
-          deriveProfileEvidenceQuarantineVisibility(row).isQuarantined
+          deriveProfileEvidenceQuarantineVisibility(row).isQuarantined ||
+          !promotionCandidateAllowed({
+            enabled: promotionPolicy?.enabled !== false,
+            approvalMode:
+              promotionPolicy?.approvalMode === "approved_only"
+                ? "approved_only"
+                : "automatic",
+            partnerStatus: partnerStatusByTarget.get(String(row.id)),
+          })
         ) {
           continue;
         }
@@ -2049,6 +2093,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
         const attributedProfilePath =
           buildCleanAffiliateBusinessPath(profilePath, affiliateTag) ||
           profilePath;
+        const promotionProfilePath = `${attributedProfilePath}${attributedProfilePath.includes("?") ? "&" : "?"}promoSource=${encodeURIComponent(id)}`;
 
         candidates.push({
           id: String(row.id),
@@ -2062,7 +2107,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
             ? String(row.coverImageUrl)
             : null,
           profilePath,
-          attributedProfilePath,
+          attributedProfilePath: promotionProfilePath,
           attributionApplied: attributedProfilePath !== profilePath,
         });
       }
