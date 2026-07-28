@@ -21,8 +21,8 @@ const requiredDashboardSnippets = [
   "profilePath",
   "canonicalMealScoutOrigin",
   'const normalizedPathname = url.pathname.replace(/\\/+$/, "") || "/";',
-  "url.pathname = `${normalizedPathname}/${encodeURIComponent(tag)}`;",
-  'url.searchParams.delete("ref");',
+  "url.pathname = normalizedPathname;",
+  'url.searchParams.set("ref", tag);',
   'url.searchParams.delete("to");',
   "Affiliate Link",
   "No affiliate link assigned",
@@ -48,23 +48,23 @@ if (dashboard.includes("`/ref/${encodeURIComponent(tag)}`")) {
 }
 
 if (
-  !profilePage.includes("/directory/${encodeURIComponent(") ||
+  !profilePage.includes("/directory?ref=${encodeURIComponent(") ||
   profilePage.includes("/ref/${affiliateTag}") ||
-  profilePage.includes("?ref=")
+  profilePage.includes("/directory/${encodeURIComponent(")
 ) {
   throw new Error(
-    "Profile affiliate link generator must use canonical /directory/<tag> links",
+    "Profile affiliate link generator must use canonical /directory?ref=<tag> links",
   );
 }
 
 if (
   !adminAffiliatePage.includes("const getAffiliateLink") ||
-  !adminAffiliatePage.includes("`/directory/${encodedTag}`") ||
+  !adminAffiliatePage.includes("`/directory?ref=${encodedTag}`") ||
   adminAffiliatePage.includes("`/ref/${tag}`") ||
-  adminAffiliatePage.includes("?ref=")
+  adminAffiliatePage.includes("`/directory/${encodedTag}`")
 ) {
   throw new Error(
-    "Admin affiliate page link generator must use canonical /directory/<tag> links",
+    "Admin affiliate page link generator must use canonical /directory?ref=<tag> links",
   );
 }
 
