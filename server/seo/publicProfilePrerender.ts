@@ -24,6 +24,7 @@ import { resolveCityTimeZoneSync } from "../services/cityTimeZone";
 import { buildSlotDateTimes } from "../services/timeIntent";
 import { isSlotPublic } from "../services/publicSlotGate";
 import { canExposeAnonymousEventDetail } from "../publicProfiles/publicEventDetailAccess";
+import { isSyntheticPublicEntityName } from "@shared/publicDiscoveryIntegrity";
 
 type PageLink = { label: string; href: string };
 
@@ -73,7 +74,9 @@ async function isImportSystemOwner(ownerId: string | null): Promise<boolean> {
     .from(users)
     .where(eq(users.id, ownerId))
     .limit(1);
-  return Boolean(owner?.email && owner.email.toLowerCase() === IMPORT_SYSTEM_EMAIL);
+  return Boolean(
+    owner?.email && owner.email.toLowerCase() === IMPORT_SYSTEM_EMAIL,
+  );
 }
 
 const toSlug = (value: string | null | undefined) =>
@@ -153,17 +156,14 @@ const indexableRobots =
 const noindexRobots = "noindex,follow";
 
 const friendlyLocationTypeLabel = (value: string | null | undefined) => {
-  const normalized = String(value || "").trim().toLowerCase();
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase();
   if (!normalized) return "";
   if (normalized === "private_residence") return "Private event location";
   if (normalized === "business") return "Business";
   if (normalized === "other") return "Host location";
   return labelize(normalized);
-};
-
-const isSyntheticTestEntityName = (value: string | null | undefined) => {
-  const normalized = cleanText(value).toLowerCase();
-  return /^test (truck|restaurant|business|vendor)\b/.test(normalized);
 };
 
 const moneyFromCents = (value: unknown) => {
@@ -271,12 +271,13 @@ const menuSnippetForRestaurant = async (restaurantId: string) => {
           sql<number>`count(${menuItems.id}) filter (where ${menuItems.isAvailable} = true)`.mapWith(
             Number,
           ),
-        itemNames:
-          sql<string>`string_agg(distinct ${menuItems.name}, ', ') filter (where ${menuItems.isAvailable} = true)`,
+        itemNames: sql<string>`string_agg(distinct ${menuItems.name}, ', ') filter (where ${menuItems.isAvailable} = true)`,
       })
       .from(menus)
       .leftJoin(menuItems, eq(menuItems.menuId, menus.id))
-      .where(and(eq(menus.restaurantId, restaurantId), eq(menus.isActive, true)))
+      .where(
+        and(eq(menus.restaurantId, restaurantId), eq(menus.isActive, true)),
+      )
       .groupBy(menus.restaurantId);
 
     const itemNames = String(row?.itemNames || "")
@@ -373,13 +374,14 @@ async function restaurantPage(baseUrl: string, restaurantId: string) {
   const isUnclaimed = await isImportSystemOwner(row.ownerId);
 
   const name = cleanText(row.name, "MealScout business");
-  const isSyntheticTestEntity = isSyntheticTestEntityName(name);
+  const isSyntheticTestEntity = isSyntheticPublicEntityName(name);
   const cityState = [row.city, row.state]
     .map((value) => cleanText(value))
     .filter(Boolean)
     .join(", ");
   const canonicalBusinessType = toCanonicalFoodBusinessType(row.businessType);
-  const isTruck = Boolean(row.isFoodTruck) || isTruckBusinessType(row.businessType);
+  const isTruck =
+    Boolean(row.isFoodTruck) || isTruckBusinessType(row.businessType);
   const isBar = isBarBusinessType(row.businessType);
   const isPrivateChef = canonicalBusinessType === "private_chef";
   const ownerType = isTruck ? "food_truck" : "restaurant";
@@ -410,7 +412,7 @@ async function restaurantPage(baseUrl: string, restaurantId: string) {
       ? `/bar/${encodeURIComponent(`${toSlug(name) || row.id}--${row.id}`)}`
       : isPrivateChef
         ? `/chef/${encodeURIComponent(`${toSlug(name) || row.id}--${row.id}`)}`
-      : `/restaurant/${encodeURIComponent(row.id)}/${encodeURIComponent(toSlug(name) || row.id)}`;
+        : `/restaurant/${encodeURIComponent(row.id)}/${encodeURIComponent(toSlug(name) || row.id)}`;
   const videos = await publicVideosFor(ownerType, row.id);
   const menuSnippet = await menuSnippetForRestaurant(row.id);
   const image = videos[0]?.thumbnailUrl || resolveRestaurantImage(baseUrl, row);
@@ -489,7 +491,8 @@ async function restaurantPage(baseUrl: string, restaurantId: string) {
     description,
     canonicalPath,
     imageUrl: image,
-    robots: isUnclaimed || isSyntheticTestEntity ? noindexRobots : indexableRobots,
+    robots:
+      isUnclaimed || isSyntheticTestEntity ? noindexRobots : indexableRobots,
     schema: [localBusiness, ...videoSchemas(baseUrl, videos, name)],
     links: [
       { label: "Open profile", href: canonicalPath },
@@ -618,17 +621,17 @@ async function eventPage(baseUrl: string, eventId: string) {
   });
   const slotIsPublic = Boolean(
     primaryTruck?.bookingConfirmedAt &&
-      eventInterval &&
-      isSlotPublic({
-        slot: {
-          source: "parking_pass_booking",
-          status: "confirmed",
-          startsAtUtc: eventInterval.startUtc,
-          endsAtUtc: eventInterval.endUtc,
-          lastConfirmedAtUtc: primaryTruck.bookingConfirmedAt,
-        },
-        ttlHours: 24 * 365 * 100,
-      }),
+    eventInterval &&
+    isSlotPublic({
+      slot: {
+        source: "parking_pass_booking",
+        status: "confirmed",
+        startsAtUtc: eventInterval.startUtc,
+        endsAtUtc: eventInterval.endUtc,
+        lastConfirmedAtUtc: primaryTruck.bookingConfirmedAt,
+      },
+      ttlHours: 24 * 365 * 100,
+    }),
   );
   if (
     !canExposeAnonymousEventDetail({
@@ -819,6 +822,7 @@ async function supplierPage(baseUrl: string, supplierId: string) {
     .limit(1);
   if (!row || !row.isActive) return null;
   const name = cleanText(row.businessName, "MealScout supplier");
+  const isSyntheticTestEntity = isSyntheticPublicEntityName(name);
   const cityState = [row.city, row.state]
     .map((value) => cleanText(value))
     .filter(Boolean)
@@ -831,6 +835,7 @@ async function supplierPage(baseUrl: string, supplierId: string) {
     description,
     canonicalPath,
     imageUrl: defaultSocialImagePath,
+    robots: isSyntheticTestEntity ? noindexRobots : indexableRobots,
     schema: {
       "@context": "https://schema.org",
       "@type": "LocalBusiness",
@@ -860,13 +865,23 @@ async function supplierPage(baseUrl: string, supplierId: string) {
 
 async function seoLandingPage(
   baseUrl: string,
-  input: { path: string; title: string; description: string; links: PageLink[] },
+  input: {
+    path: string;
+    title: string;
+    description: string;
+    links: PageLink[];
+  },
 ) {
+  const containsSyntheticPathSegment = input.path
+    .split("/")
+    .some((segment) => isSyntheticPublicEntityName(segment));
+
   return {
     title: `${input.title} | MealScout`,
     description: input.description,
     canonicalPath: input.path,
     imageUrl: defaultSocialImagePath,
+    robots: containsSyntheticPathSegment ? noindexRobots : indexableRobots,
     schema: {
       "@context": "https://schema.org",
       "@type": "CollectionPage",
@@ -982,8 +997,14 @@ export function registerPublicProfilePrerenderRoutes(
       seoLandingPage(canonicalBaseUrl, {
         path: `/food-trucks-today/${encodeURIComponent(String(req.params.city || ""))}`,
         title: `Food trucks today in ${String(req.params.city || "").replace(/-/g, " ")}`,
-        description: "Find local food trucks active today. Browse local profiles, menus, and nearby stops.",
-        links: [{ label: "Open city food", href: `/city/${encodeURIComponent(String(req.params.city || ""))}/food` }],
+        description:
+          "Find local food trucks active today. Browse local profiles, menus, and nearby stops.",
+        links: [
+          {
+            label: "Open city food",
+            href: `/city/${encodeURIComponent(String(req.params.city || ""))}/food`,
+          },
+        ],
       }),
     ),
   );
@@ -993,8 +1014,14 @@ export function registerPublicProfilePrerenderRoutes(
       seoLandingPage(canonicalBaseUrl, {
         path: `/deals-today/${encodeURIComponent(String(req.params.city || ""))}`,
         title: `Deals today in ${String(req.params.city || "").replace(/-/g, " ")}`,
-        description: "See local food deals active today and open the related business profiles.",
-        links: [{ label: "Open city food", href: `/city/${encodeURIComponent(String(req.params.city || ""))}/food` }],
+        description:
+          "See local food deals active today and open the related business profiles.",
+        links: [
+          {
+            label: "Open city food",
+            href: `/city/${encodeURIComponent(String(req.params.city || ""))}/food`,
+          },
+        ],
       }),
     ),
   );
@@ -1004,7 +1031,8 @@ export function registerPublicProfilePrerenderRoutes(
       seoLandingPage(canonicalBaseUrl, {
         path: `/events-today/${encodeURIComponent(String(req.params.city || ""))}`,
         title: `Food events today in ${String(req.params.city || "").replace(/-/g, " ")}`,
-        description: "Find food events happening today and open local profile pages from each listing.",
+        description:
+          "Find food events happening today and open local profile pages from each listing.",
         links: [{ label: "Browse events", href: "/events/public" }],
       }),
     ),
@@ -1015,11 +1043,21 @@ export function registerPublicProfilePrerenderRoutes(
       seoLandingPage(canonicalBaseUrl, {
         path: `/city/${encodeURIComponent(String(req.params.city || ""))}/food`,
         title: `Places to eat in ${String(req.params.city || "").replace(/-/g, " ")}`,
-        description: "Browse local food businesses and open their canonical MealScout profile pages.",
+        description:
+          "Browse local food businesses and open their canonical MealScout profile pages.",
         links: [
-          { label: "Food trucks today", href: `/food-trucks-today/${encodeURIComponent(String(req.params.city || ""))}` },
-          { label: "Deals today", href: `/deals-today/${encodeURIComponent(String(req.params.city || ""))}` },
-          { label: "Events today", href: `/events-today/${encodeURIComponent(String(req.params.city || ""))}` },
+          {
+            label: "Food trucks today",
+            href: `/food-trucks-today/${encodeURIComponent(String(req.params.city || ""))}`,
+          },
+          {
+            label: "Deals today",
+            href: `/deals-today/${encodeURIComponent(String(req.params.city || ""))}`,
+          },
+          {
+            label: "Events today",
+            href: `/events-today/${encodeURIComponent(String(req.params.city || ""))}`,
+          },
         ],
       }),
     ),
@@ -1028,14 +1066,19 @@ export function registerPublicProfilePrerenderRoutes(
     "/cuisine/:cuisine/:city?",
     gate((req) =>
       seoLandingPage(canonicalBaseUrl, {
-        path:
-          req.params.city
-            ? `/cuisine/${encodeURIComponent(String(req.params.cuisine || ""))}/${encodeURIComponent(String(req.params.city || ""))}`
-            : `/cuisine/${encodeURIComponent(String(req.params.cuisine || ""))}`,
+        path: req.params.city
+          ? `/cuisine/${encodeURIComponent(String(req.params.cuisine || ""))}/${encodeURIComponent(String(req.params.city || ""))}`
+          : `/cuisine/${encodeURIComponent(String(req.params.cuisine || ""))}`,
         title: `${String(req.params.cuisine || "").replace(/-/g, " ")} food`,
-        description: "Explore local cuisine pages and open canonical MealScout profiles for nearby options.",
+        description:
+          "Explore local cuisine pages and open canonical MealScout profiles for nearby options.",
         links: req.params.city
-          ? [{ label: "Open city food", href: `/city/${encodeURIComponent(String(req.params.city || ""))}/food` }]
+          ? [
+              {
+                label: "Open city food",
+                href: `/city/${encodeURIComponent(String(req.params.city || ""))}/food`,
+              },
+            ]
           : [{ label: "Open search", href: "/search" }],
       }),
     ),
@@ -1046,8 +1089,14 @@ export function registerPublicProfilePrerenderRoutes(
       seoLandingPage(canonicalBaseUrl, {
         path: `/locations-with-trucks/${encodeURIComponent(String(req.params.city || ""))}`,
         title: `Locations with food trucks in ${String(req.params.city || "").replace(/-/g, " ")}`,
-        description: "Find host locations with active truck activity and open location profile pages.",
-        links: [{ label: "Open city food", href: `/city/${encodeURIComponent(String(req.params.city || ""))}/food` }],
+        description:
+          "Find host locations with active truck activity and open location profile pages.",
+        links: [
+          {
+            label: "Open city food",
+            href: `/city/${encodeURIComponent(String(req.params.city || ""))}/food`,
+          },
+        ],
       }),
     ),
   );

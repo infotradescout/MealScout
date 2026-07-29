@@ -1,8 +1,14 @@
 import { readFileSync } from "node:fs";
 
 const indexHtml = readFileSync("client/index.html", "utf8");
-const scoutPage = readFileSync("client/src/pages/explore-preview-v2.tsx", "utf8");
-const publicProfile = readFileSync("client/src/pages/public-profile.tsx", "utf8");
+const scoutPage = readFileSync(
+  "client/src/pages/explore-preview-v2.tsx",
+  "utf8",
+);
+const publicProfile = readFileSync(
+  "client/src/pages/public-profile.tsx",
+  "utf8",
+);
 const prerender = readFileSync("server/seo/publicProfilePrerender.ts", "utf8");
 const publicDiscoveryRoutes = readFileSync(
   "server/routes/publicDiscoveryRoutes.ts",
@@ -50,7 +56,9 @@ assert(
 );
 
 assert(
-  prerender.includes('if (normalized === "private_residence") return "Private event location";') &&
+  prerender.includes(
+    'if (normalized === "private_residence") return "Private event location";',
+  ) &&
     prerender.includes('if (normalized === "other") return "Host location";'),
   "Prerendered location pages should format raw location types as consumer labels.",
 );
@@ -60,14 +68,17 @@ assert(
 );
 
 assert(
-  prerender.includes("isSyntheticTestEntityName(name)") &&
-    prerender.includes("isUnclaimed || isSyntheticTestEntity ? noindexRobots : indexableRobots"),
+  prerender.includes("isSyntheticPublicEntityName(name)") &&
+    prerender.includes(
+      "isUnclaimed || isSyntheticTestEntity ? noindexRobots : indexableRobots",
+    ),
   "Obvious synthetic test profiles should be noindexed in prerendered public profile HTML.",
 );
 
 assert(
-  publicDiscoveryRoutes.includes("friendlyLocationTypeLabel(row.locationType)") &&
-    !publicDiscoveryRoutes.includes("Location type: ${row.locationType}"),
+  publicDiscoveryRoutes.includes(
+    "friendlyLocationTypeLabel(row.locationType)",
+  ) && !publicDiscoveryRoutes.includes("Location type: ${row.locationType}"),
   "Public discovery source truth statements should use friendly location type labels.",
 );
 

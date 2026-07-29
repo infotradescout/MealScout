@@ -25,10 +25,7 @@ import {
   videoStories,
 } from "@shared/schema";
 import { getIndexNowConfig } from "../services/indexNow";
-import {
-  isBarBusinessType,
-  isTruckBusinessType,
-} from "@shared/businessTypes";
+import { isBarBusinessType, isTruckBusinessType } from "@shared/businessTypes";
 import { resolveCityTimeZoneSync } from "../services/cityTimeZone";
 import { buildSlotDateTimes } from "../services/timeIntent";
 import { dateKeyInZone } from "../services/dateKeys";
@@ -37,6 +34,7 @@ import {
   assembleTruckOperatingPlan,
   type TruckOperatingPlanRow,
 } from "../services/truckOperatingPlan";
+import { isPublicDiscoveryEligibleEntity } from "@shared/publicDiscoveryIntegrity";
 
 const truckBusinessTypeAliases = [
   "food_truck",
@@ -78,7 +76,10 @@ const hasEligibleConfirmedEventInCity = async (input: {
         ),
         gte(events.date, input.windowStart),
         lte(events.date, input.windowEnd),
-        or(ilike(hosts.city, input.cityLike), ilike(hosts.address, input.cityLike)),
+        or(
+          ilike(hosts.city, input.cityLike),
+          ilike(hosts.address, input.cityLike),
+        ),
       ),
     )
     .limit(250);
@@ -97,17 +98,17 @@ const hasEligibleConfirmedEventInCity = async (input: {
     });
     return Boolean(
       interval &&
-        isSlotPublic({
-          slot: {
-            source: "parking_pass_booking",
-            status: "confirmed",
-            startsAtUtc: interval.startUtc,
-            endsAtUtc: interval.endUtc,
-            lastConfirmedAtUtc: row.bookingConfirmedAt,
-          },
-          now: input.now,
-          ttlHours: 24 * 365 * 100,
-        }),
+      isSlotPublic({
+        slot: {
+          source: "parking_pass_booking",
+          status: "confirmed",
+          startsAtUtc: interval.startUtc,
+          endsAtUtc: interval.endUtc,
+          lastConfirmedAtUtc: row.bookingConfirmedAt,
+        },
+        now: input.now,
+        ttlHours: 24 * 365 * 100,
+      }),
     );
   });
 };
@@ -184,9 +185,9 @@ const hasEligibleManualTruckStopInCity = async (input: {
   });
   return Boolean(
     plan.currentStop ||
-      plan.todayStop ||
-      plan.nextStop ||
-      plan.upcomingStops.length > 0,
+    plan.todayStop ||
+    plan.nextStop ||
+    plan.upcomingStops.length > 0,
   );
 };
 
@@ -324,7 +325,7 @@ export function registerSeoRoutes(app: Express) {
         .select()
         .from(cities)
         .orderBy(desc(cities.createdAt));
-      const restaurantRows = await db
+      const allRestaurantRows = await db
         .select({
           id: restaurants.id,
           name: restaurants.name,
@@ -337,7 +338,7 @@ export function registerSeoRoutes(app: Express) {
         .from(restaurants)
         .where(eq(restaurants.isActive, true))
         .orderBy(desc(restaurants.updatedAt));
-      const hostRows = await db
+      const allHostRows = await db
         .select({
           id: hosts.id,
           name: hosts.businessName,
@@ -345,7 +346,7 @@ export function registerSeoRoutes(app: Express) {
         })
         .from(hosts)
         .orderBy(desc(hosts.updatedAt));
-      const supplierRows = await db
+      const allSupplierRows = await db
         .select({
           id: suppliers.id,
           name: suppliers.businessName,
@@ -354,6 +355,24 @@ export function registerSeoRoutes(app: Express) {
         .from(suppliers)
         .where(eq(suppliers.isActive, true))
         .orderBy(desc(suppliers.updatedAt));
+      const restaurantRows = allRestaurantRows.filter((row: any) =>
+        isPublicDiscoveryEligibleEntity({
+          name: row.name,
+          isActive: true,
+        }),
+      );
+      const hostRows = allHostRows.filter((row: any) =>
+        isPublicDiscoveryEligibleEntity({
+          name: row.name,
+          isActive: true,
+        }),
+      );
+      const supplierRows = allSupplierRows.filter((row: any) =>
+        isPublicDiscoveryEligibleEntity({
+          name: row.name,
+          isActive: true,
+        }),
+      );
 
       const baseUrl = resolveSitemapSiteUrl();
       const lastmodByLoc = new Map<string, string | null>();
@@ -728,7 +747,11 @@ export function registerSeoRoutes(app: Express) {
       const entries = rows
         .filter(
           (row: any) =>
-            Boolean(row.isFoodTruck) || isTruckBusinessType(row.businessType),
+            isPublicDiscoveryEligibleEntity({
+              name: row.name,
+              isActive: true,
+            }) &&
+            (Boolean(row.isFoodTruck) || isTruckBusinessType(row.businessType)),
         )
         .map((row: any) => ({
           loc: `${baseUrl}/truck/${encodeURIComponent(`${toSlug(row.name) || row.id}--${row.id}`)}`,
@@ -758,7 +781,13 @@ export function registerSeoRoutes(app: Express) {
         .limit(50000);
 
       const entries = rows
-        .filter((row: any) => isBarBusinessType(row.businessType))
+        .filter(
+          (row: any) =>
+            isPublicDiscoveryEligibleEntity({
+              name: row.name,
+              isActive: true,
+            }) && isBarBusinessType(row.businessType),
+        )
         .map((row: any) => ({
           loc: `${baseUrl}/bar/${encodeURIComponent(`${toSlug(row.name) || row.id}--${row.id}`)}`,
           lastmod: row.updatedAt,
@@ -937,11 +966,7 @@ export function registerSeoRoutes(app: Express) {
           }),
         ]);
 
-        if (
-          hasTruck.length === 0 &&
-          !hasEvent &&
-          !hasManual
-        ) {
+        if (hasTruck.length === 0 && !hasEvent && !hasManual) {
           continue;
         }
 
@@ -1132,19 +1157,19 @@ export function registerSeoRoutes(app: Express) {
         });
         return Boolean(
           interval &&
-            row.bookingConfirmedAt &&
-            isSlotPublic({
-              slot: {
-                source: "parking_pass_booking",
-                status: "confirmed",
-                startsAtUtc: interval.startUtc,
-                endsAtUtc: interval.endUtc,
-                lastConfirmedAtUtc: row.bookingConfirmedAt,
-              },
-              now,
-              lookaheadHours,
-              ttlHours: 24 * 365 * 100,
-            }),
+          row.bookingConfirmedAt &&
+          isSlotPublic({
+            slot: {
+              source: "parking_pass_booking",
+              status: "confirmed",
+              startsAtUtc: interval.startUtc,
+              endsAtUtc: interval.endUtc,
+              lastConfirmedAtUtc: row.bookingConfirmedAt,
+            },
+            now,
+            lookaheadHours,
+            ttlHours: 24 * 365 * 100,
+          }),
         );
       });
       const uniqueEligibleRows = Array.from(
@@ -1216,10 +1241,17 @@ export function registerSeoRoutes(app: Express) {
         .limit(50000);
 
       sendUrlsetXml(res, {
-        entries: rows.map((row: any) => ({
-          loc: `${baseUrl}/supplier/${encodeURIComponent(`${toSlug(row.name) || row.id}--${row.id}`)}`,
-          lastmod: row.updatedAt,
-        })),
+        entries: rows
+          .filter((row: any) =>
+            isPublicDiscoveryEligibleEntity({
+              name: row.name,
+              isActive: true,
+            }),
+          )
+          .map((row: any) => ({
+            loc: `${baseUrl}/supplier/${encodeURIComponent(`${toSlug(row.name) || row.id}--${row.id}`)}`,
+            lastmod: row.updatedAt,
+          })),
       });
     } catch (e) {
       console.error("sitemap-suppliers failed", e);
