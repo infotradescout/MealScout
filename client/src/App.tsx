@@ -484,7 +484,6 @@ function SharedPublicRoutes() {
       <Route path="/post-verification" component={PostVerification} />
       <Route path="/menu/:restaurantId" component={OnlineMenuPage} />
       <Route path="/checkout/:restaurantId" component={PickupCheckoutPage} />
-      <Route path="/merchant-delivery" component={MerchantDeliveryPage} />
       <Route
         path="/order-confirmation/:orderId"
         component={OrderConfirmationPage}
@@ -520,156 +519,153 @@ function Router() {
 
   return (
     <Suspense fallback={<PageLoader />}>
-      <Switch>
-        {shouldUseGuestRoutes ? (
-          <>
-            <Route path="/" component={Welcome} />
-            <Route path="/scout" component={ScoutPageV2} />
-            <Route path="/scout/:refTag" component={ScoutPageV2} />
-            <Route path="/explore" component={RedirectToScout} />
-            <Route path="/explore-preview" component={RedirectToScout} />
-            <Route path="/directory" component={ScoutPageV2} />
-            <Route path="/directory/:refTag" component={ScoutPageV2} />
-            <Route path="/scout-prototype" component={RedirectToScout} />
-            <Route path="/scout-v2" component={ScoutPageV2} />
-            <Route path="/food-truck-rush" component={FoodTruckRush} />
-            <Route path="/login" component={Login} />
-            <Route path="/customer-signup" component={CustomerSignup} />
-            <Route path="/customer-signup/:refTag" component={CustomerSignup} />
-            <Route path="/restaurant-signup" component={RestaurantSignup} />
-            <Route path="/claim-business" component={ClaimTruckPage} />
-            <Route path="/claim-business/:refTag" component={ClaimTruckPage} />
-            <Route path="/claim-truck" component={ClaimTruckPage} />
-            <Route path="/claim-truck/:refTag" component={ClaimTruckPage} />
-            <Route path="/deal-creation" component={DealCreation} />
-            <Route path="/deal/:id" component={DealDetail} />
-            {SharedPublicRoutes()}
-            <Route path="/admin" component={AdminLogin} />
-            <Route path="/admin/login" component={RedirectToAdmin} />
-            <Route path="/admin/dashboard" component={RedirectToAdmin} />
-            {GuestProtectedRoutes()}
-            <Route
-              path="/:businessSlug/:refTag"
-              component={CleanPublicProfileRoute}
-            />
-            <Route path="/:businessSlug" component={CleanPublicProfileRoute} />
-          </>
-        ) : (
-          <>
-            <Route path="/" component={RedirectToScout} />
-            <Route path="/scout" component={ScoutPageV2} />
-            <Route path="/scout/:refTag" component={ScoutPageV2} />
-            <Route path="/explore" component={RedirectToScout} />
-            <Route path="/explore-preview" component={RedirectToScout} />
-            <Route path="/directory" component={ScoutPageV2} />
-            <Route path="/directory/:refTag" component={ScoutPageV2} />
-            <Route path="/scout-prototype" component={RedirectToScout} />
-            <Route path="/scout-v2" component={ScoutPageV2} />
-            <Route path="/food-truck-rush" component={FoodTruckRush} />
-            <Route path="/login" component={Login} />
-            <Route path="/customer-signup" component={CustomerSignup} />
-            <Route path="/customer-signup/:refTag" component={CustomerSignup} />
-            <Route path="/restaurant-signup" component={RestaurantSignup} />
-            <Route path="/claim-business" component={ClaimTruckPage} />
-            <Route path="/claim-business/:refTag" component={ClaimTruckPage} />
-            <Route path="/claim-truck" component={ClaimTruckPage} />
-            <Route path="/claim-truck/:refTag" component={ClaimTruckPage} />
-            <Route path="/deal-creation" component={DealCreation} />
-            <Route path="/deal-edit/:dealId" component={DealEdit} />
-            <Route path="/deal/:id" component={DealDetail} />
-            <Route path="/subscribe" component={Subscribe} />
-            <Route
-              path="/restaurant-owner-dashboard"
-              component={RestaurantOwnerDashboard}
-            />
-            <Route
-              path="/restaurant/dashboard"
-              component={RestaurantOwnerDashboard}
-            />
-            <Route path="/host/dashboard" component={HostDashboard} />
-            <Route
-              path="/event-coordinator/dashboard"
-              component={EventCoordinatorDashboard}
-            />
-            <Route path="/truck-discovery" component={TruckDiscovery} />
-            <Route path="/supply/orders" component={SupplyOrdersPage} />
-            <Route path="/favorites" component={Favorites} />
-            <Route path="/orders" component={Orders} />
-            <Route path="/merchant-promotions" component={MerchantPromotions} />
-            <Route path="/profile" component={Profile} />
-            <Route
-              path="/supplier/dashboard"
-              component={SupplierDashboardPage}
-            />
-            <Route path="/affiliate/earnings" component={AffiliateEarnings} />
-            <Route path="/staff" component={StaffDashboard} />
-            <Route path="/admin" component={AdminDashboard} />
-            <Route path="/admin/dashboard" component={RedirectToAdmin} />
-            <Route path="/admin/login" component={RedirectToAdmin} />
-            <Route path="/admin/incidents" component={AdminIncidents} />
-            <Route
-              path="/admin/control-center"
-              component={AdminControlCenter}
-            />
-            <Route
-              path="/admin/giveaway-wheel"
-              component={AdminGiveawayWheel}
-            />
-            <Route path="/admin/tickets" component={AdminSupportTickets} />
-            <Route path="/admin/moderation" component={AdminModerationEvents} />
-            <Route path="/admin/moderation/queue" component={ModerationQueue} />
-            <Route
-              path="/admin/moderation/videos"
-              component={AdminModerationVideos}
-            />
-            <Route
-              path="/admin/moderation/metrics"
-              component={AdminModerationMetrics}
-            />
-            <Route
-              path="/admin/moderation/appeals"
-              component={AdminModerationAppeals}
-            />
-            <Route path="/admin/audit-logs" component={AdminAuditLogs} />
-            <Route path="/admin/vac-logs" component={AdminVacLogs} />
-            <Route path="/admin/telemetry" component={AdminTelemetry} />
-            <Route path="/admin/geo-ads" component={AdminGeoAds} />
-            <Route path="/admin/geo/heatmap" component={AdminMarketHeatmap} />
-            <Route
-              path="/admin/affiliates"
-              component={AdminAffiliateManagement}
-            />
-            <Route path="/admin/switcher" component={DashboardSwitcherPage} />
-            <Route path="/admin/oauth-setup" component={OAuthSetupGuide} />
-            <Route
-              path="/profile/notifications"
-              component={RedirectToSettingsNotifications}
-            />
-            <Route path="/settings" component={SettingsPage} />
-            <Route path="/profile/addresses" component={RedirectToSettingsAccount} />
-            <Route path="/profile/payment" component={RedirectToSettingsAccount} />
-            <Route path="/profile/help" component={RedirectToHelp} />
-            <Route
-              path="/profile/reporter-reputation"
-              component={ReporterReputationPage}
-            />
-            <Route
-              path="/restaurant/:restaurantId/reviews"
-              component={ReviewsPage}
-            />
-            {SharedPublicRoutes()}
-            <Route path="/parking-pass-manage" component={ParkingPassManage} />
-            <Route path="/business-team" component={BusinessTeamPage} />
-            <Route path="/menu-builder" component={MenuBuilderPage} />
-            <Route path="/kitchen" component={KitchenDisplayPage} />
-            <Route
-              path="/:businessSlug/:refTag"
-              component={CleanPublicProfileRoute}
-            />
-            <Route path="/:businessSlug" component={CleanPublicProfileRoute} />
-          </>
-        )}
-      </Switch>
+      {shouldUseGuestRoutes ? (
+        <Switch>
+          <Route path="/" component={Welcome} />
+          <Route path="/scout" component={ScoutPageV2} />
+          <Route path="/scout/:refTag" component={ScoutPageV2} />
+          <Route path="/explore" component={RedirectToScout} />
+          <Route path="/explore-preview" component={RedirectToScout} />
+          <Route path="/directory" component={ScoutPageV2} />
+          <Route path="/directory/:refTag" component={ScoutPageV2} />
+          <Route path="/scout-prototype" component={RedirectToScout} />
+          <Route path="/scout-v2" component={ScoutPageV2} />
+          <Route path="/food-truck-rush" component={FoodTruckRush} />
+          <Route path="/login" component={Login} />
+          <Route path="/customer-signup" component={CustomerSignup} />
+          <Route path="/customer-signup/:refTag" component={CustomerSignup} />
+          <Route path="/restaurant-signup" component={RestaurantSignup} />
+          <Route path="/claim-business" component={ClaimTruckPage} />
+          <Route path="/claim-business/:refTag" component={ClaimTruckPage} />
+          <Route path="/claim-truck" component={ClaimTruckPage} />
+          <Route path="/claim-truck/:refTag" component={ClaimTruckPage} />
+          <Route path="/deal-creation" component={DealCreation} />
+          <Route path="/deal/:id" component={DealDetail} />
+          {SharedPublicRoutes()}
+          <Route path="/admin" component={AdminLogin} />
+          <Route path="/admin/login" component={RedirectToAdmin} />
+          <Route path="/admin/dashboard" component={RedirectToAdmin} />
+          <Route path="/merchant-delivery" component={RedirectToLogin} />
+          {GuestProtectedRoutes()}
+          <Route
+            path="/:businessSlug/:refTag"
+            component={CleanPublicProfileRoute}
+          />
+          <Route path="/:businessSlug" component={CleanPublicProfileRoute} />
+        </Switch>
+      ) : (
+        <Switch>
+          <Route path="/" component={RedirectToScout} />
+          <Route path="/scout" component={ScoutPageV2} />
+          <Route path="/scout/:refTag" component={ScoutPageV2} />
+          <Route path="/explore" component={RedirectToScout} />
+          <Route path="/explore-preview" component={RedirectToScout} />
+          <Route path="/directory" component={ScoutPageV2} />
+          <Route path="/directory/:refTag" component={ScoutPageV2} />
+          <Route path="/scout-prototype" component={RedirectToScout} />
+          <Route path="/scout-v2" component={ScoutPageV2} />
+          <Route path="/food-truck-rush" component={FoodTruckRush} />
+          <Route path="/login" component={Login} />
+          <Route path="/customer-signup" component={CustomerSignup} />
+          <Route path="/customer-signup/:refTag" component={CustomerSignup} />
+          <Route path="/restaurant-signup" component={RestaurantSignup} />
+          <Route path="/claim-business" component={ClaimTruckPage} />
+          <Route path="/claim-business/:refTag" component={ClaimTruckPage} />
+          <Route path="/claim-truck" component={ClaimTruckPage} />
+          <Route path="/claim-truck/:refTag" component={ClaimTruckPage} />
+          <Route path="/deal-creation" component={DealCreation} />
+          <Route path="/deal-edit/:dealId" component={DealEdit} />
+          <Route path="/deal/:id" component={DealDetail} />
+          <Route path="/subscribe" component={Subscribe} />
+          <Route
+            path="/restaurant-owner-dashboard"
+            component={RestaurantOwnerDashboard}
+          />
+          <Route
+            path="/restaurant/dashboard"
+            component={RestaurantOwnerDashboard}
+          />
+          <Route path="/host/dashboard" component={HostDashboard} />
+          <Route
+            path="/event-coordinator/dashboard"
+            component={EventCoordinatorDashboard}
+          />
+          <Route path="/truck-discovery" component={TruckDiscovery} />
+          <Route path="/supply/orders" component={SupplyOrdersPage} />
+          <Route path="/favorites" component={Favorites} />
+          <Route path="/orders" component={Orders} />
+          <Route path="/merchant-promotions" component={MerchantPromotions} />
+          <Route path="/profile" component={Profile} />
+          <Route path="/supplier/dashboard" component={SupplierDashboardPage} />
+          <Route path="/affiliate/earnings" component={AffiliateEarnings} />
+          <Route path="/staff" component={StaffDashboard} />
+          <Route path="/admin" component={AdminDashboard} />
+          <Route path="/admin/dashboard" component={RedirectToAdmin} />
+          <Route path="/admin/login" component={RedirectToAdmin} />
+          <Route path="/admin/incidents" component={AdminIncidents} />
+          <Route path="/admin/control-center" component={AdminControlCenter} />
+          <Route path="/admin/giveaway-wheel" component={AdminGiveawayWheel} />
+          <Route path="/admin/tickets" component={AdminSupportTickets} />
+          <Route path="/admin/moderation" component={AdminModerationEvents} />
+          <Route path="/admin/moderation/queue" component={ModerationQueue} />
+          <Route
+            path="/admin/moderation/videos"
+            component={AdminModerationVideos}
+          />
+          <Route
+            path="/admin/moderation/metrics"
+            component={AdminModerationMetrics}
+          />
+          <Route
+            path="/admin/moderation/appeals"
+            component={AdminModerationAppeals}
+          />
+          <Route path="/admin/audit-logs" component={AdminAuditLogs} />
+          <Route path="/admin/vac-logs" component={AdminVacLogs} />
+          <Route path="/admin/telemetry" component={AdminTelemetry} />
+          <Route path="/admin/geo-ads" component={AdminGeoAds} />
+          <Route path="/admin/geo/heatmap" component={AdminMarketHeatmap} />
+          <Route
+            path="/admin/affiliates"
+            component={AdminAffiliateManagement}
+          />
+          <Route path="/admin/switcher" component={DashboardSwitcherPage} />
+          <Route path="/admin/oauth-setup" component={OAuthSetupGuide} />
+          <Route
+            path="/profile/notifications"
+            component={RedirectToSettingsNotifications}
+          />
+          <Route path="/settings" component={SettingsPage} />
+          <Route
+            path="/profile/addresses"
+            component={RedirectToSettingsAccount}
+          />
+          <Route
+            path="/profile/payment"
+            component={RedirectToSettingsAccount}
+          />
+          <Route path="/profile/help" component={RedirectToHelp} />
+          <Route
+            path="/profile/reporter-reputation"
+            component={ReporterReputationPage}
+          />
+          <Route
+            path="/restaurant/:restaurantId/reviews"
+            component={ReviewsPage}
+          />
+          <Route path="/merchant-delivery" component={MerchantDeliveryPage} />
+          {SharedPublicRoutes()}
+          <Route path="/parking-pass-manage" component={ParkingPassManage} />
+          <Route path="/business-team" component={BusinessTeamPage} />
+          <Route path="/menu-builder" component={MenuBuilderPage} />
+          <Route path="/kitchen" component={KitchenDisplayPage} />
+          <Route
+            path="/:businessSlug/:refTag"
+            component={CleanPublicProfileRoute}
+          />
+          <Route path="/:businessSlug" component={CleanPublicProfileRoute} />
+        </Switch>
+      )}
     </Suspense>
   );
 }
@@ -694,6 +690,7 @@ function App() {
   const usesBusinessWorkspace =
     currentPath === "/restaurant-owner-dashboard" ||
     currentPath === "/menu-builder" ||
+    currentPath === "/merchant-delivery" ||
     currentPath === "/deal-creation" ||
     currentPath.startsWith("/deal-edit/") ||
     currentPath === "/orders" ||

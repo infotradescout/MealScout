@@ -5,15 +5,7 @@ import { ensurePremiumTrialForUserId } from "../services/premiumTrial";
 import { db } from "../db";
 import { z } from "zod";
 import Stripe from "stripe";
-import {
-  and,
-  asc,
-  eq,
-  ilike,
-  inArray,
-  like,
-  sql,
-} from "drizzle-orm";
+import { and, asc, eq, ilike, inArray, like, sql } from "drizzle-orm";
 import {
   deals,
   eventBookings,
@@ -84,9 +76,7 @@ async function findDeals(params: {
     const conditions = [eq(deals.isActive, true)];
 
     if (params.search) {
-      conditions.push(
-        like(deals.title, `%${params.search}%`)
-      );
+      conditions.push(like(deals.title, `%${params.search}%`));
     }
 
     // Note: deals don't have a 'category' field directly, skipping category filter
@@ -131,21 +121,15 @@ async function findRestaurants(params: {
     const conditions = [eq(restaurants.isActive, true)];
 
     if (params.search) {
-      conditions.push(
-        ilike(restaurants.name, `%${params.search}%`)
-      );
+      conditions.push(ilike(restaurants.name, `%${params.search}%`));
     }
 
     if (params.location) {
-      conditions.push(
-        like(restaurants.address, `%${params.location}%`)
-      );
+      conditions.push(like(restaurants.address, `%${params.location}%`));
     }
 
     if (params.cuisine) {
-      conditions.push(
-        like(restaurants.cuisineType, `%${params.cuisine}%`)
-      );
+      conditions.push(like(restaurants.cuisineType, `%${params.cuisine}%`));
     }
 
     const results = await db
@@ -203,7 +187,10 @@ async function createRestaurant(params: {
     try {
       await ensurePremiumTrialForUserId(params.userId);
     } catch (e) {
-      console.warn("ensurePremiumTrialForUserId failed after action createRestaurant:", e);
+      console.warn(
+        "ensurePremiumTrialForUserId failed after action createRestaurant:",
+        e,
+      );
     }
 
     return {
@@ -245,7 +232,7 @@ async function updateRestaurant(params: {
 
     const updated = await storage.updateRestaurant(
       params.restaurantId,
-      params.updates
+      params.updates,
     );
 
     return {
@@ -343,7 +330,10 @@ async function updateRestaurantProfile(params: {
       };
     }
 
-    const updated = await storage.updateRestaurant(params.restaurantId, baseUpdates);
+    const updated = await storage.updateRestaurant(
+      params.restaurantId,
+      baseUpdates,
+    );
 
     return {
       success: true,
@@ -400,16 +390,25 @@ async function updateRestaurantLocation(params: {
       };
     }
 
-    const updated = await storage.updateRestaurantLocation(params.restaurantId, {
-      latitude,
-      longitude,
-      city: params.city === undefined || params.city === null ? undefined : String(params.city).trim() || undefined,
-      state: params.state === undefined || params.state === null ? undefined : String(params.state).trim() || undefined,
-      mobileOnline:
-        params.mobileOnline === undefined
-          ? undefined
-          : asBoolean(params.mobileOnline),
-    });
+    const updated = await storage.updateRestaurantLocation(
+      params.restaurantId,
+      {
+        latitude,
+        longitude,
+        city:
+          params.city === undefined || params.city === null
+            ? undefined
+            : String(params.city).trim() || undefined,
+        state:
+          params.state === undefined || params.state === null
+            ? undefined
+            : String(params.state).trim() || undefined,
+        mobileOnline:
+          params.mobileOnline === undefined
+            ? undefined
+            : asBoolean(params.mobileOnline),
+      },
+    );
 
     return {
       success: true,
@@ -564,7 +563,10 @@ async function createMenu(params: {
       importSource: toNullableTrimmedText(params.importSource),
     });
 
-    const [menu] = await db.insert(menus).values(parsed as any).returning();
+    const [menu] = await db
+      .insert(menus)
+      .values(parsed as any)
+      .returning();
 
     return {
       success: true,
@@ -581,7 +583,11 @@ async function createMenu(params: {
 /**
  * Update a menu
  */
-async function updateMenu(params: { userId: string; menuId: string; updates: Record<string, any> }) {
+async function updateMenu(params: {
+  userId: string;
+  menuId: string;
+  updates: Record<string, any>;
+}) {
   try {
     if (!params.userId || !params.menuId) {
       return {
@@ -589,7 +595,10 @@ async function updateMenu(params: { userId: string; menuId: string; updates: Rec
         error: "Missing required fields: userId, menuId",
       };
     }
-    const [menu] = await db.select().from(menus).where(eq(menus.id, params.menuId));
+    const [menu] = await db
+      .select()
+      .from(menus)
+      .where(eq(menus.id, params.menuId));
     if (!menu) {
       return { success: false, error: "Menu not found" };
     }
@@ -643,7 +652,10 @@ async function deleteMenu(params: { userId: string; menuId: string }) {
         error: "Missing required fields: userId, menuId",
       };
     }
-    const [menu] = await db.select().from(menus).where(eq(menus.id, params.menuId));
+    const [menu] = await db
+      .select()
+      .from(menus)
+      .where(eq(menus.id, params.menuId));
     if (!menu) {
       return {
         success: false,
@@ -696,7 +708,10 @@ async function createMenuCategory(params: {
         error: "Missing required fields: userId, menuId",
       };
     }
-    const [menu] = await db.select().from(menus).where(eq(menus.id, params.menuId));
+    const [menu] = await db
+      .select()
+      .from(menus)
+      .where(eq(menus.id, params.menuId));
     if (!menu) {
       return { success: false, error: "Menu not found" };
     }
@@ -860,7 +875,10 @@ async function createMenuItem(params: {
       };
     }
 
-    const [menu] = await db.select().from(menus).where(eq(menus.id, params.menuId));
+    const [menu] = await db
+      .select()
+      .from(menus)
+      .where(eq(menus.id, params.menuId));
     if (!menu) return { success: false, error: "Menu not found" };
 
     const canManage = await storage.verifyRestaurantOwnership(
@@ -881,7 +899,10 @@ async function createMenuItem(params: {
       description: toNullableTrimmedText((params as any).description),
     });
 
-    const [item] = await db.insert(menuItems).values(parsed as any).returning();
+    const [item] = await db
+      .insert(menuItems)
+      .values(parsed as any)
+      .returning();
     return {
       success: true,
       data: { item },
@@ -934,17 +955,24 @@ async function updateMenuItem(params: {
         (updates as any).description !== undefined
           ? toNullableTrimmedText((updates as any).description)
           : (updates as any).description,
-      allergens:
-        Array.isArray((updates as any).allergens) ? (updates as any).allergens : undefined,
-      dietaryTags:
-        Array.isArray((updates as any).dietaryTags)
-          ? (updates as any).dietaryTags
-          : undefined,
+      allergens: Array.isArray((updates as any).allergens)
+        ? (updates as any).allergens
+        : undefined,
+      dietaryTags: Array.isArray((updates as any).dietaryTags)
+        ? (updates as any).dietaryTags
+        : undefined,
     };
 
     const [updated] = await db
       .update(menuItems)
-      .set({ ...normalized, updatedAt: new Date() })
+      .set({
+        ...normalized,
+        ...(Object.prototype.hasOwnProperty.call(updates, "isAvailable") ||
+        Object.prototype.hasOwnProperty.call(updates, "inventoryQty")
+          ? { inventoryAutoUnavailable: false }
+          : {}),
+        updatedAt: new Date(),
+      })
       .where(eq(menuItems.id, params.itemId))
       .returning();
 
@@ -986,7 +1014,11 @@ async function deleteMenuItem(params: { userId: string; itemId: string }) {
 
     const [updated] = await db
       .update(menuItems)
-      .set({ isAvailable: false, updatedAt: new Date() })
+      .set({
+        isAvailable: false,
+        inventoryAutoUnavailable: false,
+        updatedAt: new Date(),
+      })
       .where(eq(menuItems.id, params.itemId))
       .returning();
 
@@ -1085,10 +1117,16 @@ async function upsertManualSchedule(params: {
     }
 
     if (!params.scheduleId) {
-      if (!params.date || !params.startTime || !params.endTime || !params.address) {
+      if (
+        !params.date ||
+        !params.startTime ||
+        !params.endTime ||
+        !params.address
+      ) {
         return {
           success: false,
-          error: "Missing required fields for create: date, startTime, endTime, address",
+          error:
+            "Missing required fields for create: date, startTime, endTime, address",
         };
       }
       const timeZone = resolveCityTimeZoneSync({
@@ -1161,14 +1199,22 @@ async function upsertManualSchedule(params: {
       }
       updates.date = utcDateFromDateKey(params.date);
     }
-    if (params.startTime !== undefined) updates.startTime = toNullableTrimmedText(params.startTime);
-    if (params.endTime !== undefined) updates.endTime = toNullableTrimmedText(params.endTime);
-    if (params.locationName !== undefined) updates.locationName = toNullableTrimmedText(params.locationName);
-    if (params.address !== undefined) updates.address = toNullableTrimmedText(params.address);
-    if (params.city !== undefined) updates.city = toNullableTrimmedText(params.city);
-    if (params.state !== undefined) updates.state = toNullableTrimmedText(params.state);
-    if (params.notes !== undefined) updates.notes = toNullableTrimmedText(params.notes);
-    if (params.isPublic !== undefined) updates.isPublic = asBoolean(params.isPublic);
+    if (params.startTime !== undefined)
+      updates.startTime = toNullableTrimmedText(params.startTime);
+    if (params.endTime !== undefined)
+      updates.endTime = toNullableTrimmedText(params.endTime);
+    if (params.locationName !== undefined)
+      updates.locationName = toNullableTrimmedText(params.locationName);
+    if (params.address !== undefined)
+      updates.address = toNullableTrimmedText(params.address);
+    if (params.city !== undefined)
+      updates.city = toNullableTrimmedText(params.city);
+    if (params.state !== undefined)
+      updates.state = toNullableTrimmedText(params.state);
+    if (params.notes !== undefined)
+      updates.notes = toNullableTrimmedText(params.notes);
+    if (params.isPublic !== undefined)
+      updates.isPublic = asBoolean(params.isPublic);
     if (params.city !== undefined || params.state !== undefined) {
       updates.timezone = resolveCityTimeZoneSync({
         city: String(params.city || existing.city || "").trim(),
@@ -1261,7 +1307,10 @@ async function bookParkingSpot(params: {
 
     let event = await storage.getEvent(eventId);
     if (!event) {
-      event = await ensureParkingPassEventRow({ passId: eventId, requireFuture: true });
+      event = await ensureParkingPassEventRow({
+        passId: eventId,
+        requireFuture: true,
+      });
     }
     if (!event) {
       return {
@@ -1347,7 +1396,10 @@ async function bookParkingSpot(params: {
         .select({ id: eventBookings.id, status: eventBookings.status })
         .from(eventBookings)
         .where(
-          and(eq(eventBookings.eventId, event.id), eq(eventBookings.truckId, params.truckId)),
+          and(
+            eq(eventBookings.eventId, event.id),
+            eq(eventBookings.truckId, params.truckId),
+          ),
         )
         .limit(1);
       if (existing?.status === "confirmed") {
@@ -1382,7 +1434,9 @@ async function bookParkingSpot(params: {
         );
       const reservedCount = Number(countRow?.count || 0);
       if (reservedCount >= Number(lockedEvent.maxTrucks || 0)) {
-        throw Object.assign(new Error("Event is fully booked"), { statusCode: 409 });
+        throw Object.assign(new Error("Event is fully booked"), {
+          statusCode: 409,
+        });
       }
 
       const [createdBooking] = await tx
@@ -1416,7 +1470,9 @@ async function bookParkingSpot(params: {
           hostPriceCents: String(hostPriceCents),
           platformFeeCents: String(PLATFORM_FEE),
           totalCents: String(totalCents),
-          hostPaymentMode: hostStripeAccountId ? "destination_charge" : "platform_hold",
+          hostPaymentMode: hostStripeAccountId
+            ? "destination_charge"
+            : "platform_hold",
         },
       };
       if (hostStripeAccountId) {
@@ -1432,7 +1488,8 @@ async function bookParkingSpot(params: {
         .set({
           status: "cancelled",
           cancelledAt: new Date(),
-          cancellationReason: "payment_pending_manual_review: Payment setup failed",
+          cancellationReason:
+            "payment_pending_manual_review: Payment setup failed",
           stripePaymentStatus: "payment_pending",
           updatedAt: new Date(),
         })
@@ -1443,7 +1500,8 @@ async function bookParkingSpot(params: {
         data: {
           paymentPending: true,
           bookingId: booking.id,
-          message: "Your spot request was received. We'll send payment instructions.",
+          message:
+            "Your spot request was received. We'll send payment instructions.",
         },
       };
     }
@@ -1524,10 +1582,7 @@ async function getFoodTruckLocations(params: {
   radiusKm?: number;
 }) {
   try {
-    if (
-      params.latitude === undefined ||
-      params.longitude === undefined
-    ) {
+    if (params.latitude === undefined || params.longitude === undefined) {
       return {
         success: false,
         error: "Missing required fields: latitude, longitude",
@@ -1549,14 +1604,23 @@ async function getFoodTruckLocations(params: {
       };
     }
 
-    if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+    if (
+      latitude < -90 ||
+      latitude > 90 ||
+      longitude < -180 ||
+      longitude > 180
+    ) {
       return {
         success: false,
         error: "Invalid coordinates range",
       };
     }
 
-    const trucks = await storage.getLiveTrucksNearby(latitude, longitude, radius);
+    const trucks = await storage.getLiveTrucksNearby(
+      latitude,
+      longitude,
+      radius,
+    );
 
     return {
       success: true,
@@ -1591,16 +1655,28 @@ async function getParkingPassSpots(params: {
     const latitude = Number(params.latitude);
     const longitude = Number(params.longitude);
     const radius = Math.min(Number(params.radiusKm ?? 12), 80);
-    const horizonDays = Math.max(1, Math.min(Number(params.horizonDays ?? 30), 90));
+    const horizonDays = Math.max(
+      1,
+      Math.min(Number(params.horizonDays ?? 30), 90),
+    );
 
-    if (Number.isNaN(latitude) || Number.isNaN(longitude) || Number.isNaN(radius)) {
+    if (
+      Number.isNaN(latitude) ||
+      Number.isNaN(longitude) ||
+      Number.isNaN(radius)
+    ) {
       return {
         success: false,
         error: "Invalid coordinates or radius",
       };
     }
 
-    if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+    if (
+      latitude < -90 ||
+      latitude > 90 ||
+      longitude < -180 ||
+      longitude > 180
+    ) {
       return {
         success: false,
         error: "Invalid coordinates range",
@@ -1664,7 +1740,9 @@ async function getParkingPassSpots(params: {
         maxTrucks: Number(event?.maxTrucks ?? 1) || 1,
         startTime: String(event?.startTime || "").trim() || null,
         endTime: String(event?.endTime || "").trim() || null,
-        nextDate: event?.date ? new Date(event.date).toISOString().slice(0, 10) : null,
+        nextDate: event?.date
+          ? new Date(event.date).toISOString().slice(0, 10)
+          : null,
         paymentsEnabled: Boolean(event?.paymentsEnabled),
         distanceKm,
       });
@@ -1700,7 +1778,8 @@ async function redeemCredits(params: {
     if (!params.userId || !params.amount || params.amount <= 0) {
       return {
         success: false,
-        error: "Missing or invalid required fields: userId, amount (must be > 0)",
+        error:
+          "Missing or invalid required fields: userId, amount (must be > 0)",
       };
     }
 
@@ -1809,8 +1888,8 @@ async function getRestaurantDetails(params: { restaurantId: string }) {
       .where(
         and(
           eq(deals.restaurantId, params.restaurantId),
-          eq(deals.isActive, true)
-        )
+          eq(deals.isActive, true),
+        ),
       );
 
     return {

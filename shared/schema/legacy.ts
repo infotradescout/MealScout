@@ -206,10 +206,9 @@ export const restaurants = pgTable("restaurants", {
   insuranceVerified: boolean("insurance_verified").default(false),
   insuranceVerifiedAt: timestamp("insurance_verified_at"),
   insuranceExpiresAt: timestamp("insurance_expires_at"),
-  insuranceVerifiedByUserId: varchar("insurance_verified_by_user_id").references(
-    () => users.id,
-    { onDelete: "set null" },
-  ),
+  insuranceVerifiedByUserId: varchar(
+    "insurance_verified_by_user_id",
+  ).references(() => users.id, { onDelete: "set null" }),
   // Image uploads
   logoUrl: varchar("logo_url"),
   coverImageUrl: varchar("cover_image_url"),
@@ -252,8 +251,12 @@ export const merchantDeliverySettings = pgTable(
     minimumOrderCents: integer("minimum_order_cents").notNull().default(0),
     estimatedMinutes: integer("estimated_minutes").notNull().default(45),
     maxConcurrentOrders: integer("max_concurrent_orders").notNull().default(5),
-    postalCodes: jsonb("postal_codes").notNull().default(sql`'[]'::jsonb`),
-    deliveryHours: jsonb("delivery_hours").notNull().default(sql`'{}'::jsonb`),
+    postalCodes: jsonb("postal_codes")
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    deliveryHours: jsonb("delivery_hours")
+      .notNull()
+      .default(sql`'{}'::jsonb`),
     instructions: text("instructions"),
     updatedAt: timestamp("updated_at").defaultNow(),
   },
@@ -491,7 +494,9 @@ export const publicBusinessSlugOwnerships = pgTable(
     entityId: varchar("entity_id").notNull(),
     preferredSlug: varchar("preferred_slug", { length: 100 }),
     sourceName: varchar("source_name"),
-    assignmentStatus: varchar("assignment_status").notNull().default("assigned"),
+    assignmentStatus: varchar("assignment_status")
+      .notNull()
+      .default("assigned"),
     createdAt: timestamp("created_at").defaultNow(),
     updatedAt: timestamp("updated_at").defaultNow(),
   },
@@ -2893,7 +2898,8 @@ export type RestaurantUserRecommendation =
 export type InsertMenuItemRecommendation = z.infer<
   typeof insertMenuItemRecommendationSchema
 >;
-export type MenuItemRecommendation = typeof menuItemRecommendations.$inferSelect;
+export type MenuItemRecommendation =
+  typeof menuItemRecommendations.$inferSelect;
 export type InsertMenuItemPhoto = z.infer<typeof insertMenuItemPhotoSchema>;
 export type MenuItemPhoto = typeof menuItemPhotos.$inferSelect;
 
@@ -3700,7 +3706,9 @@ export const truckManualSchedules = pgTable(
     sourceType: varchar("source_type"),
     sourceArtifact: varchar("source_artifact"),
     sourceConfidence: varchar("source_confidence"),
-    ownerSubmittedEquivalent: boolean("owner_submitted_equivalent").default(false),
+    ownerSubmittedEquivalent: boolean("owner_submitted_equivalent").default(
+      false,
+    ),
     recurring: boolean("recurring").default(false),
     expiresAt: timestamp("expires_at"),
     geocodeStatus: varchar("geocode_status"),
@@ -3713,7 +3721,11 @@ export const truckManualSchedules = pgTable(
   (table) => [
     index("idx_truck_manual_schedule_truck").on(table.truckId, table.date),
     index("idx_truck_manual_schedule_last_confirmed").on(table.lastConfirmedAt),
-    index("idx_truck_manual_schedule_status").on(table.truckId, table.status, table.date),
+    index("idx_truck_manual_schedule_status").on(
+      table.truckId,
+      table.status,
+      table.date,
+    ),
     index("idx_truck_manual_schedule_expires").on(table.expiresAt),
   ],
 );
@@ -5013,8 +5025,12 @@ export type InsertTelemetryEvent = typeof telemetryEvents.$inferInsert;
 export const parkingRoutePlans = pgTable(
   "parking_route_plans",
   {
-    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-    userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    userId: varchar("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
     name: varchar("name").notNull(),
     originLabel: varchar("origin_label").notNull(),
     destinationLabel: varchar("destination_label").notNull(),
@@ -5022,8 +5038,12 @@ export const parkingRoutePlans = pgTable(
     destination: jsonb("destination").notNull(),
     scope: varchar("scope").notNull().default("nationwide"),
     recurring: boolean("recurring").notNull().default(true),
-    schedule: jsonb("schedule").notNull().default(sql`'[]'::jsonb`),
-    hostSnapshot: jsonb("host_snapshot").notNull().default(sql`'[]'::jsonb`),
+    schedule: jsonb("schedule")
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    hostSnapshot: jsonb("host_snapshot")
+      .notNull()
+      .default(sql`'[]'::jsonb`),
     lastCheckedAt: timestamp("last_checked_at").defaultNow(),
     createdAt: timestamp("created_at").defaultNow(),
     updatedAt: timestamp("updated_at").defaultNow(),
@@ -5833,6 +5853,11 @@ export const menuItems = pgTable(
     inventoryQty: integer("inventory_qty"),
     // Availability
     isAvailable: boolean("is_available").notNull().default(true),
+    // True only when checkout inventory exhaustion, rather than an owner
+    // decision, made this item unavailable. Cancellation may safely clear it.
+    inventoryAutoUnavailable: boolean("inventory_auto_unavailable")
+      .notNull()
+      .default(false),
     availableFrom: varchar("available_from"), // override menu-level time
     availableTo: varchar("available_to"),
     sortOrder: integer("sort_order").notNull().default(0),
@@ -5873,7 +5898,10 @@ export const menuItemRecommendations = pgTable(
     index("idx_menu_item_recommendations_restaurant").on(table.restaurantId),
     index("idx_menu_item_recommendations_menu_item").on(table.menuItemId),
     index("idx_menu_item_recommendations_user").on(table.userId),
-    unique("uq_menu_item_recommendations_user_item").on(table.userId, table.menuItemId),
+    unique("uq_menu_item_recommendations_user_item").on(
+      table.userId,
+      table.menuItemId,
+    ),
   ],
 );
 
@@ -5903,10 +5931,15 @@ export const menuItemPhotos = pgTable(
     caption: text("caption"),
     status: varchar("status").notNull().default("pending"), // pending | accepted | rejected | featured
     moderationStatus: varchar("moderation_status").notNull().default("pending"), // pending | accepted | rejected | featured
-    featuredByBusiness: boolean("featured_by_business").notNull().default(false),
-    reviewedByUserId: varchar("reviewed_by_user_id").references(() => users.id, {
-      onDelete: "set null",
-    }),
+    featuredByBusiness: boolean("featured_by_business")
+      .notNull()
+      .default(false),
+    reviewedByUserId: varchar("reviewed_by_user_id").references(
+      () => users.id,
+      {
+        onDelete: "set null",
+      },
+    ),
     reviewedAt: timestamp("reviewed_at"),
     rejectedReason: text("rejected_reason"),
     scorePhotoAwardedAt: timestamp("score_photo_awarded_at"),
@@ -6034,9 +6067,12 @@ export const menuDraftReviews = pgTable(
       .default(true),
     ownerApproved: boolean("owner_approved").notNull().default(false),
     ownerApprovalEvidenceUrl: text("owner_approval_evidence_url"),
-    reviewedByUserId: varchar("reviewed_by_user_id").references(() => users.id, {
-      onDelete: "set null",
-    }),
+    reviewedByUserId: varchar("reviewed_by_user_id").references(
+      () => users.id,
+      {
+        onDelete: "set null",
+      },
+    ),
     reviewedAt: timestamp("reviewed_at"),
     productionApplied: boolean("production_applied").notNull().default(false),
     appliedMenuId: varchar("applied_menu_id").references(() => menus.id, {
@@ -6875,7 +6911,12 @@ export const insertMenuItemSchema = createInsertSchema(menuItems, {
   priceCents: z.number().int().min(0).nullable(),
   itemType: z.enum(["food", "merchandise"]).default("food"),
   calories: z.number().int().min(0).optional().nullable(),
-}).omit({ id: true, createdAt: true, updatedAt: true });
+}).omit({
+  id: true,
+  inventoryAutoUnavailable: true,
+  createdAt: true,
+  updatedAt: true,
+});
 
 export const insertMenuItemRecommendationSchema = createInsertSchema(
   menuItemRecommendations,
@@ -6885,17 +6926,17 @@ export const insertMenuItemRecommendationSchema = createInsertSchema(
   updatedAt: true,
 });
 
-export const insertMenuItemPhotoSchema = createInsertSchema(menuItemPhotos).omit(
-  {
-    id: true,
-    reviewedByUserId: true,
-    reviewedAt: true,
-    scorePhotoAwardedAt: true,
-    scoreFeaturedAwardedAt: true,
-    createdAt: true,
-    updatedAt: true,
-  },
-);
+export const insertMenuItemPhotoSchema = createInsertSchema(
+  menuItemPhotos,
+).omit({
+  id: true,
+  reviewedByUserId: true,
+  reviewedAt: true,
+  scorePhotoAwardedAt: true,
+  scoreFeaturedAwardedAt: true,
+  createdAt: true,
+  updatedAt: true,
+});
 
 export const insertMenuItemVariantSchema = createInsertSchema(
   menuItemVariants,
@@ -7023,7 +7064,8 @@ export type MenuImportLog = typeof menuImportLogs.$inferSelect;
 export type MenuDraftReview = typeof menuDraftReviews.$inferSelect;
 export type MenuDraftReviewItem = typeof menuDraftReviewItems.$inferSelect;
 export type PickupOrder = typeof pickupOrders.$inferSelect;
-export type MerchantDeliverySettings = typeof merchantDeliverySettings.$inferSelect;
+export type MerchantDeliverySettings =
+  typeof merchantDeliverySettings.$inferSelect;
 export type InsertPickupOrder = z.infer<typeof insertPickupOrderSchema>;
 export type PickupOrderItem = typeof pickupOrderItems.$inferSelect;
 export type InsertPickupOrderItem = z.infer<typeof insertPickupOrderItemSchema>;
@@ -7044,8 +7086,6 @@ export type InsertJobPost = z.infer<typeof insertJobPostSchema>;
 export type JobApplication = typeof jobApplications.$inferSelect;
 export type InsertJobApplication = z.infer<typeof insertJobApplicationSchema>;
 export type PrivateChefLead = typeof privateChefLeads.$inferSelect;
-export type InsertPrivateChefLead = z.infer<
-  typeof insertPrivateChefLeadSchema
->;
+export type InsertPrivateChefLead = z.infer<typeof insertPrivateChefLeadSchema>;
 
 // ── ORDER STATUS ENUM ────────────────────────────────────────────────────────

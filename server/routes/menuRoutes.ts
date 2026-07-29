@@ -1426,16 +1426,16 @@ export function registerMenuRoutes(app: Express) {
       const [variants, modifiers]: [MenuItemVariant[], MenuItemModifier[]] =
         itemIds.length
           ? ((await Promise.all([
-            db
-              .select()
-              .from(menuItemVariants)
-              .where(inArray(menuItemVariants.menuItemId, itemIds))
-              .orderBy(asc(menuItemVariants.sortOrder)),
-            db
-              .select()
-              .from(menuItemModifiers)
-              .where(inArray(menuItemModifiers.menuItemId, itemIds))
-              .orderBy(asc(menuItemModifiers.sortOrder)),
+              db
+                .select()
+                .from(menuItemVariants)
+                .where(inArray(menuItemVariants.menuItemId, itemIds))
+                .orderBy(asc(menuItemVariants.sortOrder)),
+              db
+                .select()
+                .from(menuItemModifiers)
+                .where(inArray(menuItemModifiers.menuItemId, itemIds))
+                .orderBy(asc(menuItemModifiers.sortOrder)),
             ])) as [MenuItemVariant[], MenuItemModifier[]])
           : [[], []];
 
@@ -1648,7 +1648,14 @@ export function registerMenuRoutes(app: Express) {
 
       const [updated] = await db
         .update(menuItems)
-        .set({ ...updates, updatedAt: new Date() })
+        .set({
+          ...updates,
+          ...(Object.prototype.hasOwnProperty.call(updates, "isAvailable") ||
+          Object.prototype.hasOwnProperty.call(updates, "inventoryQty")
+            ? { inventoryAutoUnavailable: false }
+            : {}),
+          updatedAt: new Date(),
+        })
         .where(eq(menuItems.id, itemId))
         .returning();
       res.json({ item: updated });
@@ -1669,7 +1676,11 @@ export function registerMenuRoutes(app: Express) {
 
       await db
         .update(menuItems)
-        .set({ isAvailable: false, updatedAt: new Date() })
+        .set({
+          isAvailable: false,
+          inventoryAutoUnavailable: false,
+          updatedAt: new Date(),
+        })
         .where(eq(menuItems.id, itemId));
       res.json({ success: true });
     }),
@@ -1698,6 +1709,7 @@ export function registerMenuRoutes(app: Express) {
         .set({
           inventoryQty,
           isAvailable: inventoryQty > 0,
+          inventoryAutoUnavailable: false,
           updatedAt: new Date(),
         })
         .where(eq(menuItems.id, itemId))

@@ -21,9 +21,10 @@
  */
 
 import type { Express } from "express";
+import { createHash } from "node:crypto";
 import { z } from "zod";
 import Stripe from "stripe";
-import { db } from "../db";
+import { db, pool } from "../db";
 import {
   menus,
   menuItems,
@@ -49,18 +50,27 @@ import {
   isPremiumTrialActive,
   ensurePremiumTrialForUser,
 } from "../services/premiumTrial";
-import { eq, and, desc, inArray } from "drizzle-orm";
+import { eq, and, desc, gte, inArray, sql } from "drizzle-orm";
 import { isAuthenticated } from "../unifiedAuth";
 import { isAdminUserType } from "../roleAccess";
 import { storage } from "../storage";
 import { emailService } from "../emailService";
 import { sendSms } from "../smsService";
 import { distributedRateLimit } from "../middleware/distributedRateLimit";
+import { requireIdempotencyKey } from "../middleware/idempotency";
 import { getWebSocketServer } from "../websocket";
 import {
   consumePromotionAttribution,
   updatePromotedOrderCommissionStatus,
 } from "../services/merchantPromotionService";
+import {
+  cancelCashPickupOrderByOwner,
+  cancelPendingPickupOrderForCanceledPaymentIntent,
+} from "../services/pickupOrderPaymentCancellation";
+import {
+  classifyPreOrderPaymentIntentStatus,
+  paymentIntentMatchesPickupOrder,
+} from "../services/pickupOrderPaymentIntentState";
 import { getDeliveryQuote } from "./merchantDeliveryRoutes";
 
 const stripe = process.env.STRIPE_SECRET_KEY
@@ -80,6 +90,53 @@ const PICKUP_ORDER_STRIPE_FEE_FIXED_CENTS = Math.max(
   Number(process.env.PICKUP_ORDER_STRIPE_FEE_FIXED_CENTS || 30) || 30,
 );
 
+class InventoryReservationError extends Error {}
+
+function deterministicPickupOrderId(input: {
+  restaurantId: string;
+  identity: string;
+  idempotencyKey: string;
+}) {
+  const bytes = createHash("sha256")
+    .update(
+      `${input.restaurantId}|${input.identity}|${input.idempotencyKey}`,
+      "utf8",
+    )
+    .digest()
+    .subarray(0, 16);
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = bytes.toString("hex");
+  return [
+    hex.slice(0, 8),
+    hex.slice(8, 12),
+    hex.slice(12, 16),
+    hex.slice(16, 20),
+    hex.slice(20),
+  ].join("-");
+}
+
+async function acquireDeliveryCapacityLock(restaurantId: string) {
+  const client = await pool.connect();
+  const lockKey = `mealscout:merchant-delivery:${restaurantId}`;
+  try {
+    await client.query("select pg_advisory_lock(hashtext($1))", [lockKey]);
+  } catch (error) {
+    client.release();
+    throw error;
+  }
+  let released = false;
+  return async () => {
+    if (released) return;
+    released = true;
+    try {
+      await client.query("select pg_advisory_unlock(hashtext($1))", [lockKey]);
+    } finally {
+      client.release();
+    }
+  };
+}
+
 function estimateStripeFeeCents(chargeAmountCents: number): number {
   if (!Number.isFinite(chargeAmountCents) || chargeAmountCents <= 0) return 0;
   return Math.max(
@@ -91,7 +148,9 @@ function estimateStripeFeeCents(chargeAmountCents: number): number {
   );
 }
 
-function grossUpStripeProcessingFeeCents(baseBeforeProcessingCents: number): number {
+function grossUpStripeProcessingFeeCents(
+  baseBeforeProcessingCents: number,
+): number {
   if (
     !Number.isFinite(baseBeforeProcessingCents) ||
     baseBeforeProcessingCents <= 0
@@ -165,9 +224,14 @@ async function assertOwnsRestaurant(userId: string, restaurantId: string) {
     throw Object.assign(new Error("Not authorized"), { statusCode: 403 });
 }
 
-async function assertCanManageRestaurantOrders(user: any, restaurantId: string) {
+async function assertCanManageRestaurantOrders(
+  user: any,
+  restaurantId: string,
+) {
   if (isAdminUserType(user?.userType)) return;
-  if (!["restaurant_owner", "food_truck"].includes(String(user?.userType || ""))) {
+  if (
+    !["restaurant_owner", "food_truck"].includes(String(user?.userType || ""))
+  ) {
     throw Object.assign(new Error("Restaurant owner access required"), {
       statusCode: 403,
     });
@@ -206,7 +270,10 @@ async function assertHasOrderingSubscription(
     : restaurants_.map((r) => r.id);
   if (restaurantIds.length > 0) {
     const [sub] = await db
-      .select({ id: restaurantSubscriptions.id, isLifetimeFree: restaurantSubscriptions.isLifetimeFree })
+      .select({
+        id: restaurantSubscriptions.id,
+        isLifetimeFree: restaurantSubscriptions.isLifetimeFree,
+      })
       .from(restaurantSubscriptions)
       .where(
         and(
@@ -374,6 +441,11 @@ export function registerPickupOrderRoutes(app: Express) {
   app.post(
     "/api/pickup-orders",
     createOrderLimiter,
+    requireIdempotencyKey({
+      scope: "pickup-order-create",
+      ttlMs: 24 * 60 * 60 * 1000,
+      lockMs: 2 * 60 * 1000,
+    }),
     wrap(async (req, res) => {
       const bodySchema = z.object({
         restaurantId: z.string().min(1),
@@ -382,10 +454,22 @@ export function registerPickupOrderRoutes(app: Express) {
         customerEmail: z.string().email().optional().nullable(),
         customerPhone: z.string().optional().nullable(),
         orderType: z.enum(["pickup", "dine_in", "delivery"]).default("pickup"),
-        deliveryAddress: z.string().trim().min(5).max(400).optional().nullable(),
+        deliveryAddress: z
+          .string()
+          .trim()
+          .min(5)
+          .max(400)
+          .optional()
+          .nullable(),
         deliveryCity: z.string().trim().min(2).max(100).optional().nullable(),
         deliveryState: z.string().trim().min(2).max(50).optional().nullable(),
-        deliveryPostalCode: z.string().trim().min(3).max(12).optional().nullable(),
+        deliveryPostalCode: z
+          .string()
+          .trim()
+          .min(3)
+          .max(12)
+          .optional()
+          .nullable(),
         deliveryInstructions: z.string().trim().max(500).optional().nullable(),
         paymentMethod: z.enum(["card", "cash"]).default("card"),
         items: z
@@ -406,6 +490,142 @@ export function registerPickupOrderRoutes(app: Express) {
       });
 
       const body = bodySchema.parse(req.body);
+      if (body.orderType === "delivery" && body.scheduledFor) {
+        return res.status(400).json({
+          message:
+            "Scheduled merchant delivery is not available yet. Place an ASAP delivery order instead.",
+          code: "scheduled_delivery_unsupported",
+        });
+      }
+      const idempotencyKey = String(
+        req.headers["idempotency-key"] || "",
+      ).trim();
+      const identity =
+        String(req.user?.id || "").trim() || String(req.ip || "unknown").trim();
+      const orderId = deterministicPickupOrderId({
+        restaurantId: body.restaurantId,
+        identity,
+        idempotencyKey,
+      });
+      const providerKeyDigest = createHash("sha256")
+        .update(
+          `${identity}|${idempotencyKey}|${orderId}|${body.restaurantId}`,
+          "utf8",
+        )
+        .digest("hex");
+
+      // If a process stopped after the order transaction committed but before
+      // the durable idempotency response was stored, the same request can
+      // recover the deterministic order instead of attempting a second insert.
+      const [existingOrder] = await db
+        .select()
+        .from(pickupOrders)
+        .where(eq(pickupOrders.id, orderId))
+        .limit(1);
+      if (existingOrder) {
+        if (
+          existingOrder.restaurantId !== body.restaurantId ||
+          existingOrder.orderType !== body.orderType ||
+          existingOrder.paymentMethod !== body.paymentMethod ||
+          existingOrder.customerName !== body.customerName
+        ) {
+          return res.status(409).json({
+            message:
+              "The existing order does not match this idempotent request.",
+            code: "idempotent_order_mismatch",
+          });
+        }
+        if (existingOrder.status === ORDER_STATUS.CANCELLED) {
+          return res.status(409).json({
+            message: "The prior order was cancelled. Start checkout again.",
+            code: "payment_setup_cancelled",
+          });
+        }
+        if (existingOrder.paymentMethod === "cash") {
+          return res.status(201).json({
+            order: existingOrder,
+            clientSecret: null,
+          });
+        }
+        if (existingOrder.status !== ORDER_STATUS.PENDING) {
+          return res.status(201).json({
+            order: existingOrder,
+            clientSecret: null,
+            paymentState: `order_${existingOrder.status}`,
+          });
+        }
+        if (
+          !stripe ||
+          !String(existingOrder.stripePaymentIntentId || "").trim()
+        ) {
+          return res.status(503).json({
+            message: "Payment recovery is temporarily unavailable.",
+          });
+        }
+        const recoveredIntent = await stripe.paymentIntents.retrieve(
+          String(existingOrder.stripePaymentIntentId),
+        );
+        if (
+          !paymentIntentMatchesPickupOrder(recoveredIntent, {
+            orderId: existingOrder.id,
+            restaurantId: existingOrder.restaurantId,
+            totalCents: existingOrder.totalCents,
+            transferGroup: String(
+              existingOrder.stripeTransferGroupId ||
+                `order_${existingOrder.id}`,
+            ),
+          })
+        ) {
+          return res.status(503).json({
+            message: "Payment recovery is temporarily unavailable.",
+            code: "payment_intent_order_mismatch",
+          });
+        }
+        const recoveredDisposition = classifyPreOrderPaymentIntentStatus(
+          recoveredIntent.status,
+        );
+        if (recoveredDisposition === "cancelled") {
+          await cancelPendingPickupOrderForCanceledPaymentIntent({
+            paymentIntentId: recoveredIntent.id,
+            metadataOrderId: existingOrder.id,
+            cancellationReason: "Payment setup cancelled",
+          });
+          return res.status(409).json({
+            message: "The prior payment setup was cancelled. Start again.",
+            code: "payment_setup_cancelled",
+          });
+        }
+        if (recoveredDisposition === "payment_submitted") {
+          return res.status(201).json({
+            order: existingOrder,
+            clientSecret: null,
+            paymentState: recoveredIntent.status,
+          });
+        }
+        if (
+          recoveredDisposition === "resume_payment" &&
+          recoveredIntent.client_secret
+        ) {
+          return res.status(201).json({
+            order: existingOrder,
+            clientSecret: recoveredIntent.client_secret,
+            paymentState: recoveredIntent.status,
+          });
+        }
+        if (
+          recoveredDisposition !== "create_order" ||
+          !recoveredIntent.client_secret
+        ) {
+          return res.status(503).json({
+            message: "Payment recovery is temporarily unavailable.",
+            code: "payment_state_reconciliation_required",
+          });
+        }
+        return res.status(201).json({
+          order: existingOrder,
+          clientSecret: recoveredIntent.client_secret,
+        });
+      }
 
       // Fetch menu to check acceptsCash + hidePlatformFee
       const [menu] = await db
@@ -422,11 +642,9 @@ export function registerPickupOrderRoutes(app: Express) {
       }
 
       if (body.paymentMethod === "cash" && !menu.acceptsCash) {
-        return res
-          .status(400)
-          .json({
-            message: "This restaurant does not accept cash orders online",
-          });
+        return res.status(400).json({
+          message: "This restaurant does not accept cash orders online",
+        });
       }
 
       // Resolve all menu items
@@ -439,6 +657,14 @@ export function registerPickupOrderRoutes(app: Express) {
         );
 
       const itemMap = new Map<string, MenuItem>(dbItems.map((i) => [i.id, i]));
+      const requestedQuantityByItem = new Map<string, number>();
+      for (const requestItem of body.items) {
+        requestedQuantityByItem.set(
+          requestItem.menuItemId,
+          (requestedQuantityByItem.get(requestItem.menuItemId) || 0) +
+            requestItem.quantity,
+        );
+      }
 
       // Check every requested item exists and is available
       for (const reqItem of body.items) {
@@ -456,10 +682,10 @@ export function registerPickupOrderRoutes(app: Express) {
       }
 
       // Check inventory for tracked items
-      for (const reqItem of body.items) {
-        const dbItem = itemMap.get(reqItem.menuItemId)!;
+      for (const [menuItemId, requestedQuantity] of requestedQuantityByItem) {
+        const dbItem = itemMap.get(menuItemId)!;
         if (dbItem.trackInventory && dbItem.inventoryQty !== null) {
-          if (dbItem.inventoryQty < reqItem.quantity) {
+          if (dbItem.inventoryQty < requestedQuantity) {
             return res.status(400).json({
               message: `"${dbItem.name}" only has ${dbItem.inventoryQty} left in stock`,
             });
@@ -581,210 +807,419 @@ export function registerPickupOrderRoutes(app: Express) {
         return res.status(400).json({ message: "Restaurant not available" });
       }
 
-      let deliveryFeeCents = 0;
-      let deliveryEstimateMinutes: number | null = null;
-      if (body.orderType === "delivery") {
-        if (!body.deliveryAddress || !body.deliveryCity || !body.deliveryState || !body.deliveryPostalCode) {
-          return res.status(400).json({ message: "Delivery address, city, state, and postal code are required" });
-        }
-        const delivery = await getDeliveryQuote(
-          body.restaurantId,
-          subtotalCents,
-          body.deliveryPostalCode,
-        );
-        deliveryFeeCents = delivery.feeCents;
-        deliveryEstimateMinutes = delivery.estimatedMinutes;
-      }
-      const totalCents = baseTotalCents + deliveryFeeCents;
-
-      // Verify this restaurant has an active ordering subscription
-      if (restaurant.ownerId) {
-        await assertHasOrderingSubscription(restaurant.ownerId, restaurant.id);
-      }
-
-      // Insert order
-      const [order] = await db
-        .insert(pickupOrders)
-        .values({
-          restaurantId: body.restaurantId,
-          customerId: req.user?.id ?? null,
-          customerName: body.customerName,
-          customerEmail: body.customerEmail ?? null,
-          customerPhone: body.customerPhone ?? null,
-          orderType: body.orderType,
-          status: ORDER_STATUS.PENDING,
-          subtotalCents,
-          platformFeeCents,
-          feePaidByBusiness,
-          totalCents,
-          paymentMethod: body.paymentMethod,
-          specialInstructions: body.specialInstructions ?? null,
-          prepTimeMinutes: 20,
-          scheduledFor: body.scheduledFor ? new Date(body.scheduledFor) : null,
-          deliveryAddress: body.orderType === "delivery" ? body.deliveryAddress : null,
-          deliveryCity: body.orderType === "delivery" ? body.deliveryCity : null,
-          deliveryState: body.orderType === "delivery" ? body.deliveryState : null,
-          deliveryPostalCode: body.orderType === "delivery" ? body.deliveryPostalCode : null,
-          deliveryFeeCents,
-          deliveryEstimateMinutes,
-          deliveryInstructions: body.orderType === "delivery" ? body.deliveryInstructions : null,
-        })
-        .returning();
-
-      if (body.promotionToken) {
-        await consumePromotionAttribution({
-          token: body.promotionToken,
-          orderId: order.id,
-          targetRestaurantId: body.restaurantId,
-          customerUserId: req.user?.id ?? null,
-          eligibleOrderCents: subtotalCents,
-          commissionEligible: body.paymentMethod === "card",
-        });
-      }
-
-      // Insert line items
-      await db
-        .insert(pickupOrderItems)
-        .values(lineItems.map((li) => ({ ...li, orderId: order.id })));
-
-      // Deduct inventory for tracked items
-      for (const reqItem of body.items) {
-        const dbItem = itemMap.get(reqItem.menuItemId)!;
-        if (dbItem.trackInventory && dbItem.inventoryQty !== null) {
-          const newQty = dbItem.inventoryQty - reqItem.quantity;
-          await db
-            .update(menuItems)
-            .set({
-              inventoryQty: newQty,
-              isAvailable: newQty > 0,
-              updatedAt: new Date(),
-            })
-            .where(eq(menuItems.id, dbItem.id));
-        }
-      }
-
-      // For cash orders: confirm immediately, no Stripe needed
-      if (body.paymentMethod === "cash") {
-        const [confirmed] = await db
-          .update(pickupOrders)
-          .set({
-            status: ORDER_STATUS.CONFIRMED,
-            confirmedAt: new Date(),
-            updatedAt: new Date(),
-          })
-          .where(eq(pickupOrders.id, order.id))
-          .returning();
-
-        emitKitchenUpdate(body.restaurantId, confirmed);
-
-        // Send email confirmation
-        if (body.customerEmail) {
-          emailService
-            .sendBasicEmail(
-              body.customerEmail,
-              `Order confirmed – ${restaurant.name}`,
-              `<p>Hi ${body.customerName}, your order has been received! Total: $${(totalCents / 100).toFixed(2)} (pay at restaurant)</p>`,
-              `Hi ${body.customerName}, your order has been received! Total: $${(totalCents / 100).toFixed(2)} (pay at restaurant)`,
-              "general",
-            )
-            .catch(() => {});
-        }
-
-        // Emit LISA claim for order placed
-        db.insert(lisaClaims).values({
-          app: "mealscout",
-          claimType: LISA_CLAIM_TYPES.ORDER_PLACED,
-          source: LISA_CLAIM_SOURCES.ORDER,
-          subjectType: "order",
-          subjectId: confirmed.id,
-          actorType: req.user?.id ? "user" : "guest",
-          actorId: req.user?.id ?? "guest",
-          payload: {
-            restaurantId: body.restaurantId,
-            orderType: body.orderType,
-            totalCents,
-            paymentMethod: "cash",
-          },
-        }).catch(() => {});
-
-        return res.status(201).json({ order: confirmed, clientSecret: null });
-      }
-
-      // Card payment: create Stripe PaymentIntent
-      if (!stripe) {
-        // No Stripe configured – should not happen in production
-        await db.delete(pickupOrders).where(eq(pickupOrders.id, order.id));
-        return res
-          .status(503)
-          .json({ message: "Payment processing is not configured" });
-      }
-
-      const transferGroup = `order_${order.id}`;
-
-      let paymentIntent: Stripe.PaymentIntent;
+      const scheduledFor = body.scheduledFor
+        ? new Date(body.scheduledFor)
+        : null;
+      const releaseDeliveryCapacityLock =
+        body.orderType === "delivery"
+          ? await acquireDeliveryCapacityLock(body.restaurantId)
+          : null;
       try {
-        paymentIntent = await stripe.paymentIntents.create({
-          amount: totalCents,
-          currency: "usd",
-          automatic_payment_methods: { enabled: true },
-          transfer_group: transferGroup,
-          metadata: {
-            pickupOrderId: order.id,
-            orderId: order.id,
-            restaurantId: body.restaurantId,
-            subtotalCents: subtotalCents.toString(),
-            platformFeeCents: platformFeeCents.toString(),
-            mealscoutFeeCents: mealscoutFeeCents.toString(),
-            processingFeeCents: processingFeeCents.toString(),
-            deliveryFeeCents: deliveryFeeCents.toString(),
-            feePaidByBusiness: String(feePaidByBusiness),
-          },
-          description: `MealScout order at ${restaurant.name}`,
+        let deliveryFeeCents = 0;
+        let deliveryEstimateMinutes: number | null = null;
+        if (body.orderType === "delivery") {
+          if (
+            !body.deliveryAddress ||
+            !body.deliveryCity ||
+            !body.deliveryState ||
+            !body.deliveryPostalCode
+          ) {
+            return res.status(400).json({
+              message:
+                "Delivery address, city, state, and postal code are required",
+            });
+          }
+          const delivery = await getDeliveryQuote(
+            body.restaurantId,
+            subtotalCents,
+            body.deliveryPostalCode,
+            scheduledFor,
+          );
+          deliveryFeeCents = delivery.feeCents;
+          deliveryEstimateMinutes = delivery.estimatedMinutes;
+        }
+        const totalCents = baseTotalCents + deliveryFeeCents;
+
+        // Verify this restaurant has an active ordering subscription.
+        if (restaurant.ownerId) {
+          await assertHasOrderingSubscription(
+            restaurant.ownerId,
+            restaurant.id,
+          );
+        }
+
+        const transferGroup = `order_${orderId}`;
+
+        // Card setup happens before any order, attribution, or inventory write.
+        // A provider failure therefore cannot strand local side effects.
+        let paymentIntent: Stripe.PaymentIntent | null = null;
+        if (body.paymentMethod === "card") {
+          if (!stripe) {
+            return res
+              .status(503)
+              .json({ message: "Payment processing is not configured" });
+          }
+          try {
+            paymentIntent = await stripe.paymentIntents.create(
+              {
+                amount: totalCents,
+                currency: "usd",
+                automatic_payment_methods: { enabled: true },
+                transfer_group: transferGroup,
+                metadata: {
+                  pickupOrderId: orderId,
+                  orderId,
+                  restaurantId: body.restaurantId,
+                  subtotalCents: subtotalCents.toString(),
+                  platformFeeCents: platformFeeCents.toString(),
+                  mealscoutFeeCents: mealscoutFeeCents.toString(),
+                  processingFeeCents: processingFeeCents.toString(),
+                  deliveryFeeCents: deliveryFeeCents.toString(),
+                  feePaidByBusiness: String(feePaidByBusiness),
+                },
+                description: `MealScout order at ${restaurant.name}`,
+              },
+              {
+                idempotencyKey: `pickup-order:${providerKeyDigest}`,
+              },
+            );
+          } catch (stripeErr: any) {
+            console.error(
+              "[pickupOrderRoutes] Stripe PI creation failed:",
+              stripeErr,
+            );
+            return res
+              .status(502)
+              .json({ message: "Payment setup failed. Please try again." });
+          }
+          try {
+            // Stripe idempotency can replay the original create response even
+            // after that PaymentIntent was later cancelled. Retrieve current
+            // provider state before any local order or inventory write.
+            paymentIntent = await stripe.paymentIntents.retrieve(
+              paymentIntent.id,
+            );
+          } catch (stripeErr: any) {
+            console.error(
+              "[pickupOrderRoutes] Stripe PI reconciliation failed:",
+              stripeErr,
+            );
+            return res.status(502).json({
+              message: "Payment setup could not be verified. Please try again.",
+              code: "payment_state_reconciliation_required",
+            });
+          }
+          if (
+            !paymentIntentMatchesPickupOrder(paymentIntent, {
+              orderId,
+              restaurantId: body.restaurantId,
+              totalCents,
+              transferGroup,
+            })
+          ) {
+            return res.status(503).json({
+              message:
+                "Payment setup did not match this order. Please try again.",
+              code: "payment_intent_order_mismatch",
+            });
+          }
+          const intentDisposition = classifyPreOrderPaymentIntentStatus(
+            paymentIntent.status,
+          );
+          if (intentDisposition === "cancelled") {
+            return res.status(409).json({
+              message:
+                "The prior payment setup was cancelled. Start checkout again.",
+              code: "payment_setup_cancelled",
+            });
+          }
+          if (
+            intentDisposition !== "create_order" ||
+            !paymentIntent.client_secret
+          ) {
+            return res.status(503).json({
+              message:
+                "Payment state could not be reconciled safely. Please try again.",
+              code: "payment_state_reconciliation_required",
+            });
+          }
+        }
+
+        let order: PickupOrder;
+        try {
+          order = await db.transaction(async (tx: any) => {
+            const now = new Date();
+            const [insertedOrder] = await tx
+              .insert(pickupOrders)
+              .values({
+                id: orderId,
+                restaurantId: body.restaurantId,
+                customerId: req.user?.id ?? null,
+                customerName: body.customerName,
+                customerEmail: body.customerEmail ?? null,
+                customerPhone: body.customerPhone ?? null,
+                orderType: body.orderType,
+                status:
+                  body.paymentMethod === "cash"
+                    ? ORDER_STATUS.CONFIRMED
+                    : ORDER_STATUS.PENDING,
+                subtotalCents,
+                platformFeeCents,
+                feePaidByBusiness,
+                totalCents,
+                paymentMethod: body.paymentMethod,
+                specialInstructions: body.specialInstructions ?? null,
+                prepTimeMinutes: 20,
+                scheduledFor,
+                deliveryAddress:
+                  body.orderType === "delivery" ? body.deliveryAddress : null,
+                deliveryCity:
+                  body.orderType === "delivery" ? body.deliveryCity : null,
+                deliveryState:
+                  body.orderType === "delivery" ? body.deliveryState : null,
+                deliveryPostalCode:
+                  body.orderType === "delivery"
+                    ? body.deliveryPostalCode
+                    : null,
+                deliveryFeeCents,
+                deliveryEstimateMinutes,
+                deliveryInstructions:
+                  body.orderType === "delivery"
+                    ? body.deliveryInstructions
+                    : null,
+                stripePaymentIntentId: paymentIntent?.id ?? null,
+                stripeTransferGroupId:
+                  body.paymentMethod === "card" ? transferGroup : null,
+                confirmedAt: body.paymentMethod === "cash" ? now : null,
+                updatedAt: now,
+              })
+              .returning();
+
+            if (body.promotionToken) {
+              await consumePromotionAttribution(
+                {
+                  token: body.promotionToken,
+                  orderId: insertedOrder.id,
+                  targetRestaurantId: body.restaurantId,
+                  customerUserId: req.user?.id ?? null,
+                  eligibleOrderCents: subtotalCents,
+                  commissionEligible: body.paymentMethod === "card",
+                },
+                tx,
+              );
+            }
+
+            await tx.insert(pickupOrderItems).values(
+              lineItems.map((lineItem) => ({
+                ...lineItem,
+                orderId: insertedOrder.id,
+              })),
+            );
+
+            for (const [
+              menuItemId,
+              requestedQuantity,
+            ] of requestedQuantityByItem) {
+              const databaseItem = itemMap.get(menuItemId)!;
+              if (
+                databaseItem.trackInventory &&
+                databaseItem.inventoryQty !== null
+              ) {
+                const [reservedItem] = await tx
+                  .update(menuItems)
+                  .set({
+                    inventoryQty: sql`${menuItems.inventoryQty} - ${requestedQuantity}`,
+                    isAvailable: sql`${menuItems.inventoryQty} - ${requestedQuantity} > 0`,
+                    inventoryAutoUnavailable: sql`${menuItems.inventoryQty} - ${requestedQuantity} = 0`,
+                    updatedAt: now,
+                  })
+                  .where(
+                    and(
+                      eq(menuItems.id, databaseItem.id),
+                      eq(menuItems.restaurantId, body.restaurantId),
+                      eq(menuItems.trackInventory, true),
+                      eq(menuItems.isAvailable, true),
+                      gte(menuItems.inventoryQty, requestedQuantity),
+                    ),
+                  )
+                  .returning({ id: menuItems.id });
+                if (!reservedItem) {
+                  throw new InventoryReservationError(
+                    `"${databaseItem.name}" inventory changed during checkout`,
+                  );
+                }
+              }
+            }
+            return insertedOrder as PickupOrder;
+          });
+        } catch (persistenceError) {
+          if (persistenceError instanceof InventoryReservationError) {
+            let paymentRollbackSucceeded = true;
+            if (paymentIntent && stripe) {
+              try {
+                await stripe.paymentIntents.cancel(
+                  paymentIntent.id,
+                  {},
+                  {
+                    idempotencyKey: `pickup-order:${providerKeyDigest}:rollback`,
+                  },
+                );
+              } catch (cancelError) {
+                paymentRollbackSucceeded = false;
+                console.error(
+                  `[pickupOrderRoutes] Failed to cancel orphaned PaymentIntent ${paymentIntent.id}:`,
+                  cancelError,
+                );
+              }
+            }
+            if (paymentRollbackSucceeded) {
+              return res.status(409).json({
+                message:
+                  "An item changed or sold out during checkout. Review the cart and try again.",
+                code: "inventory_reservation_conflict",
+              });
+            }
+          }
+          // A transient database failure returns a retryable response without
+          // cancelling the PaymentIntent. The same request key can then reuse
+          // Stripe's idempotent create result and retry the local transaction.
+          throw persistenceError;
+        }
+
+        if (body.paymentMethod === "cash") {
+          emitKitchenUpdate(body.restaurantId, order);
+          if (body.customerEmail) {
+            emailService
+              .sendBasicEmail(
+                body.customerEmail,
+                `Order confirmed – ${restaurant.name}`,
+                `<p>Hi ${body.customerName}, your order has been received! Total: $${(totalCents / 100).toFixed(2)} (pay at restaurant)</p>`,
+                `Hi ${body.customerName}, your order has been received! Total: $${(totalCents / 100).toFixed(2)} (pay at restaurant)`,
+                "general",
+              )
+              .catch(() => {});
+          }
+          db.insert(lisaClaims)
+            .values({
+              app: "mealscout",
+              claimType: LISA_CLAIM_TYPES.ORDER_PLACED,
+              source: LISA_CLAIM_SOURCES.ORDER,
+              subjectType: "order",
+              subjectId: order.id,
+              actorType: req.user?.id ? "user" : "guest",
+              actorId: req.user?.id ?? "guest",
+              payload: {
+                restaurantId: body.restaurantId,
+                orderType: body.orderType,
+                totalCents,
+                paymentMethod: "cash",
+              },
+            })
+            .catch(() => {});
+          return res.status(201).json({ order, clientSecret: null });
+        }
+
+        db.insert(lisaClaims)
+          .values({
+            app: "mealscout",
+            claimType: LISA_CLAIM_TYPES.ORDER_PLACED,
+            source: LISA_CLAIM_SOURCES.ORDER,
+            subjectType: "order",
+            subjectId: order.id,
+            actorType: req.user?.id ? "user" : "guest",
+            actorId: req.user?.id ?? "guest",
+            payload: {
+              restaurantId: body.restaurantId,
+              orderType: body.orderType,
+              totalCents,
+              paymentMethod: "card",
+            },
+          })
+          .catch(() => {});
+        return res.status(201).json({
+          order,
+          clientSecret: paymentIntent?.client_secret,
         });
-      } catch (stripeErr: any) {
-        // Clean up pending order if Stripe fails
-        await db.delete(pickupOrders).where(eq(pickupOrders.id, order.id));
-        console.error(
-          "[pickupOrderRoutes] Stripe PI creation failed:",
-          stripeErr,
-        );
-        return res
-          .status(502)
-          .json({ message: "Payment setup failed. Please try again." });
+      } finally {
+        await releaseDeliveryCapacityLock?.();
+      }
+    }),
+  );
+
+  app.post(
+    "/api/pickup-orders/:orderId/cancel-payment",
+    createOrderLimiter,
+    requireIdempotencyKey({
+      scope: "pickup-order-cancel-payment",
+      ttlMs: 24 * 60 * 60 * 1000,
+      lockMs: 2 * 60 * 1000,
+    }),
+    wrap(async (req, res) => {
+      const orderId = String(req.params.orderId || "").trim();
+      const idempotencyKey = String(
+        req.headers["idempotency-key"] || "",
+      ).trim();
+      const identity =
+        String(req.user?.id || "").trim() || String(req.ip || "unknown").trim();
+      const [order] = await db
+        .select()
+        .from(pickupOrders)
+        .where(eq(pickupOrders.id, orderId))
+        .limit(1);
+      if (!order) {
+        return res.status(404).json({ message: "Order not found" });
+      }
+      const expectedOrderId = deterministicPickupOrderId({
+        restaurantId: order.restaurantId,
+        identity,
+        idempotencyKey,
+      });
+      if (expectedOrderId !== order.id) {
+        return res.status(404).json({ message: "Order not found" });
+      }
+      if (order.status === ORDER_STATUS.CANCELLED) {
+        return res.json({ order });
+      }
+      if (
+        order.status !== ORDER_STATUS.PENDING ||
+        order.paymentMethod !== "card" ||
+        !String(order.stripePaymentIntentId || "").trim()
+      ) {
+        return res.status(409).json({
+          message: "This order payment can no longer be cancelled.",
+        });
+      }
+      if (!stripe) {
+        return res.status(503).json({
+          message: "Payment cancellation is temporarily unavailable.",
+        });
       }
 
-      // Attach intent IDs to order
-      const [updatedOrder] = await db
-        .update(pickupOrders)
-        .set({
-          stripePaymentIntentId: paymentIntent.id,
-          stripeTransferGroupId: transferGroup,
-          updatedAt: new Date(),
-        })
-        .where(eq(pickupOrders.id, order.id))
-        .returning();
-
-      // Emit LISA claim for card order placed (payment pending)
-      db.insert(lisaClaims).values({
-        app: "mealscout",
-        claimType: LISA_CLAIM_TYPES.ORDER_PLACED,
-        source: LISA_CLAIM_SOURCES.ORDER,
-        subjectType: "order",
-        subjectId: updatedOrder.id,
-        actorType: req.user?.id ? "user" : "guest",
-        actorId: req.user?.id ?? "guest",
-        payload: {
-          restaurantId: body.restaurantId,
-          orderType: body.orderType,
-          totalCents,
-          paymentMethod: "card",
+      const cancellationDigest = createHash("sha256")
+        .update(`${identity}|${idempotencyKey}|${order.id}`, "utf8")
+        .digest("hex");
+      await stripe.paymentIntents.cancel(
+        String(order.stripePaymentIntentId),
+        {},
+        {
+          idempotencyKey: `pickup-order-cancel:${cancellationDigest}`,
         },
-      }).catch(() => {});
-
-      res.status(201).json({
-        order: updatedOrder,
-        clientSecret: paymentIntent.client_secret,
+      );
+      const cancelled = await cancelPendingPickupOrderForCanceledPaymentIntent({
+        paymentIntentId: String(order.stripePaymentIntentId),
+        metadataOrderId: order.id,
       });
+      const [updatedOrder] = await db
+        .select()
+        .from(pickupOrders)
+        .where(eq(pickupOrders.id, order.id))
+        .limit(1);
+      if (!cancelled && updatedOrder?.status !== ORDER_STATUS.CANCELLED) {
+        return res.status(409).json({
+          message: "The order changed before cancellation completed.",
+        });
+      }
+      return res.json({ order: updatedOrder ?? order });
     }),
   );
 
@@ -969,7 +1404,7 @@ export function registerPickupOrderRoutes(app: Express) {
     isAuthenticated,
     wrap(async (req, res) => {
       const { orderId } = req.params;
-      const { status, prepTimeMinutes } = z
+      const { status, prepTimeMinutes, cancellationReason } = z
         .object({
           status: z.enum([
             ORDER_STATUS.CONFIRMED,
@@ -1013,11 +1448,122 @@ export function registerPickupOrderRoutes(app: Express) {
       };
       const allowed = validTransitions[order.status] ?? [];
       if (!allowed.includes(status)) {
-        return res
-          .status(400)
-          .json({
-            message: `Cannot transition from ${order.status} to ${status}`,
+        return res.status(400).json({
+          message: `Cannot transition from ${order.status} to ${status}`,
+        });
+      }
+
+      if (
+        status === ORDER_STATUS.CONFIRMED &&
+        order.status === ORDER_STATUS.PENDING &&
+        order.paymentMethod === "card"
+      ) {
+        return res.status(409).json({
+          message:
+            "Card orders are confirmed only after Stripe reports a successful payment.",
+        });
+      }
+
+      if (
+        status === ORDER_STATUS.CANCELLED &&
+        order.status === ORDER_STATUS.PENDING &&
+        order.paymentMethod === "card"
+      ) {
+        if (!stripe || !String(order.stripePaymentIntentId || "").trim()) {
+          return res.status(503).json({
+            message:
+              "The pending card payment cannot be cancelled safely right now.",
           });
+        }
+        await stripe.paymentIntents.cancel(
+          String(order.stripePaymentIntentId),
+          {},
+          {
+            idempotencyKey: `pickup-order-owner-cancel:${order.id}`,
+          },
+        );
+        const cancelled =
+          await cancelPendingPickupOrderForCanceledPaymentIntent({
+            paymentIntentId: String(order.stripePaymentIntentId),
+            metadataOrderId: order.id,
+            cancellationReason: cancellationReason || "Cancelled by restaurant",
+          });
+        const [updated] = await db
+          .select()
+          .from(pickupOrders)
+          .where(eq(pickupOrders.id, order.id))
+          .limit(1);
+        if (!cancelled && updated?.status !== ORDER_STATUS.CANCELLED) {
+          return res.status(409).json({
+            message: "The order changed before cancellation completed.",
+          });
+        }
+        emitKitchenUpdate(order.restaurantId, updated ?? order);
+        db.insert(lisaClaims)
+          .values({
+            app: "mealscout",
+            claimType: LISA_CLAIM_TYPES.ORDER_CANCELLED,
+            source: LISA_CLAIM_SOURCES.ORDER,
+            subjectType: "order",
+            subjectId: order.id,
+            actorType: "restaurant",
+            actorId: order.restaurantId,
+            payload: {
+              cancellationReason:
+                updated?.cancellationReason ||
+                cancellationReason ||
+                "Cancelled by restaurant",
+            },
+          })
+          .catch(() => {});
+        return res.json({ order: updated ?? order });
+      }
+
+      if (status === ORDER_STATUS.CANCELLED && order.paymentMethod === "card") {
+        return res.status(409).json({
+          message:
+            "A confirmed card order requires a separately authorized refund flow before cancellation.",
+        });
+      }
+
+      if (
+        status === ORDER_STATUS.CANCELLED &&
+        order.status === ORDER_STATUS.PREPARING
+      ) {
+        return res.status(409).json({
+          message:
+            "An order already being prepared cannot be returned to inventory through this action.",
+        });
+      }
+
+      if (
+        status === ORDER_STATUS.CANCELLED &&
+        order.status === ORDER_STATUS.CONFIRMED &&
+        order.paymentMethod === "cash"
+      ) {
+        const updated = await cancelCashPickupOrderByOwner({
+          orderId: order.id,
+          cancellationReason,
+        });
+        if (!updated) {
+          return res.status(409).json({
+            message: "The order changed before cancellation completed.",
+          });
+        }
+        emitKitchenUpdate(order.restaurantId, updated);
+        db.insert(lisaClaims)
+          .values({
+            app: "mealscout",
+            claimType: LISA_CLAIM_TYPES.ORDER_CANCELLED,
+            source: LISA_CLAIM_SOURCES.ORDER,
+            subjectType: "order",
+            subjectId: updated.id,
+            actorType: "restaurant",
+            actorId: updated.restaurantId,
+            payload: { cancellationReason: updated.cancellationReason },
+          })
+          .catch(() => {});
+        return res.json({ order: updated });
       }
 
       const now = new Date();
@@ -1031,13 +1577,14 @@ export function registerPickupOrderRoutes(app: Express) {
         if (prepTimeMinutes) updates.prepTimeMinutes = prepTimeMinutes;
       }
       if (status === ORDER_STATUS.READY) updates.readyAt = now;
-      if (status === ORDER_STATUS.OUT_FOR_DELIVERY) updates.outForDeliveryAt = now;
+      if (status === ORDER_STATUS.OUT_FOR_DELIVERY)
+        updates.outForDeliveryAt = now;
       if (status === ORDER_STATUS.DELIVERED) updates.deliveredAt = now;
       if (status === ORDER_STATUS.COMPLETED) updates.completedAt = now;
       if (status === ORDER_STATUS.CANCELLED) {
         updates.cancelledAt = now;
         updates.cancellationReason =
-          (req.body as any).cancellationReason || "Cancelled by restaurant";
+          cancellationReason || "Cancelled by restaurant";
       }
 
       const [updated] = await db
@@ -1057,28 +1604,35 @@ export function registerPickupOrderRoutes(app: Express) {
       // Emit LISA claims for terminal status transitions
       if (status === ORDER_STATUS.COMPLETED) {
         await updatePromotedOrderCommissionStatus(order.id, "completed");
-        db.insert(lisaClaims).values({
-          app: "mealscout",
-          claimType: LISA_CLAIM_TYPES.ORDER_COMPLETED,
-          source: LISA_CLAIM_SOURCES.ORDER,
-          subjectType: "order",
-          subjectId: updated.id,
-          actorType: "restaurant",
-          actorId: updated.restaurantId,
-          payload: { totalCents: updated.totalCents, orderType: updated.orderType },
-        }).catch(() => {});
+        db.insert(lisaClaims)
+          .values({
+            app: "mealscout",
+            claimType: LISA_CLAIM_TYPES.ORDER_COMPLETED,
+            source: LISA_CLAIM_SOURCES.ORDER,
+            subjectType: "order",
+            subjectId: updated.id,
+            actorType: "restaurant",
+            actorId: updated.restaurantId,
+            payload: {
+              totalCents: updated.totalCents,
+              orderType: updated.orderType,
+            },
+          })
+          .catch(() => {});
       } else if (status === ORDER_STATUS.CANCELLED) {
         await updatePromotedOrderCommissionStatus(order.id, "cancelled");
-        db.insert(lisaClaims).values({
-          app: "mealscout",
-          claimType: LISA_CLAIM_TYPES.ORDER_CANCELLED,
-          source: LISA_CLAIM_SOURCES.ORDER,
-          subjectType: "order",
-          subjectId: updated.id,
-          actorType: "restaurant",
-          actorId: updated.restaurantId,
-          payload: { cancellationReason: updated.cancellationReason },
-        }).catch(() => {});
+        db.insert(lisaClaims)
+          .values({
+            app: "mealscout",
+            claimType: LISA_CLAIM_TYPES.ORDER_CANCELLED,
+            source: LISA_CLAIM_SOURCES.ORDER,
+            subjectType: "order",
+            subjectId: updated.id,
+            actorType: "restaurant",
+            actorId: updated.restaurantId,
+            payload: { cancellationReason: updated.cancellationReason },
+          })
+          .catch(() => {});
       }
 
       res.json({ order: updated });

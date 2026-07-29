@@ -2,7 +2,7 @@
  * Pickup Checkout page
  * Customer fills in contact info, chooses card/cash, and pays via Stripe.
  */
-import { useState, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useParams, useLocation } from "wouter";
 import {
   Elements,
@@ -40,8 +40,21 @@ const STRIPE_FEE_FIXED_CENTS = 30;
 const formatMoney = (cents: number) =>
   `$${(Number(cents || 0) / 100).toFixed(2)}`;
 
+function fingerprintCheckoutPayload(payload: unknown) {
+  const value = JSON.stringify(payload);
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `${value.length}:${(hash >>> 0).toString(16)}`;
+}
+
 function estimateProcessingFeeCents(baseBeforeProcessingCents: number) {
-  if (!Number.isFinite(baseBeforeProcessingCents) || baseBeforeProcessingCents <= 0) {
+  if (
+    !Number.isFinite(baseBeforeProcessingCents) ||
+    baseBeforeProcessingCents <= 0
+  ) {
     return 0;
   }
   const denominator = 10_000 - STRIPE_FEE_BPS;
@@ -83,6 +96,7 @@ interface MenuInfo {
 
 interface DeliveryInfo {
   enabled: boolean;
+  availableNow?: boolean;
   feeCents: number;
   minimumOrderCents: number;
   estimatedMinutes: number;
@@ -109,7 +123,9 @@ export default function CheckoutPage() {
   const [readiness, setReadiness] = useState<OrderingReadiness | null>(null);
   const [orderingEnabled, setOrderingEnabled] = useState(true);
   const [paymentMethod, setPaymentMethod] = useState<"card" | "cash">("card");
-  const [orderType, setOrderType] = useState<"pickup" | "dine_in" | "delivery">("pickup");
+  const [orderType, setOrderType] = useState<"pickup" | "dine_in" | "delivery">(
+    "pickup",
+  );
   const [deliveryInfo, setDeliveryInfo] = useState<DeliveryInfo | null>(null);
   const [deliveryAddress, setDeliveryAddress] = useState({
     address: "",
@@ -125,6 +141,8 @@ export default function CheckoutPage() {
   });
   const [orderError, setOrderError] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
+  const creatingOrderRef = useRef(false);
+  const orderIdempotencyKeyRef = useRef<string | null>(null);
   const [orderId, setOrderId] = useState<string | null>(null);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [serverTotals, setServerTotals] = useState<{
@@ -134,6 +152,41 @@ export default function CheckoutPage() {
     feePaidByBusiness: boolean;
   } | null>(null);
   const hostileBrowser = isPaymentHostileBrowser();
+  const checkoutIdempotencyStorageKey = restaurantId
+    ? `mealscout:checkout-idempotency:${restaurantId}`
+    : null;
+  const readCheckoutIdempotencyKey = (payloadFingerprint?: string) => {
+    if (!checkoutIdempotencyStorageKey) return null;
+    try {
+      const raw = window.sessionStorage.getItem(checkoutIdempotencyStorageKey);
+      if (!raw) return null;
+      const stored = JSON.parse(raw) as {
+        key?: unknown;
+        payloadFingerprint?: unknown;
+      };
+      const key = String(stored.key || "").trim();
+      const storedFingerprint = String(stored.payloadFingerprint || "").trim();
+      if (
+        !key ||
+        (payloadFingerprint && storedFingerprint !== payloadFingerprint)
+      ) {
+        return null;
+      }
+      return key;
+    } catch {
+      return null;
+    }
+  };
+  const clearCheckoutIdempotencyKey = () => {
+    orderIdempotencyKeyRef.current = null;
+    if (!checkoutIdempotencyStorageKey) return;
+    try {
+      window.sessionStorage.removeItem(checkoutIdempotencyStorageKey);
+    } catch {
+      // Storage can be unavailable in hardened browsers. The in-memory key
+      // still protects same-page retries.
+    }
+  };
 
   useEffect(() => {
     const restaurantCart = getCart().filter(
@@ -166,7 +219,7 @@ export default function CheckoutPage() {
         // so a diner who expected to pay cash isn't just confused.
         .catch(() => setMenuInfoError(true));
       fetch(`/api/restaurants/${encodeURIComponent(restaurantId)}/delivery`)
-        .then((response) => response.ok ? response.json() : null)
+        .then((response) => (response.ok ? response.json() : null))
         .then((payload) => setDeliveryInfo(payload))
         .catch(() => setDeliveryInfo(null));
     }
@@ -220,7 +273,8 @@ export default function CheckoutPage() {
       (paymentMethod === "card"
         ? estimateProcessingFeeCents(subtotal + MEALSCOUT_ORDER_FEE_CENTS)
         : 0);
-  const deliveryFee = orderType === "delivery" ? Number(deliveryInfo?.feeCents || 0) : 0;
+  const deliveryFee =
+    orderType === "delivery" ? Number(deliveryInfo?.feeCents || 0) : 0;
   const total = subtotal + platformFee + deliveryFee;
   const displayedSubtotal = serverTotals?.subtotalCents ?? subtotal;
   const displayedFee = serverTotals?.feePaidByBusiness
@@ -230,19 +284,29 @@ export default function CheckoutPage() {
   const menuId = cart[0].menuId;
 
   const createOrder = async () => {
+    if (creatingOrderRef.current) return;
     if (!contact.name.trim()) {
       setOrderError("Please enter your name.");
       return;
     }
     if (paymentMethod === "card" && hostileBrowser) {
-      setOrderError("Open this page in Chrome or Safari to complete card payment.");
+      setOrderError(
+        "Open this page in Chrome or Safari to complete card payment.",
+      );
       return;
     }
-    if (orderType === "delivery" && (!deliveryAddress.address.trim() || !deliveryAddress.city.trim() || !deliveryAddress.state.trim() || !deliveryAddress.postalCode.trim())) {
+    if (
+      orderType === "delivery" &&
+      (!deliveryAddress.address.trim() ||
+        !deliveryAddress.city.trim() ||
+        !deliveryAddress.state.trim() ||
+        !deliveryAddress.postalCode.trim())
+    ) {
       setOrderError("Enter the complete delivery address.");
       return;
     }
     setOrderError(null);
+    creatingOrderRef.current = true;
     setIsCreating(true);
     try {
       const payload = {
@@ -252,16 +316,24 @@ export default function CheckoutPage() {
         customerEmail: contact.email.trim() || undefined,
         customerPhone: contact.phone.trim() || undefined,
         orderType,
-        deliveryAddress: orderType === "delivery" ? deliveryAddress.address.trim() : undefined,
-        deliveryCity: orderType === "delivery" ? deliveryAddress.city.trim() : undefined,
-        deliveryState: orderType === "delivery" ? deliveryAddress.state.trim() : undefined,
-        deliveryPostalCode: orderType === "delivery" ? deliveryAddress.postalCode.trim() : undefined,
-        deliveryInstructions: orderType === "delivery" ? deliveryAddress.instructions.trim() || undefined : undefined,
+        deliveryAddress:
+          orderType === "delivery" ? deliveryAddress.address.trim() : undefined,
+        deliveryCity:
+          orderType === "delivery" ? deliveryAddress.city.trim() : undefined,
+        deliveryState:
+          orderType === "delivery" ? deliveryAddress.state.trim() : undefined,
+        deliveryPostalCode:
+          orderType === "delivery"
+            ? deliveryAddress.postalCode.trim()
+            : undefined,
+        deliveryInstructions:
+          orderType === "delivery"
+            ? deliveryAddress.instructions.trim() || undefined
+            : undefined,
         paymentMethod,
         promotionToken:
-          window.localStorage.getItem(
-            `mealscout:promotion:${restaurantId}`,
-          ) || undefined,
+          window.localStorage.getItem(`mealscout:promotion:${restaurantId}`) ||
+          undefined,
         items: cart.map((i) => ({
           menuItemId: i.menuItemId,
           quantity: i.quantity,
@@ -270,14 +342,45 @@ export default function CheckoutPage() {
           specialInstructions: i.specialInstructions || undefined,
         })),
       };
+      const payloadFingerprint = fingerprintCheckoutPayload(payload);
+      const idempotencyKey =
+        orderIdempotencyKeyRef.current ||
+        readCheckoutIdempotencyKey(payloadFingerprint) ||
+        globalThis.crypto?.randomUUID?.() ||
+        `checkout-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      orderIdempotencyKeyRef.current = idempotencyKey;
+      if (checkoutIdempotencyStorageKey) {
+        try {
+          window.sessionStorage.setItem(
+            checkoutIdempotencyStorageKey,
+            JSON.stringify({ key: idempotencyKey, payloadFingerprint }),
+          );
+        } catch {
+          // Same-page retries remain protected by the ref.
+        }
+      }
       const res = await fetch("/api/pickup-orders", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": idempotencyKey,
+        },
         credentials: "include",
         body: JSON.stringify(payload),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Failed to create order");
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const retryableResponse =
+          res.status >= 500 ||
+          res.status === 408 ||
+          res.status === 425 ||
+          res.status === 429 ||
+          (res.status === 409 && data.code === "request_in_progress");
+        if (!retryableResponse) {
+          clearCheckoutIdempotencyKey();
+        }
+        throw new Error(data.message || "Failed to create order");
+      }
 
       setOrderId(data.order.id);
       setServerTotals({
@@ -290,11 +393,19 @@ export default function CheckoutPage() {
 
       if (paymentMethod === "cash") {
         // No payment needed — redirect immediately
+        clearCheckoutIdempotencyKey();
         clearCartForRestaurant(restaurantId ?? "");
         navigate(`/order-confirmation/${data.order.id}`);
       } else {
-        // Card payment — show Stripe Elements
-        setClientSecret(data.clientSecret);
+        if (data.clientSecret) {
+          // Fresh or safely recovered card payment — show Stripe Elements.
+          setClientSecret(data.clientSecret);
+        } else {
+          // Payment was already submitted or the order is already
+          // authoritative. Keep the retry key until confirmation polling
+          // observes a non-pending state.
+          navigate(`/order-confirmation/${data.order.id}`);
+        }
       }
     } catch (err: any) {
       const message = String(err?.message || "Failed to create order");
@@ -306,8 +417,42 @@ export default function CheckoutPage() {
         setOrderError(message);
       }
     } finally {
+      creatingOrderRef.current = false;
       setIsCreating(false);
     }
+  };
+
+  const cancelPendingCardOrder = async () => {
+    const idempotencyKey =
+      orderIdempotencyKeyRef.current || readCheckoutIdempotencyKey();
+    if (!orderId || !idempotencyKey) {
+      throw new Error(
+        "This payment cannot be cancelled safely from this page. Refresh and try again.",
+      );
+    }
+    const response = await fetch(
+      `/api/pickup-orders/${encodeURIComponent(orderId)}/cancel-payment`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": idempotencyKey,
+        },
+        credentials: "include",
+        body: "{}",
+      },
+    );
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data.message || "Payment cancellation failed");
+    }
+    clearCheckoutIdempotencyKey();
+    setClientSecret(null);
+    setOrderId(null);
+    setServerTotals(null);
+    setOrderError(
+      "Payment cancelled. No charge was completed, and your cart is still available.",
+    );
   };
 
   // If we have a clientSecret, render the Stripe Elements form
@@ -322,7 +467,13 @@ export default function CheckoutPage() {
           secondaryLabel="Menu"
         />
         <main className="mx-auto w-full max-w-2xl px-4 py-6 sm:py-8">
-          <p className="profile-section-label">Pickup order</p>
+          <p className="profile-section-label">
+            {orderType === "delivery"
+              ? "Merchant delivery order"
+              : orderType === "dine_in"
+                ? "Dine-in order"
+                : "Pickup order"}
+          </p>
           <h1 className="mb-6 mt-1 text-3xl font-black tracking-tight text-[color:var(--profile-ink)]">
             Payment
           </h1>
@@ -330,7 +481,11 @@ export default function CheckoutPage() {
             <div className="mb-4">
               <PaymentBrowserGate
                 currentUrl={window.location.href}
-                reason="Complete pickup checkout in Chrome or Safari."
+                reason={`Complete ${
+                  orderType === "delivery"
+                    ? "delivery"
+                    : orderType.replace("_", "-")
+                } checkout in Chrome or Safari.`}
                 compact
               />
             </div>
@@ -343,7 +498,9 @@ export default function CheckoutPage() {
               </div>
               {displayedFee > 0 && (
                 <div className="flex justify-between text-sm mb-1">
-                  <span className="text-muted-foreground">Processing + MealScout fee</span>
+                  <span className="text-muted-foreground">
+                    Processing + MealScout fee
+                  </span>
                   <span>{formatMoney(displayedFee)}</span>
                 </div>
               )}
@@ -360,8 +517,8 @@ export default function CheckoutPage() {
             <StripePaymentForm
               orderId={orderId}
               restaurantId={restaurantId ?? ""}
+              onCancel={cancelPendingCardOrder}
               onSuccess={() => {
-                clearCartForRestaurant(restaurantId ?? "");
                 navigate(`/order-confirmation/${orderId}`);
               }}
             />
@@ -388,7 +545,13 @@ export default function CheckoutPage() {
           <ArrowLeft className="h-4 w-4" aria-hidden="true" />
           Return to menu
         </Link>
-        <p className="profile-section-label">Pickup order</p>
+        <p className="profile-section-label">
+          {orderType === "delivery"
+            ? "Merchant delivery order"
+            : orderType === "dine_in"
+              ? "Dine-in order"
+              : "Pickup order"}
+        </p>
         <h1 className="mb-6 mt-1 text-3xl font-black tracking-tight text-[color:var(--profile-ink)]">
           Checkout
         </h1>
@@ -403,9 +566,7 @@ export default function CheckoutPage() {
                   Waiting on: {readiness.blockingReasons.join(", ")}.
                 </p>
               ) : (
-                <p className="mt-1 text-xs">
-                  Please order in person for now.
-                </p>
+                <p className="mt-1 text-xs">Please order in person for now.</p>
               )}
             </div>
           </div>
@@ -467,7 +628,9 @@ export default function CheckoutPage() {
           </CardHeader>
           <CardContent className="space-y-3">
             <div>
-              <Label className="font-black text-[color:var(--profile-ink)]">Name *</Label>
+              <Label className="font-black text-[color:var(--profile-ink)]">
+                Name *
+              </Label>
               <Input
                 value={contact.name}
                 onChange={(e) =>
@@ -524,7 +687,9 @@ export default function CheckoutPage() {
           <CardContent>
             <RadioGroup
               value={orderType}
-              onValueChange={(v) => setOrderType(v as "pickup" | "dine_in" | "delivery")}
+              onValueChange={(v) =>
+                setOrderType(v as "pickup" | "dine_in" | "delivery")
+              }
               className="flex flex-wrap gap-4"
             >
               <div className="flex items-center gap-2">
@@ -545,15 +710,24 @@ export default function CheckoutPage() {
                   Dine In
                 </Label>
               </div>
-              {deliveryInfo?.enabled && (
+              {deliveryInfo?.enabled && deliveryInfo.availableNow !== false && (
                 <div className="flex items-center gap-2">
                   <RadioGroupItem value="delivery" id="ot-delivery" />
-                  <Label htmlFor="ot-delivery" className="cursor-pointer font-normal">
+                  <Label
+                    htmlFor="ot-delivery"
+                    className="cursor-pointer font-normal"
+                  >
                     Delivery · {formatMoney(deliveryInfo.feeCents)}
                   </Label>
                 </div>
               )}
             </RadioGroup>
+            {deliveryInfo?.enabled && deliveryInfo.availableNow === false && (
+              <p className="mt-3 text-xs text-muted-foreground">
+                Merchant delivery is unavailable at this time. Pickup and dine
+                in are still available.
+              </p>
+            )}
           </CardContent>
         </Card>
 
@@ -565,16 +739,56 @@ export default function CheckoutPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="grid gap-3 sm:grid-cols-2">
-              <Input className="sm:col-span-2" placeholder="Street address" value={deliveryAddress.address} onChange={(e) => setDeliveryAddress((v) => ({ ...v, address: e.target.value }))} />
-              <Input placeholder="City" value={deliveryAddress.city} onChange={(e) => setDeliveryAddress((v) => ({ ...v, city: e.target.value }))} />
+              <Input
+                className="sm:col-span-2"
+                placeholder="Street address"
+                value={deliveryAddress.address}
+                onChange={(e) =>
+                  setDeliveryAddress((v) => ({ ...v, address: e.target.value }))
+                }
+              />
+              <Input
+                placeholder="City"
+                value={deliveryAddress.city}
+                onChange={(e) =>
+                  setDeliveryAddress((v) => ({ ...v, city: e.target.value }))
+                }
+              />
               <div className="grid grid-cols-2 gap-3">
-                <Input placeholder="State" value={deliveryAddress.state} onChange={(e) => setDeliveryAddress((v) => ({ ...v, state: e.target.value }))} />
-                <Input placeholder="ZIP code" value={deliveryAddress.postalCode} onChange={(e) => setDeliveryAddress((v) => ({ ...v, postalCode: e.target.value }))} />
+                <Input
+                  placeholder="State"
+                  value={deliveryAddress.state}
+                  onChange={(e) =>
+                    setDeliveryAddress((v) => ({ ...v, state: e.target.value }))
+                  }
+                />
+                <Input
+                  placeholder="ZIP code"
+                  value={deliveryAddress.postalCode}
+                  onChange={(e) =>
+                    setDeliveryAddress((v) => ({
+                      ...v,
+                      postalCode: e.target.value,
+                    }))
+                  }
+                />
               </div>
-              <Input className="sm:col-span-2" placeholder="Gate code or delivery note (optional)" value={deliveryAddress.instructions} onChange={(e) => setDeliveryAddress((v) => ({ ...v, instructions: e.target.value }))} />
+              <Input
+                className="sm:col-span-2"
+                placeholder="Gate code or delivery note (optional)"
+                value={deliveryAddress.instructions}
+                onChange={(e) =>
+                  setDeliveryAddress((v) => ({
+                    ...v,
+                    instructions: e.target.value,
+                  }))
+                }
+              />
               <p className="sm:col-span-2 text-xs text-muted-foreground">
                 {deliveryInfo?.estimatedMinutes || 45}-minute estimate
-                {deliveryInfo?.minimumOrderCents ? ` · ${formatMoney(deliveryInfo.minimumOrderCents)} minimum` : ""}
+                {deliveryInfo?.minimumOrderCents
+                  ? ` · ${formatMoney(deliveryInfo.minimumOrderCents)} minimum`
+                  : ""}
               </p>
             </CardContent>
           </Card>
@@ -655,15 +869,18 @@ export default function CheckoutPage() {
 function StripePaymentForm({
   orderId,
   restaurantId,
+  onCancel,
   onSuccess,
 }: {
   orderId: string;
   restaurantId: string;
+  onCancel: () => Promise<void>;
   onSuccess: () => void;
 }) {
   const stripe = useStripe();
   const elements = useElements();
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -696,6 +913,18 @@ function StripePaymentForm({
     }
   };
 
+  const handleCancel = async () => {
+    setIsCancelling(true);
+    setError(null);
+    try {
+      await onCancel();
+    } catch (err: any) {
+      setError(err.message || "Payment cancellation failed");
+    } finally {
+      setIsCancelling(false);
+    }
+  };
+
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <PaymentElement />
@@ -708,10 +937,20 @@ function StripePaymentForm({
       <Button
         type="submit"
         className="h-12 w-full rounded-full bg-[#d84a12] text-base font-black text-white hover:bg-[#b83a0a]"
-        disabled={!stripe || isProcessing}
+        disabled={!stripe || isProcessing || isCancelling}
       >
         {isProcessing && <Loader2 className="w-5 h-5 mr-2 animate-spin" />}
         Confirm Payment
+      </Button>
+      <Button
+        type="button"
+        variant="outline"
+        className="h-11 w-full rounded-full"
+        disabled={isProcessing || isCancelling}
+        onClick={handleCancel}
+      >
+        {isCancelling && <Loader2 className="w-5 h-5 mr-2 animate-spin" />}
+        Cancel payment and release order
       </Button>
     </form>
   );

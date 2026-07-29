@@ -66,6 +66,7 @@ Frontend routes:
 - `/restaurant-owner-dashboard`, `/restaurant/dashboard` - owner dashboard aliases.
 - `/deal-creation`, `/deal-edit/:dealId` - deal creation/edit.
 - `/menu-builder`, `/kitchen` - menu setup and kitchen display.
+- `/merchant-delivery` - authenticated merchant-operated delivery controls; guests are redirected to login.
 - `/truck-discovery` - truck-facing discovery.
 - `/business-team`, `/business-team/accept` - team management and invite acceptance.
 - `/subscribe` - subscription/plan surface.
@@ -83,6 +84,7 @@ Main backend groups:
 - `registerBusinessTeamRoutes`
 - `registerMenuRoutes`
 - `registerPickupOrderRoutes`
+- `registerMerchantDeliveryRoutes`
 - `registerSubscriptionRoutes`
 
 ## Host / Event Routes

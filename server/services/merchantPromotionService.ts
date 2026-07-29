@@ -100,16 +100,19 @@ export async function createPromotionAttribution(input: {
   return token;
 }
 
-export async function consumePromotionAttribution(input: {
-  token: string;
-  orderId: string;
-  targetRestaurantId: string;
-  customerUserId?: string | null;
-  eligibleOrderCents: number;
-  commissionEligible: boolean;
-}) {
+export async function consumePromotionAttribution(
+  input: {
+    token: string;
+    orderId: string;
+    targetRestaurantId: string;
+    customerUserId?: string | null;
+    eligibleOrderCents: number;
+    commissionEligible: boolean;
+  },
+  transaction?: any,
+) {
   if (!input.token) return null;
-  return db.transaction(async (tx: any) => {
+  const consume = async (tx: any) => {
     const [attribution] = await tx
       .select()
       .from(promotionAttributions)
@@ -188,7 +191,8 @@ export async function consumePromotionAttribution(input: {
       });
     }
     return converted;
-  });
+  };
+  return transaction ? consume(transaction) : db.transaction(consume);
 }
 
 export async function updatePromotedOrderCommissionStatus(
