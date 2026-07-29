@@ -67,8 +67,8 @@ function requireMatch(source: string, pattern: RegExp, label: string) {
 }
 
 [
-  "C9 payment/webhook safety map complete",
-  "docs/contract-only cleanup slice",
+  "C9 payment/webhook safety map and focused payment-safety hardening complete",
+  "docs/contract-only cleanup",
   "## Payment Route Entry Points",
   "## Stripe And Payment Intent Creation Routes",
   "## Booking Payment Handoff Routes",
@@ -84,7 +84,7 @@ function requireMatch(source: string, pattern: RegExp, label: string) {
   "C9-F3",
   "C9-F4",
   "C9-F5",
-  "Do not change Stripe runtime calls from this C9 map",
+  "dedicated payment-safety lane subsequently applied only",
   "Do not mark C10 complete from C9",
 ].forEach((snippet) => requireIncludes(map, snippet, `map snippet ${snippet}`));
 
@@ -231,8 +231,17 @@ requireMatch(
   "paymentsEnabled",
 ].forEach((snippet) => requireIncludes(productionGate, snippet, `production gate snippet ${snippet}`));
 
-if (envExample.includes("STRIPE_SECRET_KEY") || prodEnvExample.includes("STRIPE_SECRET_KEY")) {
-  throw new Error("C9-F1 should be revisited: env examples now include STRIPE_SECRET_KEY");
+for (const snippet of [
+  "STRIPE_SECRET_KEY",
+  "VITE_STRIPE_PUBLIC_KEY",
+  "STRIPE_WEBHOOK_SECRET",
+]) {
+  requireIncludes(envExample, snippet, `.env.example snippet ${snippet}`);
+  requireIncludes(
+    prodEnvExample,
+    snippet,
+    `.env.production.example snippet ${snippet}`,
+  );
 }
 
 for (const forbidden of [

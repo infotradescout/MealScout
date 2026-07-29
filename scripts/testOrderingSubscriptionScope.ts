@@ -35,17 +35,22 @@ function run() {
     "Subscription helper must scope restaurantIds to the provided restaurantId",
   );
 
-  // Guard 3: critical endpoints must pass restaurantId into the helper.
-  assertContains(
-    content,
-    /assertHasOrderingSubscription\(req\.user\.id,\s*restaurantId\)/m,
-    "Owner list endpoints must pass restaurantId to assertHasOrderingSubscription",
-  );
+  // Guard 3: both owner list endpoints must use the shared access helper,
+  // which performs ownership/role checks before the scoped subscription gate.
+  const scopedListCalls =
+    content.match(
+      /assertOrderingWorkspaceAccess\(req\.user,\s*restaurantId\)/g,
+    ) || [];
+  if (scopedListCalls.length < 2) {
+    throw new Error(
+      "Owner list endpoints must pass restaurantId to assertOrderingWorkspaceAccess",
+    );
+  }
 
   assertContains(
     content,
-    /assertHasOrderingSubscription\(req\.user\.id,\s*order\.restaurantId\)/m,
-    "Owner status update endpoint must pass order.restaurantId to assertHasOrderingSubscription",
+    /assertOrderingWorkspaceAccess\(req\.user,\s*order\.restaurantId\)/m,
+    "Owner status update endpoint must pass order.restaurantId to assertOrderingWorkspaceAccess",
   );
 
   assertContains(

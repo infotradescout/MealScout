@@ -7,6 +7,7 @@ const orders = read("client/src/pages/orders.tsx");
 const kitchen = read("client/src/pages/kitchen-display.tsx");
 const workspace = read("client/src/components/owner-orders-workspace.tsx");
 const workspaceShell = read("client/src/components/business-workspace-shell.tsx");
+const merchantDelivery = read("client/src/pages/merchant-delivery.tsx");
 const confirmation = read("client/src/pages/order-confirmation.tsx");
 const routes = read("server/routes/pickupOrderRoutes.ts");
 const websocket = read("server/websocket.ts");
@@ -50,6 +51,16 @@ assert.match(workspace, /subscribe_kitchen/);
 assert.match(workspace, /invalidateQueries\(\{ queryKey: queueQueryKey \}\)/);
 
 assert.match(workspaceShell, /id: "work"[\s\S]*?buildWorkspaceHref\("\/orders", business\.id\)/);
+assert.match(
+  workspaceShell,
+  /export type BusinessWorkspaceModuleId[\s\S]*?\| "work"[\s\S]*?\| "delivery"/,
+);
+assert.match(
+  workspaceShell,
+  /id: "delivery"[\s\S]*?buildWorkspaceHref\("\/merchant-delivery", business\.id\)/,
+);
+assert.match(merchantDelivery, /activeModule="delivery"/);
+assert.doesNotMatch(merchantDelivery, /activeModule="work"/);
 
 const ownerQueueStart = routes.indexOf('"/api/owner/kitchen-queue/:restaurantId"');
 const ownerHistoryStart = routes.indexOf('"/api/owner/orders/:restaurantId"');
