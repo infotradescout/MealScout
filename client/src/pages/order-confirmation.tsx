@@ -14,6 +14,7 @@ import {
   Clock,
   ChefHat,
   Package,
+  Truck,
   XCircle,
 } from "lucide-react";
 
@@ -48,6 +49,18 @@ const STATUS_CONFIG: Record<
     color: "text-green-600",
     description: "Your order is ready! Come grab it now.",
   },
+  out_for_delivery: {
+    label: "Out for Delivery",
+    icon: Truck,
+    color: "text-blue-600",
+    description: "Your order is on its way.",
+  },
+  delivered: {
+    label: "Delivered",
+    icon: CheckCircle,
+    color: "text-green-600",
+    description: "Your order was delivered.",
+  },
   completed: {
     label: "Order Complete",
     icon: CheckCircle,
@@ -69,6 +82,15 @@ const STATUS_ORDER = [
   "ready",
   "completed",
 ];
+const DELIVERY_STATUS_ORDER = [
+  "pending",
+  "confirmed",
+  "preparing",
+  "ready",
+  "out_for_delivery",
+  "delivered",
+  "completed",
+];
 
 interface OrderItem {
   id: string;
@@ -80,6 +102,7 @@ interface OrderItem {
 
 interface Order {
   id: string;
+  restaurantId: string;
   status: string;
   customerName: string;
   orderType: string;
@@ -88,12 +111,50 @@ interface Order {
   platformFeeCents: number;
   feePaidByBusiness: boolean;
   totalCents: number;
+  deliveryAddress?: string | null;
+  deliveryCity?: string | null;
+  deliveryState?: string | null;
+  deliveryPostalCode?: string | null;
+  deliveryFeeCents?: number | null;
+  deliveryEstimateMinutes?: number | null;
+  deliveryInstructions?: string | null;
   createdAt: string;
   confirmedAt: string | null;
   readyAt: string | null;
+  outForDeliveryAt?: string | null;
+  deliveredAt?: string | null;
   completedAt: string | null;
   scheduledFor: string | null;
   items: OrderItem[];
+}
+
+function clearCompletedCheckoutState(order: Order) {
+  if (!order.restaurantId) return;
+  if (order.paymentMethod === "card" && order.status === "pending") return;
+  try {
+    window.sessionStorage.removeItem(
+      `mealscout:checkout-idempotency:${order.restaurantId}`,
+    );
+  } catch {
+    // A hardened browser may not expose session storage.
+  }
+  if (order.status === "cancelled") return;
+  try {
+    const raw = window.localStorage.getItem("mealscout_cart");
+    const cart = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(cart)) return;
+    window.localStorage.setItem(
+      "mealscout_cart",
+      JSON.stringify(
+        cart.filter(
+          (item: { restaurantId?: unknown }) =>
+            String(item?.restaurantId || "") !== order.restaurantId,
+        ),
+      ),
+    );
+  } catch {
+    // A hardened browser may not expose local storage.
+  }
 }
 
 function normalizeOrderPayload(payload: any): Order | null {
@@ -140,6 +201,7 @@ export default function OrderConfirmationPage() {
             const data = await piRes.json();
             const normalized = normalizeOrderPayload(data);
             if (!normalized) throw new Error("Order not found");
+            clearCompletedCheckoutState(normalized);
             setOrder(normalized);
             return;
           }
@@ -149,6 +211,7 @@ export default function OrderConfirmationPage() {
       const data = await res.json();
       const normalized = normalizeOrderPayload(data);
       if (!normalized) throw new Error("Order not found");
+      clearCompletedCheckoutState(normalized);
       setOrder(normalized);
     } catch (err: any) {
       setError(err.message);
@@ -215,10 +278,30 @@ export default function OrderConfirmationPage() {
     );
   }
 
-  const config = STATUS_CONFIG[order.status] ?? STATUS_CONFIG.pending;
+  const deliveryStatusOverrides =
+    order.orderType === "delivery"
+      ? {
+          ready: {
+            label: "Ready for Delivery",
+            icon: Package,
+            color: "text-green-600",
+            description:
+              "The kitchen finished your order and is preparing the delivery handoff.",
+          },
+        }
+      : {};
+  const config =
+    deliveryStatusOverrides[
+      order.status as keyof typeof deliveryStatusOverrides
+    ] ??
+    STATUS_CONFIG[order.status] ??
+    STATUS_CONFIG.pending;
   const StatusIcon = config.icon;
   const orderNum = order.id.slice(-6).toUpperCase();
   const isTerminal = ["completed", "cancelled"].includes(order.status);
+  const statusOrder =
+    order.orderType === "delivery" ? DELIVERY_STATUS_ORDER : STATUS_ORDER;
+  const progressSteps = statusOrder.slice(0, -1);
 
   return (
     <div
@@ -244,8 +327,8 @@ export default function OrderConfirmationPage() {
         {/* Progress bar (for non-cancelled orders) */}
         {order.status !== "cancelled" && (
           <div className="flex items-center justify-between mb-8 px-2">
-            {STATUS_ORDER.slice(0, -1).map((s, idx) => {
-              const stepIdx = STATUS_ORDER.indexOf(order.status);
+            {progressSteps.map((s, idx) => {
+              const stepIdx = statusOrder.indexOf(order.status);
               const isDone = idx < stepIdx;
               const isCurrent = idx === stepIdx;
               return (
@@ -261,7 +344,7 @@ export default function OrderConfirmationPage() {
                   >
                     {isDone ? "✓" : idx + 1}
                   </div>
-                  {idx < 3 && (
+                  {idx < progressSteps.length - 1 && (
                     <div
                       className={`h-1 flex-1 mx-1 ${
                         isDone ? "bg-green-500" : "bg-muted"
@@ -307,11 +390,37 @@ export default function OrderConfirmationPage() {
                   <span>{formatMoney(order.platformFeeCents)}</span>
                 </div>
               )}
+              {order.orderType === "delivery" &&
+                Number(order.deliveryFeeCents || 0) > 0 && (
+                  <div className="flex justify-between text-sm text-muted-foreground">
+                    <span>Merchant delivery</span>
+                    <span>{formatMoney(Number(order.deliveryFeeCents))}</span>
+                  </div>
+                )}
               <div className="flex justify-between font-black">
                 <span>Total</span>
                 <span>{formatMoney(order.totalCents)}</span>
               </div>
             </div>
+            {order.orderType === "delivery" && order.deliveryAddress ? (
+              <div className="rounded-2xl bg-[color:var(--profile-surface-soft)] p-3 text-sm">
+                <p className="font-black">Deliver to</p>
+                <p>
+                  {order.deliveryAddress}, {order.deliveryCity},{" "}
+                  {order.deliveryState} {order.deliveryPostalCode}
+                </p>
+                {order.deliveryEstimateMinutes ? (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Estimated delivery: {order.deliveryEstimateMinutes} minutes
+                  </p>
+                ) : null}
+                {order.deliveryInstructions ? (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Note: {order.deliveryInstructions}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
             <div className="text-xs text-muted-foreground pt-1 flex gap-3 flex-wrap">
               <span className="capitalize">
                 {order.orderType.replace("_", " ")}

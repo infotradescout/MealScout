@@ -38,6 +38,7 @@ export type BusinessWorkspaceModuleId =
   | "deals"
   | "promotions"
   | "work"
+  | "delivery"
   | "audience"
   | "team"
   | "payments"

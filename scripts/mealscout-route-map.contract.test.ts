@@ -48,7 +48,9 @@ function requireMatch(pattern: RegExp, label: string) {
   "/events-today/:city",
   "/locations-with-trucks/:city",
   "/menu/:restaurantId",
-].forEach((snippet) => requireIncludes(snippet, `public customer route ${snippet}`));
+].forEach((snippet) =>
+  requireIncludes(snippet, `public customer route ${snippet}`),
+);
 
 [
   "`/scout`, `/scout/:refTag`, `/directory`, `/directory/:refTag`, `/scout-v2` | `client/src/pages/explore-preview-v2.tsx`",
@@ -60,7 +62,9 @@ function requireMatch(pattern: RegExp, label: string) {
   "`/profile-setup` | `client/src/pages/profile-setup.tsx`",
   "`client/src/pages/explore-preview.tsx` is legacy/quarantined",
   "`client/src/pages/trending.tsx` exists, but `/trending` redirects to `/scout`",
-].forEach((snippet) => requireIncludes(snippet, `public route source inventory ${snippet}`));
+].forEach((snippet) =>
+  requireIncludes(snippet, `public route source inventory ${snippet}`),
+);
 
 [
   'const ScoutPageV2 = lazy(() => import("@/pages/explore-preview-v2"));',
@@ -77,7 +81,9 @@ function requireMatch(pattern: RegExp, label: string) {
   '<Route path="/food-trucks-today/:city" component={PublicSeoLandingPage} />',
 ].forEach((snippet) => {
   if (!appSource.includes(snippet)) {
-    throw new Error(`App route source missing expected routed surface: ${snippet}`);
+    throw new Error(
+      `App route source missing expected routed surface: ${snippet}`,
+    );
   }
 });
 
@@ -86,7 +92,9 @@ if (
     appSource,
   )
 ) {
-  throw new Error("App route source missing public profile slug route to PublicProfilePage.");
+  throw new Error(
+    "App route source missing public profile slug route to PublicProfilePage.",
+  );
 }
 
 [
@@ -95,32 +103,36 @@ if (
   '<Route path="/trending" component={Trending} />',
 ].forEach((snippet) => {
   if (appSource.includes(snippet)) {
-    throw new Error(`App route source must not mount legacy public surface: ${snippet}`);
+    throw new Error(
+      `App route source must not mount legacy public surface: ${snippet}`,
+    );
   }
 });
 
 [
   "/restaurant-owner-dashboard",
   "/restaurant/dashboard",
+  "/merchant-delivery",
   "/claim-truck",
   "/account-setup",
   "/owner/verify",
   "/post-verification",
-].forEach((snippet) => requireIncludes(snippet, `owner/truck route ${snippet}`));
+].forEach((snippet) =>
+  requireIncludes(snippet, `owner/truck route ${snippet}`),
+);
 
-[
-  "/host-signup",
-  "/host/dashboard",
-  "/events",
-  "/event/:slug",
-].forEach((snippet) => requireIncludes(snippet, `host/event route ${snippet}`));
+["/host-signup", "/host/dashboard", "/events", "/event/:slug"].forEach(
+  (snippet) => requireIncludes(snippet, `host/event route ${snippet}`),
+);
 
 [
   "/parking-pass",
   "/parking-pass-manage",
   "/parking-pass/manage",
   "not present in `client/src/App.tsx`",
-].forEach((snippet) => requireIncludes(snippet, `Parking Pass route ${snippet}`));
+].forEach((snippet) =>
+  requireIncludes(snippet, `Parking Pass route ${snippet}`),
+);
 
 [
   "/admin",
@@ -129,7 +141,9 @@ if (
   "/admin/incidents",
   "/admin/telemetry",
   "/admin/geo/heatmap",
-].forEach((snippet) => requireIncludes(snippet, `admin/staff route ${snippet}`));
+].forEach((snippet) =>
+  requireIncludes(snippet, `admin/staff route ${snippet}`),
+);
 
 [
   "Auth/account",
@@ -144,7 +158,9 @@ if (
   "Support/moderation",
   "Supplier",
   "Growth/referral",
-].forEach((snippet) => requireIncludes(snippet, `server route group ${snippet}`));
+].forEach((snippet) =>
+  requireIncludes(snippet, `server route group ${snippet}`),
+);
 
 [
   "/admin/dashboard",
@@ -169,7 +185,9 @@ if (
   "guest auth rejection",
   "IndexNow",
   "requires fixtures, staging, or explicit production-test-record approval",
-].forEach((snippet) => requireIncludes(snippet, `production gate expectation ${snippet}`));
+].forEach((snippet) =>
+  requireIncludes(snippet, `production gate expectation ${snippet}`),
+);
 
 [
   "Public user enters `/scout`",
@@ -180,20 +198,39 @@ if (
   "Parking Pass booking path starts",
 ].forEach((snippet) => requireIncludes(snippet, `trace example ${snippet}`));
 
-requireMatch(/registerPublicDiscoveryRoutes[\s\S]*registerPublicMapRoutes/i, "public backend registrations");
-requireMatch(/registerHostRoutes[\s\S]*registerBookingRoutes/i, "host booking backend registrations");
+requireMatch(
+  /registerPublicDiscoveryRoutes[\s\S]*registerPublicMapRoutes/i,
+  "public backend registrations",
+);
+requireMatch(
+  /registerHostRoutes[\s\S]*registerBookingRoutes/i,
+  "host booking backend registrations",
+);
+requireMatch(
+  /registerMerchantDeliveryRoutes/i,
+  "merchant delivery registration",
+);
 requireMatch(/registerStripeWebhookRoutes/i, "stripe webhook registration");
 
-if (/Merlin[^.\n]*active project/i.test(routeMap) || /active project[^.\n]*Merlin/i.test(routeMap)) {
+if (
+  /Merlin[^.\n]*active project/i.test(routeMap) ||
+  /active project[^.\n]*Merlin/i.test(routeMap)
+) {
   throw new Error("Route map describes Merlin as an active project.");
 }
 
 const featureLines = routeMap
   .split(/\r?\n/)
-  .filter((line) => /new product feature|new dashboard|new monetization flow|new provider integration/i.test(line));
+  .filter((line) =>
+    /new product feature|new dashboard|new monetization flow|new provider integration/i.test(
+      line,
+    ),
+  );
 for (const line of featureLines) {
   if (!/(no |not |disallowed|without|frozen|approval)/i.test(line)) {
-    throw new Error(`Route map appears to propose product feature scope: ${line}`);
+    throw new Error(
+      `Route map appears to propose product feature scope: ${line}`,
+    );
   }
 }
 

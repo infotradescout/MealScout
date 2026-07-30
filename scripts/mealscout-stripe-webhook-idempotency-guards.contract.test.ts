@@ -9,7 +9,7 @@ import { readFileSync } from "node:fs";
 // available by default, and MEALSCOUT_PAYMENT_WEBHOOK_SAFETY_MAP.md (C9-F5)
 // already flags that stateful payment smokes stay behind explicit fixture/env
 // approval. scripts/mealscout-stripe-webhook-stateful-replay.integration.test.ts
-// is the synthetic disposable-branch proof when that approval exists.
+// is the synthetic loopback-only disposable-database proof.
 //
 // Until then, this test locks in the specific idempotency/duplicate-
 // protection code shapes already present in the webhook handler, so a
@@ -18,6 +18,10 @@ import { readFileSync } from "node:fs";
 // database assertion.
 
 const source = readFileSync("server/routes/stripeWebhookRoutes.ts", "utf8");
+const pickupCancellationSource = readFileSync(
+  "server/services/pickupOrderPaymentCancellation.ts",
+  "utf8",
+);
 const hostEarningsSource = readFileSync(
   "server/hostEarningsService.ts",
   "utf8",
@@ -27,7 +31,11 @@ function requireIncludes(snippet: string, label = snippet) {
   assert.ok(source.includes(snippet), `Missing idempotency guard: ${label}`);
 }
 
-function requireCountAtLeast(snippet: string, expected: number, label = snippet) {
+function requireCountAtLeast(
+  snippet: string,
+  expected: number,
+  label = snippet,
+) {
   const actual = source.split(snippet).length - 1;
   assert.ok(
     actual >= expected,
@@ -35,15 +43,141 @@ function requireCountAtLeast(snippet: string, expected: number, label = snippet)
   );
 }
 
+const pickupFailureStart = source.indexOf(
+  'case "payment_intent.payment_failed"',
+);
+const pickupCanceledStart = source.indexOf(
+  'case "payment_intent.canceled"',
+  pickupFailureStart,
+);
+assert.ok(
+  pickupFailureStart >= 0 && pickupCanceledStart > pickupFailureStart,
+  "Missing pickup payment failure/cancellation handlers",
+);
+const pickupFailureSource = source.slice(
+  pickupFailureStart,
+  pickupCanceledStart,
+);
+const pickupCanceledEnd = source.indexOf(
+  'case "customer.subscription.updated"',
+  pickupCanceledStart,
+);
+const pickupCanceledSource = source.slice(
+  pickupCanceledStart,
+  pickupCanceledEnd,
+);
+
+assert.ok(
+  pickupFailureSource.includes("Only Stripe's terminal") &&
+    pickupFailureSource.includes("Leaving pickup order"),
+  "A pickup payment failure must remain retryable",
+);
+assert.ok(
+  !pickupFailureSource.includes(
+    "cancelPendingPickupOrderForCanceledPaymentIntent",
+  ),
+  "payment_intent.payment_failed must not cancel a pickup order",
+);
+assert.ok(
+  pickupCanceledSource.includes(
+    "cancelPendingPickupOrderForCanceledPaymentIntent",
+  ),
+  "payment_intent.canceled must invoke the terminal pickup cancellation service",
+);
+
+const requirePickupCancellationIncludes = (
+  snippet: string,
+  label = snippet,
+) => {
+  assert.ok(
+    pickupCancellationSource.includes(snippet),
+    `Missing pickup payment cancellation guard: ${label}`,
+  );
+};
+
+requirePickupCancellationIncludes(
+  "return db.transaction(async (tx: any) => {",
+  "one atomic transaction",
+);
+requirePickupCancellationIncludes(
+  "eq(pickupOrders.id, params.metadataOrderId)",
+  "metadata order id match",
+);
+requirePickupCancellationIncludes(
+  "eq(pickupOrders.stripePaymentIntentId, params.paymentIntentId)",
+  "stored PaymentIntent match",
+);
+requirePickupCancellationIncludes(
+  'eq(pickupOrders.status, "pending")',
+  "atomic pending-state guard",
+);
+requirePickupCancellationIncludes(
+  'eq(pickupOrders.paymentMethod, "card")',
+  "atomic card-payment guard",
+);
+requirePickupCancellationIncludes(
+  "inArray(pickupOrders.orderType, TERMINAL_PAYMENT_ORDER_TYPES)",
+  "pickup, dine-in, and delivery guard",
+);
+requirePickupCancellationIncludes(
+  'String(params.cancellationReason || "").trim()',
+  "caller-provided cancellation reason normalization",
+);
+requirePickupCancellationIncludes(
+  '"Card payment cancelled"',
+  "terminal cancellation reason",
+);
+requirePickupCancellationIncludes(
+  "cancellationReason,",
+  "normalized cancellation reason persistence",
+);
+requirePickupCancellationIncludes("cancelledAt: now", "cancellation timestamp");
+requirePickupCancellationIncludes(
+  "eq(pickupOrderItems.orderId, order.id)",
+  "reserved line-item inventory lookup",
+);
+requirePickupCancellationIncludes(
+  "eq(menuItems.trackInventory, true)",
+  "tracked inventory guard",
+);
+requirePickupCancellationIncludes(
+  "inventoryQty: sql`${menuItems.inventoryQty} + ${reservation.quantity}`",
+  "inventory restoration",
+);
+requirePickupCancellationIncludes(
+  "currentItem.inventoryAutoUnavailable === true",
+  "inventory-caused availability provenance",
+);
+requirePickupCancellationIncludes(
+  "inventoryAutoUnavailable: restoreAutomaticAvailability",
+  "automatic availability provenance clearing",
+);
+requirePickupCancellationIncludes(
+  "eq(promotedOrderCommissions.orderId, cancelledOrder.id)",
+  "order-scoped commission reversal",
+);
+requirePickupCancellationIncludes(
+  'eq(promotedOrderCommissions.status, "pending")',
+  "pending-only commission reversal",
+);
+requirePickupCancellationIncludes(
+  'status: "reversed"',
+  "commission reversed state",
+);
+assert.ok(
+  !pickupCancellationSource.includes("promotionAttributions"),
+  "Terminal cancellation must preserve the converted attribution record",
+);
+
 // Supplier order payment success: only marks paid if not already paid, and
 // ignores events for a PaymentIntent id that doesn't match what's stored on
 // the order (prevents a stale/duplicate intent from overwriting a newer one).
 requireIncludes(
-  '// Idempotent: only mark paid if not already.',
+  "// Idempotent: only mark paid if not already.",
   "supplier order payment_intent.succeeded idempotency comment",
 );
 requireIncludes(
-  'if (storedIntentId && storedIntentId !== paymentIntent.id) {',
+  "if (storedIntentId && storedIntentId !== paymentIntent.id) {",
   "supplier order payment_intent.succeeded stored-intent mismatch guard",
 );
 requireIncludes(
@@ -55,7 +189,7 @@ requireIncludes(
 // failure event for an old/replaced intent can't unpay a newer paid order,
 // and an out-of-order failure cannot regress a payment already marked paid.
 requireIncludes(
-  'if (storedIntentId && storedIntentId !== failedIntent.id) {',
+  "if (storedIntentId && storedIntentId !== failedIntent.id) {",
   "supplier order payment_intent.payment_failed stored-intent mismatch guard",
 );
 requireCountAtLeast(
@@ -71,10 +205,7 @@ requireIncludes(
 // Single-event booking payment: explicit idempotent skip when already
 // confirmed, plus a PaymentIntent match check and replay reconciliation for
 // the host earnings ledger.
-requireIncludes(
-  '// Idempotent',
-  "single-event booking idempotency comment",
-);
+requireIncludes("// Idempotent", "single-event booking idempotency comment");
 requireIncludes(
   "bookingIntentId !== paymentIntent.id",
   "single-event booking stored-intent mismatch guard",
@@ -102,7 +233,7 @@ assert.ok(
 // confirmed status or credited cancellation, followed by idempotent
 // reconciliation before the replay is acknowledged.
 requireIncludes(
-  'const alreadyProcessed = intentRows.some(',
+  "const alreadyProcessed = intentRows.some(",
   "parking pass alreadyProcessed guard",
 );
 requireIncludes(
@@ -177,7 +308,10 @@ requireIncludes(
   "throw reactivateError;",
   "throw pastDueSyncError;",
 ].forEach((snippet) =>
-  requireIncludes(snippet, `primary processing failure propagation: ${snippet}`),
+  requireIncludes(
+    snippet,
+    `primary processing failure propagation: ${snippet}`,
+  ),
 );
 requireIncludes(
   "await db.transaction(async (tx: any)",

@@ -1,0 +1,2 @@
+ALTER TABLE menu_items
+ADD COLUMN IF NOT EXISTS inventory_auto_unavailable BOOLEAN NOT NULL DEFAULT FALSE;
