@@ -53,7 +53,7 @@ const customBuildExamples = [
   "Catering menus",
   "Heavy photo cleanup",
   "Brand package work",
-  "Monthly profile management",
+  "Ongoing profile support",
 ];
 
 const websiteLimitations = [
@@ -67,7 +67,7 @@ const websiteLimitations = [
 ];
 
 const mealscoutProfileAdvantages = [
-  "Free standard food profile",
+  "Complete self-managed food profile",
   "Done-for-you setup available",
   "Menu and item organization",
   "Photos and food categories",
@@ -165,8 +165,8 @@ export default function ProfileSetupPage() {
                 Your food profile, built for hungry customers.
               </h1>
               <p className="mt-5 max-w-2xl text-lg font-semibold leading-relaxed text-stone-700">
-                Create your standard MealScout Profile for free and use
-                MealScout's available tools. Need help getting it ready? We can
+                Create your complete MealScout Profile for free and use all
+                included profile tools. Need help getting it ready? We can
                 set it up, customize it, organize your menu, polish your photos,
                 and connect your domain or ordering links.
               </p>
@@ -271,7 +271,10 @@ export default function ProfileSetupPage() {
                 Free profile and tools stay free. Most simple done-for-you
                 setups are $100. Larger menus, multiple locations, heavy photo
                 cleanup, online seller catalogs, advanced customization, or
-                ongoing profile management may require a custom quote.
+                ongoing profile support may require a custom quote.
+              </p>
+              <p className="mt-3 text-sm font-bold text-stone-800">
+                Optional setup help never unlocks or restricts profile tools.
               </p>
             </div>
 
@@ -282,7 +285,7 @@ export default function ProfileSetupPage() {
                     <Store className="h-6 w-6" aria-hidden="true" />
                   </div>
                   <CardTitle className="text-xl font-black">
-                    Standard MealScout Profile
+                    Complete MealScout Profile
                   </CardTitle>
                   <p className="text-3xl font-black text-emerald-700">Free</p>
                   <p className="text-sm font-semibold text-stone-600">
@@ -308,7 +311,7 @@ export default function ProfileSetupPage() {
                     Done-For-You Setup
                   </CardTitle>
                   <p className="text-3xl font-black text-orange-700">
-                    Most profiles are $100
+                    Simple setup service: $100
                   </p>
                   <p className="text-sm font-semibold text-stone-600">
                     We set it up and customize it for you.
@@ -330,13 +333,13 @@ export default function ProfileSetupPage() {
                     <ClipboardList className="h-6 w-6" aria-hidden="true" />
                   </div>
                   <CardTitle className="text-xl font-black">
-                    Custom MealScout Build
+                    Custom Setup Service
                   </CardTitle>
                   <p className="text-3xl font-black text-stone-800">
                     Quoted when needed
                   </p>
                   <p className="text-sm font-semibold text-stone-600">
-                    For larger or more complex food profiles.
+                    For larger or more complex profile setup work.
                   </p>
                 </CardHeader>
                 <CardContent className="space-y-6">

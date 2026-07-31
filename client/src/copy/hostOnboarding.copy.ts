@@ -177,8 +177,8 @@ export const HOST_ONBOARDING_COPY = {
   },
 
   promo: {
-    helperText: "Enter promo code for beta access...",
-    betaNote: 'Enter "BETA" for free access during beta testing period',
+    helperText: "Enter a promo code if you have one...",
+    betaNote: "Complete profile access does not require a promo code.",
   },
 
   terms: {
@@ -277,9 +277,9 @@ export const HOST_ONBOARDING_COPY = {
         "You can submit verification documents later from your dashboard.",
     },
     betaAccess: {
-      title: "Beta Access Granted!",
+      title: "Profile Access Active!",
       description:
-        "You can now create deals without payment during beta testing.",
+        "Your complete profile tools are active with no monthly charge.",
     },
   },
 

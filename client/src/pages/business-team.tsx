@@ -476,7 +476,7 @@ export default function BusinessTeamPage() {
                 Give the right people access to {currentBusiness.name}
               </h2>
               <p className="mt-2 max-w-xl text-sm leading-6 text-stone-700">
-                Choose exactly what each person can manage. Account, plan, and payment access stay with the business owner.
+                Choose exactly what each person can manage. Account ownership and payment approvals stay with the business owner.
               </p>
             </div>
             <div className="grid grid-cols-2 gap-2 sm:w-64">

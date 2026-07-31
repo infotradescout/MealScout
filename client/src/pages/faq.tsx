@@ -54,7 +54,7 @@ export default function FAQ() {
         "name": "Is MealScout free to join?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "Yes. Joining is free. Paid features are optional and unlock advanced visibility, profiles, and tools depending on your role."
+          "text": "Yes. Joining is free. Every business receives the complete profile and profile tools under a free trial that does not expire, require a card, convert to a paid plan, or create a monthly bill. Separate orders, deliveries, bookings, and other paid transactions may have charges shown before payment."
         }
       },
       {
@@ -86,7 +86,7 @@ export default function FAQ() {
         },
         {
           question: "Is it free to join?",
-          answer: "Yes. Joining is free for everyone. Paid features are optional and tied to advanced business tools."
+          answer: "Yes. Joining is free for everyone. Every business gets the complete profile and its tools under a free trial with no expiration, no card, and no monthly bill. Separate paid transactions are shown before payment."
         },
         {
           question: "How do I choose my user type?",
@@ -115,7 +115,7 @@ export default function FAQ() {
         },
         {
           question: "Do I need full access to book parking passes?",
-          answer: "No. Parking pass booking can be used on its own. Full access unlocks advanced features."
+          answer: "No monthly profile plan is required. Parking Pass bookings are separate paid transactions, with the charge shown before you confirm."
         }
       ]
     },
@@ -302,6 +302,5 @@ export default function FAQ() {
     </div>
   );
 }
-
 
 

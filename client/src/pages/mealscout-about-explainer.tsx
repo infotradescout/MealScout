@@ -192,7 +192,7 @@ export function MealScoutAboutExplainer() {
           </div>
           <div className="ms-about-hero-facts" role="group" aria-label="MealScout at a glance">
             <span><BadgeCheck aria-hidden="true" /> Public discovery starts without an account</span>
-            <span><BadgeCheck aria-hidden="true" /> Standard business profiles are free</span>
+            <span><BadgeCheck aria-hidden="true" /> Complete business profiles are free</span>
             <span><BadgeCheck aria-hidden="true" /> No pay-to-play organic ranking</span>
           </div>
         </div>
@@ -367,28 +367,28 @@ export function MealScoutAboutExplainer() {
           </div>
         </div>
 
-        <div className="ms-about-profile-offer" role="group" aria-label="MealScout Profile options">
+        <div className="ms-about-profile-offer" role="group" aria-label="MealScout Profile and optional setup services">
           <div className="ms-about-offer-intro">
             <img src="/brand/mealscout-logo-pin.png" alt="" />
             <div><small>MealScout Profile</small><strong>One public home for the whole food business</strong></div>
           </div>
           <article>
             <span>Self-managed</span>
-            <h3>Standard profile</h3>
+            <h3>Complete profile</h3>
             <strong className="ms-about-price">Free</strong>
-            <p>Build and maintain the profile with the available MealScout tools.</p>
+            <p>Build and maintain the complete profile with the included MealScout tools.</p>
           </article>
           <article className="ms-about-offer-featured">
-            <span>Done for you</span>
-            <h3>Profile setup</h3>
-            <strong className="ms-about-price">Most are $100</strong>
+            <span>Optional human help</span>
+            <h3>Setup service</h3>
+            <strong className="ms-about-price">Simple setup: $100</strong>
             <p>Menu organization, copy cleanup, photo placement, mobile polish, and link or domain help.</p>
           </article>
           <article>
-            <span>Complex operation</span>
-            <h3>Custom build</h3>
+            <span>Optional human help</span>
+            <h3>Custom setup service</h3>
             <strong className="ms-about-price">Custom quote</strong>
-            <p>Large menus, multiple locations, heavy content, advanced branding, or ongoing management.</p>
+            <p>Large menus, multiple locations, heavy content, advanced branding, or ongoing support.</p>
           </article>
         </div>
       </section>

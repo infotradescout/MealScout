@@ -70,12 +70,12 @@ export const aboutAudiences: AboutAudience[] = [
     summary:
       "Manage one food-first profile instead of rebuilding the same information across a website, social posts, menus, and disconnected tools.",
     bullets: [
-      "Free self-managed profile with optional done-for-you setup",
+      "Complete self-managed profile with optional setup help",
       "Menu, hours, media, specials, ordering, audience, and team tools",
       "A public home designed to be the one surface you actively maintain",
     ],
     href: "/profile-setup",
-    cta: "See profile options",
+    cta: "See profile setup choices",
     status: "coverage-expanding",
   },
   {
@@ -472,7 +472,7 @@ export const aboutFaqs = [
   {
     question: "What does a MealScout Profile cost?",
     answer:
-      "A standard self-managed MealScout Profile is free. Optional done-for-you setup is available; most simple setups are $100, while complex menus, multiple locations, heavy content, advanced branding, or ongoing management may require a custom quote.",
+      "The complete self-managed MealScout Profile and its tools are included under the non-expiring free trial. Optional human setup work is separate: simple setup service is $100, while complex menus, multiple locations, heavy content, advanced branding, or ongoing support may require a custom quote. Paying for help never unlocks or restricts profile tools.",
   },
   {
     question: "Does MealScout use star reviews?",

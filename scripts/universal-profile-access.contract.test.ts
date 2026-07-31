@@ -241,9 +241,13 @@ requireExcludes(
 const publicCopyPaths = [
   "client/src/content/role-landing.ts",
   "client/src/copy/hostOnboarding.copy.ts",
+  "client/src/pages/business-team.tsx",
   "client/src/pages/faq.tsx",
   "client/src/pages/how-it-works.tsx",
   "client/src/pages/hiring.tsx",
+  "client/src/pages/mealscout-about-content.ts",
+  "client/src/pages/mealscout-about-explainer.tsx",
+  "client/src/pages/profile-setup.tsx",
   "client/src/pages/privacy-policy.tsx",
   "client/src/pages/terms-of-service.tsx",
   "server/bootstrap/registerStaticPages.ts",
@@ -257,6 +261,17 @@ const forbiddenPublicClaims = [
   "30-day premium trial",
   "Premium subscription required",
   "Upgrade anytime to premium",
+  "Paid features are optional",
+  "Full access unlocks advanced features",
+  "Monthly profile management",
+  "Most profiles are $100",
+  "Account, plan, and payment access",
+  "free access during beta",
+  "without payment during beta testing",
+  "Standard business profiles are free",
+  "Standard profile",
+  "Most are $100",
+  "Custom MealScout Build",
 ];
 for (const path of publicCopyPaths) {
   const source = read(path);
