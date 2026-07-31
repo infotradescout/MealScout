@@ -5,6 +5,7 @@ import { z } from "zod";
 import {
   isBarBusinessType,
   isTruckBusinessType,
+  toCanonicalFoodBusinessType,
 } from "@shared/businessTypes";
 import {
   DEFAULT_TRUCK_BROADCAST_FRESHNESS_MS,
@@ -1065,7 +1066,14 @@ export function registerPublicDiscoveryRoutes(app: Express) {
         cuisine: z.string().trim().max(120).optional().nullable(),
         profileId: z.string().trim().max(80).optional().nullable(),
         profileType: z
-          .enum(["restaurant", "truck", "bar", "location"])
+          .enum([
+            "restaurant",
+            "truck",
+            "bar",
+            "caterer",
+            "private_chef",
+            "location",
+          ])
           .optional()
           .nullable(),
         targetPath: z.string().trim().max(500).optional().nullable(),
@@ -1137,7 +1145,14 @@ export function registerPublicDiscoveryRoutes(app: Express) {
   app.post("/api/public/profile-analytics", async (req, res) => {
     try {
       const schema = z.object({
-        profileEntity: z.enum(["restaurant", "truck", "bar", "location"]),
+        profileEntity: z.enum([
+          "restaurant",
+          "truck",
+          "bar",
+          "caterer",
+          "private_chef",
+          "location",
+        ]),
         profileId: z.string().trim().min(1),
         actionType: z.string().trim().min(1),
         targetType: z.string().trim().max(80).optional().nullable(),
@@ -1443,7 +1458,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
       const idHint = extractId(slugOrId);
       const safeBase = resolvePublicBaseUrl();
 
-      if (["restaurant", "truck", "bar"].includes(entity)) {
+      if (["restaurant", "truck", "bar", "caterer", "private_chef"].includes(entity)) {
         let row: any =
           entity === "truck"
             ? await resolveTruckRestaurantForPublicId(idHint)
@@ -1461,6 +1476,11 @@ export function registerPublicDiscoveryRoutes(app: Express) {
               !isBarBusinessType(candidate?.businessType)
             )
               return false;
+            if (
+              (entity === "caterer" || entity === "private_chef") &&
+              toCanonicalFoodBusinessType(candidate?.businessType) !== entity
+            )
+              return false;
             return toSlug(candidate?.name) === slugKey;
           });
         }
@@ -1469,6 +1489,12 @@ export function registerPublicDiscoveryRoutes(app: Express) {
         }
 
         const rowSlug = toSlug(row.name) || String(row.id);
+        const canonicalBusinessType = toCanonicalFoodBusinessType(row.businessType);
+        const serviceEntity =
+          canonicalBusinessType === "caterer" ||
+          canonicalBusinessType === "private_chef"
+            ? canonicalBusinessType
+            : null;
         const routeEntity =
           entity === "truck"
             ? "truck"
@@ -1478,7 +1504,9 @@ export function registerPublicDiscoveryRoutes(app: Express) {
                 ? "truck"
                 : isBarBusinessType(row.businessType)
                   ? "bar"
-                  : "restaurant";
+                  : serviceEntity
+                    ? serviceEntity
+                    : "restaurant";
         const canonicalPath = buildPublicProfilePath({
           entityType: routeEntity,
           name: row.name,
@@ -1983,7 +2011,10 @@ export function registerPublicDiscoveryRoutes(app: Express) {
     try {
       const entity = normalizePublicProfileEntity(req.params.entity);
       const id = String(req.params.id || "").trim();
-      if (!["restaurant", "truck", "bar"].includes(entity) || !id) {
+      if (
+        !["restaurant", "truck", "bar", "caterer", "private_chef"].includes(entity) ||
+        !id
+      ) {
         return res.status(400).json({ message: "Invalid profile target" });
       }
 
@@ -1995,6 +2026,12 @@ export function registerPublicDiscoveryRoutes(app: Express) {
         return res.status(404).json({ message: "Profile not found" });
       }
       if (entity === "bar" && !isBarBusinessType(source.businessType)) {
+        return res.status(404).json({ message: "Profile not found" });
+      }
+      if (
+        (entity === "caterer" || entity === "private_chef") &&
+        toCanonicalFoodBusinessType(source.businessType) !== entity
+      ) {
         return res.status(404).json({ message: "Profile not found" });
       }
 
@@ -2252,6 +2289,66 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           entity: "restaurant",
           title: mapped.displayName,
           subtitle: mapped.serviceType || "Bar",
+          address: mapped.addressPublicLabel,
+          phone: mapped.phonePublic,
+          imageUrl: mapped.coverImageUrl || mapped.logoUrl,
+          profilePath: mapped.seo.canonicalUrl.replace(baseUrl, ""),
+          cleanBusinessPath,
+          canonicalUrl: mapped.seo.canonicalUrl,
+          websiteUrl: mapped.websiteUrl,
+          profileSettings,
+          social: mapped.socialLinks,
+        });
+      }
+
+      if (entity === "caterer" || entity === "private_chef") {
+        const row = await storage.getRestaurant(id);
+        if (
+          !row ||
+          !row.isActive ||
+          toCanonicalFoodBusinessType(row.businessType) !== entity
+        ) {
+          return res.status(404).json({ message: "Profile not found" });
+        }
+        const ownerUser = await storage.getUser(row.ownerId);
+        const profileSettings = (ownerUser?.publicProfileSettings || {}) as any;
+        const showAddress =
+          entity === "private_chef" ? false : profileSettings.showAddress !== false;
+        const showContact = profileSettings.showContact !== false;
+        const [menuPayload, dealsPayload, eventsPayload] = await Promise.all([
+          buildPublicMenuPayload(String(row.id), {
+            preferredMenuId: queryPreferredMenuId || null,
+            eventId: queryEventId || null,
+            viewerUserId,
+          }),
+          buildPublicDealsPayload(String(row.id), row),
+          buildPublicEventsPayload({
+            restaurantId: String(row.id),
+            restaurantRow: row,
+          }),
+        ]);
+        const mapped = toPublicRestaurantProfile({
+          row: {
+            ...row,
+            ...menuPayload,
+            ...dealsPayload,
+            ...eventsPayload,
+          },
+          baseUrl,
+          profileType: entity,
+          showAddress,
+          showContact,
+        });
+        const cleanBusinessPath = await resolveUniqueCleanBusinessPathForEntity({
+          entityType: entity,
+          id: String(row.id),
+          name: String((row as any).name || (row as any).businessName || row.id),
+        });
+        return sendPublicJson(res, {
+          ...mapped,
+          entity,
+          title: mapped.displayName,
+          subtitle: entity === "caterer" ? "Caterer" : "Private Chef",
           address: mapped.addressPublicLabel,
           phone: mapped.phonePublic,
           imageUrl: mapped.coverImageUrl || mapped.logoUrl,

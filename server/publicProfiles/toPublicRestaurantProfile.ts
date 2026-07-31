@@ -5,8 +5,10 @@ import {
   deriveTruckPresence,
 } from "@shared/consumerEntity";
 import {
+  getBusinessCapabilities,
   isBarBusinessType,
   isTruckBusinessType,
+  toCanonicalFoodBusinessType,
 } from "@shared/businessTypes";
 import { toPublicProfileSeo } from "./toPublicProfileSeo";
 import {
@@ -90,7 +92,7 @@ export function formatOperatingHoursSummary(value: unknown): string | null {
 export function toPublicRestaurantProfile(input: {
   row: any;
   baseUrl: string;
-  profileType?: "restaurant" | "truck" | "bar";
+  profileType?: "restaurant" | "truck" | "bar" | "caterer" | "private_chef";
   showAddress?: boolean;
   showContact?: boolean;
 }): PublicRestaurantProfile {
@@ -114,13 +116,18 @@ export function toPublicRestaurantProfile(input: {
     typeof row.socialAutopostSettings.publicActionLinks === "object"
       ? row.socialAutopostSettings.publicActionLinks
       : {};
+  const canonicalBusinessType = toCanonicalFoodBusinessType(row.businessType);
   const profileType =
     input.profileType ||
     (row.isFoodTruck || isTruckBusinessType(row.businessType)
       ? "truck"
       : isBarBusinessType(row.businessType)
         ? "bar"
-        : "restaurant");
+        : canonicalBusinessType === "caterer" ||
+            canonicalBusinessType === "private_chef"
+          ? canonicalBusinessType
+          : "restaurant");
+  const capabilities = getBusinessCapabilities(canonicalBusinessType || profileType);
   const id = String(row.id || "");
   const displayName = String(row.name || "MealScout business");
   const slug = toSlug(displayName) || id;
@@ -134,14 +141,17 @@ export function toPublicRestaurantProfile(input: {
   const coverImageUrl =
     hideMedia && !isAccepted("media_cover") ? null : coverImageUrlRaw;
   const logoUrl = hideMedia && !isAccepted("media_logo") ? null : logoUrlRaw;
+  const isPrivateChef = profileType === "private_chef";
   const addressPublicLabel =
     input.showAddress === false ||
+    isPrivateChef ||
     isRejected("contact_address") ||
     (hidePublicTrustFields && !isAccepted("contact_address")) ||
     !shouldExposeStaticTruckProfileLocation(row)
       ? null
       : joinedAddressLabel(row.address, row.city, row.state);
-  const exposeProfileCoordinates = shouldExposeStaticTruckProfileLocation(row);
+  const exposeProfileCoordinates =
+    !isPrivateChef && shouldExposeStaticTruckProfileLocation(row);
   const publicLatitude =
     exposeProfileCoordinates && Number.isFinite(Number(row.latitude))
       ? Number(row.latitude)
@@ -790,7 +800,7 @@ export function toPublicRestaurantProfile(input: {
     buildPublicCta({ label: "Profile", href: canonicalPath, type: "internal" }),
     buildPublicCta({
       label: "Order online",
-      href: onlineOrderingUrl,
+      href: capabilities?.onlineOrdering === false ? null : onlineOrderingUrl,
       type: "order",
       priority: 100,
     }),
@@ -841,14 +851,20 @@ export function toPublicRestaurantProfile(input: {
     }),
     buildPublicCta({ label: "X", href: xUrl, type: "social", priority: 78 }),
     buildPublicCta({
-      label: "Catering inquiry",
+      label: profileType === "caterer" ? "Request catering" : "Catering inquiry",
       href: cateringUrl,
       type: "catering",
       priority: 74,
     }),
     buildPublicCta({
       label:
-        profileType === "truck" ? "Truck booking inquiry" : "Booking inquiry",
+        profileType === "truck"
+          ? "Truck booking inquiry"
+          : profileType === "private_chef"
+            ? "Request this chef"
+            : profileType === "caterer"
+              ? "Check availability"
+              : "Booking inquiry",
       href: truckBookingUrl,
       type: "booking",
       priority: 72,

@@ -59,7 +59,7 @@ const BASE_ITEMS: ShareHubItem[] = [
     href: "/restaurant-signup?businessType=restaurant",
     audience: "Restaurant Owners",
     priority: 4,
-    outreachText: "Create your restaurant page on MealScout: ",
+    outreachText: "Create your food business profile on MealScout: ",
   },
 ];
 

@@ -31,12 +31,21 @@ assert.equal(
 for (const [path, symbol] of [
   ["client/src/pages/public-profile.tsx", "rankPublicCtas"],
   ["client/src/components/public-profile/MobileActionDock.tsx", "rankPublicCtas"],
-  ["client/src/components/public-profile/ThinProfileState.tsx", "primaryPublicCta"],
 ] as const) {
   const source = readFileSync(resolve(process.cwd(), path), "utf8");
   assert.match(source, new RegExp(`import \\{ ${symbol} \\} from .*profileActionPolicy`));
   assert.match(source, new RegExp(`${symbol}\\(`));
 }
+
+const thinProfileSource = readFileSync(
+  resolve(process.cwd(), "client/src/components/public-profile/ThinProfileState.tsx"),
+  "utf8",
+);
+assert.doesNotMatch(
+  thinProfileSource,
+  /primaryPublicCta\(/,
+  "Incomplete-profile guidance must not duplicate the canonical profile actions",
+);
 
 const publicProfileSource = readFileSync(
   resolve(process.cwd(), "client/src/pages/public-profile.tsx"),

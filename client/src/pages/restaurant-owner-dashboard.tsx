@@ -715,6 +715,10 @@ export default function RestaurantOwnerDashboard() {
     ? "truck"
     : currentIsBarBusiness
       ? "bar"
+      : currentRestaurant?.businessType === "caterer"
+        ? "caterer"
+        : currentRestaurant?.businessType === "private_chef"
+          ? "private_chef"
       : "restaurant";
   const currentPublicProfileHref = currentRestaurant
     ? buildPublicProfilePath({
@@ -2164,13 +2168,13 @@ export default function RestaurantOwnerDashboard() {
       <div className="container mx-auto px-4 py-8 bg-[var(--bg-layered)] min-h-screen">
         <div className="max-w-2xl mx-auto text-center space-y-6">
           <Store className="h-16 w-16 mx-auto text-muted-foreground" />
-          <h1 className="text-3xl font-bold">No Restaurant Found</h1>
+          <h1 className="text-3xl font-bold">No Food Business Found</h1>
           <p className="text-muted-foreground">
-            You need to register your restaurant first to create specials.
+            Register your food business first to manage its public profile and offers.
           </p>
           <Link href="/restaurant-signup">
             <Button size="lg" data-testid="button-register-restaurant">
-              Register Your Restaurant
+              Register Your Food Business
             </Button>
           </Link>
         </div>
@@ -2198,9 +2202,9 @@ export default function RestaurantOwnerDashboard() {
     >
       <div className="mx-auto min-h-screen max-w-7xl px-4 py-6 lg:px-6 lg:py-8">
         <SEOHead
-          title="Restaurant Dashboard - MealScout | Manage Your Specials"
-          description="Manage your restaurant specials, view analytics, track performance, and engage with customers. Access insights on special claims, views, conversion rates, and customer feedback."
-          keywords="restaurant dashboard, manage specials, restaurant analytics, special performance, customer insights"
+          title="Business Profile - MealScout | Manage Your Public Presence"
+          description="Manage your MealScout business profile, availability, menu, offers, customer actions, and performance."
+          keywords="food business profile, MealScout profile, menu, availability, offers, customer insights"
           canonicalUrl="https://www.mealscout.us/restaurant-owner-dashboard"
           noIndex={true}
         />
@@ -4446,7 +4450,7 @@ export default function RestaurantOwnerDashboard() {
                             <Heart className="h-8 w-8 text-yellow-500" />
                           </div>
                           <p className="text-xs text-muted-foreground mt-2">
-                            Users who favorited your restaurant
+                            People who saved your business
                           </p>
                         </CardContent>
                       </Card>

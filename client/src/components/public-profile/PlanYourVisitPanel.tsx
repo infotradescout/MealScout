@@ -19,6 +19,8 @@ type PlanYourVisitPanelProps = {
 };
 
 export function PlanYourVisitPanel({ profile }: PlanYourVisitPanelProps) {
+  const isServiceBusiness =
+    profile.profileType === "caterer" || profile.profileType === "private_chef";
   const address = String(profile.addressPublicLabel || "").trim();
   const phone = String(profile.phonePublic || "").trim();
   const website = String(profile.websiteUrl || "").trim();
@@ -85,7 +87,7 @@ export function PlanYourVisitPanel({ profile }: PlanYourVisitPanelProps) {
   return (
     <section aria-label="Plan your visit" className="space-y-3">
       <p className="profile-section-label">
-        Plan your visit
+        {isServiceBusiness ? "Contact and service area" : "Plan your visit"}
       </p>
 
       <div className="profile-surface divide-y divide-[color:var(--profile-border)] overflow-hidden rounded-2xl">

@@ -11,6 +11,7 @@ import type {
   PublicRestaurantProfile,
   PublicSupplierProfile,
 } from "@shared/publicProfiles";
+import { getBusinessCapabilities } from "@shared/businessTypes";
 import {
   buildCleanPublicBusinessPath,
   isLikelyCleanAffiliateTagSegment,
@@ -83,7 +84,7 @@ import {
 
 type PublicProfilePayload =
   | (PublicRestaurantProfile & {
-      entity: "restaurant" | "truck" | "bar";
+      entity: "restaurant" | "truck" | "bar" | "caterer" | "private_chef";
       title: string;
       subtitle: string | null;
       imageUrl: string | null;
@@ -210,7 +211,13 @@ const normalizePublicProfileEntity = (value: string | null | undefined) => {
 
 const isRestaurantLikeEntity = (entity: string | null | undefined) => {
   const normalized = normalizePublicProfileEntity(entity);
-  return normalized === "restaurant" || normalized === "truck" || normalized === "bar";
+  return (
+    normalized === "restaurant" ||
+    normalized === "truck" ||
+    normalized === "bar" ||
+    normalized === "caterer" ||
+    normalized === "private_chef"
+  );
 };
 
 type LocationDiscoveryTruck = {
@@ -403,8 +410,12 @@ function HeroBlock({ profile }: { profile: PublicProfilePayload }) {
       ? "Location"
       : profile.profileType === "truck"
         ? "Food Truck"
-        : profile.profileType === "bar"
+      : profile.profileType === "bar"
           ? "Bar"
+          : profile.profileType === "caterer"
+            ? "Caterer"
+            : profile.profileType === "private_chef"
+              ? "Private Chef"
           : profile.profileType === "supplier"
             ? "Supplier"
             : "Restaurant";
@@ -2643,6 +2654,8 @@ export default function PublicProfilePage() {
   const inferredProfileType = (() => {
     if (pathname.startsWith("/truck/")) return "truck";
     if (pathname.startsWith("/bar/")) return "bar";
+    if (pathname.startsWith("/caterer/")) return "caterer";
+    if (pathname.startsWith("/private-chef/")) return "private_chef";
     if (pathname.startsWith("/location/")) return "location";
     if (pathname.startsWith("/supplier/")) return "supplier";
     if (pathname.startsWith("/restaurant/")) return "restaurant";
@@ -2662,7 +2675,14 @@ export default function PublicProfilePage() {
     Boolean(cleanBusinessSlug);
   const { data: cleanBusinessResolution, isLoading: cleanBusinessLoading } =
     useQuery<{
-      entityType: "restaurant" | "truck" | "bar" | "location" | "supplier";
+      entityType:
+        | "restaurant"
+        | "truck"
+        | "bar"
+        | "caterer"
+        | "private_chef"
+        | "location"
+        | "supplier";
       id: string;
       businessSlug: string;
     }>({
@@ -3050,6 +3070,14 @@ export default function PublicProfilePage() {
         restaurantProfile.menuImageUrl ||
         restaurantProfile.menuPdfUrl),
   );
+  const restaurantCapabilities = restaurantProfile
+    ? getBusinessCapabilities(restaurantProfile.profileType)
+    : null;
+  const isServiceBusiness = Boolean(
+    restaurantProfile &&
+      (restaurantProfile.profileType === "caterer" ||
+        restaurantProfile.profileType === "private_chef"),
+  );
   const ogImage =
     data.seo?.ogImageUrl ||
     (data.entity === "host"
@@ -3157,7 +3185,7 @@ export default function PublicProfilePage() {
                     .toUpperCase()}
                   isAuthenticated={isAuthenticated}
                 />
-              ) : (
+              ) : null}
                 <>
                   <PublicProfileDecisionBar
                     profile={restaurantProfile}
@@ -3191,7 +3219,7 @@ export default function PublicProfilePage() {
                       >
                         {restaurantProfile.profileType === "truck" ? (
                           <TruckSchedulePanel profile={restaurantProfile} />
-                        ) : (
+                        ) : isServiceBusiness ? null : (
                           <RestaurantHoursPanel profile={restaurantProfile} />
                         )}
                         <PlanYourVisitPanel profile={restaurantProfile} />
@@ -3202,7 +3230,9 @@ export default function PublicProfilePage() {
                       className="grid gap-6 md:grid-cols-2"
                       data-public-profile-details-grid="visit-only"
                     >
-                      <RestaurantHoursPanel profile={restaurantProfile} />
+                      {isServiceBusiness ? null : (
+                        <RestaurantHoursPanel profile={restaurantProfile} />
+                      )}
                       <PlanYourVisitPanel profile={restaurantProfile} />
                     </div>
                   )}
@@ -3217,8 +3247,19 @@ export default function PublicProfilePage() {
                     profile={restaurantProfile}
                     safeCtas={safeCtas}
                   />
+                  {isServiceBusiness && restaurantCapabilities?.booking ? (
+                    <section
+                      className="profile-surface rounded-2xl p-5"
+                      aria-label="Service availability"
+                    >
+                      <p className="profile-section-label">Service availability</p>
+                      <p className="mt-2 text-sm text-[color:var(--profile-muted)]">
+                        Contact {restaurantProfile.displayName} to confirm your date,
+                        service area, and event details.
+                      </p>
+                    </section>
+                  ) : null}
                 </>
-              )}
             </>
           ) : data.entity === "host" ? (
             /* ── LOCATION / HOST PROFILE LAYOUT ── */

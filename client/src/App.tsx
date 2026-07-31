@@ -392,6 +392,10 @@ function SharedPublicRoutes() {
       <Route path="/truck/:slug" component={PublicProfilePage} />
       <Route path="/bar/:slug/:refTag" component={PublicProfilePage} />
       <Route path="/bar/:slug" component={PublicProfilePage} />
+      <Route path="/caterer/:slug/:refTag" component={PublicProfilePage} />
+      <Route path="/caterer/:slug" component={PublicProfilePage} />
+      <Route path="/private-chef/:slug/:refTag" component={PublicProfilePage} />
+      <Route path="/private-chef/:slug" component={PublicProfilePage} />
       <Route
         path="/location/:slug/food-trucks"
         component={LocationDetailPage}

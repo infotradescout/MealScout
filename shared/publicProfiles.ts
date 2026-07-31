@@ -1,7 +1,14 @@
 import type { TruckPresence } from "./consumerEntity";
 
 export type PublicProfileType =
-  "restaurant" | "truck" | "bar" | "location" | "host" | "supplier";
+  | "restaurant"
+  | "truck"
+  | "bar"
+  | "caterer"
+  | "private_chef"
+  | "location"
+  | "host"
+  | "supplier";
 
 export type PublicCtaType =
   | "internal"
@@ -210,7 +217,7 @@ export type PublicTruckScheduleStop = {
 
 export type PublicRestaurantProfile = {
   id: string;
-  profileType: "restaurant" | "truck" | "bar";
+  profileType: "restaurant" | "truck" | "bar" | "caterer" | "private_chef";
   displayName: string;
   slug: string;
   description: string | null;

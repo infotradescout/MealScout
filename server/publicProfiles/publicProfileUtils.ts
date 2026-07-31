@@ -16,7 +16,14 @@ export const toPublicRouteSlug = (name: unknown, id: unknown) => {
 };
 
 export const buildPublicProfilePath = (input: {
-  entityType: "restaurant" | "truck" | "bar" | "location" | "supplier";
+  entityType:
+    | "restaurant"
+    | "truck"
+    | "bar"
+    | "caterer"
+    | "private_chef"
+    | "location"
+    | "supplier";
   name: unknown;
   id: unknown;
 }) => {
@@ -25,6 +32,8 @@ export const buildPublicProfilePath = (input: {
 
   if (input.entityType === "truck") return `/truck/${routeSlug}`;
   if (input.entityType === "bar") return `/bar/${routeSlug}`;
+  if (input.entityType === "caterer") return `/caterer/${routeSlug}`;
+  if (input.entityType === "private_chef") return `/private-chef/${routeSlug}`;
   if (input.entityType === "location") return `/location/${routeSlug}`;
   if (input.entityType === "supplier") return `/supplier/${routeSlug}`;
   return `/restaurant/${routeSlug}`;

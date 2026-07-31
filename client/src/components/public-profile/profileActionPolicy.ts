@@ -1,6 +1,13 @@
 import type { PublicCta } from "@shared/publicProfiles";
 
-export type ActionProfileType = "restaurant" | "truck" | "bar" | "host" | "supplier";
+export type ActionProfileType =
+  | "restaurant"
+  | "truck"
+  | "bar"
+  | "caterer"
+  | "private_chef"
+  | "host"
+  | "supplier";
 
 const ACTION_ORDER: Record<ActionProfileType | "generic", readonly string[]> = {
   restaurant: [
@@ -33,6 +40,26 @@ const ACTION_ORDER: Record<ActionProfileType | "generic", readonly string[]> = {
     "phone",
     "booking",
     "catering",
+    "external",
+    "share",
+    "social",
+    "internal",
+  ],
+  caterer: [
+    "catering",
+    "booking",
+    "menu",
+    "phone",
+    "external",
+    "share",
+    "social",
+    "internal",
+  ],
+  private_chef: [
+    "booking",
+    "catering",
+    "menu",
+    "phone",
     "external",
     "share",
     "social",

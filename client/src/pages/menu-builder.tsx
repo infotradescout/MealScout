@@ -272,6 +272,10 @@ export default function MenuBuilderPage() {
       ? "truck"
       : isBarBusinessType(currentBusiness?.businessType)
         ? "bar"
+        : currentBusiness?.businessType === "caterer"
+          ? "caterer"
+          : currentBusiness?.businessType === "private_chef"
+            ? "private_chef"
         : "restaurant";
   const publicProfileHref = currentBusiness
     ? buildPublicProfilePath({

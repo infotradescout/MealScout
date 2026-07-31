@@ -175,6 +175,10 @@ export default function SettingsPage() {
           ? "truck"
           : isBarBusinessType(currentBusiness.businessType)
             ? "bar"
+            : currentBusiness.businessType === "caterer"
+              ? "caterer"
+              : currentBusiness.businessType === "private_chef"
+                ? "private_chef"
             : "restaurant",
         id: currentBusiness.id,
         name: currentBusiness.name,

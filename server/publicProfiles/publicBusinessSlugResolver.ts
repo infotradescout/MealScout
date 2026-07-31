@@ -5,6 +5,7 @@ import { normalizeCleanBusinessSlug } from "@shared/cleanAffiliateLinks";
 import {
   isBarBusinessType,
   isTruckBusinessType,
+  toCanonicalFoodBusinessType,
 } from "@shared/businessTypes";
 
 import { db } from "../db";
@@ -16,7 +17,14 @@ import {
 } from "./publicBusinessSlugOwnership";
 
 export type PublicBusinessSlugCandidate = {
-  entityType: "restaurant" | "truck" | "bar" | "location" | "supplier";
+  entityType:
+    | "restaurant"
+    | "truck"
+    | "bar"
+    | "caterer"
+    | "private_chef"
+    | "location"
+    | "supplier";
   id: string;
   businessSlug: string;
 };
@@ -48,6 +56,10 @@ const classifyRestaurantEntityType = (row: any) => {
   }
   if (isBarBusinessType(row?.businessType)) {
     return "bar" as const;
+  }
+  const canonicalType = toCanonicalFoodBusinessType(row?.businessType);
+  if (canonicalType === "caterer" || canonicalType === "private_chef") {
+    return canonicalType;
   }
   return "restaurant" as const;
 };
@@ -139,7 +151,14 @@ export async function resolvePublicBusinessSlug(
 }
 
 export async function resolveUniqueCleanBusinessPathForEntity(input: {
-  entityType: "restaurant" | "truck" | "bar" | "location" | "supplier";
+  entityType:
+    | "restaurant"
+    | "truck"
+    | "bar"
+    | "caterer"
+    | "private_chef"
+    | "location"
+    | "supplier";
   id: string;
   name: string;
 }): Promise<string | null> {

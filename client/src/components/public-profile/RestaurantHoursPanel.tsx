@@ -28,7 +28,11 @@ export function RestaurantHoursPanel({
 }: {
   profile: PublicRestaurantProfile;
 }) {
-  if (profile.profileType === "truck") return null;
+  if (
+    profile.profileType === "truck" ||
+    profile.profileType === "caterer" ||
+    profile.profileType === "private_chef"
+  ) return null;
 
   const { isOpen, label: statusLabel } = parseOpenStatus(profile.openStatus);
   const hours = String(profile.operatingHoursSummary || "").trim();

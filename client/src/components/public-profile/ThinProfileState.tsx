@@ -2,11 +2,9 @@
  * ThinProfileState
  *
  * A graceful, intentional presentation for profiles that have limited data.
- * Renders below the hero (which already shows name/logo/address/photo/a
- * recommend button), so this only adds what the hero doesn't: the single
- * best action and a claim CTA. It shows only what's actually available — it
- * does not announce what's missing (no "menu not posted" placeholders) and
- * does not repeat the hero's name/logo/recommend button.
+ * Renders inside the normal business-specific profile instead of replacing it.
+ * This keeps an incomplete listing recognizable as the same product while
+ * exposing only confirmed information.
  *
  * "Not much is here yet, but the page still works."
  */
@@ -15,9 +13,7 @@ import type {
   PublicCta,
 } from "@shared/publicProfiles";
 import { normalizeBusinessTypeLabel } from "@/lib/publicMenuCompleteness";
-import { MapPin, MenuSquare, Phone, ShoppingBag, ExternalLink } from "lucide-react";
 import { hasTruckScheduleSignal } from "./truckScheduleTruth";
-import { primaryPublicCta } from "./profileActionPolicy";
 
 type ThinProfileStateProps = {
   profile: PublicRestaurantProfile;
@@ -45,56 +41,27 @@ function isThinProfile(profile: PublicRestaurantProfile): boolean {
 
 export function ThinProfileState({
   profile,
-  safeCtas,
 }: ThinProfileStateProps) {
   const typeLabel = normalizeBusinessTypeLabel(
     profile.profileType === "truck" ? "food_truck" : profile.profileType,
   );
 
-  // Use the same entity-aware action policy as the mobile dock and hero actions.
-  const bestCta = primaryPublicCta(safeCtas, profile.profileType);
-
-  const claimHref =
-    profile.profileType === "truck" ? "/claim-business" : "/claim-business";
+  const claimHref = "/claim-business";
+  const missingDetailsLabel =
+    profile.profileType === "caterer" || profile.profileType === "private_chef"
+      ? "Add services, availability, and photos to complete this profile."
+      : profile.profileType === "truck"
+        ? "Add your menu, schedule, and photos to complete this profile."
+        : "Add your menu, hours, and photos to complete this profile.";
 
   return (
-    <div className="flex flex-col items-center gap-6 py-6 px-4 text-center">
-      {/* Best CTA */}
-      {bestCta ? (
-        <a
-          href={bestCta.href}
-          target={
-            bestCta.type === "external" || bestCta.type === "map"
-              ? "_blank"
-              : undefined
-          }
-          rel={
-            bestCta.type === "external" || bestCta.type === "map"
-              ? "noopener noreferrer"
-              : undefined
-          }
-          data-analytics-action="thin_profile_cta"
-          data-analytics-target-type={bestCta.type}
-          className="profile-action-primary inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold"
-        >
-          {bestCta.type === "map" && <MapPin className="h-4 w-4" />}
-          {bestCta.type === "phone" && <Phone className="h-4 w-4" />}
-          {bestCta.type === "menu" && <MenuSquare className="h-4 w-4" />}
-          {bestCta.type === "order" && <ShoppingBag className="h-4 w-4" />}
-          {!["map", "phone", "menu", "order"].includes(bestCta.type) && (
-            <ExternalLink className="h-4 w-4" />
-          )}
-          {bestCta.label}
-        </a>
-      ) : null}
-
-      {/* Owner claim CTA */}
+    <div className="flex flex-col items-center px-4 py-3 text-center">
       <div className="profile-surface w-full max-w-sm space-y-1 rounded-2xl px-5 py-5 text-center">
         <p className="text-sm font-semibold text-[color:var(--profile-ink)]">
           Is this your {typeLabel.toLowerCase()}?
         </p>
         <p className="text-xs text-[color:var(--profile-muted)]">
-          Add your menu, hours, and photos to make this profile shine.
+          {missingDetailsLabel}
         </p>
         <a
           href={claimHref}

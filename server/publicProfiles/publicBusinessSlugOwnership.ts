@@ -19,6 +19,8 @@ export type PublicBusinessSlugEntityType =
   | "restaurant"
   | "truck"
   | "bar"
+  | "caterer"
+  | "private_chef"
   | "location"
   | "supplier";
 
@@ -180,7 +182,9 @@ export async function ensurePublicBusinessSlugOwnershipForEntity(input: {
   if (
     input.entityType === "restaurant" ||
     input.entityType === "truck" ||
-    input.entityType === "bar"
+    input.entityType === "bar" ||
+    input.entityType === "caterer" ||
+    input.entityType === "private_chef"
   ) {
     const row = await storage.getRestaurant(id);
     if (!row || !row.isActive) return null;
@@ -189,7 +193,9 @@ export async function ensurePublicBusinessSlugOwnershipForEntity(input: {
         ? "truck"
         : isBarBusinessType(row.businessType)
           ? "bar"
-          : "restaurant";
+          : row.businessType === "caterer" || row.businessType === "private_chef"
+            ? row.businessType
+            : "restaurant";
     if (expectedType !== input.entityType) return null;
     return ensurePublicBusinessSlugOwnership({
       entityType: expectedType,
@@ -233,7 +239,9 @@ export async function verifyOwnedSlugTarget(
   if (
     ownership.entityType === "restaurant" ||
     ownership.entityType === "truck" ||
-    ownership.entityType === "bar"
+    ownership.entityType === "bar" ||
+    ownership.entityType === "caterer" ||
+    ownership.entityType === "private_chef"
   ) {
     const [row] = await db
       .select({
@@ -251,7 +259,9 @@ export async function verifyOwnedSlugTarget(
         ? "truck"
         : isBarBusinessType(row.businessType)
           ? "bar"
-          : "restaurant";
+          : row.businessType === "caterer" || row.businessType === "private_chef"
+            ? row.businessType
+            : "restaurant";
     return expectedType === ownership.entityType;
   }
 

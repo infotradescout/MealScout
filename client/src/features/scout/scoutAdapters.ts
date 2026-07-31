@@ -27,6 +27,7 @@ export function adaptRestaurantToSceneItem(restaurant: any): ScoutSceneItem {
       id: restaurant?.id,
       slug: restaurant?.slug,
       name: restaurant?.businessName || restaurant?.name,
+      businessType: restaurant?.businessType,
     }),
     distanceMiles: toMiles(restaurant?.distanceMiles),
   };
@@ -81,6 +82,7 @@ export function adaptMenuItemToSceneItem(menuItem: any): ScoutSceneItem {
       entityType: "restaurant",
       id: menuItem?.restaurantId,
       name: menuItem?.restaurantName,
+      businessType: menuItem?.businessType || menuItem?.restaurantBusinessType,
     }),
     distanceMiles: toMiles(menuItem?.distanceMiles),
   };
@@ -99,12 +101,14 @@ export function adaptCommunityRecordToSceneItem(record: any): ScoutSceneItem {
           entityType: "restaurant",
           id: record.restaurantId,
           name: record?.businessName || record?.name,
+          businessType: record?.businessType,
         })
       : record?.id
         ? buildPublicProfilePath({
             entityType: "restaurant",
             id: record.id,
             name: record?.businessName || record?.name,
+            businessType: record?.businessType,
           })
         : null,
     distanceMiles: toMiles(record?.distanceMiles),
