@@ -47,8 +47,8 @@ type AnalyticsAccessResult = {
 };
 
 type RestaurantOperationsRouteDependencies = {
-  validateAnalyticsAccess: (userId: string) => Promise<AnalyticsAccessResult>;
-  hasBusinessDistributionAccess: (userId: string) => Promise<boolean>;
+  validateProfileAnalyticsAccess: (userId: string) => Promise<AnalyticsAccessResult>;
+  hasCompleteProfileAccess: (userId: string) => Promise<boolean>;
 };
 
 type SocialPublishPlatform = "facebook" | "instagram" | "x";
@@ -414,8 +414,8 @@ async function fetchJson(url: string, init?: RequestInit) {
 export function registerRestaurantOperationsRoutes(
   app: Express,
   {
-    validateAnalyticsAccess,
-    hasBusinessDistributionAccess,
+    validateProfileAnalyticsAccess,
+    hasCompleteProfileAccess,
   }: RestaurantOperationsRouteDependencies,
 ) {
   const isAdminLikeUserType = (userType?: string | null) =>
@@ -424,7 +424,7 @@ export function registerRestaurantOperationsRoutes(
     userType === "super_admin" ||
     userType === "staff";
 
-  const buildPremiumWeeklySummary = async (userId: string) => {
+  const buildProfileActivitySummary = async (userId: string) => {
     const now = new Date();
     const windowStart = new Date(now);
     windowStart.setHours(0, 0, 0, 0);
@@ -931,15 +931,15 @@ export function registerRestaurantOperationsRoutes(
     isAuthenticated,
     async (req: any, res) => {
       try {
-        const hasAccess = await hasBusinessDistributionAccess(req.user.id);
+        const hasAccess = await hasCompleteProfileAccess(req.user.id);
         if (!hasAccess) {
           return res.status(402).json({
-            message: "Premium subscription required for weekly summary.",
+            message: "Profile access could not be verified for the weekly summary.",
             hasAccess: false,
           });
         }
 
-        const summary = await buildPremiumWeeklySummary(req.user.id);
+        const summary = await buildProfileActivitySummary(req.user.id);
 
         await db.insert(telemetryEvents).values({
           eventName: "premium_summary_viewed",
@@ -953,7 +953,7 @@ export function registerRestaurantOperationsRoutes(
 
         res.json(summary);
       } catch (error) {
-        console.error("Error fetching premium weekly summary:", error);
+        console.error("Error fetching profile activity summary:", error);
         res.status(500).json({ message: "Failed to fetch weekly summary" });
       }
     },
@@ -964,10 +964,10 @@ export function registerRestaurantOperationsRoutes(
     isAuthenticated,
     async (req: any, res) => {
       try {
-        const hasAccess = await hasBusinessDistributionAccess(req.user.id);
+        const hasAccess = await hasCompleteProfileAccess(req.user.id);
         if (!hasAccess) {
           return res.status(402).json({
-            message: "Premium subscription required to email weekly summary.",
+            message: "Profile access could not be verified for the weekly summary.",
           });
         }
 
@@ -979,11 +979,11 @@ export function registerRestaurantOperationsRoutes(
             .json({ message: "No account email found for this user." });
         }
 
-        const summary = await buildPremiumWeeklySummary(req.user.id);
+        const summary = await buildProfileActivitySummary(req.user.id);
         const recipientName =
           String(user?.firstName || "").trim() || "MealScout operator";
 
-        const sent = await emailService.sendPremiumWeeklySummaryEmail(
+        const sent = await emailService.sendProfileActivitySummaryEmail(
           recipientEmail,
           recipientName,
           {
@@ -1014,7 +1014,7 @@ export function registerRestaurantOperationsRoutes(
 
         res.json({ ok: true });
       } catch (error) {
-        console.error("Error emailing premium weekly summary:", error);
+        console.error("Error emailing profile activity summary:", error);
         res.status(500).json({ message: "Failed to send weekly summary" });
       }
     },
@@ -1205,11 +1205,11 @@ export function registerRestaurantOperationsRoutes(
     isAuthenticated,
     async (req: any, res) => {
       try {
-        const hasAccess = await hasBusinessDistributionAccess(req.user.id);
+        const hasAccess = await hasCompleteProfileAccess(req.user.id);
         if (!hasAccess) {
           return res.status(402).json({
             message:
-              "Premium subscription required to use social auto-posting.",
+              "Profile access could not be verified for social publishing.",
           });
         }
 
@@ -1369,10 +1369,10 @@ export function registerRestaurantOperationsRoutes(
           });
         }
 
-        const hasAccess = await hasBusinessDistributionAccess(req.user.id);
+        const hasAccess = await hasCompleteProfileAccess(req.user.id);
         if (!hasAccess) {
           return res.status(402).json({
-            message: "Premium subscription required to connect publishing.",
+            message: "Profile access could not be verified for publishing.",
           });
         }
 
@@ -1527,10 +1527,10 @@ export function registerRestaurantOperationsRoutes(
           });
         }
 
-        const hasAccess = await hasBusinessDistributionAccess(req.user.id);
+        const hasAccess = await hasCompleteProfileAccess(req.user.id);
         if (!hasAccess) {
           return res.status(402).json({
-            message: "Premium subscription required to connect publishing.",
+            message: "Profile access could not be verified for publishing.",
           });
         }
 
@@ -1792,10 +1792,10 @@ export function registerRestaurantOperationsRoutes(
           });
         }
 
-        const hasAccess = await hasBusinessDistributionAccess(req.user.id);
+        const hasAccess = await hasCompleteProfileAccess(req.user.id);
         if (!hasAccess) {
           return res.status(402).json({
-            message: "Premium subscription required to connect publishing.",
+            message: "Profile access could not be verified for publishing.",
           });
         }
 
@@ -2085,10 +2085,10 @@ export function registerRestaurantOperationsRoutes(
           });
         }
 
-        const hasAccess = await hasBusinessDistributionAccess(req.user.id);
+        const hasAccess = await hasCompleteProfileAccess(req.user.id);
         if (!hasAccess) {
           return res.status(402).json({
-            message: "Premium subscription required to queue social posts.",
+            message: "Profile access could not be verified for social publishing.",
           });
         }
 
@@ -2334,11 +2334,11 @@ export function registerRestaurantOperationsRoutes(
     isAuthenticated,
     async (req: any, res) => {
       try {
-        const hasAccess = await hasBusinessDistributionAccess(req.user.id);
+        const hasAccess = await hasCompleteProfileAccess(req.user.id);
         if (!hasAccess) {
           return res.status(402).json({
             message:
-              "Premium subscription required for one-click live location updates.",
+              "Profile access could not be verified for live location updates.",
           });
         }
 
@@ -2448,7 +2448,7 @@ export function registerRestaurantOperationsRoutes(
           trucks.map(async (truck: any) => {
             const ownerId = String(truck?.ownerId || "").trim();
             if (!ownerId) return null;
-            const hasAccess = await hasBusinessDistributionAccess(ownerId);
+            const hasAccess = await hasCompleteProfileAccess(ownerId);
             return hasAccess ? truck : null;
           }),
         )
@@ -3412,7 +3412,7 @@ export function registerRestaurantOperationsRoutes(
           });
         }
 
-        const analyticsAccess = await validateAnalyticsAccess(req.user.id);
+        const analyticsAccess = await validateProfileAnalyticsAccess(req.user.id);
         if (!analyticsAccess.hasAccess) {
           return res.status(402).json({
             message: analyticsAccess.error,
@@ -3468,7 +3468,7 @@ export function registerRestaurantOperationsRoutes(
           });
         }
 
-        const analyticsAccess = await validateAnalyticsAccess(req.user.id);
+        const analyticsAccess = await validateProfileAnalyticsAccess(req.user.id);
         if (!analyticsAccess.hasAccess) {
           return res.status(402).json({
             message: analyticsAccess.error,
@@ -3520,7 +3520,7 @@ export function registerRestaurantOperationsRoutes(
           });
         }
 
-        const analyticsAccess = await validateAnalyticsAccess(req.user.id);
+        const analyticsAccess = await validateProfileAnalyticsAccess(req.user.id);
         if (!analyticsAccess.hasAccess) {
           return res.status(402).json({
             message: analyticsAccess.error,
@@ -3569,7 +3569,7 @@ export function registerRestaurantOperationsRoutes(
           });
         }
 
-        const analyticsAccess = await validateAnalyticsAccess(req.user.id);
+        const analyticsAccess = await validateProfileAnalyticsAccess(req.user.id);
         if (!analyticsAccess.hasAccess) {
           return res.status(402).json({
             message: analyticsAccess.error,
@@ -3650,7 +3650,7 @@ export function registerRestaurantOperationsRoutes(
           });
         }
 
-        const analyticsAccess = await validateAnalyticsAccess(req.user.id);
+        const analyticsAccess = await validateProfileAnalyticsAccess(req.user.id);
         if (!analyticsAccess.hasAccess) {
           return res.status(402).json({
             message: analyticsAccess.error,

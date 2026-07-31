@@ -8,7 +8,7 @@ const requiredFiles = [
   "docs/PROD_ROLLOUT_CHECKLIST.md",
   "scripts/productionReadinessGate.mjs",
   "scripts/preLaunchGate.mjs",
-  "scripts/smokeOrderingSubscriptionAccess.mjs",
+  "scripts/smokeOrderingProfileAccess.mjs",
   "scripts/smokeParkingPassStripeFlow.ts",
   "scripts/testParkingPassWebhookReplay.ts",
   "scripts/testAdminManualProvisioning.ts",
@@ -24,7 +24,7 @@ const read = (path: string) => readFileSync(path, "utf8");
 const artifact = read("MEALSCOUT_AUTHENTICATED_PRODUCTION_SMOKE_READINESS_GATE.md");
 const rolloutChecklist = read("docs/PROD_ROLLOUT_CHECKLIST.md");
 const productionGate = read("scripts/productionReadinessGate.mjs");
-const ownerSmoke = read("scripts/smokeOrderingSubscriptionAccess.mjs");
+const ownerSmoke = read("scripts/smokeOrderingProfileAccess.mjs");
 const parkingPassSmoke = read("scripts/smokeParkingPassStripeFlow.ts");
 const adminSmoke = read("scripts/testAdminManualProvisioning.ts");
 
@@ -83,7 +83,7 @@ function requireMatch(source: string, pattern: RegExp, label: string) {
   "MEALSCOUT_PAYMENT_WEBHOOK_SAFETY_MAP.md",
   "MEALSCOUT_PUBLIC_AUTH_ROUTE_BOUNDARY_AUDIT.md",
   "scripts/productionReadinessGate.mjs",
-  "scripts/smokeOrderingSubscriptionAccess.mjs",
+  "scripts/smokeOrderingProfileAccess.mjs",
   "scripts/smokeParkingPassStripeFlow.ts",
   "scripts/testParkingPassWebhookReplay.ts",
   "scripts/testAdminManualProvisioning.ts",
@@ -94,8 +94,8 @@ function requireMatch(source: string, pattern: RegExp, label: string) {
   "ORDERING_OWNER_COOKIE",
   "ORDERING_OWNER_EMAIL",
   "ORDERING_OWNER_PASSWORD",
-  "ORDERING_SUBSCRIBED_RESTAURANT_ID",
-  "ORDERING_UNSUBSCRIBED_RESTAURANT_ID",
+  "ORDERING_OWNED_RESTAURANT_ID",
+  "ORDERING_UNOWNED_RESTAURANT_ID",
   "ADMIN_SMOKE_EMAIL",
   "ADMIN_SMOKE_PASSWORD",
   "TEST_PARKING_PASS_ID",

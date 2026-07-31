@@ -177,80 +177,7 @@ export async function attributeSignupToAffiliate(
 }
 
 /**
- * Calculate and create commission when restaurant becomes a paid subscriber
- * Commission policy (updated):
- * - Signup bonus: 20% of the first paid subscription (one-time)
- * - Recurring: 5% per paid month thereafter
- * - Only monthly billing is supported; any non-month cycle is treated as monthly
- */
-export async function createCommission(
-  affiliateUserId: string,
-  restaurantUserId: string,
-  subscriptionValue: string,
-  billingCycle: 'month' | '3-month' | 'year',
-  affiliateLinkId?: string,
-) {
-  const value = parseFloat(subscriptionValue);
-
-  // Determine if this is the first commission for this affiliate-restaurant pair (signup bonus applies)
-  const existing = await db
-    .select({ id: affiliateCommissions.id })
-    .from(affiliateCommissions)
-    .where(and(eq(affiliateCommissions.affiliateUserId, affiliateUserId), eq(affiliateCommissions.restaurantUserId, restaurantUserId)))
-    .limit(1);
-
-  const isFirstCommission = existing.length === 0;
-
-  // Force monthly handling; ignore non-month cycles
-  const effectiveBilling: 'month' = 'month';
-
-  const results: typeof affiliateCommissions.$inferSelect[] = [];
-  const now = new Date();
-  const forMonth = now.toISOString().slice(0, 7); // YYYY-MM
-
-  if (isFirstCommission) {
-    // 20% signup bonus, one-time
-    const percent = 20;
-    const amount = +(value * (percent / 100)).toFixed(2);
-    const signupRow = await db.insert(affiliateCommissions).values({
-      affiliateUserId,
-      restaurantUserId,
-      affiliateLinkId: affiliateLinkId || undefined,
-      commissionAmount: amount.toString(),
-      commissionPercent: percent,
-      basedOn: 'subscription_value',
-      subscriptionValue,
-      billingCycle: effectiveBilling,
-      forMonth,
-    }).returning();
-    results.push(signupRow[0]);
-
-    await updateAffiliateWallet(affiliateUserId, { pendingCommissions: amount });
-  } else {
-    // Recurring month: 10%
-    const percent = 10;
-    const amount = +(value * (percent / 100)).toFixed(2);
-    const monthRow = await db.insert(affiliateCommissions).values({
-      affiliateUserId,
-      restaurantUserId,
-      affiliateLinkId: affiliateLinkId || undefined,
-      commissionAmount: amount.toString(),
-      commissionPercent: percent,
-      basedOn: 'subscription_value',
-      subscriptionValue,
-      billingCycle: effectiveBilling,
-      forMonth,
-    }).returning();
-    results.push(monthRow[0]);
-
-    await updateAffiliateWallet(affiliateUserId, { pendingCommissions: amount });
-  }
-
-  return results;
-}
-
-/**
- * Process pending commissions to available balance (e.g., monthly payout)
+ * Process pending transaction commissions to available balance.
  */
 export async function processPendingCommissions(forMonth: string) {
   // Find all pending commissions for this month
@@ -397,7 +324,6 @@ export default {
   createAffiliateLink,
   trackAffiliateClick,
   attributeSignupToAffiliate,
-  createCommission,
   processPendingCommissions,
   updateAffiliateWallet,
   getAffiliateStats,

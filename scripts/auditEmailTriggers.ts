@@ -5,7 +5,7 @@ import path from "node:path";
 const EMAIL_TRIGGER_DOC = "docs/EMAIL_TRIGGER_INVENTORY.md";
 const SERVER_DIR = "server";
 const SEND_PATTERN =
-  /emailService\.(sendBasicEmail|send[A-Z][A-Za-z]+Email|sendPaymentConfirmation|sendBookingConfirmationEmail|sendHostBookingNotification|sendInterestNotification|sendInterestStatusUpdate|sendSeriesCancellationNotification|sendVacPendingDigest)|notifyUser\(/g;
+  /emailService\.(sendBasicEmail|send[A-Z][A-Za-z]+Email|sendBookingConfirmationEmail|sendHostBookingNotification|sendInterestNotification|sendInterestStatusUpdate|sendSeriesCancellationNotification|sendVacPendingDigest)|notifyUser\(/g;
 
 const baseline: Record<string, number> = {
   "server/bootstrap/registerSchedulers.ts": 2,

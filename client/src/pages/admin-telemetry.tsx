@@ -227,7 +227,7 @@ export default function AdminTelemetry() {
 
     return {
       title: "Scale retention nudges",
-      body: "Adoption rates are healthy. Move to retention by sending inactivity nudges to premium users with no live or schedule actions in 7 days.",
+      body: "Adoption rates are healthy. Move to retention by sending inactivity nudges to profile owners with no live or schedule actions in 7 days.",
     };
   })();
   const funnelSteps = tractionFunnel?.steps || {};
@@ -439,11 +439,11 @@ export default function AdminTelemetry() {
             </Card>
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Active Premium Trucks</CardTitle>
+                <CardTitle className="text-sm font-medium">Active Truck Profiles</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">
-                  {loadingPensacolaOps ? "..." : Number(pensacolaOps?.trucks?.activePremiumTrucks || 0)}
+                  {loadingPensacolaOps ? "..." : Number(pensacolaOps?.trucks?.activeProfileTrucks || 0)}
                 </div>
                 <p className="text-xs text-muted-foreground">
                   New owners (7d): {Number(pensacolaOps?.trucks?.newOwners7d || 0)}
@@ -767,7 +767,7 @@ export default function AdminTelemetry() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Premium Ops Adoption Trend (Last 30 Days)</CardTitle>
+          <CardTitle>Profile Tools Adoption Trend (Last 30 Days)</CardTitle>
           <CardDescription>
             Daily usage of weekly summary, live location, and manual scheduling
           </CardDescription>
@@ -829,7 +829,7 @@ export default function AdminTelemetry() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Premium Ops Next Target</CardTitle>
+          <CardTitle>Profile Tools Next Target</CardTitle>
           <CardDescription>
             Recommendation generated from the current 30-day adoption profile
           </CardDescription>
@@ -935,6 +935,5 @@ export default function AdminTelemetry() {
     </div>
   );
 }
-
 
 

@@ -29,7 +29,6 @@ import {
   reportLeadSequenceSends,
   emailSequenceSends,
   users,
-  restaurantSubscriptions,
 } from "@shared/schema";
 import {
   and,
@@ -394,7 +393,8 @@ export function registerGrowthRoutes(app: Express): void {
         const pensacolaTruckRows = (await db
           .select({
             restaurantId: restaurants.id,
-            ownerId: restaurants.ownerId,
+              ownerId: restaurants.ownerId,
+              isActive: restaurants.isActive,
             emailVerified: users.emailVerified,
             isDisabled: users.isDisabled,
           })
@@ -414,6 +414,7 @@ export function registerGrowthRoutes(app: Express): void {
           ownerId: string | null;
           emailVerified: boolean | null;
           isDisabled: boolean | null;
+          isActive: boolean | null;
         }>;
 
         const pensacolaRestaurantIds: string[] = Array.from(
@@ -438,32 +439,12 @@ export function registerGrowthRoutes(app: Express): void {
             .filter(Boolean),
         );
 
-        let activePremiumCount = 0;
-        if (pensacolaRestaurantIds.length > 0) {
-          const activeSubs = (await db
-            .select({
-              restaurantId: restaurantSubscriptions.restaurantId,
-            })
-            .from(restaurantSubscriptions)
-            .where(
-              and(
-                eq(restaurantSubscriptions.status, "active"),
-                or(
-                  eq(restaurantSubscriptions.isLifetimeFree, true),
-                  sql`${restaurantSubscriptions.tier} != 'free'`,
-                ),
-                inArray(
-                  restaurantSubscriptions.restaurantId,
-                  pensacolaRestaurantIds,
-                ),
-              ),
-            )) as Array<{ restaurantId: string | null }>;
-          activePremiumCount = new Set(
-            activeSubs
-              .map((row) => String(row.restaurantId || "").trim())
-              .filter(Boolean),
-          ).size;
-        }
+        const activeProfileCount = new Set(
+          pensacolaTruckRows
+            .filter((row) => row.isActive && !row.isDisabled)
+            .map((row) => String(row.restaurantId || "").trim())
+            .filter(Boolean),
+        ).size;
 
         const [newTruckOwners7dRow] = pensacolaOwnerIds.length
           ? await db
@@ -517,7 +498,7 @@ export function registerGrowthRoutes(app: Express): void {
             pensacolaTrucks: pensacolaRestaurantIds.length,
             pensacolaOwners: pensacolaOwnerIds.length,
             verifiedOwners: verifiedOwnerIds.size,
-            activePremiumTrucks: activePremiumCount,
+            activeProfileTrucks: activeProfileCount,
             newOwners7d: Number(newTruckOwners7dRow?.count || 0),
             stepSends: truckStepSends,
           },

@@ -64,7 +64,7 @@ export const roleLandingContent = {
       label: "Claim my business",
       href: "/customer-signup?role=business&businessType=food_truck",
     },
-    bullets: ["Free to join", "Premium tools: $25/mo", "Built for bookings"],
+    bullets: ["Complete profile", "No monthly bill", "Built for bookings"],
     map: {
       kicker: "Concept map",
       title: "Host hotspots + time slots",
@@ -86,7 +86,7 @@ export const roleLandingContent = {
       },
       {
         icon: Sparkles,
-        text: "Free to join, premium tools are $25/mo",
+        text: "The complete profile is included in the free trial",
       },
     ],
     steps: [
@@ -118,11 +118,11 @@ export const roleLandingContent = {
     starter: {
       kicker: "Start now",
       title: "Free to join",
-      copy: "Build your presence today. Upgrade anytime to premium tools for $25/month.",
+      copy: "Build your complete profile today. The free trial does not expire or become a monthly bill.",
       bullets: [
-        "Signup is free",
-        "Premium tools: $25/month",
-        "Cancel anytime",
+        "No card required",
+        "All profile tools included",
+        "No monthly subscription",
       ],
     },
     finalCta: {
@@ -174,7 +174,7 @@ export const roleLandingContent = {
       },
       {
         icon: Bolt,
-        text: "Simple monthly access, cancel anytime",
+        text: "Complete profile access with no monthly bill",
       },
     ],
     steps: [
@@ -206,11 +206,11 @@ export const roleLandingContent = {
     starter: {
       kicker: "Start now",
       title: "Free to join",
-      copy: "Build your profile today. Upgrade anytime to premium tools for $25/month.",
+      copy: "Build your complete profile today. The free trial does not expire or become a monthly bill.",
       bullets: [
-        "Signup is free",
-        "Premium tools: $25/month",
-        "Cancel anytime",
+        "No card required",
+        "All profile tools included",
+        "No monthly subscription",
       ],
     },
     finalCta: {
@@ -262,7 +262,7 @@ export const roleLandingContent = {
       },
       {
         icon: Bolt,
-        text: "Simple monthly access, cancel anytime",
+        text: "Complete profile access with no monthly bill",
       },
     ],
     steps: [
@@ -294,11 +294,11 @@ export const roleLandingContent = {
     starter: {
       kicker: "Start now",
       title: "Free to join",
-      copy: "Build your profile today. Upgrade anytime to premium tools for $25/month.",
+      copy: "Build your complete profile today. The free trial does not expire or become a monthly bill.",
       bullets: [
-        "Signup is free",
-        "Premium tools: $25/month",
-        "Cancel anytime",
+        "No card required",
+        "All profile tools included",
+        "No monthly subscription",
       ],
     },
     finalCta: {
@@ -567,5 +567,4 @@ export const roleLandingContent = {
     },
   },
 } satisfies Record<string, RoleLandingContent>;
-
 

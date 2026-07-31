@@ -9,7 +9,7 @@ import { deals, menuItems, restaurants as restaurantsTable } from "@shared/schem
 import { toPublicRestaurantListing } from "../publicProfiles/toPublicRestaurantListing";
 
 type LocationUtilityRouteDependencies = {
-  hasBusinessDistributionAccess: (userId: string) => Promise<boolean>;
+  hasCompleteProfileAccess: (userId: string) => Promise<boolean>;
 };
 
 const GOOGLE_PLACE_PHOTO_HOST_RE = /(^|\/\/)(lh\d*\.googleusercontent\.com|maps\.googleapis\.com)(\/|$)/i;
@@ -94,7 +94,7 @@ const canonicalRestaurantKey = (restaurant: any) =>
 
 export function registerLocationUtilityRoutes(
   app: Express,
-  { hasBusinessDistributionAccess }: LocationUtilityRouteDependencies,
+  { hasCompleteProfileAccess }: LocationUtilityRouteDependencies,
 ) {
   app.get("/api/location/reverse", async (req, res) => {
     const lat = Number(req.query.lat);
@@ -222,7 +222,7 @@ export function registerLocationUtilityRoutes(
           candidateRestaurants.map(async (restaurant) => {
             const ownerId = String((restaurant as any)?.ownerId || "").trim();
             if (!ownerId) return null;
-            const hasAccess = await hasBusinessDistributionAccess(ownerId);
+            const hasAccess = await hasCompleteProfileAccess(ownerId);
             return hasAccess ? restaurant : null;
           }),
         )

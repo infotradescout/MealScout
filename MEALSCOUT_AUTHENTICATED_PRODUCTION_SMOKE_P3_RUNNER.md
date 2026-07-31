@@ -29,8 +29,8 @@ Every required env var must exist before the runner performs any network call:
 - `SMOKE_CUSTOMER_PASSWORD`
 - `SMOKE_OWNER_EMAIL`
 - `SMOKE_OWNER_PASSWORD`
-- `SMOKE_OWNER_SUBSCRIBED_FIXTURE_ID`
-- `SMOKE_OWNER_UNSUBSCRIBED_FIXTURE_ID`
+- `SMOKE_OWNER_OWNED_FIXTURE_ID`
+- `SMOKE_OWNER_UNOWNED_FIXTURE_ID`
 - `SMOKE_ADMIN_EMAIL`
 - `SMOKE_ADMIN_PASSWORD`
 
@@ -118,8 +118,8 @@ Owner smoke is limited to:
 
 Owner smoke must use only:
 
-- `SMOKE_OWNER_SUBSCRIBED_FIXTURE_ID`
-- `SMOKE_OWNER_UNSUBSCRIBED_FIXTURE_ID`
+- `SMOKE_OWNER_OWNED_FIXTURE_ID`
+- `SMOKE_OWNER_UNOWNED_FIXTURE_ID`
 
 Owner smoke must not edit profiles, menus, schedules, images, ordering state, subscriptions, Stripe objects, payouts, broadcasts, live locations, public discovery records, or notifications.
 

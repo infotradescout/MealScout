@@ -38,6 +38,7 @@ export type BusinessWorkspaceModuleId =
   | "deals"
   | "promotions"
   | "work"
+  | "delivery"
   | "audience"
   | "team"
   | "payments"
@@ -63,6 +64,7 @@ type WorkspaceCapabilities = {
   deals?: boolean;
   promotions?: boolean;
   work?: boolean;
+  delivery?: boolean;
   audience?: boolean;
   team?: boolean;
   payments?: boolean;
@@ -221,7 +223,7 @@ export default function BusinessWorkspaceShell({
       description: "Zones, fees, minimums, and capacity",
       href: buildWorkspaceHref("/merchant-delivery", business.id),
       icon: ShoppingBag,
-      visible: capabilities.work !== false,
+      visible: capabilities.delivery !== false,
     },
     {
       id: "audience",
@@ -243,8 +245,8 @@ export default function BusinessWorkspaceShell({
     },
     {
       id: "payments",
-      label: "Payments",
-      description: "Plan and payment access",
+      label: "Profile access",
+      description: "Free trial status and included tools",
       href: buildWorkspaceHref("/subscribe", business.id),
       icon: CreditCard,
       visible: capabilities.payments !== false,

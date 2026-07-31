@@ -1960,104 +1960,16 @@ export function registerAdminCoreOpsRoutes(app: Express) {
     },
   );
 
-  // Admin endpoint to sync subscriptions from Stripe to database
+  // Retired route kept so old admin clients cannot restore recurring billing.
   app.post(
     "/api/admin/subscriptions/sync",
     isAuthenticated,
     isStaffOrAdmin,
     async (_req: any, res) => {
-      try {
-        if (!stripe) {
-          return res.status(500).json({ message: "Stripe not configured" });
-        }
-
-        const results = {
-          synced: 0,
-          skipped: 0,
-          errors: 0,
-          details: [] as any[],
-        };
-
-        const allUsers = await storage.getAllUsers();
-        const usersWithStripe = allUsers.filter((u) => u.stripeCustomerId);
-
-        console.log(
-          `[ADMIN SYNC] Found ${usersWithStripe.length} users with Stripe customer IDs`,
-        );
-
-        for (const user of usersWithStripe) {
-          try {
-            if (user.stripeSubscriptionId) {
-              results.skipped++;
-              continue;
-            }
-
-            const subscriptions = await stripe.subscriptions.list({
-              customer: user.stripeCustomerId!,
-              status: "active",
-              limit: 1,
-            });
-
-            if (subscriptions.data.length > 0) {
-              const subscription = subscriptions.data[0];
-              const interval =
-                subscription.items.data[0]?.price?.recurring?.interval;
-              const intervalCount =
-                subscription.items.data[0]?.price?.recurring?.interval_count ||
-                1;
-
-              let billingInterval = "month";
-              if (interval === "month" && intervalCount === 3) {
-                billingInterval = "quarter";
-              } else if (interval === "year") {
-                billingInterval = "year";
-              }
-
-              await storage.updateUserStripeInfo(
-                user.id,
-                user.stripeCustomerId!,
-                subscription.id,
-                `standard-${billingInterval}`,
-              );
-
-              results.synced++;
-              results.details.push({
-                userId: user.id,
-                email: user.email,
-                subscriptionId: subscription.id,
-                billingInterval: `standard-${billingInterval}`,
-                status: "synced",
-              });
-
-              console.log(
-                `[ADMIN SYNC] Synced subscription ${subscription.id} for user ${user.email}`,
-              );
-            } else {
-              results.skipped++;
-            }
-          } catch (error: any) {
-            results.errors++;
-            results.details.push({
-              userId: user.id,
-              email: user.email,
-              error: error.message,
-              status: "error",
-            });
-            console.error(
-              `[ADMIN SYNC] Error syncing user ${user.email}:`,
-              error,
-            );
-          }
-        }
-
-        console.log(
-          `[ADMIN SYNC] Complete: ${results.synced} synced, ${results.skipped} skipped, ${results.errors} errors`,
-        );
-        res.json(results);
-      } catch (error) {
-        console.error("Error syncing subscriptions:", error);
-        res.status(500).json({ message: "Failed to sync subscriptions" });
-      }
+      return res.status(410).json({
+        message:
+          "Recurring profile subscriptions are retired. Use the legacy-billing retirement workflow instead.",
+      });
     },
   );
 

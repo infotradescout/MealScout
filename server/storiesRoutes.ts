@@ -14,7 +14,6 @@ import {
   insertStoryCommentSchema,
   insertStoryViewSchema,
   insertStoryAwardSchema,
-  restaurantSubscriptions,
   feedAds,
   type VideoStory,
   type User,
@@ -27,6 +26,7 @@ import { upload } from './imageUpload';
 import multer from 'multer';
 import { storage } from './storage';
 import { LISA_CLAIM_TYPES, LISA_CLAIM_SOURCES } from '@shared/schema';
+import { isStaffOrAdminUserType } from '@shared/profileAccessPolicy';
 
 // Configure multer for video uploads
 const videoStorage = multer.memoryStorage();
@@ -79,58 +79,21 @@ export default function setupStoriesRoutes(app: Express) {
 
         const hasRestaurant = Boolean(bodyData.restaurantId);
 
-        // Check if this is a restaurant video and verify subscription (paid or lifetime)
+        // Complete profiles include video posting. Ownership and anti-spam
+        // limits still apply; subscription state never does.
         if (bodyData.restaurantId) {
-          const subscription = await db
-            .select()
-            .from(restaurantSubscriptions)
-            .where(eq(restaurantSubscriptions.restaurantId, bodyData.restaurantId))
-            .limit(1);
-
-          if (subscription.length === 0) {
-            // No subscription - create free tier record but block posting
-            await db.insert(restaurantSubscriptions).values({
-              restaurantId: bodyData.restaurantId,
-              tier: 'free',
-              status: 'active',
-              priceCents: 0,
-              billingInterval: 'monthly',
-              canPostVideos: false,
-              canPostDeals: false,
-              canUseFeaturedSlots: false,
-              maxFeaturedSlots: 0,
-              hasAnalytics: false,
-              hasDealScheduling: false,
-            });
+          const userType = String((req as any).user?.userType || '');
+          if (
+            !isStaffOrAdminUserType(userType) &&
+            !(await storage.verifyRestaurantOwnership(
+              bodyData.restaurantId,
+              userId,
+              'manageProfile',
+            ))
+          ) {
             return res.status(403).json({
-              message: 'A paid plan is required to post restaurant videos. Current plan: $25/mo.',
+              message: 'You can only post videos for a profile you manage.',
             });
-          }
-
-          const sub = subscription[0];
-          const isPaidTier = ['monthly', 'quarterly', 'yearly'].includes(sub.tier);
-          const hasLifetime = sub.isLifetimeFree === true;
-
-          if (!hasLifetime && !isPaidTier) {
-            return res.status(403).json({
-              message: 'Restaurant subscription does not allow video posts. Upgrade to Monthly ($25).',
-            });
-          }
-
-          // Ensure posting flag is enabled for paid/lifetime tiers
-          if (!sub.canPostVideos) {
-            await db
-              .update(restaurantSubscriptions)
-              .set({
-                canPostVideos: true,
-                canPostDeals: true,
-                canUseFeaturedSlots: true,
-                maxFeaturedSlots: 3,
-                hasAnalytics: true,
-                hasDealScheduling: false,
-                updatedAt: new Date(),
-              })
-              .where(eq(restaurantSubscriptions.id, sub.id));
           }
         }
 

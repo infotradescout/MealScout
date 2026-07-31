@@ -42,7 +42,7 @@ export function buildPensacolaReportData(): PensacolaReportData {
         bullets: [
           "Create a free MealScout account to unlock live availability.",
           "Browse Pensacola spots and book a guaranteed slot.",
-          "Upgrade to Premium ($25/mo) for live GPS + schedule + booking calendar view.",
+          "Use the complete profile tools for live GPS, schedules, and the booking calendar. The free trial has no expiration or monthly bill.",
         ],
       },
     ],
@@ -92,4 +92,3 @@ export async function renderPensacolaReportPdfBuffer(
   doc.end();
   return done;
 }
-

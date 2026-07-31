@@ -7,13 +7,6 @@ import {
   hasBusinessPermissionForRestaurant,
 } from "../services/businessTeamAccess";
 
-type SubscriptionValidationResult = {
-  isValid: boolean;
-  error?: string;
-  currentCount?: number;
-  maxDeals?: number;
-};
-
 type DealManagementRouteDependencies = {
   logAudit: (
     userId: string,
@@ -24,10 +17,6 @@ type DealManagementRouteDependencies = {
     userAgent: string | undefined,
     details: unknown,
   ) => Promise<void>;
-  validateSubscriptionLimits: (
-    userId: string,
-    excludeDealId?: string,
-  ) => Promise<SubscriptionValidationResult>;
   notifyNearbyDealSubscribers: (params: {
     creatorUserId: string;
     dealId: string;
@@ -44,7 +33,7 @@ type DealManagementRouteDependencies = {
     restaurantName: string;
   }) => Promise<void>;
   toNumeric: (value: unknown) => number | null;
-  hasBusinessDistributionAccess: (userId: string) => Promise<boolean>;
+  hasCompleteProfileAccess: (userId: string) => Promise<boolean>;
   queueSocialPost: (payload: {
     platform: string;
     target?: string | null;
@@ -67,11 +56,10 @@ export function registerDealManagementRoutes(
   app: Express,
   {
     logAudit,
-    validateSubscriptionLimits,
     notifyNearbyDealSubscribers,
     notifyRestaurantFollowersOfDeal,
     toNumeric,
-    hasBusinessDistributionAccess,
+    hasCompleteProfileAccess,
     queueSocialPost,
   }: DealManagementRouteDependencies,
 ) {
@@ -136,20 +124,6 @@ export function registerDealManagementRoutes(
         const currentDeal = await storage.getDeal(dealId);
         if (!currentDeal) {
           return res.status(404).json({ message: "Deal not found" });
-        }
-
-        if (req.body.isActive === true && !currentDeal.isActive) {
-          const subscriptionValidation = await validateSubscriptionLimits(
-            req.user.id,
-            dealId,
-          );
-          if (!subscriptionValidation.isValid) {
-            return res.status(402).json({
-              message: subscriptionValidation.error,
-              currentCount: subscriptionValidation.currentCount,
-              maxDeals: subscriptionValidation.maxDeals,
-            });
-          }
         }
 
         const updatedDeal = await storage.updateDeal(dealId, req.body);
@@ -318,17 +292,6 @@ export function registerDealManagementRoutes(
         return res.status(403).json({ message: "Unauthorized" });
       }
 
-      const billingUserId = restaurant.ownerId;
-      const subscriptionValidation = await validateSubscriptionLimits(billingUserId);
-      console.log("📊 Subscription validation", subscriptionValidation);
-      if (!subscriptionValidation.isValid) {
-        return res.status(402).json({
-          message: subscriptionValidation.error,
-          currentCount: subscriptionValidation.currentCount,
-          maxDeals: subscriptionValidation.maxDeals,
-        });
-      }
-
       const deal = await storage.createDeal(dealData);
       console.log("✅ Deal created", {
         id: deal.id,
@@ -364,7 +327,7 @@ export function registerDealManagementRoutes(
       // Hands-off auto-sharing: queue social posts when deal trigger is enabled
       // and the owner has disabled prompt-before-post in social settings.
       try {
-        const hasDistributionAccess = await hasBusinessDistributionAccess(userId);
+        const hasDistributionAccess = await hasCompleteProfileAccess(userId);
         const socialSettings =
           restaurant?.socialAutopostSettings &&
           typeof restaurant.socialAutopostSettings === "object"

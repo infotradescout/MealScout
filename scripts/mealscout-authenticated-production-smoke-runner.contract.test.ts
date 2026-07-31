@@ -51,8 +51,8 @@ const requiredEnvNames = [
   "SMOKE_CUSTOMER_PASSWORD",
   "SMOKE_OWNER_EMAIL",
   "SMOKE_OWNER_PASSWORD",
-  "SMOKE_OWNER_SUBSCRIBED_FIXTURE_ID",
-  "SMOKE_OWNER_UNSUBSCRIBED_FIXTURE_ID",
+  "SMOKE_OWNER_OWNED_FIXTURE_ID",
+  "SMOKE_OWNER_UNOWNED_FIXTURE_ID",
   "SMOKE_ADMIN_EMAIL",
   "SMOKE_ADMIN_PASSWORD",
 ];
@@ -111,8 +111,8 @@ requireIncludes(runner, "dryMutationPolicy: \"no_mutation_except_login\"", "no m
   "role: \"staff_admin\"",
   "customer session read",
   "owner restaurants read",
-  "owner subscribed fixture kitchen queue read",
-  "owner unsubscribed fixture kitchen queue negative check",
+  "owner owned fixture kitchen queue read",
+  "owner unowned fixture kitchen queue negative check",
   "staff/admin launch board read",
 ].forEach((snippet) => requireIncludes(runner, snippet, `role/check section ${snippet}`));
 

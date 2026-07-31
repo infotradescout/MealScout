@@ -1,68 +1,45 @@
-# MealScout Rep Call Sheet (One-Page)
+# MealScout Representative Call Sheet
 
-Use this during live calls.
+## One-sentence position
 
-## 1) 15-Second opener
+MealScout gives a local food business one complete public profile for discovery, menus, availability, customer actions, and supported operations—with no monthly bill.
 
-MealScout helps food trucks get booked, helps hosts fill spots, and helps local diners find what is open right now.
+## Access promise
 
-## 2) Fast qualification (ask in order)
+- Call it a free trial.
+- It does not expire.
+- No card is required.
+- It never converts into a paid subscription.
+- Complete profile tools are included.
+- Transaction charges for orders, delivery, bookings, supplier payments, or other paid actions are separate and must be quoted only from the current workflow.
 
-- Are you a food truck, host, restaurant/bar, or event coordinator?
-- What is your #1 goal right now: more bookings, better visibility, easier scheduling, or events?
-- Are you already posting deals/schedule manually today?
-- Are you already paying for any marketing tools?
+## Discovery questions
 
-## 3) Free vs Paid in plain English
+1. Where do customers currently find your menu and current location?
+2. Which profile fact changes most often: menu, hours, truck stop, service area, or availability?
+3. Which customer action matters most: directions, order, follow, contact, or booking?
+4. Who on the team keeps that information current?
 
-- Free: core discovery and browsing, profile onboarding, and core Parking Pass visibility/booking flows.
-- Paid (Premium): growth and automation tools.
-- Premium includes: deal distribution/posting access, analytics, off-platform schedule management, one-click live location updates, social auto-post settings, and gated event workflow actions.
-- Business users get a 30-day account-age trial for premium access logic.
+## Product explanation
 
-## 4) Role-specific value statement
+“Your profile is the center of MealScout. Customers can discover the business, see current information, and take the actions you enable. You get the complete profile toolset under a free trial with no expiration, no card, and no monthly bill.”
 
-- Food truck: Start free, book host spots, then upgrade for schedule/location/social automation.
-- Host: List spots by address, set pricing and blackout dates, and attract trucks to your location.
-- Restaurant/Bar: Use profile + promotions + analytics to increase repeat local demand.
-- Event coordinator: Manage event workflows and truck participation with premium event tools.
+## Objections
 
-## 5) Objection handling (quick)
+### “I do not want another subscription.”
 
-- "Too expensive": Start free, prove demand first, then upgrade when automation saves enough time.
-- "I already use social": Premium complements social by automating posts tied to live ops.
-- "I only need this sometimes": Free core is available; premium is for consistency at scale.
-- "Will this guarantee revenue?": No guaranteed revenue, but it improves visibility, booking flow, and operational speed.
+“There is no monthly profile subscription. The free trial does not expire or convert.”
 
-## 6) Payments and trust points
+### “What is the catch?”
 
-- Booking follows payment flow where applicable.
-- Platform and processing fees apply in checkout.
-- Earliest successful payer wins conflict scenarios.
-- Hosts/operators handle permits, insurance, taxes, and on-site operations.
+“There is no monthly profile charge. A specific paid order, booking, delivery, or other transaction may include a separately disclosed charge, but that does not change profile access.”
 
-## 7) Close script
+### “I already use social media.”
 
-- If they are price-sensitive: "Let us start you on core free usage and track results."
-- If they need growth now: "Premium is the fastest path to automate schedule, visibility, and event actions."
-- Ask for next step: "Do you want me to set you up for onboarding now or send the premium comparison first?"
+“Keep it. MealScout gives customers one dependable profile for your current menu, availability, location, and actions instead of making them reconstruct those facts from posts.”
 
-## 8) Do not say
+## Close
 
-- Do not promise guaranteed revenue.
-- Do not say all event functionality is free.
-- Do not imply hosts must buy a subscription to list.
+“Let’s make the profile useful now: confirm the business identity, menu or offerings, current availability, location, and primary customer action.”
 
-## 9) Follow-up template
-
-Subject: MealScout next step
-
-Hi <Name>,
-
-Great speaking with you. Based on your goal (<goal>), I recommend:
-
-- Step 1: <free or premium onboarding path>
-- Step 2: <first action in dashboard>
-- Step 3: <measurement checkpoint in 7-14 days>
-
-If useful, I can also send a side-by-side free vs premium breakdown tailored to your role.
+Never offer a paid profile upgrade, monthly discount, lifetime price, or trial-conversion deadline.

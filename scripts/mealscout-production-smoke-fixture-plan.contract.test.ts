@@ -147,7 +147,6 @@ if (/Status: `(QUEUED|NEXT)`/.test(cleanupMap)) {
   "EMAIL_NOTIFICATIONS_MODE",
   "sendTransacEmail",
   "sendBasicEmail",
-  "sendPaymentConfirmation",
   "sendBookingConfirmationEmail",
   "sendHostBookingNotification",
 ].forEach((snippet) => requireIncludes(emailService, snippet, `email surface ${snippet}`));
@@ -161,9 +160,12 @@ if (/Status: `(QUEUED|NEXT)`/.test(cleanupMap)) {
   "stripe.webhooks.constructEvent",
   "invoice.payment_succeeded",
   "payment_intent.succeeded",
-  "sendPaymentConfirmation",
   "sendBookingConfirmationEmail",
 ].forEach((snippet) => requireIncludes(stripeWebhookRoutes, snippet, `webhook route ${snippet}`));
+
+if (emailService.includes("sendPaymentConfirmation")) {
+  throw new Error("Retired recurring-profile payment email still exists");
+}
 
 [
   '"/api/parking-pass/:passId/book"',

@@ -28,7 +28,6 @@ These confirm purchases or direct order state and should generally remain delive
 
 | Trigger | Recipient | Source | Guardrails |
 | --- | --- | --- | --- |
-| Subscription payment confirmation | Subscriber | `routes/stripeWebhookRoutes.ts` | Stripe webhook-driven |
 | Parking Pass booking confirmation | Truck owner and host | `routes/stripeWebhookRoutes.ts` | Stripe webhook-driven |
 | Pickup order confirmation/ready | Customer | `routes/pickupOrderRoutes.ts` | Ready notification has per-order sent flag; provider skips are logged as failed |
 | Supplier accepted/delivery update | Buyer | `routes/suppliers/requestsRoutes.ts` | Respects `orderUpdates` email preference |
@@ -59,7 +58,7 @@ These should respect user preferences and/or idempotency.
 | Trigger | Recipient | Source | Guardrails |
 | --- | --- | --- | --- |
 | Host weekly digest | Hosts | `digestService.ts` | One per host/week, `weeklyDigest` preference |
-| Premium weekly summary | Subscribed operators | `bootstrap/registerSchedulers.ts` | One per user/week, `weeklyDigest` preference |
+| Profile activity summary | Active business-profile operators | `bootstrap/registerSchedulers.ts` | One per user/month, `weeklyDigest` preference |
 | Diner deals digest | Customers with saved address | `dinerDigestService.ts` | One per user/week, `weeklyDigest`, marketing category |
 | Customer onboarding drip | Customers | `onboardingDripService.ts` | Day 3/day 7 idempotency, email opt-out, marketing category |
 | Restaurant activation nudge | Restaurant owners without deals | `restaurantActivationService.ts` | Day 7/day 14 idempotency, email opt-out, marketing category |

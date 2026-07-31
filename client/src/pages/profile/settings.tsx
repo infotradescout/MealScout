@@ -378,8 +378,8 @@ export default function SettingsPage() {
                 <SettingsLinkCard
                   href={buildBusinessHref("/subscribe")}
                   icon={CreditCard}
-                  title="Plan and billing"
-                  description="Review Premium status, credits, and billing access."
+                  title="Profile access"
+                  description="Review the free trial and everything included with the profile."
                 />
               ) : null}
             </CardContent>

@@ -1,6 +1,6 @@
 # MealScout Payment/Webhook Safety Map
 
-Status: C9 payment/webhook safety map and focused payment-safety hardening complete. The map began as a docs/contract-only cleanup; the dedicated follow-up lane added the narrowly scoped signature, retry, replay, and out-of-order protections documented below.
+Status: Current. Profile access is a non-expiring, no-card free trial. Stripe remains in MealScout only for separate order, delivery, booking, supplier, payout, and other transaction flows, plus retirement of legacy recurring subscriptions.
 
 ## Scope
 
@@ -10,7 +10,7 @@ This map documents current MealScout payment, Stripe Connect, booking/payment ha
 
 Frontend payment surfaces:
 
-- `client/src/pages/subscribe.tsx` uses Stripe Elements with `VITE_STRIPE_PUBLIC_KEY` and calls subscription quote/create/status routes.
+- `client/src/pages/subscribe.tsx` is the profile-access workspace. It does not mount Stripe Elements or initiate recurring billing.
 - `client/src/components/event-booking-modal.tsx` handles single event/spot booking checkout with a Payment Element and server-returned `clientSecret`.
 - `client/src/components/booking-payment-modal.tsx` handles Parking Pass checkout, fetches `/api/payments/stripe-config` when needed, creates checkout holds, and can cancel pending checkout by PaymentIntent.
 - `client/src/pages/pickup-checkout.tsx` creates pickup orders and renders Stripe Elements when a card order returns `clientSecret`.
@@ -18,11 +18,11 @@ Frontend payment surfaces:
 
 Backend registration:
 
-- `server/routes.ts` creates a shared `stripe` client from `STRIPE_SECRET_KEY` and passes it to subscription and supplier marketplace routes.
+- `server/routes.ts` creates a shared `stripe` client from `STRIPE_SECRET_KEY` and passes it to legacy-billing retirement and transaction-payment routes.
 - `registerHostRoutes` owns public publishable-key config, host Stripe Connect onboarding/status, Parking Pass booking PaymentIntent creation, and bypass/test-mode booking branches.
 - `registerEventRoutes` owns the legacy/single event Parking Pass booking PaymentIntent path and immediate client confirmation endpoint.
 - `registerBookingRoutes` owns PaymentIntent lookup/cancel endpoints for Parking Pass checkout state.
-- `registerSubscriptionRoutes` owns premium subscription quote, create, status, pause, and cancel routes.
+- `registerSubscriptionRoutes` keeps legacy client paths compatible, always returns complete free-trial profile access, and can immediately cancel a legacy recurring charge. It cannot create or reactivate a subscription.
 - `registerPickupOrderRoutes` owns pickup order card PaymentIntent creation and owner order status management.
 - `registerSupplierMarketplaceRoutes` delegates supplier online payment creation to `registerSupplierPaymentRoutes` and supplier Connect onboarding/status to `registerSupplierOnboardingRoutes`.
 - `registerStripeWebhookRoutes` owns Stripe webhook event reconciliation.
@@ -30,11 +30,12 @@ Backend registration:
 
 ## Stripe And Payment Intent Creation Routes
 
-Subscription/Billing:
+Profile access and legacy billing:
 
-- `POST /api/subscriptions/initialize` is authenticated and returns quotes, trial/lifetime access responses, or test-promo quote responses. It validates verified business access for restaurant owner/food truck users before paid premium setup.
-- `POST /api/create-subscription` is authenticated and creates Stripe customers and subscriptions with `payment_behavior: "default_incomplete"` and `expand: ["latest_invoice.payment_intent"]`; it persists `stripeCustomerId` and `stripeSubscriptionId` on the user record.
-- `GET /api/subscription/status`, `POST /api/subscription/pause`, and `POST /api/subscription/cancel` are authenticated. Cancellation sets `cancel_at_period_end`; webhook deletion later clears access state.
+- `POST /api/subscriptions/initialize`, `POST /api/create-subscription`, and `GET /api/subscription/status` are authenticated compatibility routes. They return active complete-profile free-trial access with no expiration, card requirement, conversion, or monthly billing.
+- No route calls `stripe.subscriptions.create`, `stripe.subscriptions.update`, or a recurring Stripe Price ID.
+- `POST /api/subscription/pause` explains that there is no monthly profile plan to pause.
+- `POST /api/subscription/cancel` immediately cancels an attached legacy Stripe subscription and clears its user lookup key without changing profile access.
 
 Parking Pass and event booking:
 
@@ -112,14 +113,10 @@ Unhandled event types are logged and acknowledged without mutation.
 
 ## Webhook Reconciliation Effects
 
-`invoice.payment_succeeded`:
+`invoice.payment_succeeded` and `invoice.payment_failed`:
 
-- Retrieves the Stripe subscription.
-- Finds the user by subscription ID.
-- Updates user Stripe IDs if needed.
-- Syncs `restaurantSubscriptions` rows to active monthly access for owned restaurants.
-- Creates affiliate subscription commissions where applicable.
-- Sends best-effort payment confirmation email.
+- If an invoice references a legacy subscription, MealScout logs it without canceling Stripe or changing local access. Live cleanup remains a separate dry-run-first operator action.
+- Neither event can activate profile access, revoke profile tools or public content, create subscription affiliate commissions, or email a recurring-payment confirmation.
 
 `payment_intent.succeeded`:
 
@@ -133,10 +130,10 @@ Unhandled event types are logged and acknowledged without mutation.
 - Supplier order metadata marks matching supplier orders unpaid unless a succeeded event already marked the order paid.
 - Only pending booking rows matching `stripePaymentIntentId` are cancelled with `stripePaymentStatus: "failed"`; an out-of-order failure event cannot regress an already-confirmed booking.
 
-Subscription events:
+Legacy subscription events:
 
-- `customer.subscription.updated` deactivates matching `restaurantSubscriptions` and user deals for canceled/incomplete-expired subscriptions, then clears `stripeSubscriptionId` last; it restores the ID and subscription rows for active reactivations and inserts LISA subscription claims.
-- `customer.subscription.deleted` resolves the user by subscription ID with a customer-ID fallback, deactivates matching `restaurantSubscriptions` and user deals, then clears the user subscription ID last. This remains recoverable when an earlier canceled update already cleared the subscription lookup key.
+- `customer.subscription.updated` retires the local legacy billing record only after Stripe reports a terminal status. `customer.subscription.deleted` synchronizes the already-completed external deletion. Neither handler cancels Stripe, deactivates deals, or changes other profile features.
+- Customer-ID fallback and row locking remain so delayed events cannot clear a replacement legacy subscription while cleanup is in progress.
 
 Connect account events:
 
@@ -150,15 +147,15 @@ Intended direct write paths discovered in code:
 - `eventBookings.status`, `stripePaymentStatus`, `stripePaymentIntentId`, `paidAt`, `bookingConfirmedAt`, `stripeTransferDestination`, and related cancellation fields are written by event booking creation, Parking Pass booking creation, booking cancel/confirm routes, webhook success/failure handlers, and bypass/test-mode branches.
 - `pickupOrders.status`, `confirmedAt`, `stripePaymentIntentId`, `stripeTransferGroupId`, and `payoutStatus` are written by pickup order creation, owner status management, and webhook success transfer handling.
 - `supplierOrders.paymentStatus`, `stripePaymentIntentId`, charge/application/transfer amount fields, buyer discount, and buyer payment method are written by supplier order creation/request routes, supplier pay-intent route, and webhook success/failure handlers.
-- `users.stripeCustomerId`, `users.stripeSubscriptionId`, and `restaurantSubscriptions` are written by subscription creation, lifetime access promo activation, subscription webhook events, first-partner access code paths, admin lifetime access routes, and backfill scripts.
+- `users.stripeSubscriptionId` and `restaurantSubscriptions` remain only as legacy billing audit/cancellation state. Compatibility cancellation, webhook retirement, and the explicit cleanup script can clear or retire them; they do not grant product access.
 - `hostEarningsLedger` and `hostPayoutRequests` are written by booking webhook handlers, host payout request flows, and admin payout processing.
 
 These write paths are not changed by C9. Future cleanup must preserve idempotency, ownership, webhook-first reconciliation, and test/bypass isolation.
 
 ## Admin And Staff Payment Visibility
 
-- Admin/staff user and affiliate views expose Stripe/subscription-derived diagnostics such as `stripeCustomerId`/`stripeSubscriptionId` presence, affiliate commission status, and booking-derived affiliate eligibility.
-- Admin Launch Board and dashboard surfaces aggregate subscription, booking, payout, and payment-adjacent metrics through protected admin/staff endpoints.
+- Admin/staff user views may expose legacy Stripe ID presence for cleanup and audit. New monthly subscription links, grants, and revocations are disabled.
+- Affiliate views expose referral attribution and eligible transaction/booking commission state, not recurring-subscription promises.
 - `/api/admin/host-payout-requests`, `/api/admin/host-payout-requests/:requestId`, and export routes require authenticated admin access.
 - `/api/admin/supplier-orders` requires authenticated staff/admin access.
 - Public pickup order reads intentionally strip Stripe PaymentIntent and transfer group details for non-owner callers.
@@ -174,13 +171,9 @@ Payment-sensitive env vars discovered:
 - `STRIPE_PUBLISHABLE_KEY`
 - `STRIPE_WEBHOOK_SECRET`
 - `STRIPE_WEBHOOK_FORCE_VERIFY`
-- `PRICE_MONTHLY_25`
 - `MEALSCOUT_BYPASS_STRIPE`
 - `MEALSCOUT_TEST_MODE`
 - `MEALSCOUT_TEST_PROMOS_REQUIRE_ADMIN`
-- `LIFETIME_ACCESS_CODES`
-- `MEALSCOUT_LIFETIME_ACCESS_CODES`
-- `LIFETIME25_ENABLED`
 - `PARKING_PASS_HOLD_TTL_MINUTES`
 - `PICKUP_ORDER_MEALSCOUT_FEE_CENTS`
 - `PICKUP_ORDER_STRIPE_FEE_BPS`
@@ -209,7 +202,8 @@ Existing payment/webhook coverage:
 - `scripts/testParkingPassWebhookReplay.ts`
 - `scripts/testSupplierPaymentIntentFlow.ts`
 - `scripts/testSupplierPayIntentMethodSwitch.ts`
-- `scripts/testMoneyButton.ts`
+- `scripts/universal-profile-access.contract.test.ts`
+- `scripts/mealscout-business-payments-workspace.contract.test.ts`
 - `scripts/preLaunchGate.mjs`
 - `scripts/productionReadinessGate.mjs`
 - Package scripts include `test:stripe-webhook-safety`, `test:stripe-webhook-stateful-replay`, `smoke:parking-pass-stripe`, `audit:parking-pass-webhooks`, `test:parking-pass-webhook-replay`, `test:supplier-payments`, and `test:supplier-pay-intent-switch`.
@@ -222,7 +216,7 @@ Coverage shape:
 - Supplier intent method-switch tests are static/unit style around reuse/cancel/conflict decisions.
 - Webhook verification behavior uses fabricated local-only Stripe fixture strings and the real Stripe SDK HMAC implementation; it makes no Stripe API calls.
 - Webhook processing failure behavior uses an intentionally unreachable fixture database and proves a primary write failure returns 500.
-- Mutation-level database idempotency remains opt-in and requires an explicitly identified disposable Neon branch and endpoint host. On 2026-07-26, the synthetic stateful replay passed signed duplicate/out-of-order delivery checks for Parking Pass host earnings and committed credit debits, pickup order confirmation and canceled-order non-regression, supplier payment non-regression, and stale/current subscription cancellation behavior.
+- Mutation-level database idempotency remains opt-in and requires an explicitly identified disposable Neon branch and endpoint host. The stateful replay covers transaction reconciliation and stale legacy-subscription retirement without using subscription state as a product entitlement.
 
 ## Audit Findings And Follow-Ups
 
@@ -236,9 +230,9 @@ The original C9 map made no runtime repair. The dedicated payment-safety lane su
 
 ## Do-Not-Touch Rules
 
-- Do not broaden this payment-safety lane into a provider, Checkout, Connect-account, pricing, subscription, or schema redesign.
+- Do not introduce a recurring profile price, paid profile tier, expiring trial, card requirement, or subscription-derived feature gate.
 - Do not weaken raw-body verification, the opt-in-only unsigned development mode, primary-error 500 behavior, or PaymentIntent-backed replay guards.
-- Do not change unrelated booking, order, supplier, subscription, payout, affiliate, credit, route-auth, or provider behavior under the guise of webhook hardening.
+- Do not remove or invent order, delivery, booking, supplier, payout, affiliate, or other transaction charges under the profile-access policy.
 - Do not enable production test/bypass flags or copy real credentials into examples or tests.
 - Do not add sample users, fake payments, fake bookings, fake suppliers, fake hosts, or production test records.
 - Do not mark C10 complete from C9.

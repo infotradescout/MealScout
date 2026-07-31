@@ -3,7 +3,6 @@ import { affiliateCommissionLedger, users } from "@shared/schema";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
 type CommissionSource =
-  | "subscription_payment"
   | "booking_fee_host"
   | "booking_fee_truck";
 
@@ -152,29 +151,6 @@ async function createCommissionEntry(
   }
 
   return commission;
-}
-
-export async function createAffiliateCommissionsForSubscription(
-  userId: string,
-  invoiceTotalCents: number,
-  invoiceId: string,
-) {
-  const recipients = await getAffiliateRecipientsForUser(userId);
-  if (recipients.length === 0) return [];
-
-  const results = [];
-  for (const recipient of recipients) {
-    const commission = await createCommissionEntry(
-      recipient.affiliateUserId,
-      invoiceTotalCents,
-      recipient.percent,
-      "subscription_payment",
-      invoiceId,
-    );
-    if (commission) results.push(commission);
-  }
-
-  return results;
 }
 
 export async function createAffiliateCommissionsForBooking({

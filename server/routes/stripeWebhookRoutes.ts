@@ -20,10 +20,6 @@ import {
   creditLedger,
   hosts,
   suppliers,
-  lisaClaims,
-  LISA_CLAIM_TYPES,
-  LISA_CLAIM_SOURCES,
-  deals,
   restaurantSubscriptions,
   restaurants,
   users,
@@ -78,8 +74,8 @@ async function deactivateSubscriptionEntitlements(params: {
       .limit(1)
       .for("update");
 
-    // The event-specific row can always be retired. Deals and the user lookup
-    // key belong to whichever subscription is current under the row lock.
+    // Retire legacy billing records without changing profile tools or public
+    // content. Profile access no longer derives from subscription state.
     await tx
       .update(restaurantSubscriptions)
       .set({
@@ -104,23 +100,6 @@ async function deactivateSubscriptionEntitlements(params: {
       return;
     }
 
-    const userRestaurants = await tx
-      .select({ id: restaurants.id })
-      .from(restaurants)
-      .where(eq(restaurants.ownerId, params.userId));
-    const restaurantIds = userRestaurants.map(
-      (restaurant: { id: string }) => restaurant.id,
-    );
-    if (restaurantIds.length > 0) {
-      await tx
-        .update(deals)
-        .set({
-          isActive: false,
-          updatedAt: new Date(),
-        })
-        .where(inArray(deals.restaurantId, restaurantIds));
-    }
-
     const clearedUsers = await tx
       .update(users)
       .set({
@@ -142,6 +121,22 @@ async function deactivateSubscriptionEntitlements(params: {
         `Subscription changed while revoking ${params.subscriptionId}`,
       );
     }
+  });
+}
+
+async function retireLegacyProfileSubscription(
+  subscriptionId: string,
+  customerId?: string | null,
+) {
+  let user = await storage.getUserByStripeSubscriptionId(subscriptionId);
+  if (!user && customerId) {
+    user = await storage.getUserByStripeCustomerId(customerId);
+  }
+  if (!user) return;
+
+  await deactivateSubscriptionEntitlements({
+    userId: user.id,
+    subscriptionId,
   });
 }
 
@@ -198,211 +193,27 @@ export function registerStripeWebhookRoutes(
 
     try {
       switch (event.type) {
-        case "invoice.payment_succeeded":
+        case "invoice.payment_succeeded": {
           const invoice = event.data.object;
           console.log(`[WEBHOOK] Invoice ${invoice.id} payment succeeded`);
 
-          if (invoice.subscription && stripe) {
-            // Retrieve the subscription to get full details
-            const subscription = await stripe.subscriptions.retrieve(
-              invoice.subscription as string,
+          if (invoice.subscription) {
+            const subscriptionId = String(invoice.subscription);
+            console.warn(
+              `[WEBHOOK] Legacy profile subscription ${subscriptionId} received a payment; no automatic cancellation or access change was made`,
             );
-            if (subscription && subscription.status === "active") {
-              console.log(
-                `[WEBHOOK] Subscription ${subscription.id} is now active for customer ${subscription.customer}`,
-              );
-
-              // Find user by subscription ID (more reliable than customer ID)
-              const user = await storage.getUserByStripeSubscriptionId(
-                subscription.id,
-              );
-
-              if (user) {
-                try {
-                  const { createAffiliateCommissionsForSubscription } =
-                    await import("../affiliateCommissionService");
-                  await createAffiliateCommissionsForSubscription(
-                    user.id,
-                    invoice.total,
-                    invoice.id,
-                  );
-                } catch (commissionError) {
-                  console.error(
-                    "[WEBHOOK] Error processing affiliate commissions:",
-                    commissionError,
-                  );
-                  throw commissionError;
-                }
-              }
-
-              if (user) {
-                console.log(
-                  `[WEBHOOK] Found user ${user.id} (${user.email}) - ensuring subscription is active`,
-                );
-
-                // Make sure the user has the subscription ID stored
-                // (it should already be there from initialization, but this ensures consistency)
-                if (
-                  !user.stripeSubscriptionId ||
-                  user.stripeSubscriptionId !== subscription.id
-                ) {
-                  await storage.updateUser(user.id, {
-                    stripeSubscriptionId: subscription.id,
-                    stripeCustomerId: subscription.customer as string,
-                  });
-                  console.log(
-                    `[WEBHOOK] Updated user ${user.id} with subscription ID ${subscription.id}`,
-                  );
-                } else {
-                  console.log(
-                    `[WEBHOOK] User ${user.id} subscription already properly configured`,
-                  );
-                }
-
-                // Sync restaurantSubscriptions table so assertHasOrderingSubscription
-                // works reliably even when Stripe is unreachable (eliminates split-brain
-                // access gate where trucks with active paid subscriptions get 403s).
-                try {
-                  const periodStart = (subscription as any).current_period_start
-                    ? new Date((subscription as any).current_period_start * 1000)
-                    : new Date();
-                  const periodEnd = (subscription as any).current_period_end
-                    ? new Date((subscription as any).current_period_end * 1000)
-                    : null;
-                  const userRestaurants = await storage.getRestaurantsByOwner(user.id);
-                  for (const restaurant of userRestaurants) {
-                    const [existing] = await db
-                      .select({ id: restaurantSubscriptions.id })
-                      .from(restaurantSubscriptions)
-                      .where(eq(restaurantSubscriptions.restaurantId, restaurant.id))
-                      .limit(1);
-                    if (existing) {
-                      await db
-                        .update(restaurantSubscriptions)
-                        .set({
-                          status: "active",
-                          tier: "monthly",
-                          stripeSubscriptionId: subscription.id,
-                          stripeCustomerId: subscription.customer as string,
-                          currentPeriodStart: periodStart,
-                          currentPeriodEnd: periodEnd,
-                          canceledAt: null,
-                          canPostVideos: true,
-                          canPostDeals: true,
-                          canUseFeaturedSlots: true,
-                          maxFeaturedSlots: 3,
-                          hasAnalytics: true,
-                          hasDealScheduling: true,
-                          updatedAt: new Date(),
-                        })
-                        .where(eq(restaurantSubscriptions.id, existing.id));
-                    } else {
-                      await db.insert(restaurantSubscriptions).values({
-                        restaurantId: restaurant.id,
-                        tier: "monthly",
-                        status: "active",
-                        priceCents: 2500,
-                        billingInterval: "monthly",
-                        stripeSubscriptionId: subscription.id,
-                        stripeCustomerId: subscription.customer as string,
-                        currentPeriodStart: periodStart,
-                        currentPeriodEnd: periodEnd,
-                        canPostVideos: true,
-                        canPostDeals: true,
-                        canUseFeaturedSlots: true,
-                        maxFeaturedSlots: 3,
-                        hasAnalytics: true,
-                        hasDealScheduling: true,
-                      });
-                    }
-                    console.log(
-                      `[WEBHOOK] Synced restaurantSubscriptions for restaurant ${restaurant.id} (user ${user.id})`,
-                    );
-                  }
-                } catch (syncError) {
-                  console.error(
-                    "[WEBHOOK] Error syncing restaurantSubscriptions:",
-                    syncError,
-                  );
-                  throw syncError;
-                }
-
-                try {
-                  const amountPaidCents = Number((invoice as any).amount_paid || 0) || 0;
-                  await emailService.sendPaymentConfirmation(
-                    user,
-                    amountPaidCents,
-                    "standard-month",
-                    subscription.id,
-                  );
-                } catch (emailError) {
-                  console.error(
-                    "[WEBHOOK] Failed to send subscription payment confirmation:",
-                    emailError,
-                  );
-                }
-              } else {
-                console.log(
-                  `[WEBHOOK] Warning: No user found for subscription ${subscription.id}`,
-                );
-              }
-            }
           }
           break;
+        }
         case "invoice.payment_failed": {
-          // Stripe sets the subscription to "past_due" immediately on a
-          // declined card and only reaches "canceled" after the full Smart
-          // Retry schedule (days to weeks later). Nothing previously
-          // reacted to this event, so assertHasOrderingSubscription (which
-          // only checks restaurantSubscriptions.status === "active") kept
-          // granting full ordering access for the entire retry window.
-          // Mark it past_due immediately so access is revoked on decline,
-          // not on eventual cancellation.
           const failedInvoice = event.data.object;
           console.log(`[WEBHOOK] Invoice ${failedInvoice.id} payment failed`);
 
           if (failedInvoice.subscription) {
             const subscriptionId = String(failedInvoice.subscription);
-            let userForFailedPayment =
-              await storage.getUserByStripeSubscriptionId(subscriptionId);
-            if (!userForFailedPayment && failedInvoice.customer) {
-              userForFailedPayment = await storage.getUserByStripeCustomerId(
-                String(failedInvoice.customer),
-              );
-            }
-
-            if (userForFailedPayment) {
-              try {
-                const userRestaurants = await storage.getRestaurantsByOwner(
-                  userForFailedPayment.id,
-                );
-                for (const restaurant of userRestaurants) {
-                  await db
-                    .update(restaurantSubscriptions)
-                    .set({ status: "past_due", updatedAt: new Date() })
-                    .where(
-                      and(
-                        eq(restaurantSubscriptions.restaurantId, restaurant.id),
-                        eq(restaurantSubscriptions.stripeSubscriptionId, subscriptionId),
-                        eq(restaurantSubscriptions.isLifetimeFree, false),
-                      ),
-                    );
-                }
-                console.log(
-                  `[WEBHOOK] Marked restaurantSubscriptions past_due for user ${userForFailedPayment.id} (subscription ${subscriptionId})`,
-                );
-              } catch (pastDueError) {
-                console.error(
-                  "[WEBHOOK] Error marking restaurantSubscriptions past_due:",
-                  pastDueError,
-                );
-                throw pastDueError;
-              }
-            } else {
-              console.log(
-                `[WEBHOOK] Warning: No user found for failed invoice subscription ${subscriptionId}`,
-              );
-            }
+            console.warn(
+              `[WEBHOOK] Legacy profile subscription ${subscriptionId} reported a failed payment; no automatic cancellation or access change was made`,
+            );
           }
           break;
         }
@@ -1791,188 +1602,32 @@ export function registerStripeWebhookRoutes(
           }
           break;
 
-        case "customer.subscription.updated":
+        case "customer.subscription.updated": {
           const subscriptionUpdated = event.data.object;
-          console.log(
-            `[WEBHOOK] Subscription ${subscriptionUpdated.id} updated to status: ${subscriptionUpdated.status}`,
+          const terminalLegacyStatus = ["canceled", "incomplete_expired"].includes(
+            String(subscriptionUpdated.status || ""),
           );
-
-          // Find user by subscription ID; fall back to customer ID for reactivations
-          let userForUpdate = await storage.getUserByStripeSubscriptionId(
-            subscriptionUpdated.id,
-          );
-          if (!userForUpdate && subscriptionUpdated.customer) {
-            const customerId = getSubscriptionCustomerId(
-              subscriptionUpdated.customer,
+          if (terminalLegacyStatus) {
+            await retireLegacyProfileSubscription(
+              subscriptionUpdated.id,
+              getSubscriptionCustomerId(subscriptionUpdated.customer),
             );
-            if (customerId) {
-              userForUpdate =
-                await storage.getUserByStripeCustomerId(customerId);
-            }
-          }
-
-          if (userForUpdate) {
-            console.log(
-              `[WEBHOOK] Found user ${userForUpdate.id} for subscription ${subscriptionUpdated.id}`,
-            );
-
-            if (
-              subscriptionUpdated.status === "canceled" ||
-              subscriptionUpdated.status === "incomplete_expired"
-            ) {
-              console.log(
-                `[WEBHOOK] Subscription ${subscriptionUpdated.id} is now ${subscriptionUpdated.status} for user ${userForUpdate.id}`,
-              );
-              await deactivateSubscriptionEntitlements({
-                userId: userForUpdate.id,
-                subscriptionId: subscriptionUpdated.id,
-              });
-              db.insert(lisaClaims).values({
-                app: "mealscout",
-                claimType: LISA_CLAIM_TYPES.SUBSCRIPTION_CANCELLED,
-                source: LISA_CLAIM_SOURCES.SUBSCRIPTION,
-                subjectType: "subscription",
-                subjectId: subscriptionUpdated.id,
-                actorType: "user",
-                actorId: userForUpdate.id,
-                payload: { status: subscriptionUpdated.status },
-              }).catch(() => {});
-            } else if (subscriptionUpdated.status === "active") {
-              console.log(
-                `[WEBHOOK] Subscription ${subscriptionUpdated.id} is active for user ${userForUpdate.id}`,
-              );
-              // Ensure user record reflects the active subscription (handles reactivations)
-              if (userForUpdate.stripeSubscriptionId !== subscriptionUpdated.id) {
-                await storage.updateUser(userForUpdate.id, {
-                  stripeSubscriptionId: subscriptionUpdated.id,
-                });
-              }
-              // A subscription can return to "active" from past_due without a
-              // fresh invoice.payment_succeeded event (e.g. manual recovery in
-              // the Stripe dashboard) -- sync restaurantSubscriptions here too
-              // so ordering access is restored immediately.
-              try {
-                const userRestaurants = await storage.getRestaurantsByOwner(
-                  userForUpdate.id,
-                );
-                for (const restaurant of userRestaurants) {
-                  await db
-                    .update(restaurantSubscriptions)
-                    .set({ status: "active", updatedAt: new Date() })
-                    .where(
-                      and(
-                        eq(restaurantSubscriptions.restaurantId, restaurant.id),
-                        eq(
-                          restaurantSubscriptions.stripeSubscriptionId,
-                          subscriptionUpdated.id,
-                        ),
-                        eq(restaurantSubscriptions.isLifetimeFree, false),
-                      ),
-                    );
-                }
-              } catch (reactivateError) {
-                console.error(
-                  "[WEBHOOK] Error reactivating restaurantSubscriptions:",
-                  reactivateError,
-                );
-                throw reactivateError;
-              }
-              db.insert(lisaClaims).values({
-                app: "mealscout",
-                claimType: LISA_CLAIM_TYPES.SUBSCRIPTION_STARTED,
-                source: LISA_CLAIM_SOURCES.SUBSCRIPTION,
-                subjectType: "subscription",
-                subjectId: subscriptionUpdated.id,
-                actorType: "user",
-                actorId: userForUpdate.id,
-                payload: { stripeSubscriptionId: subscriptionUpdated.id },
-              }).catch(() => {});
-            } else if (
-              subscriptionUpdated.status === "past_due" ||
-              subscriptionUpdated.status === "unpaid" ||
-              subscriptionUpdated.status === "incomplete" ||
-              subscriptionUpdated.status === "paused"
-            ) {
-              // Defense in depth alongside invoice.payment_failed: if that
-              // event is ever missed, this still catches the status
-              // transition and revokes access instead of leaving
-              // restaurantSubscriptions stuck on "active".
-              console.log(
-                `[WEBHOOK] Subscription ${subscriptionUpdated.id} is ${subscriptionUpdated.status} for user ${userForUpdate.id} -- marking past_due`,
-              );
-              try {
-                const userRestaurants = await storage.getRestaurantsByOwner(
-                  userForUpdate.id,
-                );
-                for (const restaurant of userRestaurants) {
-                  await db
-                    .update(restaurantSubscriptions)
-                    .set({ status: "past_due", updatedAt: new Date() })
-                    .where(
-                      and(
-                        eq(restaurantSubscriptions.restaurantId, restaurant.id),
-                        eq(
-                          restaurantSubscriptions.stripeSubscriptionId,
-                          subscriptionUpdated.id,
-                        ),
-                        eq(restaurantSubscriptions.isLifetimeFree, false),
-                      ),
-                    );
-                }
-              } catch (pastDueSyncError) {
-                console.error(
-                  "[WEBHOOK] Error marking restaurantSubscriptions past_due on subscription.updated:",
-                  pastDueSyncError,
-                );
-                throw pastDueSyncError;
-              }
-            }
           } else {
-            console.log(
-              `[WEBHOOK] Warning: No user found for subscription ${subscriptionUpdated.id}`,
+            console.warn(
+              `[WEBHOOK] Legacy profile subscription ${subscriptionUpdated.id} changed to ${subscriptionUpdated.status}; no automatic cancellation or access change was made`,
             );
           }
           break;
+        }
 
-        case "customer.subscription.deleted":
+        case "customer.subscription.deleted": {
           const subscriptionDeleted = event.data.object;
-          console.log(
-            `[WEBHOOK] Subscription ${subscriptionDeleted.id} was deleted`,
-          );
-
-          // Resolve by subscription first, then by customer so deletion still
-          // revokes entitlements if an earlier canceled update already cleared
-          // the subscription lookup key.
-          let userForDeletion = await storage.getUserByStripeSubscriptionId(
+          await retireLegacyProfileSubscription(
             subscriptionDeleted.id,
+            getSubscriptionCustomerId(subscriptionDeleted.customer),
           );
-          if (!userForDeletion && subscriptionDeleted.customer) {
-            const customerId = getSubscriptionCustomerId(
-              subscriptionDeleted.customer,
-            );
-            if (customerId) {
-              userForDeletion =
-                await storage.getUserByStripeCustomerId(customerId);
-            }
-          }
-
-          if (userForDeletion) {
-            console.log(
-              `[WEBHOOK] Clearing subscription for user ${userForDeletion.id}`,
-            );
-            await deactivateSubscriptionEntitlements({
-              userId: userForDeletion.id,
-              subscriptionId: subscriptionDeleted.id,
-            });
-            console.log(
-              `[WEBHOOK] Subscription cleared for user ${userForDeletion.id} (${userForDeletion.email})`,
-            );
-          } else {
-            console.log(
-              `[WEBHOOK] Warning: No user found for deleted subscription ${subscriptionDeleted.id}`,
-            );
-          }
           break;
+        }
 
         case "account.updated": {
           const account = event.data.object as Stripe.Account;

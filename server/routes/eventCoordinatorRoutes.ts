@@ -24,7 +24,7 @@ import {
 } from "../utils/eventDateInput";
 
 type EventCoordinatorRouteDependencies = {
-  hasBusinessDistributionAccess: (userId: string) => Promise<boolean>;
+  hasCompleteProfileAccess: (userId: string) => Promise<boolean>;
 };
 
 const allowedRoles = new Set([
@@ -49,7 +49,7 @@ const isEventCoordinator = (req: any, res: any, next: any) => {
 
 export function registerEventCoordinatorRoutes(
   app: Express,
-  { hasBusinessDistributionAccess }: EventCoordinatorRouteDependencies,
+  { hasCompleteProfileAccess }: EventCoordinatorRouteDependencies,
 ) {
   const ensurePaidEventAccess = async (req: any, res: any) => {
     if (
@@ -60,10 +60,10 @@ export function registerEventCoordinatorRoutes(
       return true;
     }
 
-    const hasAccess = await hasBusinessDistributionAccess(req.user.id);
+    const hasAccess = await hasCompleteProfileAccess(req.user.id);
     if (!hasAccess) {
       res.status(402).json({
-        message: "Premium subscription required for event access.",
+        message: "Profile access could not be verified for event tools.",
       });
       return false;
     }

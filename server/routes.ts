@@ -87,11 +87,8 @@ const stripe = process.env.STRIPE_SECRET_KEY
 
 const {
   ensureTrialForUser,
-  isTrialActive,
-  getLockedPriceForUser,
-  validateAnalyticsAccess,
-  validateSubscriptionLimits,
-  hasBusinessDistributionAccess,
+  validateProfileAnalyticsAccess,
+  hasCompleteProfileAccess,
   filterDealsByBusinessAccess,
 } = createRouteAccessPolicyDependencies(stripe);
 
@@ -104,7 +101,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerParkingRoutePlanningRoutes(app);
 
   registerLocationDemandRoutes(app);
-  registerLocationUtilityRoutes(app, { hasBusinessDistributionAccess });
+  registerLocationUtilityRoutes(app, { hasCompleteProfileAccess });
 
   registerPublicMapRoutes(app);
 
@@ -118,22 +115,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   registerDealManagementRoutes(app, {
     logAudit,
-    validateSubscriptionLimits,
     notifyNearbyDealSubscribers,
     notifyRestaurantFollowersOfDeal,
     toNumeric,
-    hasBusinessDistributionAccess,
+    hasCompleteProfileAccess,
     queueSocialPost,
   });
 
   registerDealDiscoveryRoutes(app, {
     filterDealsByBusinessAccess,
-    hasBusinessDistributionAccess,
+    hasCompleteProfileAccess,
   });
 
   registerRestaurantOperationsRoutes(app, {
-    validateAnalyticsAccess,
-    hasBusinessDistributionAccess,
+    validateProfileAnalyticsAccess,
+    hasCompleteProfileAccess,
   });
   registerMerchantPromotionRoutes(app);
   registerMerchantDeliveryRoutes(app);
@@ -145,15 +141,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   registerSubscriptionRoutes(app, {
     stripe,
-    ensureTrialForUser,
-    isTrialActive,
-    getLockedPriceForUser,
   });
   registerTruckClaimRoutes(app);
 
   registerPublicDiscoveryRoutes(app);
 
-  registerRestaurantCoreRoutes(app, { validateAnalyticsAccess });
+  registerRestaurantCoreRoutes(app, { validateProfileAnalyticsAccess });
 
   registerPublicSearchRoutes(app);
   registerPublicSeoLandingRoutes(app);
@@ -186,12 +179,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ====================================================================
 
   // Truck Discovery
-  registerEventRoutes(app, { hasBusinessDistributionAccess });
+  registerEventRoutes(app, { hasCompleteProfileAccess });
   registerDiscoveryRoutes(app);
-  registerEventCoordinatorRoutes(app, { hasBusinessDistributionAccess });
+  registerEventCoordinatorRoutes(app, { hasCompleteProfileAccess });
 
   // Booking Management
-  registerBookingRoutes(app, { hasBusinessDistributionAccess });
+  registerBookingRoutes(app, { hasCompleteProfileAccess });
 
   // Supplier marketplace (suppliers + food truck pickup orders)
   registerSupplierMarketplaceRoutes(app);
@@ -203,7 +196,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Online menus + pickup ordering
   registerMenuRoutes(app);
   registerPickupOrderRoutes(app);
-  registerHiringRoutes(app, { hasBusinessDistributionAccess });
+  registerHiringRoutes(app, { hasCompleteProfileAccess });
 
   // Admin API endpoints
   registerAdminManagementRoutes(app);

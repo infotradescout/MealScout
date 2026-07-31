@@ -293,7 +293,7 @@ export default function ProfilePage() {
       badge: null,
       href: "/settings?tab=account",
     },
-    // Only show Payment Methods for restaurant owners who need subscription billing
+    // Payment methods are only for separate orders, bookings, and transactions.
     ...(user?.userType === "restaurant_owner"
       ? [
           {

@@ -11,7 +11,6 @@ const creditService = read("server/creditService.ts");
 const financialAccess = read("server/businessFinancialAccess.ts");
 const actionRoutes = read("server/routes/actionRoutes.ts");
 const stripeWebhookRoutes = read("server/routes/stripeWebhookRoutes.ts");
-const subscriptionRoutes = read("server/routes/subscriptionRoutes.ts");
 
 // The unfinished settlement flow must not be represented as a usable owner
 // control or promise weekly Stripe payments.
@@ -91,9 +90,5 @@ assert.match(
   /creditAppliedCents \/ 100,[\s\S]*externalValueAlreadyCommitted: true/,
 );
 assert.ok(!stripeWebhookRoutes.includes("Math.min(\n                    creditAppliedCents"));
-assert.match(
-  subscriptionRoutes,
-  /"subscription_credit",[\s\S]*externalValueAlreadyCommitted: true/,
-);
 
 console.log("mealscout-credit-redemption-safety.contract: PASS");

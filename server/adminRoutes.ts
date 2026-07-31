@@ -933,99 +933,12 @@ router.get("/health", isAdmin, async (req, res) => {
   }
 });
 
-/**
- * POST /api/admin/grant-lifetime-access
- * Grant lifetime Premium access to a restaurant (no billing, forever)
- */
+/** Retired route kept so old admin clients fail safely. */
 router.post("/grant-lifetime-access", isAdmin, async (req, res) => {
-  try {
-    const adminUserId = (req as any).user.id;
-    const { restaurantId, reason } = req.body;
-
-    if (!restaurantId) {
-      return res.status(400).json({ message: "Restaurant ID required" });
-    }
-
-    // Verify restaurant exists
-    const { restaurants, restaurantSubscriptions } =
-      await import("@shared/schema");
-    const restaurant = await db
-      .select()
-      .from(restaurants)
-      .where(eq(restaurants.id, restaurantId))
-      .limit(1);
-
-    if (!restaurant.length) {
-      return res.status(404).json({ message: "Restaurant not found" });
-    }
-
-    // Check if subscription exists
-    const existingSubscription = await db
-      .select()
-      .from(restaurantSubscriptions)
-      .where(eq(restaurantSubscriptions.restaurantId, restaurantId))
-      .limit(1);
-
-    if (existingSubscription.length > 0) {
-      // Update existing subscription to lifetime Premium
-      await db
-        .update(restaurantSubscriptions)
-        .set({
-          tier: "premium",
-          status: "active",
-          isLifetimeFree: true,
-          lifetimeGrantedBy: adminUserId,
-          lifetimeGrantedAt: new Date(),
-          lifetimeReason: reason || "Admin granted lifetime access",
-          canPostVideos: true,
-          canPostDeals: true,
-          canUseFeaturedSlots: true,
-          maxFeaturedSlots: 3,
-          hasAnalytics: true,
-          hasDealScheduling: true,
-          canceledAt: null,
-          updatedAt: new Date(),
-        })
-        .where(eq(restaurantSubscriptions.id, existingSubscription[0].id));
-    } else {
-      // Create new lifetime Premium subscription
-      await db.insert(restaurantSubscriptions).values({
-        restaurantId,
-        tier: "premium",
-        status: "active",
-        isLifetimeFree: true,
-        lifetimeGrantedBy: adminUserId,
-        lifetimeGrantedAt: new Date(),
-        lifetimeReason: reason || "Admin granted lifetime access",
-        canPostVideos: true,
-        canPostDeals: true,
-        canUseFeaturedSlots: true,
-        maxFeaturedSlots: 3,
-        hasAnalytics: true,
-        hasDealScheduling: true,
-      });
-    }
-
-    // Log action
-    await logAudit(
-      adminUserId,
-      "grant_lifetime_access",
-      "restaurant_subscription",
-      restaurantId,
-      "",
-      "",
-      { reason },
-    );
-
-    res.json({
-      message: "Lifetime Premium access granted successfully",
-      restaurantId,
-      restaurantName: restaurant[0].name,
-    });
-  } catch (error) {
-    console.error("Error granting lifetime access:", error);
-    res.status(500).json({ message: "Failed to grant lifetime access" });
-  }
+  return res.status(410).json({
+    message:
+      "Tiered profile access is retired. Every business profile already has the complete free trial.",
+  });
 });
 
 // Manual user onboarding - create any user type and send setup invite
@@ -1440,63 +1353,15 @@ router.get("/lifetime-restaurants", isAdmin, async (req, res) => {
   }
 });
 
-/**
- * DELETE /api/admin/revoke-lifetime-access/:restaurantId
- * Revoke lifetime access and revert to free tier
- */
+/** Retired route kept so old admin clients cannot revoke profile tools. */
 router.delete(
   "/revoke-lifetime-access/:restaurantId",
   isAdmin,
   async (req, res) => {
-    try {
-      const adminUserId = (req as any).user.id;
-      const { restaurantId } = req.params;
-      const { restaurantSubscriptions } = await import("@shared/schema");
-
-      const subscription = await db
-        .select()
-        .from(restaurantSubscriptions)
-        .where(eq(restaurantSubscriptions.restaurantId, restaurantId))
-        .limit(1);
-
-      if (!subscription.length) {
-        return res.status(404).json({ message: "Subscription not found" });
-      }
-
-      // Revert to free tier
-      await db
-        .update(restaurantSubscriptions)
-        .set({
-          tier: "free",
-          isLifetimeFree: false,
-          lifetimeGrantedBy: null,
-          lifetimeGrantedAt: null,
-          lifetimeReason: null,
-          canPostDeals: false,
-          canUseFeaturedSlots: false,
-          maxFeaturedSlots: 0,
-          hasAnalytics: false,
-          hasDealScheduling: false,
-          updatedAt: new Date(),
-        })
-        .where(eq(restaurantSubscriptions.id, subscription[0].id));
-
-      // Log action
-      await logAudit(
-        adminUserId,
-        "revoke_lifetime_access",
-        "restaurant_subscription",
-        restaurantId,
-        "",
-        "",
-        {},
-      );
-
-      res.json({ message: "Lifetime access revoked successfully" });
-    } catch (error) {
-      console.error("Error revoking lifetime access:", error);
-      res.status(500).json({ message: "Failed to revoke lifetime access" });
-    }
+    return res.status(410).json({
+      message:
+        "Tiered profile access is retired. Complete profile tools cannot be revoked by a billing action.",
+    });
   },
 );
 

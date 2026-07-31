@@ -59,7 +59,7 @@ const PRIVACY_POLICY_HTML = `<!DOCTYPE html>
     <ul>
       <li>Provide, maintain, and improve our Service</li>
       <li>Provide location-based deal recommendations</li>
-      <li>Process subscription payments and billing</li>
+      <li>Process orders, bookings, delivery charges, payouts, and other paid transactions</li>
       <li>Enable real-time food truck tracking</li>
       <li>Verify business credentials and documents</li>
       <li>Send important service communications and updates</li>

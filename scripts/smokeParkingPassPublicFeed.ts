@@ -66,7 +66,7 @@ const run = async () => {
   });
 
   registerEventRoutes(app, {
-    hasBusinessDistributionAccess: async () => true,
+    hasCompleteProfileAccess: async () => true,
     parkingPassFeedBuilder: async () => [
       parkingPassRow({
         id: "deleted-host",

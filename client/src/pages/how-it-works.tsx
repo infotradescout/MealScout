@@ -100,7 +100,7 @@ export default function HowItWorks() {
         "Search and book parking pass locations",
         "Manage your schedule and live location",
         "Share your profile with one tap",
-        "Optional premium tools when you want them"
+        "Complete profile tools with no monthly bill"
       ],
       cta: { label: "Go to Parking Pass", href: "/parking-pass" }
     },
@@ -124,7 +124,7 @@ export default function HowItWorks() {
         "Publish your profile, deals, and specials",
         "Track performance and engagement",
         "Keep your info accurate for locals",
-        "Cancel or rejoin monthly any time"
+        "Free trial with no expiration or card"
       ],
       cta: { label: "Business dashboard", href: "/dashboard" }
     },
@@ -301,7 +301,6 @@ export default function HowItWorks() {
     </div>
   );
 }
-
 
 
 

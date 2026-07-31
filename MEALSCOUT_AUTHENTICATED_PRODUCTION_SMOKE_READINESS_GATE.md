@@ -13,7 +13,7 @@ Authenticated production smoke is BLOCKED until every high-risk blocker in this 
 - `MEALSCOUT_PUBLIC_AUTH_ROUTE_BOUNDARY_AUDIT.md`
 - `scripts/productionReadinessGate.mjs`
 - `scripts/preLaunchGate.mjs`
-- `scripts/smokeOrderingSubscriptionAccess.mjs`
+- `scripts/smokeOrderingProfileAccess.mjs`
 - `scripts/smokeParkingPassStripeFlow.ts`
 - `scripts/testParkingPassWebhookReplay.ts`
 - `scripts/testAdminManualProvisioning.ts`
@@ -59,8 +59,8 @@ Authenticated owner/business readiness inputs:
 - `SMOKE_BASE_URL`
 - `SMOKE_ORIGIN`
 - `ORDERING_OWNER_COOKIE` or `ORDERING_OWNER_EMAIL` and `ORDERING_OWNER_PASSWORD`
-- `ORDERING_SUBSCRIBED_RESTAURANT_ID`
-- `ORDERING_UNSUBSCRIBED_RESTAURANT_ID`
+- `ORDERING_OWNED_RESTAURANT_ID`
+- `ORDERING_UNOWNED_RESTAURANT_ID`
 
 Admin/staff readiness inputs:
 
@@ -122,7 +122,7 @@ Owner/business smoke readiness evidence must prove:
 
 - Approved smoke owner account id, smoke business/profile ids, and smoke markers are present.
 - Smoke business/profile is excluded from public discovery/maps/search before any owner smoke runs.
-- Ordering access checks use known fixture ids for subscribed and unsubscribed states.
+- Ordering access checks use known fixture ids for owned and unowned states.
 - Owner dashboard/profile/menu/schedule checks are read-only unless an approved reset/cleanup dry-run exists.
 - No profile, menu, schedule, image upload, order, payout, or subscription state is mutated.
 - External send count is zero.

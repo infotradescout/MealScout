@@ -240,7 +240,7 @@ export const aboutFeatureGroups: AboutFeatureGroup[] = [
     items: [
       "Overview, profile, menu, schedule, media, deals, orders, and audience modules",
       "Business-specific team invitations and permission boundaries",
-      "Payments, audience insights, settings, and subscriptions where applicable",
+      "Profile access, transaction payments, audience insights, and settings",
       "Profile-completion and source-quality guidance",
       "Food-truck claim intake plus owner review and handoff for existing profiles",
       "One account can participate in more than one business without sharing every permission",

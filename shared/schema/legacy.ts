@@ -229,7 +229,7 @@ export const restaurants = pgTable("restaurants", {
   goldenPlateEarnedAt: timestamp("golden_plate_earned_at"),
   goldenPlateCount: integer("golden_plate_count").default(0), // Total times awarded (permanent record)
   rankingScore: integer("ranking_score").default(0), // Calculated from recommendations, favorites, reviews, deal usage
-  // Pricing lock (IMMUTABLE RULE: $25/month if claimed before April 1, 2026)
+  // Legacy pricing audit fields. They no longer control profile access.
   lockedPriceCents: integer("locked_price_cents"), // Price is stored, never recalculated
   priceLockDate: timestamp("price_lock_date"), // When the price lock was applied
   priceLockReason: varchar("price_lock_reason"), // 'early_rollout' or other reason
@@ -4153,7 +4153,7 @@ export const restaurantSubscriptions = pgTable(
       .notNull()
       .references(() => restaurants.id, { onDelete: "cascade" }),
     tier: varchar("tier").notNull().default("free"), // 'free' | 'monthly' | 'quarterly' | 'yearly'
-    // Pricing (USD): Monthly only — $25/mo (was $50)
+    // Legacy recurring-billing fields retained for cancellation and audit only.
     status: varchar("status").notNull().default("active"), // 'active' | 'canceled' | 'past_due'
     priceCents: integer("price_cents").default(0),
     billingInterval: varchar("billing_interval").default("monthly"), // 'monthly' | 'quarterly' | 'yearly'

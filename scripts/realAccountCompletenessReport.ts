@@ -13,7 +13,7 @@ import { isTruckBusinessType } from "../shared/businessTypes";
  * This makes no application or database writes. It writes one local,
  * PII-minimized JSON report under backups/. It is the reporting half of the ~91
  * early-account audit lineage (see 596706fa and
- * scripts/backfillEarlyAccountTrials.ts) - it does not touch, decommission,
+ * the retired early-account cleanup) - it does not touch, decommission,
  * or flag any account for deletion. That is intentionally a separate,
  * higher-risk piece of work.
  *

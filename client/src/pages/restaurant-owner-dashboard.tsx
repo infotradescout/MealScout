@@ -397,7 +397,7 @@ export default function RestaurantOwnerDashboard() {
     enabled: !!user,
   });
 
-  const hasPremiumLocationTools = canManageParkingPass;
+  const hasProfileLocationTools = canManageParkingPass;
   const hasAnalyticsAccess = canViewAnalytics;
   // The routed Audience workspace owns served analytics. Keep the legacy query
   // definitions inert until their hidden JSX is removed in the cleanup pass.
@@ -1526,7 +1526,7 @@ export default function RestaurantOwnerDashboard() {
 
   // Start broadcasting handler
   const handleStartBroadcasting = () => {
-    if (!hasPremiumLocationTools) {
+    if (!hasProfileLocationTools) {
       toast({
         title: "Permission required",
         description: "This account cannot broadcast this truck's location.",
@@ -1586,7 +1586,7 @@ export default function RestaurantOwnerDashboard() {
 
   // Handle restaurant location update
   const handleUpdateRestaurantLocation = () => {
-    if (!hasPremiumLocationTools) {
+    if (!hasProfileLocationTools) {
       toast({
         title: "Permission required",
         description: "This account cannot update this business location.",
@@ -2105,9 +2105,9 @@ export default function RestaurantOwnerDashboard() {
           <Button
             size="sm"
             variant="outline"
-            data-testid="button-manage-subscription"
+            data-testid="button-profile-access"
           >
-            Plan
+            Profile access
           </Button>
         </Link>
       ) : null}
@@ -5104,7 +5104,7 @@ export default function RestaurantOwnerDashboard() {
                                 ) : (
                                   <Play className="mr-2 h-4 w-4" />
                                 )}
-                                {hasPremiumLocationTools
+                                {hasProfileLocationTools
                                   ? "Go live"
                                   : "Location permission required"}
                               </Button>
@@ -5234,7 +5234,7 @@ export default function RestaurantOwnerDashboard() {
                             ) : (
                               <RefreshCw className="mr-2 h-4 w-4" />
                             )}
-                            {hasPremiumLocationTools
+                            {hasProfileLocationTools
                               ? "Use current location"
                               : "Location permission required"}
                           </Button>

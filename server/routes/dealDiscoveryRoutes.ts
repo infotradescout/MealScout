@@ -23,7 +23,7 @@ type DealDiscoveryRouteDependencies = {
   filterDealsByBusinessAccess: <T extends { restaurantId?: string | null }>(
     dealRows: T[],
   ) => Promise<T[]>;
-  hasBusinessDistributionAccess: (userId: string) => Promise<boolean>;
+  hasCompleteProfileAccess: (userId: string) => Promise<boolean>;
 };
 
 const toSlug = (value: string | null | undefined) =>
@@ -45,7 +45,7 @@ export function registerDealDiscoveryRoutes(
   app: Express,
   {
     filterDealsByBusinessAccess,
-    hasBusinessDistributionAccess,
+    hasCompleteProfileAccess,
   }: DealDiscoveryRouteDependencies,
 ) {
   app.get("/api/deals/active", async (_req, res) => {
@@ -222,7 +222,7 @@ export function registerDealDiscoveryRoutes(
         Boolean(req.isAuthenticated?.()) &&
         String((req as any)?.user?.id || "") ===
           String((restaurant as any).ownerId || "");
-      const ownerHasAccess = await hasBusinessDistributionAccess(
+      const ownerHasAccess = await hasCompleteProfileAccess(
         String((restaurant as any).ownerId || ""),
       );
       if (!ownerHasAccess && !isOwnerViewing) {
@@ -364,7 +364,7 @@ export function registerDealDiscoveryRoutes(
         Boolean(req.isAuthenticated?.()) &&
         String((req as any)?.user?.id || "") ===
           String((restaurant as any).ownerId || "");
-      const ownerHasAccess = await hasBusinessDistributionAccess(
+      const ownerHasAccess = await hasCompleteProfileAccess(
         String((restaurant as any).ownerId || ""),
       );
       if (!ownerHasAccess && !isOwnerViewing) {

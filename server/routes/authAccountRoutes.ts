@@ -26,7 +26,6 @@ import {
   hosts,
   insertUserAddressSchema,
   restaurants,
-  restaurantSubscriptions,
   suppliers,
 } from "@shared/schema";
 import { resolveEffectiveLocationContext } from "../services/sessionLocationContext";
@@ -37,7 +36,7 @@ import {
 } from "../services/customProfileDomain";
 
 const FIRST_PARTNER_MESSAGE =
-  "As an appreciation of being our first MealScout Partner, 3D Eats now has lifetime free access to all paid features. Keep killin it.";
+  "As an appreciation of being our first MealScout Partner, 3D Eats is recognized as a founding partner. Your complete profile remains included. Keep killin it.";
 
 function isLikely3DEatsPartner(
   user: any,
@@ -65,7 +64,7 @@ function isLikely3DEatsPartner(
   return email.length > 0 && allowlistedEmails.includes(email);
 }
 
-async function ensureFirstPartnerLifetimeAccess(user: any) {
+async function ensureFirstPartnerRecognition(user: any) {
   if (!user?.id) return user;
   if (!["restaurant_owner", "food_truck"].includes(String(user.userType || ""))) {
     return user;
@@ -77,85 +76,6 @@ async function ensureFirstPartnerLifetimeAccess(user: any) {
   }
 
   const now = new Date();
-  for (const restaurant of ownedRestaurants as any[]) {
-    const restaurantId = String(restaurant?.id || "").trim();
-    if (!restaurantId) continue;
-
-    const [existing] = await db
-      .select({
-        id: restaurantSubscriptions.id,
-        tier: restaurantSubscriptions.tier,
-        status: restaurantSubscriptions.status,
-        isLifetimeFree: restaurantSubscriptions.isLifetimeFree,
-        lifetimeGrantedBy: restaurantSubscriptions.lifetimeGrantedBy,
-        lifetimeReason: restaurantSubscriptions.lifetimeReason,
-        canPostVideos: restaurantSubscriptions.canPostVideos,
-        canPostDeals: restaurantSubscriptions.canPostDeals,
-        canUseFeaturedSlots: restaurantSubscriptions.canUseFeaturedSlots,
-        maxFeaturedSlots: restaurantSubscriptions.maxFeaturedSlots,
-        hasAnalytics: restaurantSubscriptions.hasAnalytics,
-        hasDealScheduling: restaurantSubscriptions.hasDealScheduling,
-        canceledAt: restaurantSubscriptions.canceledAt,
-      })
-      .from(restaurantSubscriptions)
-      .where(eq(restaurantSubscriptions.restaurantId, restaurantId))
-      .limit(1);
-
-    if (existing) {
-      const alreadyGranted =
-        existing.tier === "premium" &&
-        existing.status === "active" &&
-        existing.isLifetimeFree === true &&
-        existing.lifetimeGrantedBy === "system:first-partner" &&
-        existing.lifetimeReason === "First MealScout Partner - 3D Eats" &&
-        existing.canPostVideos === true &&
-        existing.canPostDeals === true &&
-        existing.canUseFeaturedSlots === true &&
-        existing.maxFeaturedSlots === 3 &&
-        existing.hasAnalytics === true &&
-        existing.hasDealScheduling === true &&
-        existing.canceledAt == null;
-
-      if (!alreadyGranted) {
-        await db
-          .update(restaurantSubscriptions)
-          .set({
-            tier: "premium",
-            status: "active",
-            isLifetimeFree: true,
-            lifetimeGrantedBy: "system:first-partner",
-            lifetimeGrantedAt: now,
-            lifetimeReason: "First MealScout Partner - 3D Eats",
-            canPostVideos: true,
-            canPostDeals: true,
-            canUseFeaturedSlots: true,
-            maxFeaturedSlots: 3,
-            hasAnalytics: true,
-            hasDealScheduling: true,
-            canceledAt: null,
-            updatedAt: now,
-          })
-          .where(eq(restaurantSubscriptions.id, existing.id));
-      }
-    } else {
-      await db.insert(restaurantSubscriptions).values({
-        restaurantId,
-        tier: "premium",
-        status: "active",
-        isLifetimeFree: true,
-        lifetimeGrantedBy: "system:first-partner",
-        lifetimeGrantedAt: now,
-        lifetimeReason: "First MealScout Partner - 3D Eats",
-        canPostVideos: true,
-        canPostDeals: true,
-        canUseFeaturedSlots: true,
-        maxFeaturedSlots: 3,
-        hasAnalytics: true,
-        hasDealScheduling: true,
-      });
-    }
-  }
-
   const currentSettings =
     user?.accountSettings && typeof user.accountSettings === "object"
       ? { ...(user.accountSettings as any) }
@@ -167,8 +87,8 @@ async function ensureFirstPartnerLifetimeAccess(user: any) {
   const partnerProgram = {
     ...existingPartnerProgram,
     partnerKey: "3d-eats",
-    lifetimeFreeAccess: true,
-    lifetimeGrantedAt: existingPartnerProgram.lifetimeGrantedAt || now.toISOString(),
+    foundingPartner: true,
+    recognizedAt: existingPartnerProgram.recognizedAt || now.toISOString(),
     loginAnnouncement: shouldQueueAnnouncement
       ? {
           message: FIRST_PARTNER_MESSAGE,
@@ -351,7 +271,7 @@ export function registerAuthAccountRoutes(app: Express) {
         }
       }
 
-      user = await ensureFirstPartnerLifetimeAccess(user);
+      user = await ensureFirstPartnerRecognition(user);
 
       authLog("auth_user_authenticated", {
         userId: user.id,

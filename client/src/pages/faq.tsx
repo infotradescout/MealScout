@@ -148,8 +148,8 @@ export default function FAQ() {
           answer: "Your profile is a mini website: photos, menu highlights, deals, contact info, and visibility in local search."
         },
         {
-          question: "How do subscriptions work?",
-          answer: "Monthly access unlocks premium tools. You can cancel anytime with one tap."
+          question: "What does the free trial include?",
+          answer: "The complete business profile and its tools are included. The trial has no expiration, requires no card, and never becomes a monthly bill."
         },
         {
           question: "Can I post deals and promotions?",
@@ -302,7 +302,6 @@ export default function FAQ() {
     </div>
   );
 }
-
 
 
 

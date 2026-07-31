@@ -51,7 +51,7 @@ No route should be removed in the first implementation slice. Legacy retirement 
 | Event coordinator | Scout, Events, Requests, Dashboard, Share, More |
 | Supplier | Scout, Orders, Products, Dashboard, Share, More |
 
-- The More sheet exposes additional persona-specific tools, including profile, reports, subscription, suppliers, events, host venue, and administrative destinations.
+- The More sheet exposes additional persona-specific tools, including profile access, reports, suppliers, events, host venue, and administrative destinations.
 - This is a confirmed IA problem: consumer media and business operations compete at the same global-navigation level, and operator tools are distributed between primary slots, More, `/dashboard`, and persona-specific dashboard routes.
 
 ### Consumer surfaces
@@ -266,7 +266,7 @@ The workspace is scoped to one selected business identity. Identity selection, c
 | Orders/bookings/requests | Persona-specific work queue; not one generic data model |
 | Audience/analytics | Existing views, actions, attribution, deal/profile outcomes without vanity-dashboard overload |
 | Team | Members, invites, permissions |
-| Payments | Existing Stripe/subscription/payout state and supported actions |
+| Payments | Profile access, transaction-payment setup, payout state, and supported actions |
 | Settings | Business-level settings, attribution, integrations, support links; account settings remain separate |
 
 ### Capability matrix
@@ -517,7 +517,7 @@ Evidence codes: **R** routed in `App.tsx`; **N** current navigation/reference co
 | `/business-team/accept` | BusinessTeamAcceptPage | Invite acceptance | Auth/onboarding utility | Keep standalone | R | High |
 | `/affiliate/earnings` | AffiliateEarnings | Referral earnings | Workspace/Account: Attribution | Move into appropriate shell | R,O | High |
 | `/share-hub` | ShareHubPage | Referral sharing | Contextual share/attribution utility | Remove from primary nav; keep URL | R,N | Medium |
-| `/subscribe` | Subscribe | Subscription | Workspace/Account: Plan | Move into Payments/Plan; preserve URL | R,N | Critical |
+| `/subscribe` | Profile access | Non-expiring free trial | Workspace: Profile access | Preserve URL for compatibility; no recurring checkout | R,N | Critical |
 | `/profile` | Profile | User identity | Account | Keep | R,N | High |
 | `/profile/settings` | SettingsPage | Account and mixed business settings | Account settings; move business gallery/domain controls to workspace | Repair/split by ownership | R,O | High |
 | `/settings` | SettingsPage | Settings alias | `/profile/settings` | Redirect after deep-link audit | R,A | Medium |
@@ -633,7 +633,7 @@ Evidence codes: **R** routed in `App.tsx`; **N** current navigation/reference co
 ### Move
 
 - Video, Events, and Deals out of permanent consumer primary navigation and into Scout/supporting collections.
-- Menu Builder, Deal editors, Team, Subscription, Affiliate, and supply orders into the business workspace shell while preserving URLs.
+- Menu Builder, Deal editors, Team, Profile access, Affiliate, and supply orders into the business workspace shell while preserving URLs.
 - Truck Discovery into truck Opportunities/Work.
 - Static Profile Setup copy into honestly named business marketing content.
 
@@ -731,7 +731,7 @@ The first slice should not modify currently dirty `client/src/pages/public-profi
 
 1. A guest can open Welcome, scout, search, view a profile, and log in using the same routes and APIs as before.
 2. A diner can Scout, open Saved, and open Account from mobile and desktop navigation.
-3. A restaurant owner lands in the correct workspace and can still reach Orders, Kitchen, Menu, Profile, Hours, Media, Team, Subscription, and Scout.
+3. A restaurant owner lands in the correct workspace and can still reach Orders, Kitchen, Menu, Profile, Hours, Media, Team, Profile access, and Scout.
 4. A food-truck owner can still reach schedule/parking, live tools, orders, kitchen, events/opportunities, and Scout.
 5. Hosts, suppliers, and event coordinators resolve to their current dashboards and work queues through the new shell.
 6. Multi-role precedence is covered by tests and does not silently hide the secondary host/business identity.
@@ -788,7 +788,7 @@ Stop the relevant migration slice if any of the following occurs:
 4. A new shell prevents access to an existing operational tool for any supported persona.
 5. Truck live/scheduled/stale states cannot be reproduced deterministically in tests.
 6. Media ownership, approval, or post-refresh persistence differs from current server truth.
-7. Checkout, booking, subscription, payout, or claim behavior changes as a side effect of visual work.
+7. Checkout, booking, profile-access, payout, or claim behavior changes as a side effect of visual work.
 8. The slice cannot be rolled back independently from unrelated product changes.
 
 ---

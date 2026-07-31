@@ -9,7 +9,7 @@ This audit is the cleanup authority for admin role display and role-sensitive ad
 - `shared/schema.ts` exports the schema modules; `shared/schema/legacy.ts` defines `users.userType` as `user_type` with default `customer`.
 - `server/roleAccess.ts` defines the canonical assignable user type allow-list.
 - `server/unifiedAuth.ts` maps OAuth, registration, redirects, and middleware roles.
-- `server/routes/*` contains provisioning, admin, supplier, host, Parking Pass, and subscription gates.
+- `server/routes/*` contains provisioning, admin, supplier, host, Parking Pass, profile-access, and operational-readiness checks.
 - `client/src/pages/admin-dashboard.tsx` renders admin user cards, role dropdowns, business attachment state, affiliate links, provisioning controls, and Parking Pass admin controls.
 - `client/src/hooks/useAuth.ts` applies account/business continuation redirects.
 - `client/src/components/dashboard-switcher.tsx` exposes admin/operator dashboard lanes.
@@ -87,7 +87,7 @@ Rules:
 
 ## Parking Pass Access Boundary
 
-Parking Pass has its own booking, host, and management gates. Do not let unrelated business setup or subscription gates block access that is intended to remain free.
+Parking Pass has its own booking, host, and management checks. Do not let unrelated setup checks block complete profile access.
 
 Guarded behavior:
 

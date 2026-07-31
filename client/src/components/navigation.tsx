@@ -421,7 +421,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
         { path: "/suppliers", icon: Truck, label: "Suppliers" },
         { path: "/business-team", icon: Users, label: "Team" },
         { path: "/share-hub", icon: Share2, label: "Share" },
-        { path: "/subscribe", icon: BarChart3, label: "Subscription" },
+        { path: "/subscribe", icon: BarChart3, label: "Profile access" },
         {
           path: "/restaurant-owner-dashboard",
           icon: BarChart3,
@@ -457,7 +457,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
         { path: "/suppliers", icon: Truck, label: "Suppliers" },
         { path: "/business-team", icon: Users, label: "Team" },
         { path: "/share-hub", icon: Share2, label: "Share" },
-        { path: "/subscribe", icon: BarChart3, label: "Subscription" },
+        { path: "/subscribe", icon: BarChart3, label: "Profile access" },
         {
           path: "/restaurant-owner-dashboard",
           icon: BarChart3,
@@ -888,4 +888,3 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
     </>
   );
 }
-

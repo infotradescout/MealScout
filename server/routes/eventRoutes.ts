@@ -154,7 +154,7 @@ export const sanitizeParkingPassPublicFeedRows = (events: any[]) =>
   );
 
 type EventRouteDependencies = {
-  hasBusinessDistributionAccess: (userId: string) => Promise<boolean>;
+  hasCompleteProfileAccess: (userId: string) => Promise<boolean>;
   parkingPassFeedBuilder?: () => Promise<any[]>;
 };
 
@@ -162,7 +162,7 @@ export function registerEventRoutes(
   app: Express,
   dependencies: EventRouteDependencies,
 ) {
-  const { hasBusinessDistributionAccess } = dependencies;
+  const { hasCompleteProfileAccess } = dependencies;
   const parkingPassFeedLimiter = distributedRateLimit({
     scope: "parking-pass-feed",
     limit: 120,
@@ -788,10 +788,10 @@ export function registerEventRoutes(
   // Truck Discovery (authenticated)
   app.get("/api/events", isAuthenticated, async (req: any, res) => {
     try {
-      const hasAccess = await hasBusinessDistributionAccess(req.user.id);
+      const hasAccess = await hasCompleteProfileAccess(req.user.id);
       if (!hasAccess) {
         return res.status(402).json({
-          message: "Premium subscription required for event access.",
+          message: "Profile access could not be verified for event tools.",
         });
       }
 
@@ -2086,10 +2086,10 @@ export function registerEventRoutes(
     isRestaurantOwner,
     async (req: any, res) => {
       try {
-        const hasAccess = await hasBusinessDistributionAccess(req.user.id);
+        const hasAccess = await hasCompleteProfileAccess(req.user.id);
         if (!hasAccess) {
           return res.status(402).json({
-            message: "Premium subscription required for event access.",
+            message: "Profile access could not be verified for event tools.",
           });
         }
 

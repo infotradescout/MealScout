@@ -19,7 +19,7 @@ import {
 } from "@shared/schema";
 
 type HiringRouteDependencies = {
-  hasBusinessDistributionAccess: (userId: string) => Promise<boolean>;
+  hasCompleteProfileAccess: (userId: string) => Promise<boolean>;
 };
 
 const moneyToCents = (value: unknown) => {
@@ -137,7 +137,7 @@ async function assertRestaurantAccess(restaurantId: string, userId: string) {
 
 export function registerHiringRoutes(
   app: Express,
-  { hasBusinessDistributionAccess }: HiringRouteDependencies,
+  { hasCompleteProfileAccess }: HiringRouteDependencies,
 ) {
   app.get("/api/hiring/jobs", async (req, res) => {
     try {
@@ -238,7 +238,7 @@ export function registerHiringRoutes(
 
       const visibleRows = [];
       for (const row of rows) {
-        if (await hasBusinessDistributionAccess(String(row.ownerId || ""))) {
+        if (await hasCompleteProfileAccess(String(row.ownerId || ""))) {
           const { ownerId: _ownerId, ...publicRow } = row;
           visibleRows.push(publicRow);
         }
@@ -577,7 +577,7 @@ export function registerHiringRoutes(
         )
         .limit(1);
       if (!chef) return res.status(404).json({ message: "Private chef not found" });
-      const hasAccess = await hasBusinessDistributionAccess(
+      const hasAccess = await hasCompleteProfileAccess(
         String(chef.ownerId || ""),
       );
       if (!hasAccess) {

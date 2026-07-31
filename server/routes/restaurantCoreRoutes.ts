@@ -88,7 +88,7 @@ type AnalyticsAccessResult = {
 };
 
 type RestaurantCoreRouteDependencies = {
-  validateAnalyticsAccess: (userId: string) => Promise<AnalyticsAccessResult>;
+  validateProfileAnalyticsAccess: (userId: string) => Promise<AnalyticsAccessResult>;
 };
 
 const ENGAGEMENT_ACTION_COOLDOWN_MS = 3000;
@@ -114,7 +114,7 @@ const consumeEngagementWindow = (key: string) => {
 
 export function registerRestaurantCoreRoutes(
   app: Express,
-  { validateAnalyticsAccess }: RestaurantCoreRouteDependencies,
+  { validateProfileAnalyticsAccess }: RestaurantCoreRouteDependencies,
 ) {
   const trackEngagement = async (
     eventName: string,
@@ -1780,7 +1780,7 @@ export function registerRestaurantCoreRoutes(
           });
         }
 
-        const analyticsAccess = await validateAnalyticsAccess(userId);
+        const analyticsAccess = await validateProfileAnalyticsAccess(userId);
         if (!analyticsAccess.hasAccess) {
           return res.status(402).json({
             message: analyticsAccess.error,
@@ -1832,7 +1832,7 @@ export function registerRestaurantCoreRoutes(
           });
         }
 
-        const analyticsAccess = await validateAnalyticsAccess(userId);
+        const analyticsAccess = await validateProfileAnalyticsAccess(userId);
         if (!analyticsAccess.hasAccess) {
           return res.status(402).json({
             message: analyticsAccess.error,

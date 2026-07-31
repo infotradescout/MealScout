@@ -1,10 +1,9 @@
-import { eq, and, isNull, lt, gte } from "drizzle-orm";
+import { eq, and, isNull, isNotNull, lt, gte } from "drizzle-orm";
 import { db } from "./db";
 import { timingSafeEqual } from "crypto";
 import { 
   videoStories, 
   featuredVideoSlots, 
-  restaurantSubscriptions,
   storyLikes,
   storyViews,
 } from "../shared/schema";
@@ -12,13 +11,13 @@ import {
 /**
  * Fair Video Cycling Algorithm
  * 
- * Each restaurant gets 3 featured slots (if Premium tier) or 1 slot (if Basic tier)
+ * Each eligible profile can use the same fair three-slot rotation.
  * Daily, we rotate which videos occupy those slots based on engagement score:
  * 
  * engagement_score = (likes / impressions) * 100
  * 
  * Process:
- * 1. Find all restaurants with active subscriptions
+ * 1. Find all profiles with an eligible video
  * 2. For each restaurant, get all eligible videos (not expired, not featured yet today)
  * 3. Score each video by engagement
  * 4. Fill empty slots with highest-scoring videos
@@ -89,39 +88,42 @@ async function cycleFeaturedVideos() {
   console.log("[CRON] Starting featured video cycling...");
 
   try {
-    // Get all restaurants with active subscriptions
-    const subscriptions = await db
-      .select({
-        restaurantId: restaurantSubscriptions.restaurantId,
-        tier: restaurantSubscriptions.tier,
-        maxFeaturedSlots: restaurantSubscriptions.maxFeaturedSlots,
-      })
-      .from(restaurantSubscriptions)
-      .where(eq(restaurantSubscriptions.status, "active"));
+    const eligibleProfiles = await db
+      .selectDistinct({ restaurantId: videoStories.restaurantId })
+      .from(videoStories)
+      .where(
+        and(
+          isNotNull(videoStories.restaurantId),
+          eq(videoStories.status, "ready"),
+          isNull(videoStories.deletedAt),
+          gte(videoStories.expiresAt, new Date()),
+        ),
+      );
 
-    console.log(`[CRON] Found ${subscriptions.length} active restaurant subscriptions`);
+    console.log(`[CRON] Found ${eligibleProfiles.length} profiles with eligible videos`);
 
-    for (const sub of subscriptions) {
-      // Free tier: no featured slots
-      if (sub.maxFeaturedSlots === 0) continue;
+    for (const profile of eligibleProfiles) {
+      const restaurantId = String(profile.restaurantId || "").trim();
+      if (!restaurantId) continue;
+      const maxFeaturedSlots = 3;
 
       console.log(
-        `[CRON] Cycling featured videos for restaurant ${sub.restaurantId} (${sub.tier} tier, ${sub.maxFeaturedSlots} slots)`
+        `[CRON] Cycling featured videos for profile ${restaurantId} (${maxFeaturedSlots} slots)`
       );
 
       // Get all slots for this restaurant
       const slots = await db
         .select()
         .from(featuredVideoSlots)
-        .where(eq(featuredVideoSlots.restaurantId, sub.restaurantId))
+        .where(eq(featuredVideoSlots.restaurantId, restaurantId))
         .orderBy(featuredVideoSlots.slotNumber);
 
       // Ensure we have the right number of slots
-      if (slots.length < sub.maxFeaturedSlots) {
+      if (slots.length < maxFeaturedSlots) {
         // Create missing slots
-        for (let i = slots.length + 1; i <= sub.maxFeaturedSlots; i++) {
+        for (let i = slots.length + 1; i <= maxFeaturedSlots; i++) {
           await db.insert(featuredVideoSlots).values({
-            restaurantId: sub.restaurantId,
+            restaurantId,
             slotNumber: i,
             currentVideoId: null,
             cycleStartDate: new Date(),
@@ -135,14 +137,14 @@ async function cycleFeaturedVideos() {
       }
 
       // Score available videos
-      const scoredVideos = await scoreVideosByEngagement(sub.restaurantId);
+      const scoredVideos = await scoreVideosByEngagement(restaurantId);
       console.log(
         `[CRON] Found ${scoredVideos.length} eligible videos for rotation`
       );
 
       // Fill slots with highest-scoring videos
       let videoIndex = 0;
-      for (let i = 0; i < Math.min(slots.length, sub.maxFeaturedSlots); i++) {
+      for (let i = 0; i < Math.min(slots.length, maxFeaturedSlots); i++) {
         const slot = slots[i];
 
         // Skip if video is still within its 24hr featured period

@@ -33,7 +33,6 @@ import {
   pickupOrderItems,
   orderNotifications,
   restaurants,
-  restaurantSubscriptions,
   telemetryEvents,
   ORDER_STATUS,
   LISA_CLAIM_TYPES,
@@ -45,10 +44,6 @@ import {
   type MenuItemVariant,
   type MenuItemModifier,
 } from "@shared/schema";
-import {
-  isPremiumTrialActive,
-  ensurePremiumTrialForUser,
-} from "../services/premiumTrial";
 import { eq, and, desc, inArray } from "drizzle-orm";
 import { isAuthenticated } from "../unifiedAuth";
 import { isAdminUserType } from "../roleAccess";
@@ -177,82 +172,6 @@ async function assertCanManageRestaurantOrders(user: any, restaurantId: string) 
 
 async function assertOrderingWorkspaceAccess(user: any, restaurantId: string) {
   await assertCanManageRestaurantOrders(user, restaurantId);
-  if (!isAdminUserType(user?.userType)) {
-    await assertHasOrderingSubscription(user.id, restaurantId);
-  }
-}
-
-// ── Subscription gate ─────────────────────────────────────────────────────────
-/**
- * Throws 403 if the user (restaurant owner) does not have an active ordering
- * subscription. Access hierarchy: trial → lifetime → active monthly subscription.
- */
-async function assertHasOrderingSubscription(
-  userId: string,
-  restaurantId?: string,
-) {
-  const user = await storage.getUser(userId);
-  if (!user)
-    throw Object.assign(new Error("User not found"), { statusCode: 401 });
-
-  // 1. Trial access
-  const hydratedUser = await ensurePremiumTrialForUser(user);
-  if (isPremiumTrialActive(hydratedUser)) return;
-
-  // 2. Lifetime or active subscription via restaurantSubscriptions table
-  const restaurants_ = await storage.getRestaurantsByOwner(userId);
-  const restaurantIds = restaurantId
-    ? restaurants_.filter((r) => r.id === restaurantId).map((r) => r.id)
-    : restaurants_.map((r) => r.id);
-  if (restaurantIds.length > 0) {
-    const [sub] = await db
-      .select({ id: restaurantSubscriptions.id, isLifetimeFree: restaurantSubscriptions.isLifetimeFree })
-      .from(restaurantSubscriptions)
-      .where(
-        and(
-          inArray(restaurantSubscriptions.restaurantId, restaurantIds),
-          eq(restaurantSubscriptions.status, "active"),
-        ),
-      )
-      .limit(1);
-    if (sub) return; // covers both lifetime (isLifetimeFree=true) and active paid subscriptions
-  }
-
-  // 3. Stripe subscription check as final fallback
-  if (stripe && hydratedUser?.stripeSubscriptionId) {
-    try {
-      const stripeSub = await stripe.subscriptions.retrieve(
-        hydratedUser.stripeSubscriptionId,
-      );
-      if (stripeSub?.status === "active") return;
-    } catch {
-      // fall through to denial
-    }
-  }
-
-  try {
-    await db.insert(telemetryEvents).values({
-      eventName: "ordering_subscription_denied",
-      userId,
-      properties: {
-        restaurantId: restaurantId ?? null,
-        userType: user.userType ?? null,
-        reason: "subscription_inactive",
-      },
-    });
-  } catch (telemetryError) {
-    console.warn(
-      "[pickupOrderRoutes] Failed to record telemetry event",
-      telemetryError,
-    );
-  }
-
-  throw Object.assign(
-    new Error(
-      "Online ordering requires an active MealScout subscription ($25/mo). Visit your account settings to subscribe.",
-    ),
-    { statusCode: 403 },
-  );
 }
 
 // ── Calculate line total ──────────────────────────────────────────────────────
@@ -596,11 +515,6 @@ export function registerPickupOrderRoutes(app: Express) {
         deliveryEstimateMinutes = delivery.estimatedMinutes;
       }
       const totalCents = baseTotalCents + deliveryFeeCents;
-
-      // Verify this restaurant has an active ordering subscription
-      if (restaurant.ownerId) {
-        await assertHasOrderingSubscription(restaurant.ownerId, restaurant.id);
-      }
 
       // Insert order
       const [order] = await db

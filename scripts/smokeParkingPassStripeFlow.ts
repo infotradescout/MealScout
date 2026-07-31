@@ -1,4 +1,5 @@
 import "dotenv/config";
+import Stripe from "stripe";
 
 type JsonValue = string | number | boolean | null | JsonObject | JsonValue[];
 type JsonObject = { [key: string]: JsonValue };
@@ -78,6 +79,7 @@ async function run() {
     /\/+$/,
     "",
   );
+  const stripe = new Stripe(requireEnv("STRIPE_SECRET_KEY"));
   const PASS_ID = requireEnv("TEST_PARKING_PASS_ID");
   const TRUCK_ID = requireEnv("TEST_TRUCK_ID");
   const TRUCK_AUTH_COOKIE = requireEnv("TEST_TRUCK_AUTH_COOKIE");
@@ -178,7 +180,40 @@ async function run() {
   if (!paymentIntentId) {
     throw new Error(`Missing paymentIntentId in booking response: ${JSON.stringify(bookingRes.data)}`);
   }
+  const expectedTotalCents = Number(bookingData.totalCents);
+  const expectedPlatformFeeCents = Number(
+    asRecord(bookingData.breakdown).platformFee,
+  );
+  if (!Number.isFinite(expectedTotalCents) || expectedTotalCents <= 0) {
+    throw new Error(`Invalid totalCents in booking response: ${JSON.stringify(bookingRes.data)}`);
+  }
+  if (!Number.isFinite(expectedPlatformFeeCents) || expectedPlatformFeeCents < 0) {
+    throw new Error(`Invalid platform fee in booking response: ${JSON.stringify(bookingRes.data)}`);
+  }
+
+  const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+  if (paymentIntent.amount !== expectedTotalCents) {
+    throw new Error(
+      `PaymentIntent amount mismatch: intent=${paymentIntent.amount} expected=${expectedTotalCents}`,
+    );
+  }
+  if (Number(paymentIntent.metadata?.platformFeeCents || -1) !== expectedPlatformFeeCents) {
+    throw new Error(
+      `PaymentIntent fee metadata mismatch: intent=${paymentIntent.metadata?.platformFeeCents} expected=${expectedPlatformFeeCents}`,
+    );
+  }
+  if (
+    bookingData.hostPaymentsReady === true &&
+    Number(paymentIntent.application_fee_amount || 0) !== expectedPlatformFeeCents
+  ) {
+    throw new Error(
+      `Application fee mismatch: intent=${paymentIntent.application_fee_amount} expected=${expectedPlatformFeeCents}`,
+    );
+  }
   console.log(`Created booking checkout intent: ${paymentIntentId}`);
+  console.log(
+    `Verified booking amount=${expectedTotalCents} platformFee=${expectedPlatformFeeCents} hostPaymentsReady=${bookingData.hostPaymentsReady === true}`,
+  );
 
   const statusRes = await httpJson(
     `${API_BASE}/api/bookings/payment-intent/${encodeURIComponent(paymentIntentId)}?truckId=${encodeURIComponent(TRUCK_ID)}`,

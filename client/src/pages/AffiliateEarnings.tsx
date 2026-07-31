@@ -279,7 +279,7 @@ export default function AffiliateEarnings() {
       <div className="mb-8">
         <h1 className="text-3xl font-bold">Affiliate Dashboard</h1>
         <p className="text-[color:var(--text-muted)] mt-2">
-          Earn commissions when MealScout gets paid on subscriptions you refer.
+          Track links, signups, and eligible commissions from paid booking activity.
         </p>
       </div>
 
@@ -345,7 +345,7 @@ export default function AffiliateEarnings() {
               Request Cashout
             </Button>
             <p className="mt-2 text-xs text-[color:var(--status-success)]">
-              Cashouts are manual. You can also spend credits on bookings or monthly fees.
+              Cashouts are manual. You can also spend credits on eligible paid transactions.
             </p>
           </CardContent>
         </Card>
@@ -443,7 +443,7 @@ export default function AffiliateEarnings() {
                 <div>
                   <h4 className="font-medium">2. Someone Signs Up</h4>
                   <p className="text-sm text-[color:var(--text-muted)]">
-                    A restaurant owner clicks your link and becomes a paid subscriber
+                    A business owner clicks your link and creates or claims a profile
                   </p>
                 </div>
               </div>
@@ -453,9 +453,9 @@ export default function AffiliateEarnings() {
                   <DollarSign className="w-5 h-5 text-[color:var(--status-success)]" />
                 </div>
                 <div>
-                  <h4 className="font-medium">3. Earn Recurring Commissions</h4>
+                  <h4 className="font-medium">3. Earn Eligible Commissions</h4>
                   <p className="text-sm text-[color:var(--text-muted)]">
-                    Get 10% of their subscription value every month they stay active
+                    Eligible paid booking fees credited to your referral appear in your ledger
                   </p>
                 </div>
               </div>
@@ -512,7 +512,7 @@ export default function AffiliateEarnings() {
           <Card>
             <CardHeader>
               <CardTitle>Commission History</CardTitle>
-              <CardDescription>Detailed breakdown of your monthly earnings</CardDescription>
+              <CardDescription>Detailed breakdown of recorded earnings</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="overflow-x-auto">
@@ -521,7 +521,7 @@ export default function AffiliateEarnings() {
                     <TableRow>
                       <TableHead>Month</TableHead>
                       <TableHead>Restaurant</TableHead>
-                      <TableHead>Subscription</TableHead>
+                      <TableHead>Source</TableHead>
                       <TableHead>Commission</TableHead>
                       <TableHead>Status</TableHead>
                     </TableRow>
@@ -760,7 +760,6 @@ export default function AffiliateEarnings() {
     </div>
   );
 }
-
 
 
 

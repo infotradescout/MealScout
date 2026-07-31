@@ -80,51 +80,50 @@ export default function TermsOfService() {
                   <li>Real-time GPS tracking for food trucks</li>
                   <li>Business verification and authentication services</li>
                   <li>User review and rating systems</li>
-                  <li>
-                    Subscription-based business model with various pricing tiers
-                  </li>
+                  <li>Complete business profiles under a non-expiring free trial</li>
                   <li>Analytics and reporting for business users</li>
                 </ul>
                 <p className="text-[color:var(--text-secondary)] leading-relaxed mt-4">
-                  The Service is provided on a Software-as-a-Service (SaaS)
-                  basis and requires an active subscription for business users
-                  to access premium features.
+                  Business profile access is provided under a free trial that
+                  does not expire, require a payment card, convert to a paid
+                  plan, or create a monthly subscription charge.
                 </p>
               </section>
 
               <section>
                 <h2 className="text-2xl font-semibold text-[color:var(--text-primary)] mb-4">
-                  3. Subscription Terms
+                  3. Profile Access and Free Trial
                 </h2>
                 <p className="text-[color:var(--text-secondary)] leading-relaxed mb-4">
-                  Business users must maintain an active subscription to access
-                  premium features. Subscriptions automatically renew unless
-                  cancelled before the renewal date. You may cancel your
-                  subscription at any time through your account settings.
+                  Business users receive the complete MealScout profile
+                  product under a free trial. The trial has no expiration date,
+                  no card requirement, no automatic conversion, and no monthly
+                  profile subscription.
                 </p>
                 <div className="bg-[var(--bg-surface)] p-4 rounded-lg mb-4">
                   <h3 className="font-semibold text-[color:var(--text-primary)] mb-2">
-                    Pricing Plans:
+                    Profile Access:
                   </h3>
                   <ul className="text-[color:var(--text-secondary)] space-y-1">
-                    <li>- Monthly: $25/month (was $50)</li>
-                    <li>- Quarterly: $100/3 months (first-time users only)</li>
+                    <li>- Complete profile tools are included</li>
+                    <li>- No monthly or quarterly profile charge</li>
+                    <li>- No card is required for the free trial</li>
                   </ul>
                 </div>
                 <p className="text-[color:var(--text-secondary)] leading-relaxed mb-4">
-                  <strong>Auto-Renewal:</strong> Subscriptions automatically
-                  renew for the same period unless cancelled. You will be
-                  charged the then-current subscription fee.
+                  <strong>No Auto-Renewal:</strong> The profile free trial does
+                  not renew into a paid plan and does not generate a recurring
+                  profile charge.
                 </p>
                 <p className="text-[color:var(--text-secondary)] leading-relaxed mb-4">
-                  <strong>Promo Codes:</strong> We may offer promotional codes
-                  that provide discounts or free access. Promo codes are subject
-                  to terms and conditions and may be revoked at any time.
+                  <strong>Separate Paid Actions:</strong> Orders, deliveries,
+                  bookings, and other paid transactions may carry their own
+                  clearly disclosed charges. Those charges do not unlock or
+                  restrict profile access.
                 </p>
                 <p className="text-[color:var(--text-secondary)] leading-relaxed">
-                  <strong>Refunds:</strong> Subscription fees are generally
-                  non-refundable. However, we may provide refunds at our sole
-                  discretion for certain circumstances.
+                  <strong>Refunds:</strong> Refund terms for a paid transaction
+                  are shown in the applicable order or booking flow.
                 </p>
               </section>
 
@@ -267,11 +266,9 @@ export default function TermsOfService() {
                   </h3>
                   <ul className="text-[color:var(--text-secondary)] space-y-1 text-sm">
                     <li>- All payments are processed in USD</li>
-                    <li>
-                      - Subscription fees are charged at the beginning of each
-                      billing period
-                    </li>
-                    <li>- Failed payments may result in service suspension</li>
+                    <li>- Profile access does not create a recurring charge</li>
+                    <li>- Transaction charges are shown before payment</li>
+                    <li>- A failed transaction payment does not remove profile access</li>
                     <li>
                       - You are responsible for any taxes or fees imposed by
                       your jurisdiction
@@ -284,9 +281,9 @@ export default function TermsOfService() {
                   disputes in good faith.
                 </p>
                 <p className="text-[color:var(--text-secondary)] leading-relaxed">
-                  <strong>Price Changes:</strong> We may change subscription
-                  prices with 30 days advance notice. Continued use after price
-                  changes constitutes acceptance.
+                  <strong>Transaction Price Changes:</strong> Charges for
+                  separate paid actions may change, but the applicable amount
+                  must be shown before the user confirms that transaction.
                 </p>
               </section>
 

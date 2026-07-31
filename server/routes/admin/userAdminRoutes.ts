@@ -450,38 +450,10 @@ export function registerUserAdminRoutes(
     isStaffOrAdmin,
     async (req: any, res) => {
       if (denyStaffEdits(req, res)) return;
-      try {
-        const user = await storage.getUser(req.params.id);
-        if (!user) {
-          return res.status(404).json({ message: "User not found" });
-        }
-        if (!user.email) {
-          return res.status(400).json({ message: "User has no email address" });
-        }
-
-        const baseUrl =
-          process.env.CLIENT_ORIGIN ||
-          process.env.PUBLIC_BASE_URL ||
-          "http://localhost:5000";
-        const subscribeUrl = `${baseUrl}/subscribe`;
-        const subject = "MealScout Monthly Subscription";
-        const html = `
-          <p>Hi ${user.firstName || "there"},</p>
-          <p>Use the link below to sign up for MealScout monthly subscriptions:</p>
-          <p><a href="${subscribeUrl}">Subscribe now</a></p>
-          <p>If the link doesn't work, copy and paste this URL:</p>
-          <p>${subscribeUrl}</p>
-        `;
-        const text = `Use this link to sign up for MealScout monthly subscriptions: ${subscribeUrl}`;
-
-        await emailService.sendBasicEmail(user.email, subject, html, text);
-        res.json({ message: "Subscription link sent" });
-      } catch (error: any) {
-        console.error("Error sending subscription link:", error);
-        res.status(500).json({
-          message: error.message || "Failed to send subscription link",
-        });
-      }
+      return res.status(410).json({
+        message:
+          "Monthly subscriptions are retired. Every business profile already has complete free-trial access.",
+      });
     },
   );
 

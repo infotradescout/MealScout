@@ -51,7 +51,7 @@ function subjectForStep(step: number): string {
     case 2:
       return "See Pensacola spots live (availability + booking)";
     case 3:
-      return "Premium is $25/mo — avoid dead nights";
+      return "Your complete MealScout profile can help avoid dead nights";
     default:
       return "MealScout";
   }
@@ -96,9 +96,9 @@ function htmlForStep(params: { step: number; lead: any }): string {
 
   if (params.step === 3) {
     return wrap(`
-      <h2 style="margin: 0 0 12px 0;">Premium is $25/month</h2>
+      <h2 style="margin: 0 0 12px 0;">Your complete profile is included</h2>
       <p style="margin: 0 0 12px 0;">
-        It’s less than the cost of one bad night, and it unlocks:
+        The MealScout free trial has no expiration or monthly bill, and it includes:
       </p>
       <ul style="margin: 0 0 16px 20px;">
         <li>Live GPS button (instant map presence)</li>
@@ -106,7 +106,7 @@ function htmlForStep(params: { step: number; lead: any }): string {
         <li>Faster booking workflow</li>
       </ul>
       <p style="margin: 0;">
-        Upgrade here: <a href="${subscribeUrl}">${subscribeUrl}</a>
+        Review profile access: <a href="${subscribeUrl}">${subscribeUrl}</a>
       </p>
     `);
   }

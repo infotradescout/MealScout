@@ -259,7 +259,7 @@ export default function AdminAffiliateManagement() {
                     Earnings
                   </TableHead>
                   <TableHead className="text-xs font-semibold">
-                    Subs/Book
+                    Legacy/Book
                   </TableHead>
                   <TableHead className="w-12" />
                 </TableRow>

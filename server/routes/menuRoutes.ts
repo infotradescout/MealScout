@@ -29,7 +29,6 @@ import {
   restaurants,
   restaurantFavorites,
   restaurantFollows,
-  restaurantSubscriptions,
   restaurantUserRecommendations,
   telemetryEvents,
   users,
@@ -49,7 +48,6 @@ import {
   type MenuItemVariant,
   type MenuItemModifier,
 } from "@shared/schema";
-import { UNIVERSAL_PROFILE_FREE_TRIAL_ACTIVE } from "@shared/profileAccessPolicy";
 import {
   eq,
   and,
@@ -197,39 +195,6 @@ function isRestaurantOpenNow(operatingHours: unknown): boolean | null {
   });
 }
 
-async function getOrderingSubscriptionReady(
-  ownerId: string,
-  restaurantId: string,
-) {
-  if (UNIVERSAL_PROFILE_FREE_TRIAL_ACTIVE) return true;
-
-  const [activeSub] = await db
-    .select({ id: restaurantSubscriptions.id })
-    .from(restaurantSubscriptions)
-    .where(
-      and(
-        eq(restaurantSubscriptions.restaurantId, restaurantId),
-        eq(restaurantSubscriptions.status, "active"),
-      ),
-    )
-    .limit(1);
-  if (activeSub) return true;
-
-  const [ownerRow] = await db
-    .select({
-      trialEndsAt: users.trialEndsAt,
-      stripeSubscriptionId: users.stripeSubscriptionId,
-    })
-    .from(users)
-    .where(eq(users.id, ownerId))
-    .limit(1);
-
-  if (ownerRow?.trialEndsAt && new Date(ownerRow.trialEndsAt) > new Date()) {
-    return true;
-  }
-  return Boolean(ownerRow?.stripeSubscriptionId);
-}
-
 async function buildOrderingReadiness(restaurantId: string) {
   const [restaurantRow] = await db
     .select({
@@ -267,9 +232,7 @@ async function buildOrderingReadiness(restaurantId: string) {
 
   const acceptsCash = restaurantMenus.some((menu: any) => menu.acceptsCash);
   const stripeConfigured = Boolean(process.env.STRIPE_SECRET_KEY);
-  const subscriptionReady = restaurantRow?.ownerId
-    ? await getOrderingSubscriptionReady(restaurantRow.ownerId, restaurantId)
-    : false;
+  const profileOwnerReady = Boolean(restaurantRow?.ownerId);
   const openNow = isRestaurantOpenNow(restaurantRow?.operatingHours);
 
   const checks = [
@@ -295,11 +258,11 @@ async function buildOrderingReadiness(restaurantId: string) {
       action: "Add or enable menu items.",
     },
     {
-      id: "subscription",
-      label: "Online ordering access is active",
-      ok: subscriptionReady,
+      id: "profile_owner",
+      label: "Business profile has a confirmed owner",
+      ok: profileOwnerReady,
       blocking: true,
-      action: "Start or restore the MealScout business plan.",
+      action: "Claim and confirm the business profile before taking orders.",
     },
     {
       id: "stripe",

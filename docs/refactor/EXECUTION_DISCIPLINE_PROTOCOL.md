@@ -40,7 +40,7 @@ Every extraction PR must state:
 The owner and reviewer must verify, as applicable:
 
 - authentication and ownership outcomes;
-- subscription gate outcomes;
+- profile-access and operational-readiness outcomes;
 - booking and event state transitions;
 - admin totals and telemetry counters.
 

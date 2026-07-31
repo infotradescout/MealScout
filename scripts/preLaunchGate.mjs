@@ -55,7 +55,7 @@ section("Step 1: Required Environment Variables");
 const requiredEnvVars = [
   {
     name: "STRIPE_SECRET_KEY",
-    desc: "Backend Stripe API — PaymentIntents and Subscriptions will fail without this.",
+    desc: "Backend Stripe API — transaction payments and payouts will fail without this.",
   },
   {
     name: "VITE_STRIPE_PUBLIC_KEY",
@@ -63,7 +63,7 @@ const requiredEnvVars = [
   },
   {
     name: "STRIPE_WEBHOOK_SECRET",
-    desc: "Webhook signature verification — bookings and subscriptions will never activate without this.",
+    desc: "Webhook signature verification — paid orders and bookings will not reconcile without this.",
   },
   {
     name: "BREVO_API_KEY",
@@ -149,7 +149,7 @@ const criticalChecks = [
     expect: [401, 403],
   },
   {
-    name: "Subscription status (guest guarded)",
+    name: "Profile access status (guest guarded)",
     path: "/api/subscription/status",
     expect: [200, 401],
   },
@@ -183,11 +183,18 @@ console.log(`
 
   Required events:
     • payment_intent.succeeded
+    • payment_intent.payment_failed
+    • account.updated
+    • account.application.deauthorized
+
+  During legacy recurring-billing cleanup, also retain:
     • invoice.payment_succeeded
+    • invoice.payment_failed
     • customer.subscription.updated
     • customer.subscription.deleted
 
-  If these are not registered, bookings and subscriptions will never activate.
+  Transaction events reconcile paid workflows; legacy events retire old
+  recurring charges without changing profile access.
   Verify at: https://dashboard.stripe.com/webhooks
 `);
 warn("Cannot auto-verify Stripe webhook registration — confirm manually in the Stripe Dashboard.");

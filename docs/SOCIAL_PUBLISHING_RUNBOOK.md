@@ -61,7 +61,7 @@ tweet.read tweet.write users.read offline.access
 
 ## Owner Smoke Test
 
-1. Log in as a subscribed food truck owner.
+1. Log in as a food truck owner with a claimed profile.
 2. Open `/parking-pass?tab=schedule`.
 3. In Social share prompts, connect Facebook, Instagram, and/or X.
 4. Confirm each card changes from `Manual` to `Connected`.

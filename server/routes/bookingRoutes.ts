@@ -28,7 +28,7 @@ const stripe = process.env.STRIPE_SECRET_KEY
   : null;
 
 type BookingRouteDependencies = {
-  hasBusinessDistributionAccess: (userId: string) => Promise<boolean>;
+  hasCompleteProfileAccess: (userId: string) => Promise<boolean>;
 };
 
 /**
@@ -39,7 +39,7 @@ type BookingRouteDependencies = {
  */
 export function registerBookingRoutes(
   app: Express,
-  { hasBusinessDistributionAccess }: BookingRouteDependencies,
+  { hasCompleteProfileAccess }: BookingRouteDependencies,
 ) {
   const toDateKey = (value: unknown, timeZone?: string): string | null => {
     if (value instanceof Date) {
@@ -507,8 +507,8 @@ export function registerBookingRoutes(
         return res.status(404).json({ message: "Truck not found" });
       }
 
-      const ownerHasPremiumAccess = truck.ownerId
-        ? await hasBusinessDistributionAccess(String(truck.ownerId))
+      const ownerHasProfileAccess = truck.ownerId
+        ? await hasCompleteProfileAccess(String(truck.ownerId))
         : false;
 
       let includePrivate = false;
@@ -525,7 +525,7 @@ export function registerBookingRoutes(
 
       const entries = await storage.getTruckManualSchedules(truckId);
       const now = new Date();
-      const filtered = !ownerHasPremiumAccess
+      const filtered = !ownerHasProfileAccess
         ? []
         : includePrivate
           ? entries
@@ -586,11 +586,11 @@ export function registerBookingRoutes(
     isAuthenticated,
     async (req: any, res) => {
       try {
-        const hasAccess = await hasBusinessDistributionAccess(req.user.id);
+        const hasAccess = await hasCompleteProfileAccess(req.user.id);
         if (!hasAccess) {
           return res.status(402).json({
             message:
-              "Premium subscription required to manage off-platform schedule.",
+              "Profile access could not be verified for schedule management.",
           });
         }
 
@@ -693,11 +693,11 @@ export function registerBookingRoutes(
     isAuthenticated,
     async (req: any, res) => {
       try {
-        const hasAccess = await hasBusinessDistributionAccess(req.user.id);
+        const hasAccess = await hasCompleteProfileAccess(req.user.id);
         if (!hasAccess) {
           return res.status(402).json({
             message:
-              "Premium subscription required to manage off-platform schedule.",
+              "Profile access could not be verified for schedule management.",
           });
         }
 
@@ -899,8 +899,8 @@ export function registerBookingRoutes(
         req.user?.userType || "",
       );
       let includePending = false;
-      const ownerHasPremiumAccess = truck.ownerId
-        ? await hasBusinessDistributionAccess(String(truck.ownerId))
+      const ownerHasProfileAccess = truck.ownerId
+        ? await hasCompleteProfileAccess(String(truck.ownerId))
         : false;
       if (req.isAuthenticated?.() && req.user?.id) {
         const isOwner = await storage.verifyRestaurantOwnership(
@@ -908,7 +908,7 @@ export function registerBookingRoutes(
           req.user.id,
           "manageParkingPass",
         );
-        includePending = isAdmin || (isOwner && ownerHasPremiumAccess);
+        includePending = isAdmin || (isOwner && ownerHasProfileAccess);
       }
       if (!truck.isActive && !includePending) {
         return res.status(404).json({ message: "Truck not found" });
@@ -1094,7 +1094,7 @@ export function registerBookingRoutes(
       };
 
       const manualSchedule = manualEntries
-        .filter(() => ownerHasPremiumAccess)
+        .filter(() => ownerHasProfileAccess)
         .filter((entry) => entry.isPublic)
         .filter((entry) => (includePending ? true : isPublicManualSlot(entry)))
         .map((entry) => ({

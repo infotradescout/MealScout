@@ -48,7 +48,6 @@ for (const role of canonicalRoles) {
 const requiredDashboardSnippets = [
   'if (!isBusinessBearingUserType(userType)) return "not_required";',
   "{isBusinessBearingUserType(user.userType) && (",
-  "{canSendMonthlySubscriptionLink(user.userType) && (",
   "{isBusinessUserType(user.userType) &&",
   "Attach Business",
   "Create Business Shell",
@@ -144,15 +143,16 @@ if (attachControlIndex === -1 || attachGateIndex === -1) {
   throw new Error("Attach Business control must be gated by business role");
 }
 
-const subscriptionControlIndex = dashboard.indexOf("Send Monthly Link");
-const subscriptionGateIndex = dashboard.lastIndexOf(
-  "{canSendMonthlySubscriptionLink(user.userType) && (",
-  subscriptionControlIndex,
-);
-if (subscriptionControlIndex === -1 || subscriptionGateIndex === -1) {
-  throw new Error(
-    "Send Monthly Link must be gated by explicit business subscription roles",
-  );
+for (const retiredRecurringControl of [
+  "Send Monthly Link",
+  "canSendMonthlySubscriptionLink",
+  "sendSubscriptionLink.mutate",
+]) {
+  if (dashboard.includes(retiredRecurringControl)) {
+    throw new Error(
+      `Admin dashboard still exposes recurring profile billing: ${retiredRecurringControl}`,
+    );
+  }
 }
 
 const forbiddenDashboardSnippets = [

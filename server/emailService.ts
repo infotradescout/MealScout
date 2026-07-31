@@ -147,7 +147,7 @@ interface BookingConfirmationParams {
   totalCents: number;
 }
 
-interface PremiumWeeklySummaryEmailData {
+interface ProfileActivitySummaryEmailData {
   weekStart: string;
   weekEnd: string;
   stopsCovered: number;
@@ -605,84 +605,6 @@ Access your admin dashboard to get started.
 
 Best regards,
 The MealScout Development Team
-
-© 2025 MealScout. All rights reserved.`;
-
-    return { html, text };
-  }
-
-  static getPaymentConfirmationTemplate(
-    user: User,
-    amount: number,
-    interval: string,
-    subscriptionId: string,
-  ): { html: string; text: string } {
-    const content = `
-      <h2>Payment Confirmation 💳</h2>
-      <p>Hello ${user.firstName || "Valued Customer"}!</p>
-      <p>Thank you for your payment! Your MealScout subscription has been successfully processed.</p>
-
-      <div class="highlight-box">
-        <strong>Payment Details</strong><br>
-        Amount: $${(amount / 100).toFixed(2)}<br>
-        Billing Cycle: ${interval === "month" ? "Monthly" : interval === "3-month" ? "Quarterly" : "Yearly"}<br>
-        Subscription ID: ${subscriptionId}
-      </div>
-
-      <p>Your premium features are now active and you can enjoy:</p>
-
-      <div class="features">
-        <div class="feature">
-          <div class="feature-icon">🎯</div>
-          <div class="feature-text">
-            <div class="feature-title">Priority Access</div>
-            <div class="feature-desc">Get early access to the best deals before they sell out</div>
-          </div>
-        </div>
-        <div class="feature">
-          <div class="feature-icon">🔔</div>
-          <div class="feature-text">
-            <div class="feature-title">Smart Notifications</div>
-            <div class="feature-desc">Receive personalized deal alerts based on your preferences</div>
-          </div>
-        </div>
-        <div class="feature">
-          <div class="feature-icon">⭐</div>
-          <div class="feature-text">
-            <div class="feature-title">Premium Support</div>
-            <div class="feature-desc">Priority customer support and exclusive member benefits</div>
-          </div>
-        </div>
-      </div>
-
-      <p>If you have any questions about your subscription or need assistance, please don't hesitate to contact our support team.</p>
-
-      <p>Thank you for being a valued MealScout member!<br>
-      The MealScout Team 💖</p>
-    `;
-
-    const html = this.getBaseTemplate(
-      "Payment Confirmation - MealScout",
-      content,
-    );
-    const text = `MealScout Payment Confirmation
-
-Hello ${user.firstName || "Valued Customer"}!
-
-Thank you for your payment! Your MealScout subscription has been successfully processed.
-
-Payment Details:
-Amount: $${(amount / 100).toFixed(2)}
-Billing Cycle: ${interval === "month" ? "Monthly" : interval === "3-month" ? "Quarterly" : "Yearly"}
-Subscription ID: ${subscriptionId}
-
-Your premium features are now active:
-• Priority access to the best deals
-• Smart personalized notifications
-• Premium customer support
-
-Thank you for being a valued MealScout member!
-The MealScout Team
 
 © 2025 MealScout. All rights reserved.`;
 
@@ -1535,28 +1457,6 @@ export class EmailService {
     });
   }
 
-  // Send payment confirmation email
-  async sendPaymentConfirmation(
-    user: User,
-    amount: number,
-    interval: string,
-    subscriptionId: string,
-  ): Promise<boolean> {
-    const template = EmailTemplates.getPaymentConfirmationTemplate(
-      user,
-      amount,
-      interval,
-      subscriptionId,
-    );
-
-    return await this.sendEmail({
-      to: user.email!,
-      subject: "Payment Confirmation - MealScout Subscription 💳",
-      html: template.html,
-      text: template.text,
-    });
-  }
-
   // Send admin notification when new user signs up
   async sendAdminNotification(
     user: User,
@@ -1858,14 +1758,14 @@ export class EmailService {
     });
   }
 
-  async sendPremiumWeeklySummaryEmail(
+  async sendProfileActivitySummaryEmail(
     to: string,
     operatorName: string,
-    data: PremiumWeeklySummaryEmailData,
+    data: ProfileActivitySummaryEmailData,
   ): Promise<boolean> {
     if (!this.isConfigured) {
       console.warn(
-        "Email service not configured. Skipping premium weekly summary email.",
+        "Email service not configured. Skipping profile activity summary email.",
       );
       return false;
     }
@@ -1889,10 +1789,10 @@ export class EmailService {
           year: "numeric",
         });
 
-    const title = `Your Premium Ops ${periodLabel} Summary (${weekStartLabel} - ${weekEndLabel})`;
+    const title = `Your MealScout Profile ${periodLabel} Summary (${weekStartLabel} - ${weekEndLabel})`;
     const content = `
       <p>Hi ${operatorName},</p>
-      <p>Here is your Premium Ops summary for <strong>${weekStartLabel}</strong> to <strong>${weekEndLabel}</strong>.</p>
+      <p>Here is your profile activity summary for <strong>${weekStartLabel}</strong> to <strong>${weekEndLabel}</strong>.</p>
 
       <div style="display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 18px 0;">
         <div style="padding: 12px; border: 1px solid #e2e8f0; border-radius: 6px; background: #f8fafc;">
@@ -1914,7 +1814,7 @@ export class EmailService {
       </div>
 
       <div style="text-align: center; margin: 26px 0;">
-        <a href="https://www.mealscout.us/subscribe" style="background-color: #ea580c; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 700;">Open Premium Dashboard</a>
+        <a href="https://www.mealscout.us/restaurant-owner-dashboard" style="background-color: #ea580c; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 700;">Open Profile Dashboard</a>
       </div>
 
       <p style="font-size: 12px; color: #64748b; margin-top: 24px;">
@@ -1923,7 +1823,7 @@ export class EmailService {
     `;
 
     const html = EmailTemplates.getBaseTemplate(title, content);
-    const text = `Hi ${operatorName}, ${periodLabel.toLowerCase()} premium summary (${weekStartLabel} - ${weekEndLabel}): stops covered ${data.stopsCovered}, live location activations ${data.liveLocationActivations}, manual schedule usage ${data.manualScheduleUsage}, parking reports completed ${data.parkingReportsCompleted}. Open: https://www.mealscout.us/subscribe`;
+    const text = `Hi ${operatorName}, ${periodLabel.toLowerCase()} profile activity summary (${weekStartLabel} - ${weekEndLabel}): stops covered ${data.stopsCovered}, live location activations ${data.liveLocationActivations}, manual schedule usage ${data.manualScheduleUsage}, parking reports completed ${data.parkingReportsCompleted}. Open: https://www.mealscout.us/restaurant-owner-dashboard`;
 
     return await this.sendEmail({
       to,

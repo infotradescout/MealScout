@@ -82,8 +82,8 @@ for (const endpoint of [
 ]) {
   assert.ok(owner.includes(endpoint), `Missing preserved endpoint: ${endpoint}`);
 }
-assert.match(owner, /if \(!hasPremiumLocationTools\)/);
-assert.match(owner, /const hasPremiumLocationTools = canManageParkingPass/);
+assert.match(owner, /if \(!hasProfileLocationTools\)/);
+assert.match(owner, /const hasProfileLocationTools = canManageParkingPass/);
 assert.doesNotMatch(owner, /Upgrade to use live location|setLocation\("\/subscribe"\)/);
 assert.match(owner, /navigator\.geolocation\.watchPosition/);
 assert.match(owner, /stopFoodTruckSessionMutation\.mutate\(\)/);

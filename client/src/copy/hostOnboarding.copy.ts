@@ -58,9 +58,9 @@ export const HOST_ONBOARDING_COPY = {
       title: "Signed in: add a business profile to this account",
       body: "You are creating an additional business profile on your existing account. No new account is created.",
       freeLine:
-        "Free profile: parking pass + search visibility stay available.",
+        "Complete profile: discovery, menus, schedules, deals, and profile tools are included.",
       paidLine:
-        "Paid visibility: feed/maps + deal posting require an active plan after your 30-day trial.",
+        "The free trial has no expiration, requires no card, and never becomes a monthly bill.",
     },
     hero: {
       badge: "Business profile setup",
@@ -134,12 +134,12 @@ export const HOST_ONBOARDING_COPY = {
 
   pricing: {
     hero: {
-      title: "Free Profile + Premium Trial",
+      title: "Complete Profile Free Trial",
       coreLine:
-        "Create your profile for free. Full features are included for 30 days from account creation.",
-      originalPrice: "$50",
-      monthlyPrice: "$25",
-      monthlySuffix: "/month",
+        "Create your complete profile. The free trial does not expire or convert to a paid plan.",
+      originalPrice: "",
+      monthlyPrice: "No monthly bill",
+      monthlySuffix: "",
       everythingIncludedTitle: "Everything included:",
       everythingIncludedBullets: [
         "Unlimited deals",
@@ -149,19 +149,19 @@ export const HOST_ONBOARDING_COPY = {
         "Real-time notifications",
         "Location-based promotion",
         "24/7 support",
-        "Cancel anytime",
+        "No card required",
       ],
     },
     formCard: {
-      title: "Free Profile Setup",
-      badge: "No payment required to create your profile.",
+      title: "Complete Profile Setup",
+      badge: "No card or monthly subscription required.",
       freeProfileLine:
-        "Profiles stay active for parking pass access and search visibility.",
-      trialLine: "30-day full-feature trial starts from account creation.",
-      paidLine: "After trial: $25/month to appear in feed/maps and post deals.",
-      originalPrice: "$50",
-      monthlyPrice: "$25",
-      monthlySuffix: "/month",
+        "Profiles stay active with discovery, menus, schedules, deals, and profile tools.",
+      trialLine: "The free trial has no expiration date.",
+      paidLine: "It never converts into a paid plan or monthly bill.",
+      originalPrice: "",
+      monthlyPrice: "No monthly bill",
+      monthlySuffix: "",
       unlimitedTitle: "Unlimited Deals",
       unlimitedBody: "Post as many deals as you want - no limits!",
       everythingIncludedTitle: "Everything included:",
@@ -171,7 +171,7 @@ export const HOST_ONBOARDING_COPY = {
         "Performance analytics",
         "Location-based promotion",
         "Real-time notifications",
-        "Cancel anytime",
+        "No card required",
       ],
     },
   },

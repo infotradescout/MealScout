@@ -133,7 +133,7 @@ export default function PaymentMethodsPage() {
               Add Payment Method
             </h3>
             <p className="text-sm text-muted-foreground mb-4">
-              Add a card for easy subscription payments
+              Add a card for orders, bookings, and other paid transactions
             </p>
             <Button variant="outline" data-testid="button-add-new-payment">
               Add Card

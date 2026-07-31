@@ -41,7 +41,7 @@ function subjectForStep(step: number): string {
     case 1:
       return "Pensacola spots are waiting — unlock and book on MealScout";
     case 2:
-      return "Get Premium for $25/mo (live GPS + schedule + booking calendar)";
+      return "Your complete MealScout profile includes live GPS, schedules, and booking tools";
     case 3:
       return "How trucks turn guaranteed spots into predictable sales";
     case 4:
@@ -97,17 +97,17 @@ function htmlForStep(params: {
       `);
     case 2:
       return wrap(`
-        <h2 style="margin: 0 0 12px 0;">Premium is $25/month</h2>
+        <h2 style="margin: 0 0 12px 0;">Your complete profile is included</h2>
         <p style="margin: 0 0 12px 0;">
-          Premium is built for trucks that want more predictable locations and more discoverability:
+          The MealScout free trial includes the profile tools trucks use for predictable locations and discovery:
         </p>
         <ul style="margin: 0 0 16px 20px;">
           <li>Live GPS button (instant map presence)</li>
           <li>Editable schedule + booking calendar view</li>
-          <li>Priority tools to get booked faster</li>
+          <li>Profile and discovery tools to get booked faster</li>
         </ul>
         <p style="margin: 0 0 0 0;">
-          Upgrade here: <a href="${subscribeUrl}">${subscribeUrl}</a>
+          Review profile access: <a href="${subscribeUrl}">${subscribeUrl}</a>. No card, expiration, or monthly bill.
         </p>
       `);
     case 3:

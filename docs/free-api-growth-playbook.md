@@ -78,18 +78,17 @@ This document captures a practical 1-by-1 rollout plan for free or free-tier API
 - What it does: High-quality place lookup, geocoding, and enrichment.
 - Why it helps: Better data quality for ambiguous business records.
 - First implementation:
-  - Reserve for premium enrichment only (top-value leads).
+  - Reserve paid enrichment calls for high-value, low-confidence records.
   - Trigger enrichment only on low-confidence addresses.
 - KPI: Enriched lead close rate.
 
 ## 10) Stripe APIs
-- What it does: Payments, deposits, payouts, recurring billing.
-- Why it helps: Converts demand into predictable revenue.
+- What it does: Transaction payments, deposits, and payouts.
+- Why it helps: Safely moves money when customers order or book.
 - First implementation:
   - Add booking deposits.
-  - Add monthly billing for premium owner features.
   - Add payout status visibility.
-- KPI: MRR, paid booking count.
+- KPI: Paid booking count and reconciled payout rate.
 
 ---
 
@@ -103,4 +102,3 @@ This document captures a practical 1-by-1 rollout plan for free or free-tier API
 7. OpenWeather demand scoring
 8. Stripe expansion (deposits/monthlies)
 9. Google Maps premium enrichment
-

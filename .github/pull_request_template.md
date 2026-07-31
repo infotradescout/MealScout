@@ -20,7 +20,7 @@
 - [ ] Auth/session checked
 - [ ] Booking checked
 - [ ] Payments/Stripe checked
-- [ ] Ordering subscription gate checked
+- [ ] Ordering profile-access and fulfillment checks verified
 - [ ] Mobile responsiveness on primary pages checked
 
 ## Metrics Evidence
@@ -40,7 +40,7 @@
 - Non-author reviewer GitHub handle:
 - Rollback method:
 - Auth and ownership parity:
-- Subscription gate parity:
+- Profile-access parity (no monthly gate):
 - Booking/event transition parity:
 - Admin totals/telemetry parity:
 - Metrics-log entry:

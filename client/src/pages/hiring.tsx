@@ -608,7 +608,8 @@ export default function HiringPage() {
               <CardHeader>
                 <CardTitle className="text-lg">Private chef request</CardTitle>
                 <CardDescription>
-                  Chefs pay MealScout $25/month. No giant commission.
+                  Chefs receive the complete profile with no monthly bill.
+                  Separate paid bookings remain separate.
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -819,7 +820,7 @@ export default function HiringPage() {
                 <CardHeader>
                   <CardTitle className="text-lg">Private chef leads</CardTitle>
                   <CardDescription>
-                    $25/month business model, leads stay direct.
+                    Complete profile access, no monthly bill, and direct relationships.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">

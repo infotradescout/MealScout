@@ -110,11 +110,6 @@ const businessBearingUserTypes = new Set([
   "supplier",
 ]);
 
-const monthlySubscriptionLinkUserTypes = new Set([
-  "restaurant_owner",
-  "food_truck",
-]);
-
 const isBusinessBearingUserType = (userType?: string | null) =>
   businessBearingUserTypes.has(String(userType || "").toLowerCase());
 
@@ -122,9 +117,6 @@ const isBusinessUserType = (userType?: string | null) => {
   const type = String(userType || "").toLowerCase();
   return type === "food_truck" || type === "restaurant_owner";
 };
-
-const canSendMonthlySubscriptionLink = (userType?: string | null) =>
-  monthlySubscriptionLinkUserTypes.has(String(userType || "").toLowerCase());
 
 const canonicalMealScoutOrigin = (
   import.meta.env.VITE_PUBLIC_BASE_URL ||
@@ -6988,28 +6980,6 @@ export default function AdminDashboard() {
     },
   });
 
-  const sendSubscriptionLink = useMutation({
-    mutationFn: async (userId: string) => {
-      return await apiRequest(
-        "POST",
-        `/api/admin/users/${userId}/send-subscription-link`,
-      );
-    },
-    onSuccess: () => {
-      toast({
-        title: "Subscription Link Sent",
-        description: "Monthly subscription link has been emailed.",
-      });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to send subscription link.",
-        variant: "destructive",
-      });
-    },
-  });
-
   const updateUserInfo = useMutation({
     mutationFn: async (payload: { userId: string; updates: any }) => {
       const res = await apiRequest(
@@ -11711,24 +11681,6 @@ export default function AdminDashboard() {
                                 : "Verify Insurance"}
                             </Button>
                           )}
-                          {canSendMonthlySubscriptionLink(user.userType) && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() =>
-                                sendSubscriptionLink.mutate(user.id)
-                              }
-                              disabled={
-                                sendSubscriptionLink.isPending ||
-                                isStaff ||
-                                !user.email
-                              }
-                              data-testid={`button-send-subscription-${user.id}`}
-                            >
-                              <DollarSign className="w-3 h-3 mr-1" />
-                              Send Monthly Link
-                            </Button>
-                          )}
                         </div>
                         <Button
                           size="sm"
@@ -13113,13 +13065,13 @@ export default function AdminDashboard() {
                 </div>
               )}
 
-              {/* Subscription Information */}
+              {/* Legacy billing records remain visible for support and audit. */}
               {(selectedUser.stripeCustomerId ||
                 selectedUser.stripeSubscriptionId) && (
                 <div>
                   <h3 className="font-semibold mb-3 flex items-center text-sm text-muted-foreground">
                     <CreditCard className="w-4 h-4 mr-2" />
-                    SUBSCRIPTION
+                    LEGACY BILLING RECORD
                   </h3>
                   <div className="grid grid-cols-2 gap-3">
                     {selectedUser.stripeCustomerId && (
@@ -13135,7 +13087,7 @@ export default function AdminDashboard() {
                     {selectedUser.stripeSubscriptionId && (
                       <div className="space-y-1">
                         <p className="text-xs text-muted-foreground">
-                          Subscription ID
+                          Legacy Subscription ID
                         </p>
                         <p className="text-sm font-mono text-xs">
                           {selectedUser.stripeSubscriptionId}

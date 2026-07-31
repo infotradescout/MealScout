@@ -67,8 +67,7 @@ function requireMatch(source: string, pattern: RegExp, label: string) {
 }
 
 [
-  "C9 payment/webhook safety map complete",
-  "docs/contract-only cleanup slice",
+  "Profile access is a non-expiring, no-card free trial",
   "## Payment Route Entry Points",
   "## Stripe And Payment Intent Creation Routes",
   "## Booking Payment Handoff Routes",
@@ -84,7 +83,7 @@ function requireMatch(source: string, pattern: RegExp, label: string) {
   "C9-F3",
   "C9-F4",
   "C9-F5",
-  "Do not change Stripe runtime calls from this C9 map",
+  "Do not introduce a recurring profile price",
   "Do not mark C10 complete from C9",
 ].forEach((snippet) => requireIncludes(map, snippet, `map snippet ${snippet}`));
 
@@ -93,7 +92,6 @@ function requireMatch(source: string, pattern: RegExp, label: string) {
   "VITE_STRIPE_PUBLIC_KEY",
   "STRIPE_WEBHOOK_SECRET",
   "STRIPE_WEBHOOK_FORCE_VERIFY",
-  "PRICE_MONTHLY_25",
   "MEALSCOUT_BYPASS_STRIPE",
   "MEALSCOUT_TEST_MODE",
   "PICKUP_ORDER_MEALSCOUT_FEE_CENTS",
@@ -130,11 +128,22 @@ requireMatch(
   '"/api/subscription/status"',
   '"/api/subscription/pause"',
   '"/api/subscription/cancel"',
+  "subscriptionRequired: false",
+  "cardRequired: false",
+  "convertsToPaid: false",
+  "monthlyBilling: false",
+].forEach((snippet) => requireIncludes(subscriptionRoutes, snippet, `subscription route snippet ${snippet}`));
+
+for (const retiredRecurringBehavior of [
   "stripe.subscriptions.create",
   "stripe.subscriptions.update",
   "stripe.customers.create",
   "PRICE_MONTHLY_25",
-].forEach((snippet) => requireIncludes(subscriptionRoutes, snippet, `subscription route snippet ${snippet}`));
+]) {
+  if (subscriptionRoutes.includes(retiredRecurringBehavior)) {
+    throw new Error(`Recurring profile billing remains: ${retiredRecurringBehavior}`);
+  }
+}
 
 [
   'app.post("/api/stripe/webhook"',
@@ -231,8 +240,17 @@ requireMatch(
   "paymentsEnabled",
 ].forEach((snippet) => requireIncludes(productionGate, snippet, `production gate snippet ${snippet}`));
 
-if (envExample.includes("STRIPE_SECRET_KEY") || prodEnvExample.includes("STRIPE_SECRET_KEY")) {
-  throw new Error("C9-F1 should be revisited: env examples now include STRIPE_SECRET_KEY");
+for (const envSource of [envExample, prodEnvExample]) {
+  for (const requiredPaymentEnv of [
+    "STRIPE_SECRET_KEY",
+    "VITE_STRIPE_PUBLIC_KEY",
+    "STRIPE_WEBHOOK_SECRET",
+  ]) {
+    requireIncludes(envSource, requiredPaymentEnv, `payment env ${requiredPaymentEnv}`);
+  }
+  if (envSource.includes("PRICE_MONTHLY_25")) {
+    throw new Error("Retired recurring profile price remains in an env example");
+  }
 }
 
 for (const forbidden of [

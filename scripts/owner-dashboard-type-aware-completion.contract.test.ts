@@ -85,16 +85,23 @@ requireAll(
 requireAll(
   parkingPass,
   [
-    'queryKey: ["/api/subscription/status"]',
-    "distributionStatus?.hasAccess === true",
-    'data-testid="dated-stop-distribution-access-required"',
-    'setLocation("/subscribe")',
+    "const hasProfileTruckTools = canManageParkingPass",
     "parseParkingPassOwnerNavigation(window.location.search)",
     "selectRequestedAccessibleTruck(",
     "reconcileParkingPassTopTab({",
   ],
-  "dated-stop schedule access",
+  "dated-stop schedule profile access",
 );
+
+for (const retiredMonthlyGate of [
+  'queryKey: ["/api/subscription/status"]',
+  'data-testid="dated-stop-distribution-access-required"',
+  'setLocation("/subscribe")',
+]) {
+  if (parkingPass.includes(retiredMonthlyGate)) {
+    throw new Error(`Parking Pass still has a monthly gate: ${retiredMonthlyGate}`);
+  }
+}
 
 requireAll(
   parkingPassNavigation,

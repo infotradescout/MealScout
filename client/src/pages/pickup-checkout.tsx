@@ -298,13 +298,7 @@ export default function CheckoutPage() {
       }
     } catch (err: any) {
       const message = String(err?.message || "Failed to create order");
-      if (message.toLowerCase().includes("subscription")) {
-        setOrderError(
-          "Online ordering requires the restaurant to have an active MealScout subscription. Menu browsing is always free — you can still view the menu and order in person.",
-        );
-      } else {
-        setOrderError(message);
-      }
+      setOrderError(message);
     } finally {
       setIsCreating(false);
     }

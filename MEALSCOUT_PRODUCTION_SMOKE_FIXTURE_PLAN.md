@@ -17,7 +17,7 @@ The fixture plan is for future work only. Runtime code and live production data 
 ## Current Smoke Inventory
 
 - Public/read-only smoke: `scripts/productionReadinessGate.mjs`, `scripts/preLaunchGate.mjs`, `scripts/smokeCriticalRoutes.mjs`, `scripts/smokeScoutSurface.mjs`, and mobile deep-link smokes use GET probes or local server checks.
-- Owner ordering smoke: `scripts/smokeOrderingSubscriptionAccess.mjs` uses `ORDERING_OWNER_COOKIE` or owner login env vars, then GETs owner ordering endpoints.
+- Owner ordering smoke: `scripts/smokeOrderingProfileAccess.mjs` uses `ORDERING_OWNER_COOKIE` or owner login env vars, then GETs owner ordering endpoints.
 - Parking Pass payment smoke: `scripts/smokeParkingPassStripeFlow.ts` posts to `/api/parking-pass/:passId/book`, reads `/api/bookings/payment-intent/:paymentIntentId`, attempts a duplicate booking, and optionally posts to `/api/bookings/payment-intent/:paymentIntentId/cancel`.
 - Parking Pass webhook replay: `scripts/testParkingPassWebhookReplay.ts` signs test webhook payloads and posts to `/api/stripe/webhook` after finding an existing confirmed booking intent.
 - Admin provisioning smoke: `scripts/testAdminManualProvisioning.ts` logs in as an admin and creates smoke host users with `smoke-host-*` emails.
@@ -45,7 +45,7 @@ Required fixture properties:
 - Dedicated owner account and business profile marked with durable smoke identifiers such as `_smoke_`, `smoke-`, or a smoke-only email domain.
 - Business name/address/city values must be filtered by current public visibility protections or explicitly excluded from public discovery before production use.
 - Owner smoke should prefer read-only dashboard and subscription access checks. Profile, menu, schedule, image upload, and ordering writes require an approved reset step.
-- Ordering smoke may use `ORDERING_OWNER_COOKIE`, `ORDERING_OWNER_EMAIL`, `ORDERING_OWNER_PASSWORD`, `ORDERING_SUBSCRIBED_RESTAURANT_ID`, and `ORDERING_UNSUBSCRIBED_RESTAURANT_ID`, but it must not auto-create restaurants in production.
+- Ordering smoke may use `ORDERING_OWNER_COOKIE`, `ORDERING_OWNER_EMAIL`, `ORDERING_OWNER_PASSWORD`, `ORDERING_OWNED_RESTAURANT_ID`, and `ORDERING_UNOWNED_RESTAURANT_ID`, but it must not auto-create restaurants in production.
 
 Current visibility reality: `server/utils/publicBusinessVisibility.ts` filters obvious test/demo/fake placeholder tokens and `PUBLIC_TEST_BUSINESS_TOKENS`; public search and map paths use visibility filtering in several places. That is not a full smoke fixture quarantine model.
 
@@ -135,7 +135,7 @@ Existing smoke and gate env requirements:
 
 - Production gate: `DATABASE_URL`, `SESSION_SECRET`, `PUBLIC_BASE_URL`, `SITEMAP_SITE_URL`, `CLIENT_ORIGIN`, `INDEXNOW_ENABLED`, `INDEXNOW_KEY`, `INDEXNOW_HOST`, `STRIPE_SECRET_KEY`, `VITE_STRIPE_PUBLIC_KEY`, `STRIPE_WEBHOOK_SECRET`, and `BREVO_API_KEY`.
 - Read-only live probe controls: `SKIP_LIVE_PROBES`, `PROD_GATE_STRICT_ENV`, `PROD_GATE_PUBLIC_BASE_URL`, and `PROD_GATE_API_BASE_URL`.
-- Ordering smoke: `SMOKE_BASE_URL`, `SMOKE_ORIGIN`, `ORDERING_OWNER_COOKIE`, `ORDERING_OWNER_EMAIL`, `ORDERING_OWNER_PASSWORD`, `ORDERING_SUBSCRIBED_RESTAURANT_ID`, and `ORDERING_UNSUBSCRIBED_RESTAURANT_ID`.
+- Ordering smoke: `SMOKE_BASE_URL`, `SMOKE_ORIGIN`, `ORDERING_OWNER_COOKIE`, `ORDERING_OWNER_EMAIL`, `ORDERING_OWNER_PASSWORD`, `ORDERING_OWNED_RESTAURANT_ID`, and `ORDERING_UNOWNED_RESTAURANT_ID`.
 - Admin smoke: `ADMIN_SMOKE_BASE_URL`, `ADMIN_SMOKE_ORIGIN`, `ADMIN_SMOKE_EMAIL`, and `ADMIN_SMOKE_PASSWORD`.
 - Parking Pass smoke: `API_BASE`, `TEST_PARKING_PASS_ID`, `TEST_TRUCK_ID`, `TEST_TRUCK_AUTH_COOKIE`, `TEST_HOST_AUTH_COOKIE`, `TEST_SLOT_TYPES`, `TEST_APPLY_CREDITS_CENTS`, and `CANCEL_PENDING_AFTER_CHECK`.
 - Webhook replay: `API_BASE`, `STRIPE_SECRET_KEY`, and `STRIPE_WEBHOOK_SECRET`.

@@ -173,15 +173,16 @@ requireIncludes(
   "throw pickupError;",
   "throw supplierError;",
   "throw bookingError;",
-  "throw pastDueError;",
-  "throw reactivateError;",
-  "throw pastDueSyncError;",
 ].forEach((snippet) =>
   requireIncludes(snippet, `primary processing failure propagation: ${snippet}`),
 );
 requireIncludes(
   "await db.transaction(async (tx: any)",
-  "subscription entitlement transaction failures propagate",
+  "legacy billing retirement transaction failures propagate",
+);
+requireIncludes(
+  "await retireLegacyProfileSubscription(",
+  "legacy recurring events are retired instead of activated",
 );
 requireIncludes(
   'res.status(500).json({ error: "Webhook processing failed" })',

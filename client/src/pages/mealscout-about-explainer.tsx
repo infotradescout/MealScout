@@ -630,7 +630,7 @@ export function MealScoutAboutExplainer() {
         </div>
         <article data-status="available"><BadgeCheck aria-hidden="true" /><span>Available now</span><p>Core public discovery, profiles, business workspaces, events, food work, video, and Parking Pass have active product surfaces.</p></article>
         <article data-status="business-supplied"><Store aria-hidden="true" /><span>Business supplied</span><p>Menus, prices, hours, schedules, live stops, deals, media, and ordering depth depend on what the business has published.</p></article>
-        <article data-status="where-enabled"><LayoutDashboard aria-hidden="true" /><span>Where enabled</span><p>Pickup ordering, supplier tools, payments, subscriptions, referrals, and some operating connections depend on the account, market, and active service.</p></article>
+        <article data-status="where-enabled"><LayoutDashboard aria-hidden="true" /><span>Where enabled</span><p>Pickup ordering, supplier tools, transaction payments, referrals, and some operating connections depend on the business, market, and active service. Profile access does not depend on a monthly plan.</p></article>
         <article data-status="expanding"><Globe2 aria-hidden="true" /><span>Still expanding</span><p>Coverage, profile completeness, mobile-store readiness, supplier reach, connections, and this help foundation continue to grow.</p></article>
       </section>
 

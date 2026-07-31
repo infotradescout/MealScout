@@ -38,7 +38,7 @@ Why it should not be refactored casually:
 - **Operating hours/static schedule**: operating hours save, static schedule display, schedule setup links, and schedule-readiness prompts belong to static owner scheduling, not live GPS broadcasting.
 - **Live truck location / GPS / WebSocket broadcasting**: `navigator.geolocation.watchPosition`, geolocation fallback, live auto-timeout/stop broadcast behavior, truck-session start/end, location writes, and `useFoodTruckSocket` are live status responsibilities.
 - **Manual schedule / Parking Pass entry points**: schedule setup links, truck schedule entry points, `/parking-pass-manage`, `/restaurant-owner-dashboard?setup=schedule`, and `/api/bookings/my-truck` booking schedule reads/cancel.
-- **Deals/marketing surfaces**: deal listing, deal status updates, edit/delete, promotion cards, analytics claims/views/conversions, and business premium weekly summary links.
+- **Deals/marketing surfaces**: deal listing, deal status updates, edit/delete, promotion cards, analytics claims/views/conversions, and profile activity summary links.
 - **Analytics and Recharts rendering**: dashboard stats, favorites analytics, recommendation analytics, summary/timeseries/customer/compare analytics, Recharts charts, export CSV link, owner value attribution, and profile completion action tracking.
 - **QR/canvas/social asset generation**: QR kit, `downloadQrPng`, branded QR assets, social QR graphics, Canvas rendering, canonical URL composition, and download link behavior.
 - **Media upload/approval**: logo/cover/gallery file input, `uploadProfileMediaMutation`, `approveProfileMediaMutation`, media gallery display, approval state, and media delete paths.

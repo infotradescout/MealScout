@@ -1,5 +1,4 @@
 import {
-  users,
   restaurants,
   deals,
   dealClaims,
@@ -14,7 +13,6 @@ import { db } from "../db";
 import {
   eq,
   and,
-  isNotNull,
   desc,
   sql,
 } from "drizzle-orm";
@@ -157,36 +155,14 @@ export function createRestaurantsDealsRepository(
       lng: number,
       radiusKm: number,
     ): Promise<Restaurant[]> {
+      // Legacy method name retained for compatibility. Complete active profiles
+      // are discoverable without any subscription or billing-row requirement.
       const results = await db
-        .select({
-          id: restaurants.id,
-          name: restaurants.name,
-          address: restaurants.address,
-          phone: restaurants.phone,
-          businessType: restaurants.businessType,
-          latitude: restaurants.latitude,
-          longitude: restaurants.longitude,
-          cuisineType: restaurants.cuisineType,
-          promoCode: restaurants.promoCode,
-          isActive: restaurants.isActive,
-          isVerified: restaurants.isVerified,
-          ownerId: restaurants.ownerId,
-          createdAt: restaurants.createdAt,
-          updatedAt: restaurants.updatedAt,
-          isFoodTruck: restaurants.isFoodTruck,
-          mobileOnline: restaurants.mobileOnline,
-          currentLatitude: restaurants.currentLatitude,
-          currentLongitude: restaurants.currentLongitude,
-          lastBroadcastAt: restaurants.lastBroadcastAt,
-          operatingHours: restaurants.operatingHours,
-          subscriptionStatus: users.subscriptionBillingInterval,
-        })
+        .select()
         .from(restaurants)
-        .innerJoin(users, eq(restaurants.ownerId, users.id))
         .where(
           and(
             eq(restaurants.isActive, true),
-            isNotNull(users.subscriptionBillingInterval),
             sql`
               (6371 * acos(
                 cos(radians(${lat})) *
@@ -199,8 +175,8 @@ export function createRestaurantsDealsRepository(
           ),
         );
 
-      return results.map(
-        ({ subscriptionStatus, ...restaurant }: any) => restaurant as Restaurant,
+      return results.filter((restaurant: any) =>
+        isPublicBusinessVisible(restaurant),
       );
     },
 

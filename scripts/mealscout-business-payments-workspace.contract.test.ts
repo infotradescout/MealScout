@@ -1,86 +1,84 @@
+import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 const page = readFileSync("client/src/pages/subscribe.tsx", "utf8");
 const routes = readFileSync("server/routes/subscriptionRoutes.ts", "utf8");
-const accessPolicy = readFileSync(
-  "server/routes/accessPolicyDependencies.ts",
-  "utf8",
-);
+const policy = readFileSync("shared/profileAccessPolicy.ts", "utf8");
 
 for (const snippet of [
-  "<BusinessWorkspaceShell",
-  'activeModule="payments"',
-  'queryParams.get("restaurantId")',
-  'queryKey: ["/api/restaurants/my-restaurants"]',
-  "onBusinessChange={handleBusinessChange}",
-  "selectedBusinessReturnPath",
-  'stripeReturnParams.set("restaurantId", requestedRestaurantId)',
-  "Plan &amp; billing",
-  "This plan belongs to your MealScout business account",
-  "PaymentBrowserGate",
-  '"/api/subscriptions/initialize"',
-  '"/api/create-subscription"',
+  "<BackHeader",
+  'title="Profile access"',
+  'params.get("restaurantId")',
+  "The profile is the product.",
+  "Free trial active",
+  "No expiration",
+  "No card required",
+  "No monthly bill",
+  "An order, delivery, booking, or other paid transaction",
+]) {
+  assert.ok(page.includes(snippet), `Profile-access workspace missing: ${snippet}`);
+}
+
+for (const retiredClientSurface of [
+  "PaymentElement",
+  "Elements",
   'queryKey: ["/api/subscription/status"]',
-  'queryKey: ["/api/payout/balance"]',
-  '"/api/subscription/cancel"',
-  '"/api/business/premium-weekly-summary"',
-  "isPaidActive && !subscriptionStatus.cancelAtPeriodEnd",
-  'const hasExistingPlan = currentPlanStatus !== "none"',
-  "Checkout is disabled so a second subscription cannot be created by mistake.",
-  "No plan or payment change can be made here.",
+  'apiRequest("POST", "/api/create-subscription"',
+  "BusinessWorkspaceShell",
+  "Plan &amp; billing",
+  "PaymentBrowserGate",
+  "promoCode",
+  "applyCreditsCents",
 ]) {
-  if (!page.includes(snippet)) {
-    throw new Error(`Business payments workspace contract missing: ${snippet}`);
-  }
+  assert.ok(
+    !page.includes(retiredClientSurface),
+    `Retired monthly-billing surface remains: ${retiredClientSurface}`,
+  );
 }
 
-for (const safeNextGuard of [
-  'if (!raw.startsWith("/")) return null',
-  'if (raw.startsWith("//")) return null',
-  'if (raw.includes("://")) return null',
-]) {
-  if (!page.includes(safeNextGuard)) {
-    throw new Error(`Subscription return-path guard missing: ${safeNextGuard}`);
-  }
-}
-
-for (const staleOrUnsafeSurface of [
-  "join before April 1, 2026",
-  "Billing History",
-  "Manage Plan & Promo",
-  "button-change-plan",
-  "You can switch plans",
-  "Back to Home",
-]) {
-  if (page.includes(staleOrUnsafeSurface)) {
-    throw new Error(
-      `Stale or unsafe payment surface remains: ${staleOrUnsafeSurface}`,
-    );
-  }
-}
-
-for (const routeSnippet of [
+for (const compatibilityRoute of [
   '"/api/subscriptions/initialize"',
   '"/api/create-subscription"',
   '"/api/subscription/status"',
   '"/api/subscription/cancel"',
-  "isAuthenticated",
-  "cancel_at_period_end: true",
-  "applyCreditsCents",
-  "promoCode",
 ]) {
-  if (!routes.includes(routeSnippet)) {
-    throw new Error(`Subscription behavior contract missing: ${routeSnippet}`);
-  }
+  assert.ok(
+    routes.includes(compatibilityRoute),
+    `Missing legacy-client compatibility route: ${compatibilityRoute}`,
+  );
 }
 
-for (const pricingSnippet of [
+for (const routePromise of [
+  "hasAccess: true",
+  "trialEndsAt: null",
+  "subscriptionRequired: false",
+  "cardRequired: false",
+  "convertsToPaid: false",
+  "monthlyBilling: false",
+]) {
+  assert.ok(routes.includes(routePromise), `Access response missing: ${routePromise}`);
+}
+
+for (const forbiddenServerBehavior of [
+  "stripe.subscriptions.create",
+  "stripe.subscriptions.update",
   "PRICE_MONTHLY_25",
-  'const label = "$25 (was $50)"',
+  "cancel_at_period_end",
 ]) {
-  if (!accessPolicy.includes(pricingSnippet)) {
-    throw new Error(`Server pricing contract missing: ${pricingSnippet}`);
-  }
+  assert.ok(
+    !routes.includes(forbiddenServerBehavior),
+    `Recurring billing behavior remains: ${forbiddenServerBehavior}`,
+  );
 }
 
-console.log("mealscout-business-payments-workspace.contract: PASS");
+for (const policyPromise of [
+  'label: "Free trial"',
+  "expires: false",
+  "cardRequired: false",
+  "convertsToPaid: false",
+  "monthlySubscriptionEnabled: false",
+]) {
+  assert.ok(policy.includes(policyPromise), `Canonical policy missing: ${policyPromise}`);
+}
+
+console.log("mealscout-business-profile-access-workspace.contract: PASS");

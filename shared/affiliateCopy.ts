@@ -18,12 +18,12 @@ export const COPY = {
 
     earlyMessage: {
       heading: '🔥 You\'re early — MealScout is just starting in your area.',
-      body: 'People who help shape their local food scene become founding foodies and earn recurring commissions.',
+      body: 'People who help shape their local food scene can track referrals and eligible paid booking activity.',
     },
 
     communityMessage: {
       heading: '🤝 Help shape your local food scene',
-      body: 'Submit your favorite restaurants. If they join MealScout, you\'ll earn recurring commission every month they stay active.',
+      body: 'Submit your favorite restaurants. Your referral stays attached if the business joins MealScout.',
       hint: 'Know a great spot? Recommend it below and help us build something special.',
     },
 
@@ -34,7 +34,7 @@ export const COPY = {
 
     submitForm: {
       title: 'Recommend a Restaurant',
-      subtitle: 'Help us discover your favorite local spots. If they join MealScout, you earn recurring commissions!',
+      subtitle: 'Help us discover your favorite local spots and keep credit for the referral.',
       fields: {
         name: 'Restaurant Name',
         address: 'Address',
@@ -52,26 +52,26 @@ export const COPY = {
   shareDialog: {
     deal: {
       title: '💰 Share this deal',
-      subtitle: 'Earn recurring commission every time someone signs up through your link',
-      info: 'First-click attribution: Earn 20% at signup, then 10% every month',
+      subtitle: 'Keep referral credit when someone signs up through your link',
+      info: 'First-click attribution keeps the original referral attached',
     },
 
     restaurant: {
       title: '🍽️ Recommend this restaurant',
       subtitle: 'Get paid when they become an MealScout partner',
-      info: 'Share your unique affiliate link: 20% at signup + 10% monthly',
+      info: 'Share your unique link to keep referral credit',
     },
 
     page: {
       title: '📱 Share MealScout',
       subtitle: 'Your friends earn money too when they recommend',
-      info: 'Every restaurant signup through your link = recurring commission for you both',
+      info: 'Every business signup through your link stays attributed to you',
     },
 
     collection: {
       title: '⭐ Share this collection',
       subtitle: 'Earn affiliate commissions on all recommendations',
-      info: 'Get paid 20% at signup, then 10% monthly from restaurants in this collection',
+      info: 'Eligible paid booking activity from attributed businesses appears in your ledger',
     },
 
     search: {
@@ -85,7 +85,7 @@ export const COPY = {
   dashboard: {
     header: {
       title: 'Affiliate Dashboard',
-      subtitle: 'Earn recurring commissions by sharing restaurants from MealScout',
+      subtitle: 'Track referrals and eligible paid booking commissions',
     },
 
     cards: {
@@ -126,12 +126,12 @@ export const COPY = {
       step2: {
         icon: '📈',
         title: 'Someone Signs Up',
-        description: 'A restaurant owner clicks your link and becomes a paid subscriber',
+        description: 'A business owner clicks your link and creates or claims a profile',
       },
       step3: {
         icon: '💵',
-        title: 'Earn Recurring Commissions',
-        description: 'Get 20% at signup, then 10% every paid month they stay active',
+        title: 'Earn Eligible Commissions',
+        description: 'Eligible paid booking fees credited to your referral appear in your ledger',
       },
     },
 
@@ -151,14 +151,14 @@ export const COPY = {
     },
 
     commissionTiers: {
-      monthly: '10% of each paid month (recurring) + 20% signup bonus',
+      monthly: 'No monthly profile-subscription commissions',
     },
   },
 
   // ===== AFFILIATE BADGE / BADGE MESSAGING =====
   foundingFoodie: {
     title: '🍽️ Founding Foodie',
-    description: 'You helped shape your local food scene and earned recurring commissions',
+    description: 'You helped shape your local food scene and built verified referral activity',
     requirements: [
       'Submitted 3+ restaurant recommendations',
       'Earned $50+ in affiliate commissions',
@@ -189,7 +189,7 @@ ${url}
 Let me know what you think! And if you find other great restaurants, you can earn money by sharing them too.
 
 -
-Share restaurants on MealScout and earn recurring commissions
+Share restaurants on MealScout and keep credit for your referrals
 ${url}`,
     },
 
@@ -218,7 +218,7 @@ ${url}`,
     linkedin: {
       title: 'Discover how I\'m earning with MealScout',
       description:
-        'Found a way to share my favorite local restaurants AND earn recurring commissions. Here\'s how →',
+        'Found a way to share my favorite local restaurants and keep credit for my referrals. Here\'s how →',
     },
   },
 
@@ -239,39 +239,39 @@ ${url}`,
   // ===== COMMISSION DETAILS =====
   commissionInfo: {
     title: 'How Commissions Work',
-    intro: 'When a restaurant you refer becomes a paid MealScout partner, you earn recurring commissions.',
+    intro: 'MealScout tracks the business referrals attached to your links. Eligible paid booking activity appears in your commission ledger.',
 
     structure: {
       title: 'Commission Structure',
       monthly: {
-        label: 'Signup bonus',
-        commission: '20% of the first paid subscription',
+        label: 'Profile signup',
+        commission: 'Referral attribution is recorded; the profile itself has no monthly charge',
       },
       yearly: {
-        label: 'Recurring monthly',
-        commission: '10% of each paid month thereafter',
+        label: 'Eligible paid activity',
+        commission: 'The configured share of eligible booking fees is recorded in your ledger',
       },
     },
 
     rules: {
       firstClick: '✔ First-click attribution — whoever referred them first gets the commission',
-      paidOnly: '✔ Only paid if restaurant becomes a paid subscriber',
-      recurring: '✔ Recurring monthly (stops when they cancel)',
-      noFree: '✔ No commission on free tiers',
+      paidOnly: '✔ Profile signups do not create a monthly charge or commission',
+      recurring: '✔ Eligible booking commissions are recorded per paid activity',
+      noFree: '✔ No profile feature is gated by payment',
       noSelfReferral: '✔ Self-referrals are blocked',
     },
 
     example: {
       title: 'Example',
       scenario:
-        'You recommend Joe\'s Pizza. They subscribe for $25 this month. You earn 20% ($5) for signup, then 10% ($2.50) for each month they stay subscribed.',
+        'You recommend Joe\'s Pizza and the owner creates a profile through your link. The referral stays attached, and any eligible paid booking commission is recorded in your ledger.',
     },
   },
 
   // ===== INVITE PAGE =====
   invitePage: {
     title: 'Share MealScout & Earn Money',
-    subtitle: 'Every restaurant signup through your link earns you recurring commissions.',
+    subtitle: 'Every business signup through your link stays attributed to you.',
 
     mainCTA: 'Get your unique affiliate link',
 
@@ -284,7 +284,7 @@ ${url}`,
       {
         icon: '💰',
         title: 'Earn commissions',
-        description: 'Earn 20% at signup + 10% every month from restaurant subscriptions',
+        description: 'Track eligible commissions from attributed paid booking activity',
       },
       {
         icon: '📈',
@@ -299,10 +299,10 @@ ${url}`,
     ],
 
     socialProof: {
-      title: 'Join founders earning with MealScout',
+      title: 'Build your local referral record',
       testimonial:
-        'I\'ve recommended my favorite restaurants and earned over $500 in the first 3 months. It\'s a win-win for restaurants and scouts like us.',
-      attribution: '— MealScout Member',
+        'Share businesses you trust, keep the original referral attached, and see eligible earnings in one ledger.',
+      attribution: 'MealScout affiliate tracking',
     },
   },
 
@@ -319,7 +319,7 @@ ${url}`,
     step3: {
       title: '💵 Earn when they sign up',
       description:
-        'If someone becomes a paid subscriber through your link, you earn 10% every month.',
+        'If a business joins through your link, the referral stays attached and eligible paid activity can be credited to you.',
     },
     step4: {
       title: '💸 Withdraw or spend credits',

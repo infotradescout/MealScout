@@ -1,135 +1,79 @@
-# MealScout Sales Cheat Sheet
+# MealScout Feature Cheat Sheet
 
-Last updated: 2026-04-10
+## Product law
 
-Quick link: One-page live-call script is in docs/sales/mealscout_rep_call_sheet.md
+The business profile is the product.
 
-## 1) One-line pitch
+- Every merchant receives the complete profile toolset.
+- Profile access is described as a free trial.
+- The free trial has no expiration date.
+- No card is required for profile access.
+- The free trial never converts to a paid plan.
+- MealScout does not charge a monthly profile subscription.
+- Order, delivery, booking, supplier, payout, and other transaction charges are separate. Quote only the charge shown by the applicable workflow.
 
-MealScout helps food trucks get booked, hosts fill spots, and local diners discover what is open now.
+## What a complete profile can include
 
-## 2) Who MealScout serves
+- Public business identity, description, contact information, and verified ownership
+- Logo, cover image, gallery, menu, products, or services
+- Hours, dated truck stops, live location, service area, and availability
+- Deals, video stories, social publishing, and audience analytics
+- Ordering, kitchen, fulfillment, booking, event, and Parking Pass workflows where the business is operationally eligible
+- Team permissions, profile settings, domains, integrations, and support tools
 
-- Food trucks
-- Restaurants and bars
-- Hosts (property owners / venues)
-- Event coordinators
-- Diners
+“Included” means there is no monthly feature gate. Operational prerequisites still apply: ownership, menu approval, current location and service window, payout readiness, inventory, fulfillment settings, safety rules, and market availability.
 
-## 3) Free vs Paid (current offer)
+## Role summary
 
-### Free for all users
+### Restaurants and food trucks
 
-- Browse food pages, map pages, and local listings.
-- Browse public upcoming events.
-- Browse Parking Pass listings.
-- See where trucks are when they are at host locations.
+Create and manage a complete profile, publish current information, receive customer actions, and use the available operating tools without a monthly plan.
 
-### Free for food trucks / business users
+### Bars and hosts
 
-- Create account and profile.
-- Book Parking Pass spots (based on normal booking/payment rules).
-- View host-location schedules and bookings.
+Maintain a venue profile, publish availability, and use supported booking and event tools. Applicable booking or payout charges remain transaction-specific.
 
-### Paid (Premium required, with 30-day account-age trial for business users)
+### Caterers and private chefs
 
-- Show up in deal feeds across discovery, map, and search.
-- Post deals.
-- View premium analytics.
-- Off-platform manual schedule management.
-- One-click live location broadcasting/updates.
-- Social auto-post settings.
-- Event actions for trucks and coordinators (interest, booking, and event management).
+Present offerings, availability, contact paths, and supported request or booking actions through the same complete-profile model.
 
-### Admin/staff override
+### Customers
 
-- Admin, super_admin, and staff can access everything without a subscription.
+Scout nearby food, view truthful profiles, save and follow businesses, and complete supported orders or bookings.
 
-## 4) Food truck talk track
+## Approved answers
 
-- "You can get started free and still book host spots right away."
-- "Premium gives you growth tools: off-platform schedule, one-click location updates, social auto-post, and expanded event access."
-- "If you want steady bookings and better visibility, start free and upgrade when you are ready."
+### “How much is the profile?”
 
-## 5) Host talk track
+“MealScout calls profile access a free trial. It has no expiration, needs no card, never converts to a paid plan, and has no monthly bill.”
 
-- "Hosts create one Parking Pass listing per address, define spot count, pricing, and blackout dates."
-- "Trucks can discover and book available spots."
-- "Hosts stay visible through Parking Pass and host-location visibility."
+### “Which features require Premium?”
 
-## 6) Restaurants/Bars talk track
+“There is no paid profile tier. Complete profile tools are included. Some actions still require the business to finish operational setup, and a specific order or booking can have a clearly disclosed transaction charge.”
 
-- "For brick-and-mortar restaurants, the mission is simple: drive more people into your restaurant."
-- "MealScout gives you a profile and local visibility that helps turn nearby searchers into walk-in traffic."
-- "Premium gives you stronger promotion and analytics tools to keep growing."
+### “Will I be charged later?”
 
-## 7) Events talk track
+“Not for profile access. There is no automatic conversion and no monthly profile subscription.”
 
-- "Events are separate from Parking Pass."
-- "Public users can browse upcoming events."
-- "Paid access is required for key event actions (truck interest/booking and coordinator event management)."
+### “Is the profile really free if bookings have fees?”
 
-## 8) Payments and booking basics
+“Yes. Profile access and transaction charges are different. Any order, delivery, booking, or other transaction charge is shown in that workflow before payment.”
 
-- When payment is required, booking is confirmed after successful payment.
-- Platform and processing fees apply at checkout.
-- If two people try to grab the same spot, the first successful payment wins.
+## Language rules
 
-## 9) FAQ quick answers (sales-safe)
+Use:
 
-### "Can I use MealScout without paying?"
+- Complete profile
+- Free trial
+- No expiration
+- No card required
+- No monthly bill
+- Transaction charges are separate
 
-Yes. You can join and use core browsing and booking features for free. Premium is for advanced growth tools.
+Do not use:
 
-### "What exactly does Premium unlock?"
-
-Growth tools: deal visibility and posting, analytics, off-platform scheduling, one-click live location, social auto-posting, and paid event actions.
-
-### "Is Parking Pass paid?"
-
-Parking Pass browsing and host-location visibility are available. Premium is mainly for advanced business tools around schedule, location updates, social posting, and event actions.
-
-### "Do hosts need to pay a subscription?"
-
-Hosts can set up listings and receive bookings without a required host subscription in this model, as long as payout/payment setup is complete.
-
-### "How fast can we go live?"
-
-Usually same day once profile and required payment/payout setup are done.
-
-### "Do you offer mobile ordering?"
-
-Not as a live feature yet. We already have a smart, cost-controlled approach and are building it now.
-
-### "Who handles permits/insurance/taxes?"
-
-Hosts and operators do. MealScout is the platform layer, not the on-site operator.
-
-## 10) Objection handling
-
-### "$25/month is too much"
-
-- "Start free and validate demand first."
-- "Upgrade when you want tools that save time and help you grow faster."
-- "If one recurring booking or deal campaign pays for itself, Premium is net-positive."
-
-### "I already post on social media"
-
-- "Perfect. Premium does not replace your strategy. It helps reduce manual posting and keeps your schedule and visibility in sync."
-
-### "I only need occasional bookings"
-
-- "Use free tools now. Upgrade only when scheduling and location updates become frequent."
-
-## 11) Discovery positioning that wins deals
-
-- "MealScout reaches local people who are deciding where to eat right now."
-- "Hosts and trucks both benefit: hosts fill spots, trucks get predictable placement."
-- "Premium is about consistency and speed, not just feature count."
-
-## 12) Internal notes for sales consistency
-
-- Do not promise guaranteed revenue or guaranteed booking volume.
-- Frame Premium as optional growth support, not a forced paywall for basic setup.
-- Keep event messaging clear: browsing is public; key participation and management actions are paid.
-- When in doubt, send edge-case questions to support with the customer role, account email, and the exact action they tried.
+- Free versus Premium profile tiers
+- Trial countdowns or conversion dates
+- Upgrade to unlock profile tools
+- Monthly profile price comparisons
+- Lifetime deal, founding price, or subscription discount language

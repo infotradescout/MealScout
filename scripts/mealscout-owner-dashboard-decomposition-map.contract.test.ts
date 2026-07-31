@@ -241,7 +241,7 @@ function requireMatch(source: string, pattern: RegExp, label: string) {
   'user?.userType === "food_truck"',
   'queryKey: ["/api/business-access/me"]',
   'queryKey: ["/api/restaurants/my-restaurants"]',
-  "const hasPremiumLocationTools = canManageParkingPass",
+  "const hasProfileLocationTools = canManageParkingPass",
   'queryKey: ["/api/bookings/my-truck", selectedRestaurant]',
   "/api/owner/value-attribution",
   "/api/owner/profile-completion-action",
@@ -260,7 +260,8 @@ function requireMatch(source: string, pattern: RegExp, label: string) {
   "/api/restaurants/${selectedRestaurant}/profile-basics",
   "/api/restaurants/${selectedRestaurant}/operating-hours",
   "/api/restaurants/${selectedRestaurant}/analytics/export",
-  "/parking-pass-manage",
+  "currentDatedStopScheduleHref",
+  "/parking-pass?setup=schedule&truckId=",
   "/menu-builder?restaurantId=",
 ].forEach((snippet) => requireIncludes(ownerDashboard, snippet, `owner dashboard evidence ${snippet}`));
 

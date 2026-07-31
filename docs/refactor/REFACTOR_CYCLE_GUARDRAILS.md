@@ -75,7 +75,7 @@ These flows outrank refactor velocity:
 - Auth/session
 - Booking
 - Payments/Stripe
-- Ordering subscription gate
+- Ordering profile ownership and operational-readiness checks
 - Mobile responsiveness on primary pages
 
 If one regresses, pause and stabilize before moving to the next phase.

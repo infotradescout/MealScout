@@ -7,7 +7,7 @@ import { restaurants, truckClaimRequests } from "../shared/schema";
 /**
  * One-time cleanup: delete two confirmed-empty duplicate restaurant rows,
  * per direction from the 2026-07-14 conversation record (same lineage as
- * 596706fa / scripts/backfillEarlyAccountTrials.ts).
+ * 596706fa / the retired early-account cleanup).
  *
  * Both target rows were verified empty across menus, deals, favorites,
  * follows, recommendations, subscriptions, food truck sessions/locations,

@@ -95,41 +95,46 @@ export async function registerSchedulers(app: Express): Promise<void> {
     }
   });
 
-  // Premium Monthly Summary — 1st of the month, 8:30 AM (subscribed trucks)
+  // Monthly profile activity summary — 1st of the month, 8:30 AM.
   scheduleCron("30 8 1 * *", async () => {
-    console.log("⏰ Triggering Premium Monthly Summary Cron");
+    if (!areAutomatedMarketingEmailsEnabled() || !shouldRunMarketingEmailJobs()) {
+      return;
+    }
+    console.log("⏰ Triggering Profile Activity Monthly Summary Cron");
     try {
-      const { users, restaurantSubscriptions, restaurants } = await import(
+      const { users, restaurants } = await import(
         "@shared/schema",
       );
       const { and, eq, isNotNull, inArray } = await import("drizzle-orm");
       const { emailService } = await import("../emailService");
       const { telemetryEvents } = await import("@shared/schema");
-      // Find all restaurant owners with an active restaurant subscription row.
-      const activeSubs = await db
+      // Profile activity summaries are available to every active business
+      // profile and never depend on legacy subscription rows.
+      const activeProfiles = await db
         .selectDistinct({ userId: restaurants.ownerId })
-        .from(restaurantSubscriptions)
-        .innerJoin(
-          restaurants,
-          eq(restaurantSubscriptions.restaurantId, restaurants.id),
-        )
+        .from(restaurants)
         .where(
           and(
-            eq(restaurantSubscriptions.status, "active"),
+            eq(restaurants.isActive, true),
             isNotNull(restaurants.ownerId),
           ),
         );
-      const activeUserIds = activeSubs
+      const activeUserIds = activeProfiles
         .map((r: { userId: string | null }) => String(r.userId || "").trim())
         .filter(Boolean);
       if (activeUserIds.length === 0) {
-        console.log("[premium-monthly] No active subscribers — skipping");
+        console.log("[profile-monthly] No active business profiles — skipping");
         return;
       }
       const activeUsers = await db
         .select({ id: users.id, email: users.email, firstName: users.firstName, accountSettings: users.accountSettings })
         .from(users)
-        .where(inArray(users.id, activeUserIds));
+        .where(
+          and(
+            inArray(users.id, activeUserIds),
+            eq(users.isDisabled, false),
+          ),
+        );
       const now = new Date();
       // Cron fires on the 1st, so "this month" is the just-completed month.
       const idempotencyKey = `${now.getFullYear()}-M${String(now.getMonth() + 1).padStart(2, "0")}`;
@@ -141,7 +146,7 @@ export async function registerSchedulers(app: Express): Promise<void> {
         // Respect opt-out
         const settings = user.accountSettings as any;
         if (settings?.notifications?.channels?.email === false ||
-            settings?.notifications?.topics?.weeklyDigest === false) {
+            settings?.notifications?.topics?.profileActivitySummary !== true) {
           skippedCount++; continue;
         }
         // Idempotency check
@@ -153,7 +158,7 @@ export async function registerSchedulers(app: Express): Promise<void> {
           ),
         });
         if (alreadySent) { skippedCount++; continue; }
-        // Build summary inline (same logic as buildPremiumWeeklySummary)
+        // Build summary inline (same logic as buildProfileActivitySummary)
         try {
           const { restaurants: restaurantsTable, truckManualSchedules, truckParkingReports } = await import("@shared/schema");
           // Full previous calendar month (cron runs on the 1st).
@@ -180,7 +185,7 @@ export async function registerSchedulers(app: Express): Promise<void> {
           for (const s of manualSchedules) stopKeys.add(`${s.date?.toISOString().split("T")[0]}:${s.address}`);
           for (const r of parkingReports) stopKeys.add(`${r.date?.toISOString().split("T")[0]}:${r.address || r.locationName}`);
           const operatorName = String(user.firstName || "").trim() || "MealScout operator";
-          await emailService.sendPremiumWeeklySummaryEmail(email, operatorName, {
+          await emailService.sendProfileActivitySummaryEmail(email, operatorName, {
             weekStart: windowStart.toLocaleDateString(),
             weekEnd: now.toLocaleDateString(),
             stopsCovered: stopKeys.size,
@@ -196,13 +201,13 @@ export async function registerSchedulers(app: Express): Promise<void> {
           });
           sentCount++;
         } catch (userError) {
-          console.error(`[premium-monthly] Failed for user ${user.id}:`, userError);
+          console.error(`[profile-monthly] Failed for user ${user.id}:`, userError);
           skippedCount++;
         }
       }
-      console.log(`✅ Premium Monthly Summary: sent=${sentCount} skipped=${skippedCount}`);
+      console.log(`✅ Profile Monthly Summary: sent=${sentCount} skipped=${skippedCount}`);
     } catch (error) {
-      console.error("❌ Premium Monthly Summary Cron Failed:", error);
+      console.error("❌ Profile Monthly Summary Cron Failed:", error);
     }
   });
 
@@ -707,4 +712,3 @@ export async function registerSchedulers(app: Express): Promise<void> {
 
   console.log("✅ All schedulers registered");
 }
-
