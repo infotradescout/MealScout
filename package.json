@@ -48,6 +48,7 @@
     "test:profile-product-access": "npx --yes tsx scripts/universal-profile-access.contract.test.ts",
     "test:business-type-taxonomy": "npx --yes tsx scripts/mealscout-business-type-taxonomy.contract.test.ts",
     "test:profile-first-business-modes": "node --import tsx scripts/profile-first-business-modes.contract.test.ts",
+    "test:3d-eats-journey-safety": "node --import tsx scripts/3d-eats-journey-safety.contract.test.ts",
     "test:business-signup-attachment": "node --import tsx scripts/business-signup-menu-attachment.contract.test.ts",
     "test:truck-availability-truth": "node --import tsx scripts/truck-availability-truth.behavior.test.ts",
     "test:profile-completion-truth": "node --import tsx scripts/profile-completion-truth.behavior.test.ts",

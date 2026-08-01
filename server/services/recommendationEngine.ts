@@ -374,7 +374,9 @@ export async function buildLocalRecommendations(
   );
   const privateBehaviorByRestaurant = await (async () => {
     try {
-      return await getPrivateBehaviorScoresForRestaurants(candidateRestaurantIds);
+      return await getPrivateBehaviorScoresForRestaurants(
+        candidateRestaurantIds,
+      );
     } catch (error) {
       console.warn(
         "[recommendations/local] private behavior score lookup failed; continuing without private boosts",
@@ -388,6 +390,15 @@ export async function buildLocalRecommendations(
 
   for (const restaurant of nearbyRestaurants as any[]) {
     const restaurantId = String(restaurant.id);
+    // A truck's stored business address is not a serving location. Trucks enter
+    // local recommendations through the live/scheduled truck lane below, where
+    // location freshness is enforced.
+    if (
+      restaurant.isFoodTruck === true ||
+      String(restaurant.businessType || "").toLowerCase() === "food_truck"
+    ) {
+      continue;
+    }
     const latValue = toFiniteNumber(restaurant.latitude ?? restaurant.lat);
     const lngValue = toFiniteNumber(restaurant.longitude ?? restaurant.lng);
     if (latValue === null || lngValue === null) continue;
@@ -600,7 +611,8 @@ export async function buildLocalRecommendations(
     if (
       !interval ||
       interval.endUtc.getTime() < now.getTime() ||
-      dateKeyInZone(interval.startUtc, timeZone) !== dateKeyInZone(now, timeZone)
+      dateKeyInZone(interval.startUtc, timeZone) !==
+        dateKeyInZone(now, timeZone)
     ) {
       continue;
     }
@@ -651,7 +663,6 @@ export async function buildLocalRecommendations(
         sourceDetail: "public_events_feed",
       },
     });
-
   }
 
   recommendations.sort((a, b) => b.score - a.score);

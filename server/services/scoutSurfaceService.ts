@@ -59,13 +59,16 @@ const toSlug = (value: string | null | undefined) =>
     .slice(0, 80);
 
 const buildPublicProfilePath = (
-  entityType: "restaurant" | "truck" | "location",
+  entityType: "restaurant" | "truck" | "location" | "caterer" | "private_chef",
   entityId: string,
   name?: string | null,
 ) => {
   const slug = `${toSlug(name) || entityId}--${entityId}`;
   if (entityType === "truck") return `/truck/${encodeURIComponent(slug)}`;
   if (entityType === "location") return `/location/${encodeURIComponent(slug)}`;
+  if (entityType === "caterer") return `/caterer/${encodeURIComponent(slug)}`;
+  if (entityType === "private_chef")
+    return `/private-chef/${encodeURIComponent(slug)}`;
   return `/restaurant/${encodeURIComponent(slug)}`;
 };
 
@@ -117,13 +120,16 @@ const milesBetween = (
 const dedupe = (items: string[]) =>
   Array.from(new Set(items.map((item) => item.trim()).filter(Boolean)));
 
-const GOOGLE_PLACE_PHOTO_HOST_RE = /(^|\/\/)(lh\d*\.googleusercontent\.com|maps\.googleapis\.com)(\/|$)/i;
+const GOOGLE_PLACE_PHOTO_HOST_RE =
+  /(^|\/\/)(lh\d*\.googleusercontent\.com|maps\.googleapis\.com)(\/|$)/i;
 const isGooglePlacePhotoUrl = (value: unknown): boolean => {
   const url = String(value || "").trim();
   if (!url) return false;
   return GOOGLE_PLACE_PHOTO_HOST_RE.test(url);
 };
-const pickTrustedBusinessImage = (...candidates: Array<unknown>): string | null => {
+const pickTrustedBusinessImage = (
+  ...candidates: Array<unknown>
+): string | null => {
   const urls = candidates
     .map((value) => String(value || "").trim())
     .filter(Boolean);
@@ -141,7 +147,10 @@ const isRestaurantOpenNow = (restaurant: any): boolean => {
   ].find((value) => typeof value === "boolean");
   if (typeof explicit === "boolean") return explicit;
   const status = String(
-    restaurant?.openStatus || restaurant?.status || restaurant?.hoursStatus || "",
+    restaurant?.openStatus ||
+      restaurant?.status ||
+      restaurant?.hoursStatus ||
+      "",
   )
     .trim()
     .toLowerCase();
@@ -159,14 +168,16 @@ const hasRestaurantScheduleSignal = (restaurant: any): boolean => {
   if (directSchedule && typeof directSchedule === "object") {
     return Object.keys(directSchedule).length > 0;
   }
-  if (typeof directSchedule === "string" && directSchedule.trim().length > 0) return true;
+  if (typeof directSchedule === "string" && directSchedule.trim().length > 0)
+    return true;
   const explicitOpenFields = [
     restaurant?.isOpen,
     restaurant?.openNow,
     restaurant?.currentlyOpen,
     restaurant?.isCurrentlyOpen,
   ];
-  if (explicitOpenFields.some((value) => typeof value === "boolean")) return true;
+  if (explicitOpenFields.some((value) => typeof value === "boolean"))
+    return true;
   return false;
 };
 
@@ -217,8 +228,14 @@ const isToday = (value: unknown): boolean => {
 
 const byScoreThenDistance = (a: ScoutSurfaceCard, b: ScoutSurfaceCard) => {
   if (a.score !== b.score) return b.score - a.score;
-  const ad = typeof a.distanceMiles === "number" ? a.distanceMiles : Number.POSITIVE_INFINITY;
-  const bd = typeof b.distanceMiles === "number" ? b.distanceMiles : Number.POSITIVE_INFINITY;
+  const ad =
+    typeof a.distanceMiles === "number"
+      ? a.distanceMiles
+      : Number.POSITIVE_INFINITY;
+  const bd =
+    typeof b.distanceMiles === "number"
+      ? b.distanceMiles
+      : Number.POSITIVE_INFINITY;
   return ad - bd;
 };
 
@@ -233,7 +250,16 @@ const normalizeEntityType = (
   if (entityType === "host_spot") return "host_spot";
   if (entityType === "caterer") return "caterer";
   if (entityType === "private_chef") return "private_chef";
-  if (fallbackEntity?.isFoodTruck) return "truck";
+  const fallbackBusinessType = String(
+    fallbackEntity?.businessType || fallbackEntity?.serviceType || "",
+  )
+    .trim()
+    .toLowerCase();
+  if (fallbackEntity?.isFoodTruck || fallbackBusinessType === "food_truck") {
+    return "truck";
+  }
+  if (fallbackBusinessType === "caterer") return "caterer";
+  if (fallbackBusinessType === "private_chef") return "private_chef";
   return "restaurant";
 };
 
@@ -266,7 +292,8 @@ const getStatusLabel = (
   entityType: ScoutSurfaceCard["entityType"],
   availability: ScoutSurfaceCard["availability"],
 ) => {
-  if (entityType === "truck" && availability === "serving_now") return "Serving now";
+  if (entityType === "truck" && availability === "serving_now")
+    return "Serving now";
   if (availability === "open_now") return "Open now";
   if (availability === "deal_today") return "Deal today";
   if (availability === "event_today") return "Happening today";
@@ -302,18 +329,28 @@ const getCta = (card: ScoutSurfaceCard): ScoutSurfaceCard["cta"] => {
   };
 
   if (card.entityType === "deal") {
-    return { label: "View details", href: `/deal/${encodeURIComponent(card.entityId)}` };
+    return {
+      label: "View details",
+      href: `/deal/${encodeURIComponent(card.entityId)}`,
+    };
   }
   if (card.entityType === "event") {
     if (parkingPassBookable) {
       return { label: "Book spot", href: buildParkingPassHref() };
     }
-    return { label: "View details", href: `/events/${encodeURIComponent(card.entityId)}` };
+    return {
+      label: "View details",
+      href: `/events/${encodeURIComponent(card.entityId)}`,
+    };
   }
   if (card.entityType === "host_spot") {
     return {
       label: "View details",
-      href: buildPublicProfilePath("location", String(card.entityId), card.title),
+      href: buildPublicProfilePath(
+        "location",
+        String(card.entityId),
+        card.title,
+      ),
     };
   }
   if (card.entityType === "truck") {
@@ -322,9 +359,23 @@ const getCta = (card: ScoutSurfaceCard): ScoutSurfaceCard["cta"] => {
       href: buildPublicProfilePath("truck", String(card.entityId), card.title),
     };
   }
+  if (card.entityType === "caterer" || card.entityType === "private_chef") {
+    return {
+      label: "View details",
+      href: buildPublicProfilePath(
+        card.entityType,
+        String(card.entityId),
+        card.title,
+      ),
+    };
+  }
   return {
     label: "View menu",
-    href: buildPublicProfilePath("restaurant", String(card.entityId), card.title),
+    href: buildPublicProfilePath(
+      "restaurant",
+      String(card.entityId),
+      card.title,
+    ),
   };
 };
 
@@ -332,7 +383,8 @@ const isRecommendationBacked = (card: ScoutSurfaceCard) => {
   const metadata = (card.metadata || {}) as Record<string, unknown>;
   const sourceDetail = String(metadata.sourceDetail || "");
   const reasons = card.reasons || [];
-  if (card.source === "recommendation" || card.source === "community") return true;
+  if (card.source === "recommendation" || card.source === "community")
+    return true;
   if (sourceDetail.includes("private_behavior")) return true;
   if (sourceDetail.includes("restaurant_signals")) return true;
   if (sourceDetail.includes("active_deal_linked")) return true;
@@ -354,7 +406,8 @@ const isUserSpecificRecommendation = (card: ScoutSurfaceCard) => {
 };
 
 const isUnderScoutedDiscovery = (card: ScoutSurfaceCard) => {
-  if (card.source !== "restaurant_public" && card.source !== "truck_activity") return false;
+  if (card.source !== "restaurant_public" && card.source !== "truck_activity")
+    return false;
   if (isRecommendationBacked(card)) return false;
   const reasons = (card.reasons || []).map((reason) => reason.toLowerCase());
   const hasHeavyMomentumReason = reasons.some((reason) =>
@@ -394,7 +447,9 @@ async function getRestaurantSignals(
           count: sql<number>`cast(count(*) as integer)`,
         })
         .from(restaurantUserRecommendations)
-        .where(inArray(restaurantUserRecommendations.restaurantId, restaurantIds))
+        .where(
+          inArray(restaurantUserRecommendations.restaurantId, restaurantIds),
+        )
         .groupBy(restaurantUserRecommendations.restaurantId),
       db
         .select({
@@ -402,7 +457,12 @@ async function getRestaurantSignals(
           count: sql<number>`cast(count(*) as integer)`,
         })
         .from(deals)
-        .where(and(eq(deals.isActive, true), inArray(deals.restaurantId, restaurantIds)))
+        .where(
+          and(
+            eq(deals.isActive, true),
+            inArray(deals.restaurantId, restaurantIds),
+          ),
+        )
         .groupBy(deals.restaurantId),
       db
         .select({
@@ -552,8 +612,13 @@ export async function buildScoutSurface(
   const hasLocation = Number.isFinite(lat) && Number.isFinite(lng);
   const radiusKm = radiusMiles * 1.609344;
 
-  const [allRestaurants, activeDeals, upcomingEvents, liveTrucks, localRecommendations] =
-    await Promise.all([
+  const [
+    allRestaurants,
+    activeDeals,
+    upcomingEvents,
+    liveTrucks,
+    localRecommendations,
+  ] = await Promise.all([
     storage.getAllRestaurants(),
     hasLocation
       ? storage.getNearbyDeals(Number(lat), Number(lng), radiusKm)
@@ -571,7 +636,7 @@ export async function buildScoutSurface(
           userId: input.userId || null,
         })
       : Promise.resolve([]),
-    ]);
+  ]);
 
   const restaurants = (Array.isArray(allRestaurants) ? allRestaurants : [])
     .filter((row: any) => row?.isActive)
@@ -579,7 +644,10 @@ export async function buildScoutSurface(
   const scoutEligibleRestaurants = restaurants;
 
   const restaurantById = new Map(
-    scoutEligibleRestaurants.map((restaurant: any) => [String(restaurant.id), restaurant]),
+    scoutEligibleRestaurants.map((restaurant: any) => [
+      String(restaurant.id),
+      restaurant,
+    ]),
   );
 
   const restaurantIds = scoutEligibleRestaurants
@@ -608,18 +676,27 @@ export async function buildScoutSurface(
   };
 
   const recommendationCards: ScoutSurfaceCard[] = [];
-  for (const rec of Array.isArray(localRecommendations) ? localRecommendations : []) {
+  for (const rec of Array.isArray(localRecommendations)
+    ? localRecommendations
+    : []) {
     const entityType = normalizeEntityType(String(rec.entityType || ""));
-    const availability = normalizeAvailability(String(rec.availability || "unknown"));
+    const availability = normalizeAvailability(
+      String(rec.availability || "unknown"),
+    );
     const metadata = (rec.metadata || {}) as Record<string, unknown>;
     const title =
       String(metadata.name || metadata.title || "").trim() ||
-      (entityType === "deal" ? "Deal" : entityType === "event" ? "Event" : "Nearby place");
+      (entityType === "deal"
+        ? "Deal"
+        : entityType === "event"
+          ? "Event"
+          : "Nearby place");
     const subtitle =
       typeof metadata.cuisineType === "string" && metadata.cuisineType.trim()
         ? metadata.cuisineType.trim()
         : undefined;
-    const statusLabel = rec.freshnessLabel || getStatusLabel(entityType, availability);
+    const statusLabel =
+      rec.freshnessLabel || getStatusLabel(entityType, availability);
     const source = normalizeSource(String(rec.source || ""));
     const card: ScoutSurfaceCard = {
       id: String(rec.id || `${entityType}:${String(rec.entityId || "")}`),
@@ -629,7 +706,8 @@ export async function buildScoutSurface(
       subtitle,
       imageUrl: null,
       distanceMiles:
-        typeof rec.distanceMiles === "number" && Number.isFinite(rec.distanceMiles)
+        typeof rec.distanceMiles === "number" &&
+        Number.isFinite(rec.distanceMiles)
           ? Number(rec.distanceMiles.toFixed(2))
           : null,
       statusLabel,
@@ -674,17 +752,21 @@ export async function buildScoutSurface(
       entityId: truckId,
       title: String((truck as any)?.name || "Food truck"),
       subtitle: String((truck as any)?.cuisineType || "").trim() || undefined,
-      imageUrl: ((truck as any)?.coverImageUrl || (truck as any)?.logoUrl || null) as
-        | string
-        | null,
-      distanceMiles: Number.isFinite(distanceMiles) ? Number(distanceMiles?.toFixed(2)) : null,
+      imageUrl: ((truck as any)?.coverImageUrl ||
+        (truck as any)?.logoUrl ||
+        null) as string | null,
+      distanceMiles: Number.isFinite(distanceMiles)
+        ? Number(distanceMiles?.toFixed(2))
+        : null,
       statusLabel: servingNow ? "Serving now" : "Nearby",
       badges: dedupe([
         servingNow ? "Serving now" : "Nearby",
         String((truck as any)?.city || "").trim(),
       ]),
       reasons: dedupe([
-        servingNow ? "Currently serving in your area" : "Close to your location",
+        servingNow
+          ? "Currently serving in your area"
+          : "Close to your location",
         distanceMiles !== null && Number.isFinite(distanceMiles)
           ? `${Number(distanceMiles).toFixed(1)} mi away`
           : "Available nearby",
@@ -714,7 +796,11 @@ export async function buildScoutSurface(
   for (const restaurant of scoutEligibleRestaurants) {
     const restaurantId = String((restaurant as any)?.id || "").trim();
     if (!restaurantId) continue;
-    const coords = parseLatLng(restaurant);
+    const entityType = normalizeEntityType("", restaurant);
+    // Restaurant coordinates describe a fixed public destination. A food
+    // truck's stored address does not. Live truck coordinates are handled by
+    // the liveTrucks lane above and must never be inferred from the profile.
+    const coords = entityType === "truck" ? null : parseLatLng(restaurant);
     const distanceMiles =
       hasLocation && coords
         ? milesBetween(Number(lat), Number(lng), coords.lat, coords.lng)
@@ -728,7 +814,10 @@ export async function buildScoutSurface(
       continue;
     }
 
-    const availabilityState = getRestaurantAvailabilityState(restaurant);
+    const availabilityState =
+      entityType === "truck"
+        ? "no_schedule"
+        : getRestaurantAvailabilityState(restaurant);
     const openNow = availabilityState === "open_now";
     const hasSchedule = availabilityState !== "no_schedule";
     const signals =
@@ -743,13 +832,13 @@ export async function buildScoutSurface(
         activeDealCount: 0,
       } as RecommendationSignals);
 
-    const entityType = normalizeEntityType("", restaurant);
     const baseCard: ScoutSurfaceCard = {
       id: `${entityType}:${restaurantId}`,
       entityType,
       entityId: restaurantId,
       title: String((restaurant as any)?.name || "Restaurant"),
-      subtitle: String((restaurant as any)?.cuisineType || "").trim() || undefined,
+      subtitle:
+        String((restaurant as any)?.cuisineType || "").trim() || undefined,
       imageUrl: pickTrustedBusinessImage(
         (restaurant as any)?.logoUrl,
         (restaurant as any)?.coverImageUrl,
@@ -760,7 +849,11 @@ export async function buildScoutSurface(
         typeof distanceMiles === "number" && Number.isFinite(distanceMiles)
           ? Number(distanceMiles.toFixed(2))
           : null,
-      statusLabel: openNow ? "Open now" : hasSchedule ? "Closed now" : "No schedule",
+      statusLabel: openNow
+        ? "Open now"
+        : hasSchedule
+          ? "Closed now"
+          : "No schedule",
       badges: dedupe([
         openNow ? "Open now" : hasSchedule ? "Closed now" : "No schedule",
         String((restaurant as any)?.city || "").trim(),
@@ -778,7 +871,11 @@ export async function buildScoutSurface(
       cta: {
         label: "View menu",
         href: buildPublicProfilePath(
-          entityType === "truck" ? "truck" : "restaurant",
+          entityType === "truck" ||
+            entityType === "caterer" ||
+            entityType === "private_chef"
+            ? entityType
+            : "restaurant",
           restaurantId,
           String((restaurant as any)?.name || "Restaurant"),
         ),
@@ -787,7 +884,10 @@ export async function buildScoutSurface(
         (openNow ? 70 : hasSchedule ? 42 : 30) +
         Math.min(14, signals.activeDealCount * 3) +
         Math.min(10, signals.favoriteCount + signals.followCount) +
-        Math.min(12, signals.recommendationCount + signals.videoRecommendationCount) -
+        Math.min(
+          12,
+          signals.recommendationCount + signals.videoRecommendationCount,
+        ) -
         Math.min(30, Number(distanceMiles || 0) * 2.5),
       source: "restaurant_public",
       metadata: coords ? { lat: coords.lat, lng: coords.lng } : undefined,
@@ -811,7 +911,11 @@ export async function buildScoutSurface(
     if (recommendationBacking) {
       const recommendationScore =
         baseCard.score +
-        Math.min(16, signals.recommendationCount * 2 + signals.videoRecommendationCount * 2) +
+        Math.min(
+          16,
+          signals.recommendationCount * 2 +
+            signals.videoRecommendationCount * 2,
+        ) +
         Math.min(12, signals.favoriteCount + signals.followCount) +
         Math.min(8, signals.shareCount + Math.max(0, signals.reactionScore));
 
@@ -819,11 +923,14 @@ export async function buildScoutSurface(
         ...baseCard,
         id: `recommended:${restaurantId}`,
         source:
-          signals.recommendationCount > 0 || signals.videoRecommendationCount > 0
+          signals.recommendationCount > 0 ||
+          signals.videoRecommendationCount > 0
             ? "recommendation"
             : "community",
         reasons: dedupe([
-          signals.recommendationCount > 0 ? "Backed by local recommendations" : "",
+          signals.recommendationCount > 0
+            ? "Backed by local recommendations"
+            : "",
           signals.videoRecommendationCount > 0 ? "Backed by local videos" : "",
           signals.favoriteCount > 0 ? "Saved by diners" : "",
           signals.followCount > 0 ? "Followed by diners" : "",
@@ -941,7 +1048,9 @@ export async function buildScoutSurface(
       badges: dedupe([today ? "Today" : "Upcoming"]),
       reasons: dedupe([
         today ? "Scheduled for today" : "Upcoming local event",
-        (host as any)?.businessName ? `Hosted by ${(host as any).businessName}` : "",
+        (host as any)?.businessName
+          ? `Hosted by ${(host as any).businessName}`
+          : "",
       ]),
       availability: today ? "event_today" : "upcoming",
       cta: {
@@ -961,7 +1070,9 @@ export async function buildScoutSurface(
     }
 
     if (requiresPayment) {
-      const hostId = String((host as any)?.id || (event as any)?.hostId || "").trim();
+      const hostId = String(
+        (host as any)?.id || (event as any)?.hostId || "",
+      ).trim();
       if (!hostId) continue;
       cardPool.moreNearby.push({
         id: `host_spot:${hostId}:${eventId}`,
@@ -1006,16 +1117,25 @@ export async function buildScoutSurface(
 
   for (const recCard of recommendationCards) {
     if (!recCard.entityId) continue;
-    if (recCard.entityType === "truck" && recCard.availability === "serving_now") {
+    if (
+      recCard.entityType === "truck" &&
+      recCard.availability === "serving_now"
+    ) {
       cardPool.trucksServing.push(recCard);
       cardPool.nearbyNow.push(recCard);
       continue;
     }
-    if (recCard.entityType === "deal" || recCard.availability === "deal_today") {
+    if (
+      recCard.entityType === "deal" ||
+      recCard.availability === "deal_today"
+    ) {
       cardPool.dealsToday.push(recCard);
       continue;
     }
-    if (recCard.entityType === "event" && recCard.availability === "event_today") {
+    if (
+      recCard.entityType === "event" &&
+      recCard.availability === "event_today"
+    ) {
       cardPool.happeningToday.push(recCard);
       continue;
     }
@@ -1025,7 +1145,10 @@ export async function buildScoutSurface(
     if (recCard.availability === "open_now") {
       cardPool.openNearYou.push(recCard);
       cardPool.nearbyNow.push(recCard);
-    } else if (recCard.availability === "nearby" || recCard.availability === "upcoming") {
+    } else if (
+      recCard.availability === "nearby" ||
+      recCard.availability === "upcoming"
+    ) {
       cardPool.moreNearby.push(recCard);
     }
   }
@@ -1035,10 +1158,14 @@ export async function buildScoutSurface(
   }
 
   const usedEntityKeys = new Set<string>();
+  const identityKey = (card: ScoutSurfaceCard) =>
+    ["restaurant", "truck", "caterer", "private_chef"].includes(card.entityType)
+      ? `business:${card.entityId}`
+      : `${card.entityType}:${card.entityId}`;
   const pickUnique = (cards: ScoutSurfaceCard[], maxItems: number) => {
     const picked: ScoutSurfaceCard[] = [];
     for (const card of cards) {
-      const key = `${card.entityType}:${card.entityId}`;
+      const key = identityKey(card);
       if (usedEntityKeys.has(key)) continue;
       usedEntityKeys.add(key);
       picked.push(card);
@@ -1083,7 +1210,7 @@ export async function buildScoutSurface(
     const addUnique = (from: ScoutSurfaceCard[], maxItems: number) => {
       const picked: ScoutSurfaceCard[] = [];
       for (const card of from) {
-        const key = `${card.entityType}:${card.entityId}`;
+        const key = identityKey(card);
         if (localUsed.has(key)) continue;
         localUsed.add(key);
         picked.push(card);
@@ -1207,7 +1334,10 @@ export async function buildScoutSurface(
     if (rail) sections.push(rail);
   }
 
-  const markerById = new Map<string, ScoutSurfaceResponse["map"]["markers"][number]>();
+  const markerById = new Map<
+    string,
+    ScoutSurfaceResponse["map"]["markers"][number]
+  >();
   for (const sectionRow of sections) {
     for (const card of sectionRow.cards) {
       const latValue = toFinite((card.metadata as any)?.lat);
@@ -1229,7 +1359,10 @@ export async function buildScoutSurface(
     }
   }
 
-  const totalCards = sections.reduce((sum, sectionRow) => sum + sectionRow.cards.length, 0);
+  const totalCards = sections.reduce(
+    (sum, sectionRow) => sum + sectionRow.cards.length,
+    0,
+  );
   const activityScore =
     cardPool.trucksServing.length * 2 +
     cardPool.dealsToday.length * 1.5 +

@@ -61,6 +61,7 @@ import {
 import { isAuthenticated, isStaffOrAdmin } from "../unifiedAuth";
 import { distributedRateLimit } from "../middleware/distributedRateLimit";
 import { storage } from "../storage";
+import { buildPublicTruckOperatingPlan } from "../services/truckOperatingPlan";
 import { parseMenuCsv } from "../utils/menuCsvParser";
 import { parsePdfMenuWithAi } from "../utils/menuPdfParser";
 import {
@@ -234,6 +235,14 @@ async function buildOrderingReadiness(restaurantId: string) {
   const stripeConfigured = Boolean(process.env.STRIPE_SECRET_KEY);
   const profileOwnerReady = Boolean(restaurantRow?.ownerId);
   const openNow = isRestaurantOpenNow(restaurantRow?.operatingHours);
+  const truckPlan = restaurantRow?.isFoodTruck
+    ? await buildPublicTruckOperatingPlan(restaurantId)
+    : null;
+  const currentTruckStop = truckPlan?.truckSchedule.currentStop || null;
+  const truckOrderableNow = Boolean(
+    currentTruckStop?.status === "here_now" &&
+    currentTruckStop.addressPublicLabel,
+  );
 
   const checks = [
     {
@@ -286,6 +295,18 @@ async function buildOrderingReadiness(restaurantId: string) {
           ? "Update hours or reopen ordering when service starts."
           : "Set hours so customers know when ordering is available.",
     },
+    ...(restaurantRow?.isFoodTruck
+      ? [
+          {
+            id: "current_truck_stop",
+            label: "A confirmed current service stop is published",
+            ok: truckOrderableNow,
+            blocking: true,
+            action:
+              "Publish and confirm the truck's current service window and pickup location before taking orders.",
+          },
+        ]
+      : []),
   ];
 
   const blockingReasons = checks
@@ -303,6 +324,7 @@ async function buildOrderingReadiness(restaurantId: string) {
     activeMenuCount: restaurantMenus.length,
     availableItemCount: items.length,
     openNow,
+    currentTruckStop,
     checks,
     blockingReasons,
     payout: {
@@ -1389,16 +1411,16 @@ export function registerMenuRoutes(app: Express) {
       const [variants, modifiers]: [MenuItemVariant[], MenuItemModifier[]] =
         itemIds.length
           ? ((await Promise.all([
-            db
-              .select()
-              .from(menuItemVariants)
-              .where(inArray(menuItemVariants.menuItemId, itemIds))
-              .orderBy(asc(menuItemVariants.sortOrder)),
-            db
-              .select()
-              .from(menuItemModifiers)
-              .where(inArray(menuItemModifiers.menuItemId, itemIds))
-              .orderBy(asc(menuItemModifiers.sortOrder)),
+              db
+                .select()
+                .from(menuItemVariants)
+                .where(inArray(menuItemVariants.menuItemId, itemIds))
+                .orderBy(asc(menuItemVariants.sortOrder)),
+              db
+                .select()
+                .from(menuItemModifiers)
+                .where(inArray(menuItemModifiers.menuItemId, itemIds))
+                .orderBy(asc(menuItemModifiers.sortOrder)),
             ])) as [MenuItemVariant[], MenuItemModifier[]])
           : [[], []];
 

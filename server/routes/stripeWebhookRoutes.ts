@@ -1,16 +1,6 @@
 import type { Express } from "express";
 import Stripe from "stripe";
-import {
-  and,
-  asc,
-  eq,
-  gte,
-  inArray,
-  isNull,
-  lt,
-  or,
-  sql,
-} from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import {
   PARKING_PASS_BOOKING_DAYS,
   PARKING_PASS_SLOT_TYPES,
@@ -84,10 +74,7 @@ async function deactivateSubscriptionEntitlements(params: {
         updatedAt: new Date(),
       })
       .where(
-        eq(
-          restaurantSubscriptions.stripeSubscriptionId,
-          params.subscriptionId,
-        ),
+        eq(restaurantSubscriptions.stripeSubscriptionId, params.subscriptionId),
       );
 
     if (
@@ -158,9 +145,7 @@ export function registerStripeWebhookRoutes(
           .trim()
           .toLowerCase() === "true";
       const allowUnsignedDev =
-        String(
-          process.env.STRIPE_WEBHOOK_DEV_ALLOW_UNSIGNED || "",
-        )
+        String(process.env.STRIPE_WEBHOOK_DEV_ALLOW_UNSIGNED || "")
           .trim()
           .toLowerCase() === "true";
 
@@ -186,7 +171,9 @@ export function registerStripeWebhookRoutes(
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
       console.error(`Webhook signature verification failed:`, errMsg);
-      return res.status(400).send("Webhook Error: signature verification failed");
+      return res
+        .status(400)
+        .send("Webhook Error: signature verification failed");
     }
 
     console.log(`[WEBHOOK] Received event: ${event.type}`);
@@ -233,6 +220,8 @@ export function registerStripeWebhookRoutes(
               try {
                 const { pickupOrders } = await import("@shared/schema");
                 const { getWebSocketServer } = await import("../websocket");
+                const { sendPickupOrderConfirmedNotifications } =
+                  await import("../services/pickupOrderNotificationService");
                 const [order] = await db
                   .select()
                   .from(pickupOrders)
@@ -337,6 +326,11 @@ export function registerStripeWebhookRoutes(
                       order: updated as Record<string, unknown>,
                     });
                 }
+                if (updated) {
+                  sendPickupOrderConfirmedNotifications(updated).catch(
+                    console.error,
+                  );
+                }
               } catch (pickupError) {
                 console.error(
                   "[WEBHOOK] Pickup order payment confirmation failed:",
@@ -373,7 +367,8 @@ export function registerStripeWebhookRoutes(
                       .update(supplierOrders)
                       .set({
                         paymentStatus: "paid",
-                        stripePaymentIntentId: storedIntentId || paymentIntent.id,
+                        stripePaymentIntentId:
+                          storedIntentId || paymentIntent.id,
                         updatedAt: new Date(),
                       } as any)
                       .where(eq(supplierOrders.id, String(supplierOrderId)));
@@ -409,10 +404,7 @@ export function registerStripeWebhookRoutes(
                 const bookingIntentId = String(
                   booking.stripePaymentIntentId || "",
                 ).trim();
-                if (
-                  bookingIntentId &&
-                  bookingIntentId !== paymentIntent.id
-                ) {
+                if (bookingIntentId && bookingIntentId !== paymentIntent.id) {
                   throw new Error(
                     `Booking ${bookingId} expected PaymentIntent ${bookingIntentId}, received ${paymentIntent.id}`,
                   );
@@ -523,14 +515,20 @@ export function registerStripeWebhookRoutes(
                 // Send confirmation email to truck owner
                 try {
                   const [truck] = await db
-                    .select({ ownerId: restaurants.ownerId, name: restaurants.name })
+                    .select({
+                      ownerId: restaurants.ownerId,
+                      name: restaurants.name,
+                    })
                     .from(restaurants)
                     .where(eq(restaurants.id, booking.truckId));
                   const owner = truck
                     ? await storage.getUser(truck.ownerId)
                     : null;
                   const [hostRow] = await db
-                    .select({ businessName: hosts.businessName, userId: hosts.userId })
+                    .select({
+                      businessName: hosts.businessName,
+                      userId: hosts.userId,
+                    })
                     .from(hosts)
                     .where(eq(hosts.id, booking.hostId))
                     .limit(1);
@@ -607,9 +605,7 @@ export function registerStripeWebhookRoutes(
                 (row.status === "cancelled" && row.refundStatus === "credit"),
             );
 
-            const reconcileHostEarnings = async (
-              rows: typeof intentRows,
-            ) => {
+            const reconcileHostEarnings = async (rows: typeof intentRows) => {
               const entries = rows
                 .filter(
                   (row: (typeof rows)[number]) =>
@@ -789,7 +785,8 @@ export function registerStripeWebhookRoutes(
                 const recheckAlreadyProcessed = recheckRows.some(
                   (row: (typeof recheckRows)[number]) =>
                     row.status === "confirmed" ||
-                    (row.status === "cancelled" && row.refundStatus === "credit"),
+                    (row.status === "cancelled" &&
+                      row.refundStatus === "credit"),
                 );
                 if (recheckAlreadyProcessed) {
                   console.log(
@@ -1235,8 +1232,10 @@ export function registerStripeWebhookRoutes(
                         status: row.status,
                         stripePaymentIntentId: row.stripePaymentIntentId,
                         stripePaymentStatus: row.stripePaymentStatus,
-                        stripeApplicationFeeAmount: row.stripeApplicationFeeAmount,
-                        stripeTransferDestination: row.stripeTransferDestination,
+                        stripeApplicationFeeAmount:
+                          row.stripeApplicationFeeAmount,
+                        stripeTransferDestination:
+                          row.stripeTransferDestination,
                         slotType: row.slotType,
                         paidAt: row.paidAt,
                         bookingConfirmedAt: row.bookingConfirmedAt,
@@ -1284,7 +1283,9 @@ export function registerStripeWebhookRoutes(
 
                   upsertedRows.push(result);
                 } catch (upsertError: any) {
-                  const reason = String(upsertError?.message || "parking_pass_duplicate");
+                  const reason = String(
+                    upsertError?.message || "parking_pass_duplicate",
+                  );
                   await cancelWithCredit(
                     reason === "parking_pass_overbook"
                       ? "parking_pass_overbook"
@@ -1299,7 +1300,8 @@ export function registerStripeWebhookRoutes(
                 break;
               }
 
-              bookingConfirmed = upsertedRows.length === expectedDateKeys.length;
+              bookingConfirmed =
+                upsertedRows.length === expectedDateKeys.length;
               for (const row of upsertedRows) {
                 incrementNewlyConfirmed(row.eventId);
                 if (Number(row.hostPriceCents || 0) > 0) {
@@ -1336,8 +1338,7 @@ export function registerStripeWebhookRoutes(
                   ? await storage.getUser(truck.ownerId)
                   : null;
                 const endDateKey =
-                  expectedDateKeys[expectedDateKeys.length - 1] ||
-                  startDateKey;
+                  expectedDateKeys[expectedDateKeys.length - 1] || startDateKey;
                 if (owner?.email) {
                   await emailService.sendBookingConfirmationEmail({
                     to: owner.email,
@@ -1358,7 +1359,10 @@ export function registerStripeWebhookRoutes(
                       truckName: truck?.name || "A food truck",
                       startDate: startDateKey,
                       endDate: endDateKey,
-                      slotSummary: normalizedSlotTypes.length > 0 ? normalizedSlotTypes.join(", ") : undefined,
+                      slotSummary:
+                        normalizedSlotTypes.length > 0
+                          ? normalizedSlotTypes.join(", ")
+                          : undefined,
                       totalCents: amountCents,
                     });
                   }
@@ -1604,9 +1608,10 @@ export function registerStripeWebhookRoutes(
 
         case "customer.subscription.updated": {
           const subscriptionUpdated = event.data.object;
-          const terminalLegacyStatus = ["canceled", "incomplete_expired"].includes(
-            String(subscriptionUpdated.status || ""),
-          );
+          const terminalLegacyStatus = [
+            "canceled",
+            "incomplete_expired",
+          ].includes(String(subscriptionUpdated.status || ""));
           if (terminalLegacyStatus) {
             await retireLegacyProfileSubscription(
               subscriptionUpdated.id,
@@ -1656,8 +1661,12 @@ export function registerStripeWebhookRoutes(
             .set(updateValues)
             .where(eq(suppliers.stripeConnectAccountId, accountId));
 
-          const hostRows = Number((hostUpdate as { rowCount?: number })?.rowCount || 0);
-          const supplierRows = Number((supplierUpdate as { rowCount?: number })?.rowCount || 0);
+          const hostRows = Number(
+            (hostUpdate as { rowCount?: number })?.rowCount || 0,
+          );
+          const supplierRows = Number(
+            (supplierUpdate as { rowCount?: number })?.rowCount || 0,
+          );
           console.log(
             `[WEBHOOK] Synced Stripe account ${accountId} (hosts: ${hostRows}, suppliers: ${supplierRows})`,
           );
@@ -1687,8 +1696,12 @@ export function registerStripeWebhookRoutes(
             .set(revokedValues)
             .where(eq(suppliers.stripeConnectAccountId, accountId));
 
-          const hostRows = Number((hostUpdate as { rowCount?: number })?.rowCount || 0);
-          const supplierRows = Number((supplierUpdate as { rowCount?: number })?.rowCount || 0);
+          const hostRows = Number(
+            (hostUpdate as { rowCount?: number })?.rowCount || 0,
+          );
+          const supplierRows = Number(
+            (supplierUpdate as { rowCount?: number })?.rowCount || 0,
+          );
           console.log(
             `[WEBHOOK] Deauthorized Stripe account ${accountId} (hosts: ${hostRows}, suppliers: ${supplierRows})`,
           );

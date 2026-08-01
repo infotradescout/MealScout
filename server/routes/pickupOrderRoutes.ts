@@ -57,6 +57,11 @@ import {
   updatePromotedOrderCommissionStatus,
 } from "../services/merchantPromotionService";
 import { getDeliveryQuote } from "./merchantDeliveryRoutes";
+import { buildPublicTruckOperatingPlan } from "../services/truckOperatingPlan";
+import {
+  sendPickupOrderCancelledNotification,
+  sendPickupOrderConfirmedNotifications,
+} from "../services/pickupOrderNotificationService";
 
 const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY)
@@ -86,7 +91,9 @@ function estimateStripeFeeCents(chargeAmountCents: number): number {
   );
 }
 
-function grossUpStripeProcessingFeeCents(baseBeforeProcessingCents: number): number {
+function grossUpStripeProcessingFeeCents(
+  baseBeforeProcessingCents: number,
+): number {
   if (
     !Number.isFinite(baseBeforeProcessingCents) ||
     baseBeforeProcessingCents <= 0
@@ -160,9 +167,14 @@ async function assertOwnsRestaurant(userId: string, restaurantId: string) {
     throw Object.assign(new Error("Not authorized"), { statusCode: 403 });
 }
 
-async function assertCanManageRestaurantOrders(user: any, restaurantId: string) {
+async function assertCanManageRestaurantOrders(
+  user: any,
+  restaurantId: string,
+) {
   if (isAdminUserType(user?.userType)) return;
-  if (!["restaurant_owner", "food_truck"].includes(String(user?.userType || ""))) {
+  if (
+    !["restaurant_owner", "food_truck"].includes(String(user?.userType || ""))
+  ) {
     throw Object.assign(new Error("Restaurant owner access required"), {
       statusCode: 403,
     });
@@ -301,10 +313,22 @@ export function registerPickupOrderRoutes(app: Express) {
         customerEmail: z.string().email().optional().nullable(),
         customerPhone: z.string().optional().nullable(),
         orderType: z.enum(["pickup", "dine_in", "delivery"]).default("pickup"),
-        deliveryAddress: z.string().trim().min(5).max(400).optional().nullable(),
+        deliveryAddress: z
+          .string()
+          .trim()
+          .min(5)
+          .max(400)
+          .optional()
+          .nullable(),
         deliveryCity: z.string().trim().min(2).max(100).optional().nullable(),
         deliveryState: z.string().trim().min(2).max(50).optional().nullable(),
-        deliveryPostalCode: z.string().trim().min(3).max(12).optional().nullable(),
+        deliveryPostalCode: z
+          .string()
+          .trim()
+          .min(3)
+          .max(12)
+          .optional()
+          .nullable(),
         deliveryInstructions: z.string().trim().max(500).optional().nullable(),
         paymentMethod: z.enum(["card", "cash"]).default("card"),
         items: z
@@ -341,11 +365,9 @@ export function registerPickupOrderRoutes(app: Express) {
       }
 
       if (body.paymentMethod === "cash" && !menu.acceptsCash) {
-        return res
-          .status(400)
-          .json({
-            message: "This restaurant does not accept cash orders online",
-          });
+        return res.status(400).json({
+          message: "This restaurant does not accept cash orders online",
+        });
       }
 
       // Resolve all menu items
@@ -500,11 +522,37 @@ export function registerPickupOrderRoutes(app: Express) {
         return res.status(400).json({ message: "Restaurant not available" });
       }
 
+      if (restaurant.isFoodTruck) {
+        const plan = await buildPublicTruckOperatingPlan(body.restaurantId);
+        const currentStop = plan.truckSchedule.currentStop;
+        if (
+          !currentStop ||
+          currentStop.status !== "here_now" ||
+          !currentStop.addressPublicLabel
+        ) {
+          return res.status(409).json({
+            message:
+              "Ordering opens when this truck confirms its current service window and pickup location.",
+            code: "TRUCK_CURRENT_STOP_REQUIRED",
+          });
+        }
+      }
+
       let deliveryFeeCents = 0;
       let deliveryEstimateMinutes: number | null = null;
       if (body.orderType === "delivery") {
-        if (!body.deliveryAddress || !body.deliveryCity || !body.deliveryState || !body.deliveryPostalCode) {
-          return res.status(400).json({ message: "Delivery address, city, state, and postal code are required" });
+        if (
+          !body.deliveryAddress ||
+          !body.deliveryCity ||
+          !body.deliveryState ||
+          !body.deliveryPostalCode
+        ) {
+          return res
+            .status(400)
+            .json({
+              message:
+                "Delivery address, city, state, and postal code are required",
+            });
         }
         const delivery = await getDeliveryQuote(
           body.restaurantId,
@@ -535,13 +583,18 @@ export function registerPickupOrderRoutes(app: Express) {
           specialInstructions: body.specialInstructions ?? null,
           prepTimeMinutes: 20,
           scheduledFor: body.scheduledFor ? new Date(body.scheduledFor) : null,
-          deliveryAddress: body.orderType === "delivery" ? body.deliveryAddress : null,
-          deliveryCity: body.orderType === "delivery" ? body.deliveryCity : null,
-          deliveryState: body.orderType === "delivery" ? body.deliveryState : null,
-          deliveryPostalCode: body.orderType === "delivery" ? body.deliveryPostalCode : null,
+          deliveryAddress:
+            body.orderType === "delivery" ? body.deliveryAddress : null,
+          deliveryCity:
+            body.orderType === "delivery" ? body.deliveryCity : null,
+          deliveryState:
+            body.orderType === "delivery" ? body.deliveryState : null,
+          deliveryPostalCode:
+            body.orderType === "delivery" ? body.deliveryPostalCode : null,
           deliveryFeeCents,
           deliveryEstimateMinutes,
-          deliveryInstructions: body.orderType === "delivery" ? body.deliveryInstructions : null,
+          deliveryInstructions:
+            body.orderType === "delivery" ? body.deliveryInstructions : null,
         })
         .returning();
 
@@ -591,35 +644,26 @@ export function registerPickupOrderRoutes(app: Express) {
 
         emitKitchenUpdate(body.restaurantId, confirmed);
 
-        // Send email confirmation
-        if (body.customerEmail) {
-          emailService
-            .sendBasicEmail(
-              body.customerEmail,
-              `Order confirmed – ${restaurant.name}`,
-              `<p>Hi ${body.customerName}, your order has been received! Total: $${(totalCents / 100).toFixed(2)} (pay at restaurant)</p>`,
-              `Hi ${body.customerName}, your order has been received! Total: $${(totalCents / 100).toFixed(2)} (pay at restaurant)`,
-              "general",
-            )
-            .catch(() => {});
-        }
+        sendPickupOrderConfirmedNotifications(confirmed).catch(console.error);
 
         // Emit LISA claim for order placed
-        db.insert(lisaClaims).values({
-          app: "mealscout",
-          claimType: LISA_CLAIM_TYPES.ORDER_PLACED,
-          source: LISA_CLAIM_SOURCES.ORDER,
-          subjectType: "order",
-          subjectId: confirmed.id,
-          actorType: req.user?.id ? "user" : "guest",
-          actorId: req.user?.id ?? "guest",
-          payload: {
-            restaurantId: body.restaurantId,
-            orderType: body.orderType,
-            totalCents,
-            paymentMethod: "cash",
-          },
-        }).catch(() => {});
+        db.insert(lisaClaims)
+          .values({
+            app: "mealscout",
+            claimType: LISA_CLAIM_TYPES.ORDER_PLACED,
+            source: LISA_CLAIM_SOURCES.ORDER,
+            subjectType: "order",
+            subjectId: confirmed.id,
+            actorType: req.user?.id ? "user" : "guest",
+            actorId: req.user?.id ?? "guest",
+            payload: {
+              restaurantId: body.restaurantId,
+              orderType: body.orderType,
+              totalCents,
+              paymentMethod: "cash",
+            },
+          })
+          .catch(() => {});
 
         return res.status(201).json({ order: confirmed, clientSecret: null });
       }
@@ -679,21 +723,23 @@ export function registerPickupOrderRoutes(app: Express) {
         .returning();
 
       // Emit LISA claim for card order placed (payment pending)
-      db.insert(lisaClaims).values({
-        app: "mealscout",
-        claimType: LISA_CLAIM_TYPES.ORDER_PLACED,
-        source: LISA_CLAIM_SOURCES.ORDER,
-        subjectType: "order",
-        subjectId: updatedOrder.id,
-        actorType: req.user?.id ? "user" : "guest",
-        actorId: req.user?.id ?? "guest",
-        payload: {
-          restaurantId: body.restaurantId,
-          orderType: body.orderType,
-          totalCents,
-          paymentMethod: "card",
-        },
-      }).catch(() => {});
+      db.insert(lisaClaims)
+        .values({
+          app: "mealscout",
+          claimType: LISA_CLAIM_TYPES.ORDER_PLACED,
+          source: LISA_CLAIM_SOURCES.ORDER,
+          subjectType: "order",
+          subjectId: updatedOrder.id,
+          actorType: req.user?.id ? "user" : "guest",
+          actorId: req.user?.id ?? "guest",
+          payload: {
+            restaurantId: body.restaurantId,
+            orderType: body.orderType,
+            totalCents,
+            paymentMethod: "card",
+          },
+        })
+        .catch(() => {});
 
       res.status(201).json({
         order: updatedOrder,
@@ -927,11 +973,9 @@ export function registerPickupOrderRoutes(app: Express) {
       };
       const allowed = validTransitions[order.status] ?? [];
       if (!allowed.includes(status)) {
-        return res
-          .status(400)
-          .json({
-            message: `Cannot transition from ${order.status} to ${status}`,
-          });
+        return res.status(400).json({
+          message: `Cannot transition from ${order.status} to ${status}`,
+        });
       }
 
       const now = new Date();
@@ -945,10 +989,70 @@ export function registerPickupOrderRoutes(app: Express) {
         if (prepTimeMinutes) updates.prepTimeMinutes = prepTimeMinutes;
       }
       if (status === ORDER_STATUS.READY) updates.readyAt = now;
-      if (status === ORDER_STATUS.OUT_FOR_DELIVERY) updates.outForDeliveryAt = now;
+      if (status === ORDER_STATUS.OUT_FOR_DELIVERY)
+        updates.outForDeliveryAt = now;
       if (status === ORDER_STATUS.DELIVERED) updates.deliveredAt = now;
       if (status === ORDER_STATUS.COMPLETED) updates.completedAt = now;
       if (status === ORDER_STATUS.CANCELLED) {
+        if (order.paymentMethod === "card") {
+          if (!stripe || !order.stripePaymentIntentId) {
+            return res.status(503).json({
+              message:
+                "This paid order cannot be cancelled until its payment can be refunded safely.",
+            });
+          }
+
+          const paymentIntent = await stripe.paymentIntents.retrieve(
+            order.stripePaymentIntentId,
+          );
+          if (paymentIntent.status === "succeeded") {
+            const transferGroup = String(
+              order.stripeTransferGroupId || "",
+            ).trim();
+            if (order.payoutStatus === "transferred" && transferGroup) {
+              const transfers = await stripe.transfers.list({
+                transfer_group: transferGroup,
+                limit: 10,
+              });
+              for (const transfer of transfers.data) {
+                const reversibleAmount =
+                  transfer.amount - transfer.amount_reversed;
+                if (transfer.reversed || reversibleAmount <= 0) continue;
+                await stripe.transfers.createReversal(
+                  transfer.id,
+                  { amount: reversibleAmount },
+                  {
+                    idempotencyKey: `pickup-order:${order.id}:transfer-reversal`,
+                  },
+                );
+              }
+            }
+
+            const refund = await stripe.refunds.create(
+              {
+                payment_intent: order.stripePaymentIntentId,
+                reason: "requested_by_customer",
+                metadata: { pickupOrderId: order.id },
+              },
+              { idempotencyKey: `pickup-order:${order.id}:refund` },
+            );
+            if (
+              !["succeeded", "pending"].includes(String(refund.status || ""))
+            ) {
+              return res.status(502).json({
+                message:
+                  "The refund did not complete, so the order was not cancelled.",
+              });
+            }
+            updates.payoutStatus = "reversed";
+          } else if (
+            !["canceled", "requires_payment_method"].includes(
+              paymentIntent.status,
+            )
+          ) {
+            await stripe.paymentIntents.cancel(order.stripePaymentIntentId);
+          }
+        }
         updates.cancelledAt = now;
         updates.cancellationReason =
           (req.body as any).cancellationReason || "Cancelled by restaurant";
@@ -959,6 +1063,10 @@ export function registerPickupOrderRoutes(app: Express) {
         .set(updates)
         .where(eq(pickupOrders.id, orderId))
         .returning();
+
+      if (status === ORDER_STATUS.CANCELLED) {
+        sendPickupOrderCancelledNotification(updated).catch(console.error);
+      }
 
       // Notify customer when order is ready
       if (status === ORDER_STATUS.READY && !order.readyNotificationSent) {
@@ -971,28 +1079,35 @@ export function registerPickupOrderRoutes(app: Express) {
       // Emit LISA claims for terminal status transitions
       if (status === ORDER_STATUS.COMPLETED) {
         await updatePromotedOrderCommissionStatus(order.id, "completed");
-        db.insert(lisaClaims).values({
-          app: "mealscout",
-          claimType: LISA_CLAIM_TYPES.ORDER_COMPLETED,
-          source: LISA_CLAIM_SOURCES.ORDER,
-          subjectType: "order",
-          subjectId: updated.id,
-          actorType: "restaurant",
-          actorId: updated.restaurantId,
-          payload: { totalCents: updated.totalCents, orderType: updated.orderType },
-        }).catch(() => {});
+        db.insert(lisaClaims)
+          .values({
+            app: "mealscout",
+            claimType: LISA_CLAIM_TYPES.ORDER_COMPLETED,
+            source: LISA_CLAIM_SOURCES.ORDER,
+            subjectType: "order",
+            subjectId: updated.id,
+            actorType: "restaurant",
+            actorId: updated.restaurantId,
+            payload: {
+              totalCents: updated.totalCents,
+              orderType: updated.orderType,
+            },
+          })
+          .catch(() => {});
       } else if (status === ORDER_STATUS.CANCELLED) {
         await updatePromotedOrderCommissionStatus(order.id, "cancelled");
-        db.insert(lisaClaims).values({
-          app: "mealscout",
-          claimType: LISA_CLAIM_TYPES.ORDER_CANCELLED,
-          source: LISA_CLAIM_SOURCES.ORDER,
-          subjectType: "order",
-          subjectId: updated.id,
-          actorType: "restaurant",
-          actorId: updated.restaurantId,
-          payload: { cancellationReason: updated.cancellationReason },
-        }).catch(() => {});
+        db.insert(lisaClaims)
+          .values({
+            app: "mealscout",
+            claimType: LISA_CLAIM_TYPES.ORDER_CANCELLED,
+            source: LISA_CLAIM_SOURCES.ORDER,
+            subjectType: "order",
+            subjectId: updated.id,
+            actorType: "restaurant",
+            actorId: updated.restaurantId,
+            payload: { cancellationReason: updated.cancellationReason },
+          })
+          .catch(() => {});
       }
 
       res.json({ order: updated });
