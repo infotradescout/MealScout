@@ -18,6 +18,7 @@ import {
   getTruckSchedulePrimaryStop,
   hasTruckScheduleCta,
 } from "@/components/public-profile/truckScheduleTruth";
+import { shouldShowPublicClaimPrompt } from "@/components/public-profile/profileClaimPromptPolicy";
 import { CalendarDays, Clock3, MapPin, Route, Truck } from "lucide-react";
 
 type TruckHeroProps = {
@@ -361,17 +362,19 @@ export function TruckHero({ profile, safeCtas }: TruckHeroProps) {
             ) : null}
           </div>
 
-          <div className="rounded-xl border border-white/10 bg-black/15 px-3.5 py-3 text-sm text-white/68">
-            <p className="font-semibold text-white/88">
-              Own this truck? Add menu, schedule, logo, or hours.
-            </p>
-            <a
-              href="/claim-business"
-              className="mt-1 inline-flex font-semibold text-orange-200 hover:text-orange-100"
-            >
-              Claim or update this profile
-            </a>
-          </div>
+          {shouldShowPublicClaimPrompt(profile) ? (
+            <div className="rounded-xl border border-white/10 bg-black/15 px-3.5 py-3 text-sm text-white/68">
+              <p className="font-semibold text-white/88">
+                Own this truck? Add menu, schedule, logo, or hours.
+              </p>
+              <a
+                href="/claim-business"
+                className="mt-1 inline-flex font-semibold text-orange-200 hover:text-orange-100"
+              >
+                Claim or update this profile
+              </a>
+            </div>
+          ) : null}
         </div>
       </div>
     </section>

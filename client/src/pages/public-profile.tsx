@@ -45,6 +45,7 @@ import {
 } from "@/components/public-profile/ThinProfileState";
 import { PublicProfileDecisionBar } from "@/components/public-profile/PublicProfileDecisionBar";
 import { RelatedScoutRail } from "@/components/public-profile/RelatedScoutRail";
+import { isClaimedTruckProfile } from "@/components/public-profile/profileClaimPromptPolicy";
 import { useAuth } from "@/hooks/useAuth";
 import {
   getTruckScheduleEmptyStateLabel,
@@ -3062,6 +3063,7 @@ export default function PublicProfilePage() {
   const restaurantProfile = isRestaurantLikeEntity(data.entity)
     ? (data as PublicRestaurantProfile)
     : null;
+  const showPageClaimPrompts = !isClaimedTruckProfile(restaurantProfile);
   const restaurantHasMenuSurface = Boolean(
     restaurantProfile &&
       (restaurantProfile.profileType === "truck" ||
@@ -3119,12 +3121,14 @@ export default function PublicProfilePage() {
             >
               Scout
             </Link>
-            <Link
-              href="/claim-business"
-              className="hidden font-bold text-[color:var(--profile-ink-soft)] hover:text-[color:var(--profile-accent)] sm:inline"
-            >
-              Claim or update
-            </Link>
+            {showPageClaimPrompts ? (
+              <Link
+                href="/claim-business"
+                className="hidden font-bold text-[color:var(--profile-ink-soft)] hover:text-[color:var(--profile-accent)] sm:inline"
+              >
+                Claim or update
+              </Link>
+            ) : null}
           </div>
         </div>
       </header>
@@ -3348,9 +3352,11 @@ export default function PublicProfilePage() {
             <Link href="/scout" className="font-bold hover:text-[color:var(--profile-accent)]">
               Scout
             </Link>
-            <Link href="/claim-business" className="hover:text-[color:var(--profile-accent)]">
-              Business owner?
-            </Link>
+            {showPageClaimPrompts ? (
+              <Link href="/claim-business" className="hover:text-[color:var(--profile-accent)]">
+                Business owner?
+              </Link>
+            ) : null}
           </div>
         </div>
       </footer>

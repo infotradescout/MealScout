@@ -248,3 +248,27 @@ Disallowed changes: Live production booking mutations, live insurance verificati
 Validation command: `node scripts/mealscout-production-smoke-fixture-plan.contract.test.ts` and `npm run gate:production`.
 
 Handoff value: Future stateful smokes have explicit notification isolation, payment no-op, reset, fixture, evidence, and env boundaries before they touch production. No queued cleanup items remain; any next phase must be intentionally added as a new scoped cleanup map section.
+
+## C11 - Claimed Truck Public Claim-Prompt Correction
+
+Status: `DONE`
+
+Goal: Prevent claimed food-truck profiles from showing ownership, claim, or update prompts while preserving the honest `No schedule posted` empty state and the claim flow for unclaimed trucks.
+
+Files touched: Public-profile claim-prompt policy, truck schedule and thin-profile components, public-profile shell, focused contract, and `CLEANUP_MAP.md`.
+
+Allowed changes: Narrow public display gating based on the existing verified-profile signal and focused regression coverage.
+
+Disallowed changes: Claim workflow changes, verification changes, auth changes, schema changes, production data mutations, or public route changes.
+
+Validation command: `node --import tsx scripts/claimed-truck-public-profile-claim-prompts.contract.test.ts` plus the repository validation ladder in `WORKFLOW.md`.
+
+Handoff value: Claimed trucks no longer ask their owners to claim them, and unclaimed trucks retain the existing intake path.
+
+Validation evidence:
+
+- Focused claimed/unclaimed rendered-output contract passed.
+- Truck hero and thin-profile trust contracts passed.
+- Handoff spine contract and repository doctor passed.
+- TypeScript check and production build passed.
+- Local production gate reached the environment check and was blocked only by unavailable `DATABASE_URL` and `SESSION_SECRET`; all 62 non-secret/read-only checks passed or were intentionally skipped in local mode.
