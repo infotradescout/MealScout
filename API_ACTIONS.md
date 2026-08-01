@@ -1,6 +1,8 @@
 # MealScout Action API
 
-The **Action API** is a unified endpoint for server-side integrations (including any LLM client) to call controlled MealScout actions. All requests require authentication and return structured JSON responses.
+The **Action API** is currently a read-only public-discovery endpoint for trusted server-side integrations. Static integration tokens do not establish an end-user identity and cannot perform user-scoped actions. All requests require authentication and return structured JSON responses.
+
+> **Release hold:** Only `FIND_DEALS`, `FIND_RESTAURANTS`, `GET_RESTAURANT_DETAILS`, `GET_FOOD_TRUCKS`, and `GET_PARKING_PASS_SPOTS` are executable through integration tokens. Implemented user-scoped actions return HTTP `403` with `ACTION_REQUIRES_TRUSTED_PRINCIPAL` until MealScout derives the actor from a verified user credential or server-recorded delegation. Reserved unimplemented actions remain `501`; unknown names remain `400`.
 
 ## Base URL
 
@@ -30,7 +32,7 @@ Notes:
 
 ### Availability
 
-The Action API is model-agnostic: it is a server API protected by `MEALSCOUT_ACTION_TOKEN(S)` (or legacy `TRADESCOUT_API_TOKEN(S)`), not a ChatGPT-only feature. Any LLM integration that can send signed HTTPS requests and include the token can use the same action surface (including free/billed model clients).
+The Action API is model-agnostic: it is a server API protected by `MEALSCOUT_ACTION_TOKEN(S)` (or legacy `TRADESCOUT_API_TOKEN(S)`), not a ChatGPT-only feature. Those integration tokens currently authorize only the public discovery read allowlist above. They do not authorize an integration to act as a submitted `userId`.
 
 ### Use from Any LLM (not ChatGPT-only)
 
@@ -41,7 +43,7 @@ What to send:
 - `Authorization: Bearer <MEALSCOUT_ACTION_TOKEN>`
 - JSON body: `{ "action": "ACTION_NAME", "params": { ... } }`
 
-Provider-agnostic request pattern (same payload for every action):
+User-scoped mutation payloads such as the following are retained as future contract documentation but are blocked under the current integration-token identity model:
 
 ```json
 {
