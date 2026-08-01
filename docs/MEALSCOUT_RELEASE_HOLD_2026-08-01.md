@@ -26,14 +26,14 @@ remain outside the release lane.
 
 ## Confirmed blockers
 
-1. GitHub Actions did not execute for the public-read security slice and were
-   not used as evidence. The owner-directed CI-unavailable security exception
-   relied on independently reviewed local validation, remote tree identity,
-   an exact Render build marker, and controlled production smoke. Required
-   checks and their enforcement remain open release-governance work.
-2. No new branch-protection or ruleset enforcement evidence was established in
-   this lane. Required checks and ordinary-merge bypass restrictions therefore
-   remain an open control-plane requirement.
+1. GitHub Actions workflow records were created, but no GitHub Actions job
+   execution was inspected or accepted as release evidence. The owner-directed
+   CI-unavailable security exception relied on independently reviewed local
+   validation, remote tree identity, an exact Render build marker, and
+   controlled production smoke. Executable CI evidence remains open.
+2. Repository ruleset `20202108` now provides baseline `main` enforcement, but
+   no successful CI status checks are bound to it yet. Executable CI and final
+   required-check enforcement therefore remain open control-plane work.
 3. PR #322 is draft, conflicting, based on an older payment/delivery baseline,
    and must not be merged wholesale.
 4. Static Action API integration tokens establish no user principal,
@@ -80,6 +80,21 @@ Every implemented user-scoped action fails before handler dispatch with HTTP
 `403` and `ACTION_REQUIRES_TRUSTED_PRINCIPAL`. Reserved unimplemented actions
 remain `501`; unknown names remain `400`.
 
+## Main baseline enforcement — August 1, 2026
+
+Repository ruleset `20202108` (`main baseline enforcement`) is active for the
+default branch. It requires a pull request, requires review conversations to be
+resolved, and blocks branch deletion and non-fast-forward updates. It requires
+zero approving reviews and no status checks, preserving the current
+owner-directed review model while executable CI remains unavailable.
+
+The sole bypass actor is the `infotradescout` repository owner and its bypass
+mode is `pull_request`: even an emergency-security bypass must retain a pull
+request and audit trail, and it cannot be used as a routine direct push. The
+rollback is to disable ruleset `20202108`, verify that its three rules no longer
+apply, and delete it only if restoring the previously unprotected state is
+explicitly authorized.
+
 ## Production proof — August 1, 2026
 
 PR #326 was remotely verified as exactly two commits and seven intended files.
@@ -90,7 +105,8 @@ alias reported the exact deployed merge `231f06a0db4120416c47088e659db9f2a9076f2
 `RENDER_GIT_COMMIT`, `render`, `production`, and a present frontend asset
 manifest before smoke testing.
 
-GitHub Actions did not execute and were not inspected or used. The following
+GitHub Actions workflow records were created, but no GitHub Actions job
+execution was inspected or accepted as release evidence. The following
 independent local validations passed on the reviewed branch head:
 
 - `npm run test:action-api-public-read-projection`
@@ -147,9 +163,10 @@ Action API writes:                              CONTAINED IN PRODUCTION
 Action API public-read leakage:                 CONTAINED IN PRODUCTION
 Public-read contract (runtime/API_ACTIONS):     EXPLICIT / PRODUCTION SMOKE PARTIAL
 Positive truck/detail-deal item witnesses:      PENDING NATURAL INVENTORY
-EMBED v1 envelope wording:                      OPEN DOCUMENTATION FOLLOW-UP
+EMBED v1 envelope wording:                      CORRECTED BY REVIEWED ERRATUM
 Trusted-principal model:                        PENDING
-GitHub Actions/control plane:                   STILL OPEN
+GitHub Actions execution evidence:              ABSENT
+Main enforcement:                               BASELINE ACTIVE / CI CHECKS PENDING
 PR #322:                                        HOLD / DECOMPOSE
 Rescue branch:                                  PRESERVED
 Overall status:                                 PARTIAL / HOLD

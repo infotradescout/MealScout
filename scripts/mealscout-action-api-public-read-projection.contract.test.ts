@@ -53,6 +53,9 @@ const exactKeys = (
   );
 };
 
+const publicReadListEnvelopeKeys = ["success", "data", "count"] as const;
+const publicReadDetailEnvelopeKeys = ["success", "data"] as const;
+
 const assertNoSentinel = (value: unknown, label: string) => {
   assert.equal(
     JSON.stringify(value).includes("SECRET_"),
@@ -340,23 +343,23 @@ const detail = toActionApiPublicRestaurantDetailResult({
   restaurant,
   activeDeals: [deal],
 });
-exactKeys(dealList, ["success", "data", "count"], "deal list envelope");
+exactKeys(dealList, publicReadListEnvelopeKeys, "deal list envelope");
 exactKeys(
   restaurantList,
-  ["success", "data", "count"],
+  publicReadListEnvelopeKeys,
   "restaurant list envelope",
 );
 exactKeys(
   truckList,
-  ["success", "data", "count"],
+  publicReadListEnvelopeKeys,
   "food-truck list envelope",
 );
 exactKeys(
   parkingList,
-  ["success", "data", "count"],
+  publicReadListEnvelopeKeys,
   "Parking Pass list envelope",
 );
-exactKeys(detail, ["success", "data"], "restaurant detail envelope");
+exactKeys(detail, publicReadDetailEnvelopeKeys, "restaurant detail envelope");
 exactKeys(
   detail.data,
   ["restaurant", "activeDeals", "dealCount"],
@@ -527,6 +530,45 @@ const projectionSource = readFileSync(
   "server/publicProfiles/actionApiPublicReadProjection.ts",
   "utf8",
 );
+const embedContractSource = readFileSync("EMBED_CONTRACT.md", "utf8");
+const apiActionsSource = readFileSync("API_ACTIONS.md", "utf8");
+const documentedListEnvelope =
+  "`success` + `data` (array) + `count`";
+const documentedDetailEnvelope = "`success` + `data` (object)";
+
+for (const action of [
+  "FIND_DEALS",
+  "FIND_RESTAURANTS",
+  "GET_FOOD_TRUCKS",
+  "GET_PARKING_PASS_SPOTS",
+]) {
+  assert.match(embedContractSource, new RegExp(`\\b${action}\\b`));
+  assert.match(apiActionsSource, new RegExp(`\\b${action}\\b`));
+}
+assert.match(embedContractSource, /## v1 Documentation Erratum/);
+assert.ok(embedContractSource.includes(documentedListEnvelope));
+assert.ok(apiActionsSource.includes(documentedListEnvelope));
+assert.ok(embedContractSource.includes(documentedDetailEnvelope));
+assert.ok(apiActionsSource.includes(documentedDetailEnvelope));
+assert.doesNotMatch(
+  embedContractSource,
+  /lists return `results` \+ `count`/,
+  "the locked v1 document must not retain the superseded list-envelope wording",
+);
+const responseFormatStart = apiActionsSource.indexOf("## Response Format");
+const responseFormatEnd = apiActionsSource.indexOf(
+  "### Public-read projection boundary",
+  responseFormatStart,
+);
+assert.ok(responseFormatStart >= 0 && responseFormatEnd > responseFormatStart);
+const responseFormatSource = apiActionsSource.slice(
+  responseFormatStart,
+  responseFormatEnd,
+);
+assert.match(responseFormatSource, /"data": \[\]/);
+assert.match(responseFormatSource, /"count": 0/);
+assert.doesNotMatch(responseFormatSource, /"results"\s*:/);
+assert.doesNotMatch(responseFormatSource, /"message"\s*:/);
 assert.equal(
   (actionSource.match(/rawData: restaurants\.rawData/g) || []).length,
   1,

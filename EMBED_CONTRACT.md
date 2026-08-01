@@ -4,6 +4,18 @@ Status: Locked
 Owner: TradeScout (Parent OS)  
 Applies To: All embedded access via /api/actions
 
+## v1 Documentation Erratum — August 1, 2026
+
+This explicitly reviewed compatibility erratum aligns the locked document with
+the already deployed v1 wire contract. It makes no runtime, response-shape,
+schema, service, or capability change and does not require client opt-in to a
+new contract version.
+
+- `FIND_DEALS`, `FIND_RESTAURANTS`, `GET_FOOD_TRUCKS`, and
+  `GET_PARKING_PASS_SPOTS` return `success` + `data` (array) + `count`.
+- `GET_RESTAURANT_DETAILS` returns `success` + `data` (object).
+- A top-level `results` key is not part of these existing v1 success envelopes.
+
 ## Purpose
 Guarantee a safe, deterministic integration when MealScout is embedded inside TradeScout (or transferred/sold) without weakening TradeScout Law.
 
@@ -24,15 +36,20 @@ Guarantee a safe, deterministic integration when MealScout is embedded inside Tr
 
 ## Data Integrity
 - No fabricated availability, deals, locations, or hours. AI assistance cannot invent data.
-- Responses must follow the documented contract: lists return `results` + `count`; objects return `data`.
+- Responses must follow the documented v1 contract: existing public-discovery
+  lists return `success` + `data` (array) + `count`, and
+  `GET_RESTAURANT_DETAILS` returns `success` + `data` (object).
 
 ## Rate Limiting & Safety
 - `/api/actions` is rate-limited (see `API_ACTIONS.md`).
 - Abusive patterns (scraping, mass contact) are out of contract and may be blocked.
 
 ## Change Control
-- Versioned contract: v1 is locked. Changes require v2 with explicit opt-in.
-- Backward-compatible additions must be documented in `API_ACTIONS.md` and announced before use.
+- Versioned contract: v1 is locked. New capabilities or breaking wire changes
+  require a new contract version with explicit opt-in.
+- Explicit factual or security errata may correct documentation drift without
+  changing runtime behavior or expanding authority. They must be reviewed and
+  mirrored in `API_ACTIONS.md`.
 
 ## Operational Guarantees (v1 scope)
 - Authority boundary holds: TradeScout retains parent control; MealScout cannot escalate privileges.
@@ -75,4 +92,6 @@ Guarantee a safe, deterministic integration when MealScout is embedded inside Tr
 
 ---
 
-For questions or changes, raise a versioned proposal; do not alter this document without a new version.
+For capability or wire-format changes, raise a versioned proposal. A
+non-capability-expanding documentation erratum must be labeled, explicitly
+reviewed, and kept consistent with `API_ACTIONS.md` and the runtime contract.
