@@ -11,7 +11,8 @@
  *   4. Upcoming schedule list
  *   5. Closed stops (collapsed)
  *
- * Thin state: renders a tasteful "No schedule posted yet" with a claim CTA.
+ * Thin state: renders "No schedule posted" and offers a claim CTA only when
+ * the truck is still unclaimed.
  */
 import type {
   PublicRestaurantProfile,
@@ -22,6 +23,7 @@ import {
   getTruckScheduleEmptyStateLabel,
   getTruckScheduleStatusBadgeLabel,
 } from "./truckScheduleTruth";
+import { shouldShowPublicClaimPrompt } from "./profileClaimPromptPolicy";
 import { MapPin, Clock3, ExternalLink, CalendarDays } from "lucide-react";
 
 type StopRowProps = {
@@ -200,12 +202,14 @@ export function TruckSchedulePanel({
           <p className="text-sm text-[color:var(--profile-muted)]">
             {getTruckScheduleEmptyStateLabel()}
           </p>
-          <a
-            href="/claim-business"
-            className="inline-block text-xs font-semibold text-[#b93619] hover:text-[#8f2a14]"
-          >
-            Own this truck? Add your schedule →
-          </a>
+          {shouldShowPublicClaimPrompt(profile) ? (
+            <a
+              href="/claim-business"
+              className="inline-block text-xs font-semibold text-[#b93619] hover:text-[#8f2a14]"
+            >
+              Own this truck? Add your schedule →
+            </a>
+          ) : null}
         </div>
       )}
     </section>

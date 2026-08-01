@@ -14,6 +14,7 @@ import type {
 } from "@shared/publicProfiles";
 import { normalizeBusinessTypeLabel } from "@/lib/publicMenuCompleteness";
 import { hasTruckScheduleSignal } from "./truckScheduleTruth";
+import { isClaimedTruckProfile } from "./profileClaimPromptPolicy";
 
 type ThinProfileStateProps = {
   profile: PublicRestaurantProfile;
@@ -42,6 +43,8 @@ function isThinProfile(profile: PublicRestaurantProfile): boolean {
 export function ThinProfileState({
   profile,
 }: ThinProfileStateProps) {
+  if (isClaimedTruckProfile(profile)) return null;
+
   const typeLabel = normalizeBusinessTypeLabel(
     profile.profileType === "truck" ? "food_truck" : profile.profileType,
   );
