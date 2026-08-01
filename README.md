@@ -20,7 +20,7 @@ Active docs and maintenance
 - `docs/refactor/REFACTOR_CYCLE_GUARDRAILS.md` - active freeze policy and phase gate rules for the current refactor cycle
 - `docs/refactor/REFACTOR_BOARD.md` - queue/in-progress/merged/verified/rollback tracking board
 - `docs/refactor/REFACTOR_METRICS_LOG.md` - before/after reliability metrics log for each refactor merge
-- `EMBED_CONTRACT.md` and `API_ACTIONS.md` - TradeScout integration (do not modify)
+- `EMBED_CONTRACT.md` and `API_ACTIONS.md` - TradeScout integration contracts; modify only through an explicitly reviewed compatibility or security change
 
 Local prerequisites
 - Node.js 20-24

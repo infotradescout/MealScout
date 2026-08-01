@@ -8,10 +8,14 @@ import Stripe from "stripe";
 import {
   and,
   asc,
+  desc,
   eq,
+  gte,
   ilike,
   inArray,
-  like,
+  isNull,
+  lte,
+  or,
   sql,
 } from "drizzle-orm";
 import {
@@ -49,12 +53,38 @@ import {
   isActionApiPublicRead,
   isKnownActionApiAction,
 } from "../security/actionApiContainment";
+import {
+  actionApiFindDealsResultSchema,
+  actionApiFindRestaurantsResultSchema,
+  actionApiGetFoodTrucksResultSchema,
+  actionApiGetParkingPassSpotsResultSchema,
+  actionApiGetRestaurantDetailsResultSchema,
+  actionApiPublicReadFailureSchema,
+  isActionApiPublicBusinessEligible,
+  toActionApiParkingPassSpotListResult,
+  toActionApiParkingPassSpot,
+  toActionApiPublicDeal,
+  toActionApiPublicDealListResult,
+  toActionApiPublicFoodTruck,
+  toActionApiPublicFoodTruckListResult,
+  toActionApiPublicRestaurant,
+  toActionApiPublicRestaurantDetailResult,
+  toActionApiPublicInternalFailure,
+  toActionApiPublicRestaurantListResult,
+} from "../publicProfiles/actionApiPublicReadProjection";
+import {
+  assertPublicResponseSafe,
+  toPublicRestaurantProfile,
+  toPublicTruckProfile,
+} from "../publicProfiles";
+import {
+  DEFAULT_TRUCK_BROADCAST_FRESHNESS_MS,
+  deriveTruckPresence,
+} from "@shared/consumerEntity";
 
 const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY)
   : null;
-
-const router = Router();
 
 const UNAVAILABLE_ACTIONS = new Set([
   "GET_COUNTY_TRANSPARENCY",
@@ -71,6 +101,126 @@ const toNullableTrimmedText = (value: unknown) => {
   return text.length > 0 ? text : null;
 };
 
+type ActionApiReadDatabase = {
+  transaction<T>(
+    callback: (transaction: any) => Promise<T>,
+    config?: {
+      isolationLevel?: "repeatable read";
+      accessMode?: "read only";
+    },
+  ): Promise<T>;
+};
+
+type ActionApiParkingPassOccurrenceProvider =
+  typeof listParkingPassOccurrences;
+
+export type ActionApiRouterDependencies = {
+  database: ActionApiReadDatabase;
+  listParkingPassOccurrences: ActionApiParkingPassOccurrenceProvider;
+  now: () => Date;
+};
+
+const ACTION_API_READ_TRANSACTION = {
+  isolationLevel: "repeatable read" as const,
+  accessMode: "read only" as const,
+};
+
+const PUBLIC_SCAN_BATCH_SIZE = 100;
+
+const normalizePublicPagination = (input: {
+  limit?: number;
+  offset?: number;
+}) => {
+  const requestedLimit = Number(input.limit);
+  const requestedOffset = Number(input.offset);
+  return {
+    limit: Number.isFinite(requestedLimit)
+      ? Math.max(1, Math.min(Math.trunc(requestedLimit), 100))
+      : 20,
+    offset: Number.isFinite(requestedOffset)
+      ? Math.max(0, Math.trunc(requestedOffset))
+      : 0,
+  };
+};
+
+const resolveActionApiPublicBaseUrl = () =>
+  String(
+    process.env.PUBLIC_BASE_URL ||
+      process.env.SERVICE_URL ||
+      "https://www.mealscout.us",
+  ).replace(/\/+$/, "");
+
+// rawData and contact identity anchors are deliberately confined to this
+// eligibility preflight. They are required by the canonical evidence-
+// quarantine verdict and must never enter a response projection.
+const ACTION_API_BUSINESS_ELIGIBILITY_SELECT = {
+  id: restaurants.id,
+  name: restaurants.name,
+  address: restaurants.address,
+  phone: restaurants.phone,
+  websiteUrl: restaurants.websiteUrl,
+  cuisineType: restaurants.cuisineType,
+  description: restaurants.description,
+  city: restaurants.city,
+  state: restaurants.state,
+  isActive: restaurants.isActive,
+  rawData: restaurants.rawData,
+};
+
+// Public response queries select only fields admitted by the Action API DTO.
+const ACTION_API_PUBLIC_RESTAURANT_SELECT = {
+  id: restaurants.id,
+  name: restaurants.name,
+  businessType: restaurants.businessType,
+  cuisineType: restaurants.cuisineType,
+  isFoodTruck: restaurants.isFoodTruck,
+  operatingHours: restaurants.operatingHours,
+  isActive: restaurants.isActive,
+  isVerified: restaurants.isVerified,
+  logoUrl: restaurants.logoUrl,
+  coverImageUrl: restaurants.coverImageUrl,
+  city: restaurants.city,
+  state: restaurants.state,
+  description: restaurants.description,
+};
+
+const ACTION_API_PUBLIC_DEAL_SELECT = {
+  id: deals.id,
+  restaurantId: deals.restaurantId,
+  title: deals.title,
+  description: deals.description,
+  dealType: deals.dealType,
+  discountValue: deals.discountValue,
+  imageUrl: deals.imageUrl,
+  startDate: deals.startDate,
+  endDate: deals.endDate,
+  startTime: deals.startTime,
+  endTime: deals.endTime,
+  availableDuringBusinessHours: deals.availableDuringBusinessHours,
+  isOngoing: deals.isOngoing,
+};
+
+const ACTION_API_PUBLIC_TRUCK_SELECT = {
+  id: restaurants.id,
+  name: restaurants.name,
+  businessType: restaurants.businessType,
+  cuisineType: restaurants.cuisineType,
+  operatingHours: restaurants.operatingHours,
+  isActive: restaurants.isActive,
+  isVerified: restaurants.isVerified,
+  logoUrl: restaurants.logoUrl,
+  coverImageUrl: restaurants.coverImageUrl,
+  city: restaurants.city,
+  state: restaurants.state,
+  description: restaurants.description,
+  isFoodTruck: restaurants.isFoodTruck,
+  mobileOnline: restaurants.mobileOnline,
+  currentLatitude: restaurants.currentLatitude,
+  currentLongitude: restaurants.currentLongitude,
+  lastBroadcastAt: restaurants.lastBroadcastAt,
+  liveUntilAt: restaurants.liveUntilAt,
+};
+
 // ==================== ACTION HANDLERS ====================
 
 /**
@@ -82,41 +232,102 @@ async function findDeals(params: {
   search?: string;
   limit?: number;
   offset?: number;
-}) {
+}, dependencies: ActionApiRouterDependencies) {
   try {
-    const limit = Math.min(params.limit || 20, 100); // Max 100
-    const offset = params.offset || 0;
+    const { limit, offset } = normalizePublicPagination(params);
+    const now = dependencies.now();
 
-    const conditions = [eq(deals.isActive, true)];
+    const conditions: any[] = [
+      eq(deals.isActive, true),
+      lte(deals.startDate, now),
+      or(isNull(deals.endDate), gte(deals.endDate, now)),
+      eq(restaurants.isActive, true),
+    ];
 
     if (params.search) {
+      conditions.push(ilike(deals.title, `%${params.search}%`));
+    }
+
+    if (params.location) {
+      const location = `%${params.location}%`;
       conditions.push(
-        like(deals.title, `%${params.search}%`)
+        or(
+          ilike(restaurants.address, location),
+          ilike(restaurants.city, location),
+          ilike(restaurants.state, location),
+        ),
       );
     }
 
-    // Note: deals don't have a 'category' field directly, skipping category filter
-    // if (params.category) {
-    //   conditions.push(eq(deals.category, params.category));
-    // }
+    return await dependencies.database.transaction(async (transaction) => {
+      const eligibleDealIds: string[] = [];
+      let eligibleSeen = 0;
+      let candidateOffset = 0;
 
-    const results = await db
-      .select()
-      .from(deals)
-      .where(and(...conditions))
-      .limit(limit)
-      .offset(offset);
+      while (eligibleDealIds.length < limit) {
+        const candidates: any[] = await transaction
+          .select({
+            dealId: deals.id,
+            restaurant: ACTION_API_BUSINESS_ELIGIBILITY_SELECT,
+          })
+          .from(deals)
+          .innerJoin(restaurants, eq(deals.restaurantId, restaurants.id))
+          .where(and(...conditions))
+          .orderBy(desc(deals.updatedAt), desc(deals.id))
+          .limit(PUBLIC_SCAN_BATCH_SIZE)
+          .offset(candidateOffset);
 
-    return {
-      success: true,
-      data: results,
-      count: results.length,
-    };
-  } catch (error: any) {
-    return {
-      success: false,
-      error: error.message,
-    };
+        for (const row of candidates) {
+          if (!isActionApiPublicBusinessEligible(row.restaurant)) continue;
+          if (eligibleSeen < offset) {
+            eligibleSeen += 1;
+            continue;
+          }
+          const id = String(row.dealId || "").trim();
+          if (id) eligibleDealIds.push(id);
+          if (eligibleDealIds.length >= limit) break;
+        }
+
+        candidateOffset += candidates.length;
+        if (
+          candidates.length < PUBLIC_SCAN_BATCH_SIZE ||
+          eligibleDealIds.length >= limit
+        ) {
+          break;
+        }
+      }
+
+      if (eligibleDealIds.length === 0) {
+        return toActionApiPublicDealListResult([]);
+      }
+
+      const publicRows: any[] = await transaction
+        .select(ACTION_API_PUBLIC_DEAL_SELECT)
+        .from(deals)
+        .innerJoin(restaurants, eq(deals.restaurantId, restaurants.id))
+        .where(
+          and(
+            inArray(deals.id, eligibleDealIds),
+            eq(deals.isActive, true),
+            lte(deals.startDate, now),
+            or(isNull(deals.endDate), gte(deals.endDate, now)),
+            eq(restaurants.isActive, true),
+          ),
+        );
+      const publicById = new Map(
+        publicRows.map((row) => [String(row.id), row]),
+      );
+      const results = eligibleDealIds
+        .map((id) => publicById.get(id))
+        .filter(Boolean)
+        .map((row) =>
+          toActionApiPublicDeal(row as unknown as Record<string, unknown>),
+        );
+
+      return toActionApiPublicDealListResult(results);
+    }, ACTION_API_READ_TRANSACTION);
+  } catch {
+    return toActionApiPublicInternalFailure();
   }
 }
 
@@ -129,12 +340,11 @@ async function findRestaurants(params: {
   cuisine?: string;
   limit?: number;
   offset?: number;
-}) {
+}, dependencies: ActionApiRouterDependencies) {
   try {
-    const limit = Math.min(params.limit || 20, 100);
-    const offset = params.offset || 0;
+    const { limit, offset } = normalizePublicPagination(params);
 
-    const conditions = [eq(restaurants.isActive, true)];
+    const conditions: any[] = [eq(restaurants.isActive, true)];
 
     if (params.search) {
       conditions.push(
@@ -144,33 +354,87 @@ async function findRestaurants(params: {
 
     if (params.location) {
       conditions.push(
-        like(restaurants.address, `%${params.location}%`)
+        or(
+          ilike(restaurants.address, `%${params.location}%`),
+          ilike(restaurants.city, `%${params.location}%`),
+          ilike(restaurants.state, `%${params.location}%`),
+        ),
       );
     }
 
     if (params.cuisine) {
-      conditions.push(
-        like(restaurants.cuisineType, `%${params.cuisine}%`)
-      );
+      conditions.push(ilike(restaurants.cuisineType, `%${params.cuisine}%`));
     }
 
-    const results = await db
-      .select()
-      .from(restaurants)
-      .where(and(...conditions))
-      .limit(limit)
-      .offset(offset);
+    return await dependencies.database.transaction(async (transaction) => {
+      const eligibleRestaurantIds: string[] = [];
+      let eligibleSeen = 0;
+      let candidateOffset = 0;
 
-    return {
-      success: true,
-      data: results,
-      count: results.length,
-    };
-  } catch (error: any) {
-    return {
-      success: false,
-      error: error.message,
-    };
+      while (eligibleRestaurantIds.length < limit) {
+        const candidates: any[] = await transaction
+          .select(ACTION_API_BUSINESS_ELIGIBILITY_SELECT)
+          .from(restaurants)
+          .where(and(...conditions))
+          .orderBy(asc(restaurants.name), asc(restaurants.id))
+          .limit(PUBLIC_SCAN_BATCH_SIZE)
+          .offset(candidateOffset);
+
+        for (const row of candidates) {
+          if (!isActionApiPublicBusinessEligible(row)) continue;
+          if (eligibleSeen < offset) {
+            eligibleSeen += 1;
+            continue;
+          }
+          const id = String(row.id || "").trim();
+          if (id) eligibleRestaurantIds.push(id);
+          if (eligibleRestaurantIds.length >= limit) break;
+        }
+
+        candidateOffset += candidates.length;
+        if (
+          candidates.length < PUBLIC_SCAN_BATCH_SIZE ||
+          eligibleRestaurantIds.length >= limit
+        ) {
+          break;
+        }
+      }
+
+      if (eligibleRestaurantIds.length === 0) {
+        return toActionApiPublicRestaurantListResult([]);
+      }
+
+      const publicRows: any[] = await transaction
+        .select(ACTION_API_PUBLIC_RESTAURANT_SELECT)
+        .from(restaurants)
+        .where(
+          and(
+            inArray(restaurants.id, eligibleRestaurantIds),
+            eq(restaurants.isActive, true),
+          ),
+        );
+      const publicById = new Map(
+        publicRows.map((row) => [String(row.id), row]),
+      );
+      const baseUrl = resolveActionApiPublicBaseUrl();
+      const results = eligibleRestaurantIds
+        .map((id) => publicById.get(id))
+        .filter(Boolean)
+        .map((row) =>
+          toActionApiPublicRestaurant(
+            toPublicRestaurantProfile({
+              row,
+              baseUrl,
+              showAddress: false,
+              showContact: false,
+            }),
+          ),
+        );
+
+      return toActionApiPublicRestaurantListResult(results);
+    }, ACTION_API_READ_TRANSACTION);
+  } catch {
+    return toActionApiPublicInternalFailure();
   }
 }
 
@@ -1528,7 +1792,7 @@ async function getFoodTruckLocations(params: {
   latitude: number;
   longitude: number;
   radiusKm?: number;
-}) {
+}, dependencies: ActionApiRouterDependencies) {
   try {
     if (
       params.latitude === undefined ||
@@ -1562,18 +1826,119 @@ async function getFoodTruckLocations(params: {
       };
     }
 
-    const trucks = await storage.getLiveTrucksNearby(latitude, longitude, radius);
+    const staleMinutesRaw = Number(process.env.LIVE_TRUCK_STALE_MINUTES);
+    const freshnessMs = Number.isFinite(staleMinutesRaw)
+      ? Math.min(240, Math.max(5, staleMinutesRaw)) * 60_000
+      : DEFAULT_TRUCK_BROADCAST_FRESHNESS_MS;
+    const now = dependencies.now();
+    const center = { lat: latitude, lng: longitude };
+    return await dependencies.database.transaction(async (transaction) => {
+      const candidateRows: any[] = await transaction
+        .select({
+          restaurant: ACTION_API_BUSINESS_ELIGIBILITY_SELECT,
+          mobileOnline: restaurants.mobileOnline,
+          currentLatitude: restaurants.currentLatitude,
+          currentLongitude: restaurants.currentLongitude,
+          lastBroadcastAt: restaurants.lastBroadcastAt,
+          liveUntilAt: restaurants.liveUntilAt,
+        })
+        .from(restaurants)
+        .where(
+          and(
+            eq(restaurants.isFoodTruck, true),
+            eq(restaurants.mobileOnline, true),
+            eq(restaurants.isActive, true),
+            sql`${restaurants.currentLatitude} IS NOT NULL`,
+            sql`${restaurants.currentLongitude} IS NOT NULL`,
+          ),
+        );
 
-    return {
-      success: true,
-      data: trucks,
-      count: trucks.length,
-    };
-  } catch (error: any) {
-    return {
-      success: false,
-      error: error.message,
-    };
+      const eligibleTrucks = candidateRows
+        .filter((row) => isActionApiPublicBusinessEligible(row.restaurant))
+        .map((row) => {
+          const presence = deriveTruckPresence(
+            {
+              mobileOnline: row.mobileOnline,
+              currentLatitude: row.currentLatitude,
+              currentLongitude: row.currentLongitude,
+              lastBroadcastAt: row.lastBroadcastAt,
+              liveUntilAt: row.liveUntilAt,
+              locationSource: "owner_gps",
+            },
+            { now, freshnessMs },
+          );
+          if (presence.broadcastState !== "live" || !presence.location) {
+            return null;
+          }
+          const distanceKm = haversineDistanceKm(center, {
+            lat: presence.location.latitude,
+            lng: presence.location.longitude,
+          });
+          if (!Number.isFinite(distanceKm) || distanceKm > radius) return null;
+          return {
+            id: String(row.restaurant.id || "").trim(),
+            distanceKm,
+            presence,
+          };
+        })
+        .filter(
+          (
+            row,
+          ): row is {
+            id: string;
+            distanceKm: number;
+            presence: ReturnType<typeof deriveTruckPresence>;
+          } => Boolean(row?.id),
+        )
+        .sort(
+          (a, b) =>
+            a.distanceKm - b.distanceKm || a.id.localeCompare(b.id),
+        );
+
+      if (eligibleTrucks.length === 0) {
+        return toActionApiPublicFoodTruckListResult([]);
+      }
+
+      const eligibleTruckIds = eligibleTrucks.map((row) => row.id);
+      const publicRows: any[] = await transaction
+        .select(ACTION_API_PUBLIC_TRUCK_SELECT)
+        .from(restaurants)
+        .where(
+          and(
+            inArray(restaurants.id, eligibleTruckIds),
+            eq(restaurants.isFoodTruck, true),
+            eq(restaurants.mobileOnline, true),
+            eq(restaurants.isActive, true),
+          ),
+        );
+      const publicById = new Map(
+        publicRows.map((row) => [String(row.id), row]),
+      );
+      const eligibleById = new Map(
+        eligibleTrucks.map((row) => [row.id, row]),
+      );
+      const baseUrl = resolveActionApiPublicBaseUrl();
+      const trucks = eligibleTruckIds
+        .map((id) => publicById.get(id))
+        .filter(Boolean)
+        .map((row) => {
+          const eligible = eligibleById.get(String(row!.id))!;
+          const profile = toPublicTruckProfile({
+            row,
+            baseUrl,
+            showAddress: false,
+            showContact: false,
+          });
+          return toActionApiPublicFoodTruck({
+            profile: { ...profile, truckPresence: eligible.presence },
+            distanceKm: eligible.distanceKm,
+          });
+        });
+
+      return toActionApiPublicFoodTruckListResult(trucks);
+    }, ACTION_API_READ_TRANSACTION);
+  } catch {
+    return toActionApiPublicInternalFailure();
   }
 }
 
@@ -1585,7 +1950,7 @@ async function getParkingPassSpots(params: {
   longitude: number;
   radiusKm?: number;
   horizonDays?: number;
-}) {
+}, dependencies: ActionApiRouterDependencies) {
   try {
     if (params.latitude === undefined || params.longitude === undefined) {
       return {
@@ -1614,12 +1979,16 @@ async function getParkingPassSpots(params: {
     }
 
     const center = { lat: latitude, lng: longitude };
-    const { occurrences } = await listParkingPassOccurrences({
+    const { occurrences } = await dependencies.listParkingPassOccurrences({
+      start: dependencies.now(),
       horizonDays,
-      includeDraft: true,
+      includeDraft: false,
     });
 
-    const byHostId = new Map<string, any>();
+    const byHostId = new Map<
+      string,
+      ReturnType<typeof toActionApiParkingPassSpot>
+    >();
 
     for (const event of occurrences as any[]) {
       if (!isParkingPassPublicReady(event)) continue;
@@ -1650,46 +2019,44 @@ async function getParkingPassSpots(params: {
       const existing = byHostId.get(hostId);
       if (existing && existing.distanceKm <= distanceKm) continue;
 
-      byHostId.set(hostId, {
+      byHostId.set(
         hostId,
-        type: "parking_pass",
-        name: host?.businessName || "Parking Pass spot",
-        address: host?.address || null,
-        city: host?.city || null,
-        state: host?.state || null,
-        latitude: lat,
-        longitude: lng,
-        pricingCents: {
-          breakfast: Number(event?.breakfastPriceCents ?? 0) || 0,
-          lunch: Number(event?.lunchPriceCents ?? 0) || 0,
-          dinner: Number(event?.dinnerPriceCents ?? 0) || 0,
-          daily: Number(event?.dailyPriceCents ?? 0) || 0,
-          weekly: Number(event?.weeklyPriceCents ?? 0) || 0,
-          monthly: Number(event?.monthlyPriceCents ?? 0) || 0,
-        },
-        maxTrucks: Number(event?.maxTrucks ?? 1) || 1,
-        startTime: String(event?.startTime || "").trim() || null,
-        endTime: String(event?.endTime || "").trim() || null,
-        nextDate: event?.date ? new Date(event.date).toISOString().slice(0, 10) : null,
-        paymentsEnabled: Boolean(event?.paymentsEnabled),
-        distanceKm,
-      });
+        toActionApiParkingPassSpot({
+          hostId,
+          type: "parking_pass",
+          name: host?.businessName || "Parking Pass spot",
+          address: host?.address || null,
+          city: host?.city || null,
+          state: host?.state || null,
+          latitude: lat,
+          longitude: lng,
+          pricingCents: {
+            breakfast: Number(event?.breakfastPriceCents ?? 0) || 0,
+            lunch: Number(event?.lunchPriceCents ?? 0) || 0,
+            dinner: Number(event?.dinnerPriceCents ?? 0) || 0,
+            daily: Number(event?.dailyPriceCents ?? 0) || 0,
+            weekly: Number(event?.weeklyPriceCents ?? 0) || 0,
+            monthly: Number(event?.monthlyPriceCents ?? 0) || 0,
+          },
+          maxTrucks: Number(event?.maxTrucks ?? 1) || 1,
+          startTime: String(event?.startTime || "").trim() || null,
+          endTime: String(event?.endTime || "").trim() || null,
+          nextDate: event?.date
+            ? new Date(event.date).toISOString().slice(0, 10)
+            : null,
+          paymentsEnabled: Boolean(event?.paymentsEnabled),
+          distanceKm,
+        }),
+      );
     }
 
     const spots = Array.from(byHostId.values())
       .sort((a, b) => a.distanceKm - b.distanceKm)
       .slice(0, 200);
 
-    return {
-      success: true,
-      data: spots,
-      count: spots.length,
-    };
-  } catch (error: any) {
-    return {
-      success: false,
-      error: error.message,
-    };
+    return toActionApiParkingPassSpotListResult(spots);
+  } catch {
+    return toActionApiPublicInternalFailure();
   }
 }
 
@@ -1791,7 +2158,10 @@ async function getCreditBalance(params: { userId: string }) {
 /**
  * Get restaurant details
  */
-async function getRestaurantDetails(params: { restaurantId: string }) {
+async function getRestaurantDetails(
+  params: { restaurantId: string },
+  dependencies: ActionApiRouterDependencies,
+) {
   try {
     if (!params.restaurantId) {
       return {
@@ -1800,38 +2170,76 @@ async function getRestaurantDetails(params: { restaurantId: string }) {
       };
     }
 
-    const restaurant = await storage.getRestaurant(params.restaurantId);
-    if (!restaurant) {
-      return {
-        success: false,
-        error: "Restaurant not found",
-      };
-    }
-
-    // Get active deals for this restaurant
-    const restaurantDeals = await db
-      .select()
-      .from(deals)
-      .where(
-        and(
-          eq(deals.restaurantId, params.restaurantId),
-          eq(deals.isActive, true)
+    const now = dependencies.now();
+    return await dependencies.database.transaction(async (transaction) => {
+      const [eligibilityCandidate] = await transaction
+        .select(ACTION_API_BUSINESS_ELIGIBILITY_SELECT)
+        .from(restaurants)
+        .where(
+          and(
+            eq(restaurants.id, params.restaurantId),
+            eq(restaurants.isActive, true),
+          ),
         )
+        .limit(1);
+      if (
+        !eligibilityCandidate ||
+        !isActionApiPublicBusinessEligible(eligibilityCandidate)
+      ) {
+        return {
+          success: false as const,
+          error: "Restaurant not found",
+        };
+      }
+
+      const [publicRestaurantRow] = await transaction
+        .select(ACTION_API_PUBLIC_RESTAURANT_SELECT)
+        .from(restaurants)
+        .where(
+          and(
+            eq(restaurants.id, params.restaurantId),
+            eq(restaurants.isActive, true),
+          ),
+        )
+        .limit(1);
+      if (!publicRestaurantRow) {
+        return {
+          success: false as const,
+          error: "Restaurant not found",
+        };
+      }
+
+      const restaurantDealRows: any[] = await transaction
+        .select(ACTION_API_PUBLIC_DEAL_SELECT)
+        .from(deals)
+        .where(
+          and(
+            eq(deals.restaurantId, params.restaurantId),
+            eq(deals.isActive, true),
+            lte(deals.startDate, now),
+            or(isNull(deals.endDate), gte(deals.endDate, now)),
+          ),
+        )
+        .orderBy(desc(deals.updatedAt), desc(deals.id));
+      const restaurantDeals = restaurantDealRows.map((row) =>
+        toActionApiPublicDeal(row as unknown as Record<string, unknown>),
+      );
+      const restaurant = toActionApiPublicRestaurant(
+        toPublicRestaurantProfile({
+          row: publicRestaurantRow,
+          baseUrl: resolveActionApiPublicBaseUrl(),
+          showAddress: false,
+          showContact: false,
+        }),
       );
 
-    return {
-      success: true,
-      data: {
+      return toActionApiPublicRestaurantDetailResult({
         restaurant,
         activeDeals: restaurantDeals,
-        dealCount: restaurantDeals.length,
-      },
-    };
-  } catch (error: any) {
-    return {
-      success: false,
-      error: error.message,
-    };
+      });
+    }, ACTION_API_READ_TRANSACTION);
+  } catch {
+    return toActionApiPublicInternalFailure();
   }
 }
 
@@ -1879,7 +2287,18 @@ async function submitBuilderApplication(params: {
 
 // ==================== MAIN ACTION ROUTER ====================
 
-router.post("/", async (req, res) => {
+export function createActionApiRouter(
+  overrides: Partial<ActionApiRouterDependencies> = {},
+) {
+  const dependencies: ActionApiRouterDependencies = {
+    database: overrides.database ?? db,
+    listParkingPassOccurrences:
+      overrides.listParkingPassOccurrences ?? listParkingPassOccurrences,
+    now: overrides.now ?? (() => new Date()),
+  };
+  const router = Router();
+
+  router.post("/", async (req, res) => {
   const { action, params } = req.body;
 
   if (!action) {
@@ -1921,13 +2340,19 @@ router.post("/", async (req, res) => {
 
     switch (action) {
       case "FIND_DEALS":
-        result = await findDeals(params || {});
+        result = actionApiFindDealsResultSchema.parse(
+          await findDeals(params || {}, dependencies),
+        );
         break;
       case "FIND_RESTAURANTS":
-        result = await findRestaurants(params || {});
+        result = actionApiFindRestaurantsResultSchema.parse(
+          await findRestaurants(params || {}, dependencies),
+        );
         break;
       case "GET_RESTAURANT_DETAILS":
-        result = await getRestaurantDetails(params || {});
+        result = actionApiGetRestaurantDetailsResultSchema.parse(
+          await getRestaurantDetails(params || {}, dependencies),
+        );
         break;
       case "CREATE_RESTAURANT":
         result = await createRestaurant(params || {});
@@ -1945,10 +2370,14 @@ router.post("/", async (req, res) => {
         result = await updateRestaurantOperatingHours(params || {});
         break;
       case "GET_FOOD_TRUCKS":
-        result = await getFoodTruckLocations(params || {});
+        result = actionApiGetFoodTrucksResultSchema.parse(
+          await getFoodTruckLocations(params || {}, dependencies),
+        );
         break;
       case "GET_PARKING_PASS_SPOTS":
-        result = await getParkingPassSpots(params || {});
+        result = actionApiGetParkingPassSpotsResultSchema.parse(
+          await getParkingPassSpots(params || {}, dependencies),
+        );
         break;
       case "LIST_MENUS":
         result = await listMenus(params || {});
@@ -2009,14 +2438,20 @@ router.post("/", async (req, res) => {
         });
     }
 
-    return res.json(result);
+    return res.json(assertPublicResponseSafe(result));
   } catch (err: any) {
     console.error(`Error in action ${action}:`, err);
-    return res.status(500).json({
-      error: "Internal server error",
-      message: err.message,
-    });
+    return res.status(500).json(
+      actionApiPublicReadFailureSchema.parse({
+        success: false,
+        error: "Unable to complete public read",
+      }),
+    );
   }
-});
+  });
 
+  return router;
+}
+
+const router = createActionApiRouter();
 export default router;

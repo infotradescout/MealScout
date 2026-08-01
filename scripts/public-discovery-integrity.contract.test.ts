@@ -6,6 +6,7 @@ import {
   isPublicDiscoveryEligibleEntity,
   isSyntheticPublicEntityName,
 } from "../shared/publicDiscoveryIntegrity";
+import { isActionApiPublicBusinessEligible } from "../server/publicProfiles/actionApiPublicReadProjection";
 
 test("confirmed synthetic production records are not discovery eligible", () => {
   for (const name of [
@@ -67,4 +68,42 @@ test("sitemap and prerender paths consume the shared integrity policy", () => {
     prerender,
     /robots: isSyntheticTestEntity \? noindexRobots : indexableRobots/,
   );
+});
+
+test("Action public reads compose shared integrity with Scout visibility and quarantine", () => {
+  const eligible = {
+    id: "restaurant-1",
+    name: "Riverbend Cafe",
+    address: "100 Main St",
+    cuisineType: "Cafe",
+    description: "Neighborhood cafe",
+    city: "Pensacola",
+    state: "FL",
+    isActive: true,
+  };
+  assert.equal(isActionApiPublicBusinessEligible(eligible), true);
+  assert.equal(
+    isActionApiPublicBusinessEligible({
+      ...eligible,
+      name: "Test Restaurant 1771607433376",
+    }),
+    false,
+  );
+  assert.equal(
+    isActionApiPublicBusinessEligible({
+      ...eligible,
+      rawData: { evidenceQuarantine: { active: true } },
+    }),
+    false,
+  );
+
+  const actionProjection = readFileSync(
+    "server/publicProfiles/actionApiPublicReadProjection.ts",
+    "utf8",
+  );
+  const actionRoutes = readFileSync("server/routes/actionRoutes.ts", "utf8");
+  assert.match(actionProjection, /isPublicDiscoveryEligibleEntity/);
+  assert.match(actionProjection, /isPublicBusinessVisible/);
+  assert.match(actionProjection, /deriveProfileEvidenceQuarantineVisibility/);
+  assert.match(actionRoutes, /isActionApiPublicBusinessEligible/);
 });
