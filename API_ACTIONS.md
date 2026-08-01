@@ -94,7 +94,18 @@ All responses follow a consistent JSON structure:
 }
 ```
 
-Canonical contract (for new or updated actions): use `results` (array) + `count` for lists; `data` for objects. Keep responses deterministic to reduce glue code.
+Canonical contract for new or versioned actions: use `results` (array) + `count` for lists and `data` for objects. The five existing public-discovery reads retain their deployed `data` + `count` list envelope for compatibility.
+
+### Public-read projection boundary
+
+The five executable reads use strict allowlisted response objects. Database rows are never Action API responses, and fields not listed here are rejected by the runtime schema.
+
+- Deal: `id`, `restaurantId`, `title`, `description`, `dealType`, `discountValue`, `imageUrl`, `startDate`, `endDate`, `startTime`, `endTime`, `availableDuringBusinessHours`, `isOngoing`.
+- Restaurant summary/detail: `id`, `name`, `businessType`, `cuisineType`, `description`, `city`, `state`, `logoUrl`, `coverImageUrl`, `isFoodTruck`, `isVerified`, `operatingHoursSummary`.
+- Live food truck: the restaurant keys above plus `mobileOnline`, `currentLatitude`, `currentLongitude`, `lastBroadcastAt`, `liveUntilAt`, `distance`, `distanceMiles`, `lat`, `lng`, `liveBroadcasting`, `locationSource`.
+- Parking Pass spot: `hostId`, `type`, `name`, `address`, `city`, `state`, `latitude`, `longitude`, `pricingCents`, `maxTrucks`, `startTime`, `endTime`, `nextDate`, `paymentsEnabled`, `distanceKm`. `pricingCents` contains only `breakfast`, `lunch`, `dinner`, `daily`, `weekly`, and `monthly`.
+
+Security compatibility note: restaurant `address`, `phone`/`phoneNumber`, and `websiteUrl` were previously shown in the detail example but are intentionally not part of the Action API projection. That is a breaking removal made to prevent this integration surface from bypassing owner-controlled public-profile visibility. Owner-approved address and contact fields remain available through MealScout's canonical public-profile surface.
 
 ## Supported Actions
 
@@ -140,12 +151,18 @@ curl -X POST https://mealscout.yourdomain.com/api/actions \
   "data": [
     {
       "id": "deal-123",
-      "title": "50% Off Pizza",
-      "category": "food",
       "restaurantId": "rest-456",
+      "title": "50% Off Pizza",
       "description": "Half off any pizza",
-      "discount": 50,
-      "expiresAt": "2025-12-31T23:59:59Z"
+      "dealType": "percentage",
+      "discountValue": 50,
+      "imageUrl": "https://images.example/deal-123.jpg",
+      "startDate": "2026-08-01T00:00:00.000Z",
+      "endDate": null,
+      "startTime": "11:00",
+      "endTime": "14:00",
+      "availableDuringBusinessHours": false,
+      "isOngoing": true
     }
   ],
   "count": 1
@@ -214,12 +231,16 @@ Get detailed information about a specific restaurant and its active deals.
     "restaurant": {
       "id": "rest-123",
       "name": "Mario's Pizzeria",
-      "address": "123 Main St, Downtown",
+      "businessType": "restaurant",
       "cuisineType": "Italian",
       "description": "Authentic Italian pizza and pasta",
-      "phoneNumber": "555-1234",
-      "websiteUrl": "https://marios.com",
-      "isActive": true
+      "city": "Pensacola",
+      "state": "FL",
+      "logoUrl": "https://images.example/marios-logo.jpg",
+      "coverImageUrl": "https://images.example/marios-cover.jpg",
+      "isFoodTruck": false,
+      "isVerified": true,
+      "operatingHoursSummary": "Mon 11:00 AM-10:00 PM"
     },
     "activeDeals": [/* array of deal objects */],
     "dealCount": 3
