@@ -37,6 +37,7 @@
     "test:leaflet-removal": "npx --yes tsx scripts/mealscout-leaflet-removal.contract.test.ts",
     "test:event-date-normalization": "npx --yes tsx scripts/event-coordinator-date-normalization.contract.test.ts",
     "test:action-availability": "npx --yes tsx scripts/mealscout-action-availability.contract.test.ts",
+    "test:action-api-containment": "node --import tsx scripts/mealscout-action-api-write-containment.contract.test.ts",
     "test:post-merge-safety": "npx --yes tsx scripts/post-merge-safety.contract.test.ts",
     "test:about-explainer": "npx --yes tsx scripts/mealscout-about-explainer.contract.test.ts",
     "test:native-unpriced-menu-items": "node --import tsx scripts/native-unpriced-menu-items.contract.test.ts",

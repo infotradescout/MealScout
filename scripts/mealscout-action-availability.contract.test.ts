@@ -2,6 +2,10 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 const actionRoutes = readFileSync("server/routes/actionRoutes.ts", "utf8");
+const actionContainment = readFileSync(
+  "server/security/actionApiContainment.ts",
+  "utf8",
+);
 
 const unavailableActions = [
   "GET_COUNTY_TRANSPARENCY",
@@ -42,13 +46,14 @@ assert.match(unavailableGuard, /res\.status\(501\)\.json\(/);
 assert.match(unavailableGuard, /success: false/);
 assert.match(unavailableGuard, /code: "ACTION_NOT_IMPLEMENTED"/);
 
-const supportedActions = actionRoutes.match(
-  /supportedActions: \[([\s\S]*?)\]/,
+assert.match(
+  actionRoutes,
+  /supportedActions: ACTION_API_PUBLIC_READ_ACTIONS/,
+  "unknown-action response must use the executable public-read allowlist",
 );
-assert.ok(supportedActions, "unknown-action response must list supported actions");
 for (const action of unavailableActions) {
   assert.doesNotMatch(
-    supportedActions[1],
+    actionContainment,
     new RegExp(action),
     `${action} must not be advertised as supported`,
   );

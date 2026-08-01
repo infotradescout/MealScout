@@ -43,6 +43,12 @@ import {
   getUserCreditBalance,
   InsufficientCreditBalanceError,
 } from "../creditService";
+import {
+  ACTION_API_PUBLIC_READ_ACTIONS,
+  ACTION_API_WRITE_CONTAINMENT_CODE,
+  isActionApiPublicRead,
+  isKnownActionApiAction,
+} from "../security/actionApiContainment";
 
 const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY)
@@ -1891,6 +1897,25 @@ router.post("/", async (req, res) => {
     });
   }
 
+  if (!isKnownActionApiAction(action)) {
+    return res.status(400).json({
+      success: false,
+      error: `Unknown action: ${action}`,
+      supportedActions: ACTION_API_PUBLIC_READ_ACTIONS,
+    });
+  }
+
+  if (!isActionApiPublicRead(action)) {
+    return res.status(403).json({
+      success: false,
+      code: ACTION_API_WRITE_CONTAINMENT_CODE,
+      action,
+      error:
+        "This integration credential is limited to public discovery reads. User-scoped actions require a trusted MealScout principal or recorded delegation.",
+      supportedActions: ACTION_API_PUBLIC_READ_ACTIONS,
+    });
+  }
+
   try {
     let result: any;
 
@@ -1978,36 +2003,9 @@ router.post("/", async (req, res) => {
         break;
       default:
         return res.status(400).json({
+          success: false,
           error: `Unknown action: ${action}`,
-          supportedActions: [
-            "FIND_DEALS",
-            "FIND_RESTAURANTS",
-            "GET_RESTAURANT_DETAILS",
-            "CREATE_RESTAURANT",
-            "UPDATE_RESTAURANT",
-            "UPDATE_RESTAURANT_PROFILE",
-            "UPDATE_RESTAURANT_LOCATION",
-            "UPDATE_RESTAURANT_OPERATING_HOURS",
-            "GET_FOOD_TRUCKS",
-            "GET_PARKING_PASS_SPOTS",
-            "LIST_MENUS",
-            "CREATE_MENU",
-            "UPDATE_MENU",
-            "DELETE_MENU",
-            "CREATE_MENU_CATEGORY",
-            "UPDATE_MENU_CATEGORY",
-            "DELETE_MENU_CATEGORY",
-            "CREATE_MENU_ITEM",
-            "UPDATE_MENU_ITEM",
-            "DELETE_MENU_ITEM",
-            "GET_MANUAL_SCHEDULES",
-            "UPSERT_MANUAL_SCHEDULE",
-            "DELETE_MANUAL_SCHEDULE",
-            "BOOK_PARKING_SPOT",
-            "REDEEM_CREDITS",
-            "GET_CREDITS_BALANCE",
-            "SUBMIT_BUILDER_APPLICATION",
-          ],
+          supportedActions: ACTION_API_PUBLIC_READ_ACTIONS,
         });
     }
 

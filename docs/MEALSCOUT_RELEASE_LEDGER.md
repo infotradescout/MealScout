@@ -1,5 +1,7 @@
 # MealScout Release Ledger
 
+> **Current governing release state:** [`MEALSCOUT_RELEASE_HOLD_2026-08-01.md`](./MEALSCOUT_RELEASE_HOLD_2026-08-01.md) supersedes the historical readiness labels below for the August 1, 2026 release decision. Current verdict: `PARTIAL / HOLD`.
+
 Last updated: 2026-05-30 (America/Chicago)
 
 ## Locked release stack
