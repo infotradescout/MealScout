@@ -1498,7 +1498,14 @@ export function registerMenuRoutes(app: Express) {
 
       const [updated] = await db
         .update(menus)
-        .set({ ...updates, updatedAt: new Date() })
+        .set({
+          ...updates,
+          ...(Object.prototype.hasOwnProperty.call(updates, "isAvailable") ||
+          Object.prototype.hasOwnProperty.call(updates, "inventoryQty")
+            ? { inventoryAutoUnavailable: false }
+            : {}),
+          updatedAt: new Date(),
+        })
         .where(eq(menus.id, menuId))
         .returning();
       res.json({ menu: updated });
@@ -1654,7 +1661,11 @@ export function registerMenuRoutes(app: Express) {
 
       await db
         .update(menuItems)
-        .set({ isAvailable: false, updatedAt: new Date() })
+        .set({
+          isAvailable: false,
+          inventoryAutoUnavailable: false,
+          updatedAt: new Date(),
+        })
         .where(eq(menuItems.id, itemId));
       res.json({ success: true });
     }),
@@ -1683,6 +1694,7 @@ export function registerMenuRoutes(app: Express) {
         .set({
           inventoryQty,
           isAvailable: inventoryQty > 0,
+          inventoryAutoUnavailable: false,
           updatedAt: new Date(),
         })
         .where(eq(menuItems.id, itemId))
