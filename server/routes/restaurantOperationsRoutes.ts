@@ -32,7 +32,14 @@ import {
   updateRestaurantOperatingHoursSchema,
 } from "@shared/schema";
 import { computeProfileCompletionStatus } from "@shared/profileCompletionStatus";
-import { clampLiveTrucksLimit } from "@shared/searchResponseBounds";
+import {
+  MAX_LIVE_TRUCKS_RESPONSE_BYTES,
+  PUBLIC_LIVE_TRUCKS_TIMEOUT_MS,
+  clampArrayToMaxBytes,
+  clampLiveTrucksLimit,
+  isDeadlineError,
+  withDeadline,
+} from "@shared/searchResponseBounds";
 import { getBusinessAccessContext } from "../services/businessTeamAccess";
 import { getBusinessVerificationState } from "../services/businessVerificationState";
 import { loadProfileCompletionEvidenceBatch } from "../services/profileCompletionEvidence";
@@ -2440,74 +2447,103 @@ export function registerRestaurantOperationsRoutes(
         return res.status(400).json({ message: "Invalid coordinates range" });
       }
 
-      // Distance-sorted upstream; cap before per-owner access work so large
-      // radii cannot fan out into unbounded Promise.all scans.
-      const trucks = (
-        await storage.getLiveTrucksNearby(latitude, longitude, radius)
-      ).slice(0, maxTrucks);
-      const visibleTrucks = (
-        await Promise.all(
-          trucks.map(async (truck: any) => {
-            const ownerId = String(truck?.ownerId || "").trim();
-            if (!ownerId) return null;
-            const hasAccess = await hasCompleteProfileAccess(ownerId);
-            return hasAccess ? truck : null;
-          }),
-        )
-      ).filter(Boolean);
+      const trustedPayloadTrucks = await withDeadline(
+        (async () => {
+          // Distance-sorted upstream; cap before per-owner access work so large
+          // radii cannot fan out into unbounded Promise.all scans.
+          const trucks = (
+            await storage.getLiveTrucksNearby(latitude, longitude, radius)
+          ).slice(0, maxTrucks);
+          const visibleTrucks = (
+            await Promise.all(
+              trucks.map(async (truck: any) => {
+                const ownerId = String(truck?.ownerId || "").trim();
+                if (!ownerId) return null;
+                const hasAccess = await hasCompleteProfileAccess(ownerId);
+                return hasAccess ? truck : null;
+              }),
+            )
+          ).filter(Boolean);
 
-      const payloadTrucks =
-        visibleTrucks.length > 0 || trucks.length === 0 ? visibleTrucks : trucks;
-      if (visibleTrucks.length === 0 && trucks.length > 0) {
-        res.setHeader("X-MealScout-Fallback", "unfiltered-live-trucks");
-      }
-
-      const truckIds = payloadTrucks
-        .map((truck: any) => String(truck?.id || "").trim())
-        .filter(Boolean);
-      const menuEligibleIds = new Set<string>();
-      const menuCounts = new Map<string, number>();
-      if (truckIds.length > 0) {
-        const menuRows = await db
-          .select({
-            restaurantId: menuItems.restaurantId,
-            count: sql<number>`count(*)::integer`,
-          })
-          .from(menuItems)
-          .where(inArray(menuItems.restaurantId, truckIds))
-          .groupBy(menuItems.restaurantId);
-        for (const row of menuRows) {
-          menuCounts.set(String(row.restaurantId), Number(row.count || 0));
-          if (Number(row.count || 0) > 0) {
-            menuEligibleIds.add(String(row.restaurantId));
+          const payloadTrucks =
+            visibleTrucks.length > 0 || trucks.length === 0
+              ? visibleTrucks
+              : trucks;
+          if (visibleTrucks.length === 0 && trucks.length > 0) {
+            res.setHeader("X-MealScout-Fallback", "unfiltered-live-trucks");
           }
-        }
-      }
-      const menuEligibleTrucks = payloadTrucks.map((truck: any) => ({
-        ...truck,
-        menuItemCount: menuCounts.get(String(truck?.id || "").trim()) || 0,
-        menuAvailable: menuEligibleIds.has(String(truck?.id || "").trim()),
-      }));
-      res.setHeader("X-MealScout-Filtered-Missing-Menu", "0");
-      const suppressedTruckIds = await getSuppressedLocationResourceIds({
-        resourceIds: menuEligibleTrucks
-          .map((truck: any) => String(truck?.id || "").trim())
-          .filter(Boolean),
-        targetType: "live_location",
-      });
 
-      const trustedPayloadTrucks = menuEligibleTrucks.filter(
-        (truck: any) => !suppressedTruckIds.has(String(truck?.id || "")),
+          const truckIds = payloadTrucks
+            .map((truck: any) => String(truck?.id || "").trim())
+            .filter(Boolean);
+          const menuEligibleIds = new Set<string>();
+          const menuCounts = new Map<string, number>();
+          if (truckIds.length > 0) {
+            const menuRows = await db
+              .select({
+                restaurantId: menuItems.restaurantId,
+                count: sql<number>`count(*)::integer`,
+              })
+              .from(menuItems)
+              .where(inArray(menuItems.restaurantId, truckIds))
+              .groupBy(menuItems.restaurantId);
+            for (const row of menuRows) {
+              menuCounts.set(String(row.restaurantId), Number(row.count || 0));
+              if (Number(row.count || 0) > 0) {
+                menuEligibleIds.add(String(row.restaurantId));
+              }
+            }
+          }
+          const menuEligibleTrucks = payloadTrucks.map((truck: any) => ({
+            ...truck,
+            menuItemCount:
+              menuCounts.get(String(truck?.id || "").trim()) || 0,
+            menuAvailable: menuEligibleIds.has(
+              String(truck?.id || "").trim(),
+            ),
+          }));
+          res.setHeader("X-MealScout-Filtered-Missing-Menu", "0");
+          const suppressedTruckIds = await getSuppressedLocationResourceIds({
+            resourceIds: menuEligibleTrucks
+              .map((truck: any) => String(truck?.id || "").trim())
+              .filter(Boolean),
+            targetType: "live_location",
+          });
+
+          const filtered = menuEligibleTrucks.filter(
+            (truck: any) => !suppressedTruckIds.has(String(truck?.id || "")),
+          );
+          if (suppressedTruckIds.size > 0) {
+            res.setHeader(
+              "X-MealScout-Suppressed-Live-Trucks",
+              String(suppressedTruckIds.size),
+            );
+          }
+          return filtered;
+        })(),
+        PUBLIC_LIVE_TRUCKS_TIMEOUT_MS,
+        "live trucks",
       );
-      if (suppressedTruckIds.size > 0) {
-        res.setHeader(
-          "X-MealScout-Suppressed-Live-Trucks",
-          String(suppressedTruckIds.size),
-        );
-      }
 
-      res.json({ trucks: trustedPayloadTrucks });
+      const bounded = clampArrayToMaxBytes(
+        trustedPayloadTrucks,
+        maxTrucks,
+        MAX_LIVE_TRUCKS_RESPONSE_BYTES,
+        (trucks) => ({ trucks }),
+      );
+      if (bounded.truncated) {
+        res.setHeader("X-MealScout-Live-Trucks-Truncated", "1");
+        res.setHeader("X-MealScout-Live-Trucks-Bytes", String(bounded.bytes));
+      }
+      res.json({ trucks: bounded.value });
     } catch (error) {
+      if (isDeadlineError(error)) {
+        console.error("Live trucks timeout:", error);
+        return res.status(504).json({
+          message: "Live trucks timed out",
+          timeoutMs: PUBLIC_LIVE_TRUCKS_TIMEOUT_MS,
+        });
+      }
       console.error("Error fetching live trucks:", error);
       res.status(500).json({ message: "Failed to fetch live trucks" });
     }
