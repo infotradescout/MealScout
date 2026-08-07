@@ -89,7 +89,7 @@ export default function MerchantDeliveryPage() {
 
   return (
     <BusinessWorkspaceShell
-      activeModule="work"
+      activeModule="delivery"
       business={business}
       businesses={businesses}
       onBusinessChange={(id) => setLocation(`/merchant-delivery?restaurantId=${encodeURIComponent(id)}`)}
