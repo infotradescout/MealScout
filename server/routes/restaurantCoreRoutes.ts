@@ -24,6 +24,7 @@ import {
   toPublicRestaurantListing,
   toPublicRestaurantListingArray,
 } from "../publicProfiles/toPublicRestaurantListing";
+import { RESTAURANT_SEARCH_RESULT_LIMIT } from "@shared/searchResponseBounds";
 import {
   insertRestaurantSchema,
   insertRestaurantFavoriteSchema,
@@ -300,7 +301,13 @@ export function registerRestaurantCoreRoutes(
         });
       }
 
-      res.json(toPublicRestaurantListingArray(filteredRestaurants));
+      // Cap results so broad queries cannot dump the full inventory over the wire
+      // (Aug 2026 search 502 cluster: large/slow Facebook in-app responses).
+      res.json(
+        toPublicRestaurantListingArray(
+          filteredRestaurants.slice(0, RESTAURANT_SEARCH_RESULT_LIMIT),
+        ),
+      );
     } catch (error) {
       console.error("Error searching restaurants:", error);
       res.status(500).json({ message: "Failed to search restaurants" });

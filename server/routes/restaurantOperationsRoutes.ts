@@ -32,6 +32,7 @@ import {
   updateRestaurantOperatingHoursSchema,
 } from "@shared/schema";
 import { computeProfileCompletionStatus } from "@shared/profileCompletionStatus";
+import { clampLiveTrucksLimit } from "@shared/searchResponseBounds";
 import { getBusinessAccessContext } from "../services/businessTeamAccess";
 import { getBusinessVerificationState } from "../services/businessVerificationState";
 import { loadProfileCompletionEvidenceBatch } from "../services/profileCompletionEvidence";
@@ -2412,7 +2413,7 @@ export function registerRestaurantOperationsRoutes(
 
   app.get("/api/trucks/live", async (req: any, res) => {
     try {
-      const { lat, lng, radiusKm = 5 } = req.query;
+      const { lat, lng, radiusKm = 5, limit } = req.query;
       if (!lat || !lng) {
         return res
           .status(400)
@@ -2422,6 +2423,7 @@ export function registerRestaurantOperationsRoutes(
       const latitude = parseFloat(lat as string);
       const longitude = parseFloat(lng as string);
       const radius = Math.min(parseFloat(radiusKm as string), 50);
+      const maxTrucks = clampLiveTrucksLimit(limit);
 
       if (isNaN(latitude) || isNaN(longitude) || isNaN(radius)) {
         return res
@@ -2438,11 +2440,11 @@ export function registerRestaurantOperationsRoutes(
         return res.status(400).json({ message: "Invalid coordinates range" });
       }
 
-      const trucks = await storage.getLiveTrucksNearby(
-        latitude,
-        longitude,
-        radius,
-      );
+      // Distance-sorted upstream; cap before per-owner access work so large
+      // radii cannot fan out into unbounded Promise.all scans.
+      const trucks = (
+        await storage.getLiveTrucksNearby(latitude, longitude, radius)
+      ).slice(0, maxTrucks);
       const visibleTrucks = (
         await Promise.all(
           trucks.map(async (truck: any) => {
