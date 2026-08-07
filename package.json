@@ -74,7 +74,7 @@
     "test:supplier-payments": "tsx scripts/testSupplierPaymentIntentFlow.ts",
     "test:supplier-pay-intent-switch": "tsx scripts/testSupplierPayIntentMethodSwitch.ts",
     "test:ordering-profile-access": "tsx scripts/testOrderingProfileAccess.ts",
-    "test:stripe-webhook-safety": "node --import tsx scripts/mealscout-stripe-webhook-verification-mode.contract.test.ts && node --import tsx scripts/mealscout-pickup-webhook-payout-eligibility.behavior.test.ts && node --import tsx scripts/mealscout-stripe-subscription-stale-event-guard.behavior.test.ts && node --import tsx scripts/mealscout-stripe-webhook-subscription-entitlement-guards.contract.test.ts && node --import tsx scripts/mealscout-stripe-webhook-idempotency-guards.contract.test.ts && node --import tsx scripts/mealscout-stripe-webhook-signature-verification.behavior.test.ts",
+    "test:stripe-webhook-safety": "node --import tsx scripts/mealscout-pickup-payment-intent-state.behavior.test.ts && node --import tsx scripts/mealscout-stripe-webhook-verification-mode.contract.test.ts && node --import tsx scripts/mealscout-pickup-webhook-payout-eligibility.behavior.test.ts && node --import tsx scripts/mealscout-stripe-subscription-stale-event-guard.behavior.test.ts && node --import tsx scripts/mealscout-stripe-webhook-subscription-entitlement-guards.contract.test.ts && node --import tsx scripts/mealscout-stripe-webhook-idempotency-guards.contract.test.ts && node --import tsx scripts/mealscout-stripe-webhook-signature-verification.behavior.test.ts",
     "test:stripe-webhook-stateful-replay": "node --import tsx scripts/mealscout-stripe-webhook-stateful-replay.integration.test.ts",
     "ordering:session-cookie": "node -e \"(async()=>{const base=(process.env.SMOKE_BASE_URL||'http://127.0.0.1:5000').replace(/\\/$/,'');const email=process.env.ORDERING_OWNER_EMAIL;const password=process.env.ORDERING_OWNER_PASSWORD;if(!email||!password){console.log('Set ORDERING_OWNER_EMAIL and ORDERING_OWNER_PASSWORD');process.exit(0);}const res=await fetch(base+'/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({email,password})});const body=await res.json().catch(()=>({}));if(!res.ok){console.error('Login failed',res.status,body);process.exit(1);}const cookies=(typeof res.headers.getSetCookie==='function'?res.headers.getSetCookie():(res.headers.get('set-cookie')?[res.headers.get('set-cookie')]:[])).map(v=>String(v||'').split(';')[0]).filter(Boolean).join('; ');console.log(cookies||'No cookie returned');})().catch(e=>{console.error(e);process.exit(1);})\"",
     "smoke:ordering-profile-access": "node scripts/smokeOrderingProfileAccess.mjs",
@@ -135,7 +135,8 @@
     "test:money-button": "tsx scripts/testMoneyButton.ts",
     "test:all": "npm run check && npm run test:email-policy && npm run audit:email-triggers && npm run test:flows && npm run stress-test",
     "monitor": "tsx scripts/monitorPerformance.ts",
-    "audit:theme": "node scripts/audit-theme-colors.mjs"
+    "audit:theme": "node scripts/audit-theme-colors.mjs",
+    "test:pickup-payment-intent-state": "node --import tsx scripts/mealscout-pickup-payment-intent-state.behavior.test.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.109.0",
