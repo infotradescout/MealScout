@@ -72,18 +72,29 @@ Examples:
 
 ## Response Format
 
-All responses follow a consistent JSON structure:
+The currently executable public-discovery actions use these strict, already
+deployed v1 success envelopes.
 
-### Success Response
+### Public-discovery list success envelope
 ```json
 {
   "success": true,
-  "data": { /* action-specific data or a results array */ },
-  "results": [ /* canonical array shape for list responses */ ],
-  "count": 5,
-  "message": "Optional success message"
+  "data": [],
+  "count": 0
 }
 ```
+
+Existing v1 list success envelope: `success` + `data` (array) + `count`.
+
+### Restaurant-detail success envelope
+```json
+{
+  "success": true,
+  "data": { /* approved restaurant, activeDeals, and dealCount object */ }
+}
+```
+
+Existing v1 detail success envelope: `success` + `data` (object).
 
 ### Error Response
 ```json
@@ -94,7 +105,13 @@ All responses follow a consistent JSON structure:
 }
 ```
 
-Canonical contract for new or versioned actions: use `results` (array) + `count` for lists and `data` for objects. The five existing public-discovery reads retain their deployed `data` + `count` list envelope for compatibility.
+Documentation erratum: this section now reflects the deployed v1 wire
+contract. A top-level `results` key and an optional top-level `message` are not
+part of these strict public-read success envelopes. This correction makes no
+runtime or client-facing wire change.
+
+For new or versioned actions, lists use `results` (array) + `count` and objects
+use `data`.
 
 ### Public-read projection boundary
 
