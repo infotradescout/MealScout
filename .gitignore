@@ -37,6 +37,7 @@ playwright-report/
 
 # Private operator intake binaries and normalized evidence packages
 /artifacts/manual-intake/
+/artifacts/exact-commit-gate/
 
 .env*.local
 

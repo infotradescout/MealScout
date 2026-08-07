@@ -1,4 +1,6 @@
 services:
+  # Production web: post-merge install+build only. Pre-merge exact-commit proof is
+  # Actions-free: docs/MEALSCOUT_ACTIONS_FREE_EXACT_COMMIT_GATE.md (do not use GitHub Actions).
   - type: web
     name: mealscout
     runtime: node

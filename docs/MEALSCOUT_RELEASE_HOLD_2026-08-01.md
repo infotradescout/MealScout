@@ -26,25 +26,23 @@ remain outside the release lane.
 
 ## Confirmed blockers
 
-1. GitHub Actions hosted jobs do not start: check-run annotations report
-   `The job was not started because your account is locked due to a billing
-   issue.` Sampled runs
-   ([30710537840](https://github.com/infotradescout/MealScout/actions/runs/30710537840)
-   on `main`,
-   [30717708199](https://github.com/infotradescout/MealScout/actions/runs/30717708199)
-   on PR #328) conclude `failure` in ~2s with `runner_id: 0`, empty
-   `runner_name`, and `steps: []`. This is an `infotradescout` user-account
-   billing lock, not a `.github/workflows/ci.yml` defect and not absence of
-   self-hosted runners (`ubuntu-latest` is GitHub-hosted). Full evidence:
+1. Executable **Actions-free** exact-commit verification is not yet proven on an
+   independent host for the next merge candidate. GitHub Actions is **retired**
+   for MealScout release evidence: do not chase Actions billing, do not require
+   Actions green, and do not bind Actions status checks to ruleset `20202108`
+   (PR + conversation resolution without required checks remains fine). The
+   in-repo gate is `npm run gate:exact-commit` /
+   `scripts/exactCommitReleaseGate.mjs`; evidence lands in
+   `artifacts/exact-commit-gate/`. Full inventory, PR #328 commands, and the
+   single owner host action:
+   [`MEALSCOUT_ACTIONS_FREE_EXACT_COMMIT_GATE.md`](./MEALSCOUT_ACTIONS_FREE_EXACT_COMMIT_GATE.md).
+   Local-only validation remains non-substitutable for step 1. Historical
+   Actions billing notes are superseded:
    [`MEALSCOUT_HOSTED_CI_BLOCKER_2026-08-07.md`](./MEALSCOUT_HOSTED_CI_BLOCKER_2026-08-07.md).
-   Until unlock, hosted checks cannot validate PR #328 or any merge-to-main
-   path. Do not bind required status checks on ruleset `20202108` until a
-   check has actually executed successfully. Prior security slices used an
-   owner-directed CI-unavailable exception with independent local validation;
-   that exception remains non-substitutable for step-1 hosted-check restoration.
-2. No new branch-protection or ruleset enforcement evidence was established in
-   this lane. Required checks and ordinary-merge bypass restrictions therefore
-   remain an open control-plane requirement.
+2. Ruleset `20202108` is active with PR + conversation resolution and no
+   required status checks. Do not add Actions required checks. Ordinary
+   merge still waits on the Actions-free exact-commit gate PASS for the
+   proposed SHA, then an owner ask.
 3. PR #322 is draft, conflicting, based on an older payment/delivery baseline,
    and must not be merged wholesale.
 4. Static Action API integration tokens establish no user principal,
@@ -53,8 +51,8 @@ remain outside the release lane.
    until its semantic classification is accepted and any required behavior is
    reimplemented from current `main`.
 6. The remaining hold-lift matrix still lacks complete browser, migration,
-   provider, payment, cross-tenant trusted-principal, and enforced required-check
-   proof on one exact release SHA.
+   provider, payment, cross-tenant trusted-principal, and Actions-free
+   exact-commit gate proof on one exact release SHA.
 
 ## Production Action API containment
 
@@ -160,7 +158,9 @@ Public-read contract (runtime/API_ACTIONS):     EXPLICIT / PRODUCTION SMOKE PART
 Positive truck/detail-deal item witnesses:      PENDING NATURAL INVENTORY
 EMBED v1 envelope wording:                      OPEN DOCUMENTATION FOLLOW-UP
 Trusted-principal model:                        PENDING
-GitHub Actions/control plane:                   STILL OPEN
+Actions-free exact-commit gate:                 IN-REPO / INDEPENDENT HOST PENDING
+GitHub Actions:                                 RETIRED (not release evidence)
+Ruleset 20202108:                               PR+conversations; no Actions checks
 PR #322:                                        HOLD / DECOMPOSE
 Rescue branch:                                  PRESERVED
 Overall status:                                 PARTIAL / HOLD
@@ -221,7 +221,7 @@ One exact release SHA must have all of the following:
 - deployment pinned to the validated SHA
 - controlled post-deployment smoke checks
 - documented rollback or roll-forward boundaries
-- executed required checks enforced through branch protection
+- Actions-free exact-commit gate PASS evidence for that same SHA (not GitHub Actions)
 
 The local and production checks recorded above remain valid only for their
 tested Action API and build-marker surfaces. They establish containment of the

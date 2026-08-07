@@ -109,6 +109,8 @@
     "smoke:scout-surface": "node scripts/smokeScoutSurface.mjs",
     "gate:prelaunch": "node scripts/preLaunchGate.mjs",
     "gate:production": "node scripts/productionReadinessGate.mjs",
+    "gate:exact-commit": "node scripts/exactCommitReleaseGate.mjs",
+    "gate:exact-commit:pr-328": "cross-env GATE_PROFILE=pr-328 GATE_REQUIRE_CLEAN=1 npm run gate:exact-commit",
     "smoke:parking-pass-stripe": "tsx scripts/smokeParkingPassStripeFlow.ts",
     "smoke:parking-pass-public-feed": "tsx scripts/smokeParkingPassPublicFeed.ts",
     "test": "tsx scripts/runTargetedTests.ts",
