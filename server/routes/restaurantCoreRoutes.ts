@@ -24,7 +24,11 @@ import {
   toPublicRestaurantListing,
   toPublicRestaurantListingArray,
 } from "../publicProfiles/toPublicRestaurantListing";
-import { RESTAURANT_SEARCH_RESULT_LIMIT } from "@shared/searchResponseBounds";
+import {
+  MAX_SEARCH_RESPONSE_BYTES,
+  RESTAURANT_SEARCH_RESULT_LIMIT,
+  clampArrayToMaxBytes,
+} from "@shared/searchResponseBounds";
 import {
   insertRestaurantSchema,
   insertRestaurantFavoriteSchema,
@@ -303,11 +307,20 @@ export function registerRestaurantCoreRoutes(
 
       // Cap results so broad queries cannot dump the full inventory over the wire
       // (Aug 2026 search 502 cluster: large/slow Facebook in-app responses).
-      res.json(
-        toPublicRestaurantListingArray(
-          filteredRestaurants.slice(0, RESTAURANT_SEARCH_RESULT_LIMIT),
-        ),
+      const listed = toPublicRestaurantListingArray(
+        filteredRestaurants.slice(0, RESTAURANT_SEARCH_RESULT_LIMIT),
       );
+      const bounded = clampArrayToMaxBytes(
+        listed,
+        RESTAURANT_SEARCH_RESULT_LIMIT,
+        MAX_SEARCH_RESPONSE_BYTES,
+        (items) => items,
+      );
+      if (bounded.truncated) {
+        res.setHeader("X-MealScout-Search-Truncated", "1");
+        res.setHeader("X-MealScout-Search-Bytes", String(bounded.bytes));
+      }
+      res.json(bounded.value);
     } catch (error) {
       console.error("Error searching restaurants:", error);
       res.status(500).json({ message: "Failed to search restaurants" });

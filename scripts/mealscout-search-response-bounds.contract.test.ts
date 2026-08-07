@@ -7,6 +7,7 @@ import {
   AGGREGATE_SEARCH_DEAL_LIMIT,
   AGGREGATE_SEARCH_EVENT_LIMIT,
   AGGREGATE_SEARCH_HOST_LIMIT,
+  AGGREGATE_SEARCH_RESTAURANT_CANDIDATE_LIMIT,
   AGGREGATE_SEARCH_RESTAURANT_LIMIT,
   AGGREGATE_SEARCH_VIDEO_LIMIT,
   LIVE_TRUCKS_DEFAULT_LIMIT,
@@ -14,9 +15,14 @@ import {
   MAX_LIVE_TRUCKS_RESPONSE_BYTES,
   MAX_SEARCH_ASSEMBLE_MS,
   MAX_SEARCH_RESPONSE_BYTES,
+  PUBLIC_LIVE_TRUCKS_TIMEOUT_MS,
+  PUBLIC_SEARCH_TIMEOUT_MS,
   RESTAURANT_SEARCH_RESULT_LIMIT,
+  clampJsonByBucketArrays,
   clampLiveTrucksLimit,
+  isDeadlineError,
   jsonUtf8ByteLength,
+  withDeadline,
 } from "../shared/searchResponseBounds";
 
 const pad = (label: string, size: number) =>
@@ -233,6 +239,13 @@ const liveTrucksSource = readFileSync(
   "utf8",
 );
 
+assert.ok(PUBLIC_SEARCH_TIMEOUT_MS <= 5_000);
+assert.ok(PUBLIC_LIVE_TRUCKS_TIMEOUT_MS <= 4_000);
+assert.ok(
+  AGGREGATE_SEARCH_RESTAURANT_CANDIDATE_LIMIT >=
+    AGGREGATE_SEARCH_RESTAURANT_LIMIT,
+);
+
 assert.match(
   aggregateSource,
   /AGGREGATE_SEARCH_RESTAURANT_LIMIT/,
@@ -242,6 +255,31 @@ assert.match(
   aggregateSource,
   /AGGREGATE_SEARCH_DEAL_LIMIT/,
   "aggregate /api/search must use shared deal result limit",
+);
+assert.match(
+  aggregateSource,
+  /AGGREGATE_SEARCH_RESTAURANT_CANDIDATE_LIMIT/,
+  "aggregate /api/search must cap SQL restaurant candidates",
+);
+assert.match(
+  aggregateSource,
+  /withDeadline\(/,
+  "aggregate /api/search must wrap assembly in withDeadline",
+);
+assert.match(
+  aggregateSource,
+  /clampJsonByBucketArrays\(/,
+  "aggregate /api/search must clamp oversized JSON before respond",
+);
+assert.match(
+  aggregateSource,
+  /status\(504\)/,
+  "aggregate /api/search must fail closed with 504 on deadline",
+);
+assert.doesNotMatch(
+  aggregateSource,
+  /storage\.getAllRestaurants\(/,
+  "aggregate /api/search must not load the full restaurants table",
 );
 assert.match(
   restaurantSearchSource,
@@ -254,6 +292,11 @@ assert.match(
   "restaurant search must slice before serialization",
 );
 assert.match(
+  restaurantSearchSource,
+  /clampArrayToMaxBytes\(/,
+  "restaurant search must enforce max response bytes at send time",
+);
+assert.match(
   liveTrucksSource,
   /clampLiveTrucksLimit/,
   "live trucks must clamp the client limit query param",
@@ -262,6 +305,61 @@ assert.match(
   liveTrucksSource,
   /\.slice\(0,\s*maxTrucks\)/,
   "live trucks must slice the distance-sorted set before access fan-out",
+);
+assert.match(
+  liveTrucksSource,
+  /withDeadline\(/,
+  "live trucks must wrap assembly in withDeadline",
+);
+assert.match(
+  liveTrucksSource,
+  /clampArrayToMaxBytes\(/,
+  "live trucks must enforce max response bytes at send time",
+);
+assert.match(
+  liveTrucksSource,
+  /status\(504\)/,
+  "live trucks must fail closed with 504 on deadline",
+);
+
+{
+  const fat = {
+    query: "hungry",
+    restaurants: Array.from({ length: 24 }, (_, i) => ({
+      id: `r${i}`,
+      name: "X".repeat(8_000),
+    })),
+    deals: Array.from({ length: 12 }, (_, i) => ({
+      id: `d${i}`,
+      title: "Z".repeat(4_000),
+    })),
+    parkingPassHosts: [],
+    videos: Array.from({ length: 12 }, (_, i) => ({
+      id: `v${i}`,
+      title: "V".repeat(4_000),
+    })),
+    events: Array.from({ length: 12 }, (_, i) => ({
+      id: `e${i}`,
+      name: "E".repeat(4_000),
+    })),
+  };
+  assert.ok(jsonUtf8ByteLength(fat) > MAX_SEARCH_RESPONSE_BYTES);
+  const clamped = clampJsonByBucketArrays(fat, MAX_SEARCH_RESPONSE_BYTES);
+  assert.equal(clamped.truncated, true);
+  assert.ok(clamped.bytes <= MAX_SEARCH_RESPONSE_BYTES);
+}
+
+await assert.rejects(
+  () =>
+    withDeadline(
+      new Promise((resolve) => setTimeout(resolve, 50)),
+      5,
+      "bound-proof",
+    ),
+  (error: unknown) => {
+    assert.ok(isDeadlineError(error));
+    return true;
+  },
 );
 
 // --- Size + assemble-time proofs against fixtures (no production credentials) ---
