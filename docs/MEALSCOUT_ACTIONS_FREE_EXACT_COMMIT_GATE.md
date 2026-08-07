@@ -61,32 +61,38 @@ Proposed head (do not merge without owner ask):
 - PR: https://github.com/infotradescout/MealScout/pull/328
 - Exact SHA: `a23b4579f08db689141790449be8e0326ddf3546`
 
-On an **independent** clean host (not a dirty developer laptop used as the sole
-proof):
+`a23b4579` does not yet contain this gate script. Use one of:
+
+**A (preferred):** Merge this validation-infra PR (#329) when the owner asks,
+refresh #328 onto that `main`, then on the **new** #328 head:
 
 ```bash
 git fetch origin
-git checkout --detach a23b4579f08db689141790449be8e0326ddf3546
-EXPECTED_SHA=a23b4579f08db689141790449be8e0326ddf3546 \
+git checkout --detach <pr-328-head-after-refresh>
+EXPECTED_SHA=<that-full-sha> \
 GATE_PROFILE=pr-328 \
 GATE_REQUIRE_CLEAN=1 \
 GATE_HOST_LABEL=independent-host \
 npm run gate:exact-commit
 ```
 
-Equivalent shortcut once this branch is available on the checked-out tree:
+**B (no merge yet):** On an independent clean host, check out `a23b4579`, copy
+only `scripts/exactCommitReleaseGate.mjs` from this branch into that tree
+(contract npm scripts already exist on that SHA), then:
 
 ```bash
 EXPECTED_SHA=a23b4579f08db689141790449be8e0326ddf3546 \
+GATE_PROFILE=pr-328 \
+GATE_REQUIRE_CLEAN=1 \
 GATE_HOST_LABEL=independent-host \
-npm run gate:exact-commit:pr-328
+node scripts/exactCommitReleaseGate.mjs
 ```
 
 Record:
 
 1. Console verdict `PASS`
-2. Evidence file `artifacts/exact-commit-gate/a23b4579f08d-pr-328.json` (SHA prefix may vary with `short` form; use the written path)
-3. Confirm JSON `git.headSha` equals `a23b4579f08db689141790449be8e0326ddf3546`
+2. Evidence file under `artifacts/exact-commit-gate/` (path printed at end of run)
+3. Confirm JSON `git.headSha` equals the SHA that was pinned with `EXPECTED_SHA`
 4. Attach or paste the evidence JSON into the PR #328 discussion / release hold update
 
 Only after that independent PASS does release order step 2 (merge #328) become
@@ -105,14 +111,12 @@ eligible for an owner ask.
 
 ## ONE exact owner action (not Actions billing)
 
-Provision or use any independent clean runner you already control (preferred:
-Render one-off / SSH shell on a non-production scratch box, or a Cursor Cloud
-Agent with a clean checkout — **not** GitHub Actions), then run the PR #328
-commands above and attach the evidence JSON.
+On an independent clean host you already control (Render one-off / scratch shell,
+or Cursor Cloud Agent with a clean checkout — **not** GitHub Actions), run path
+**B** under “How to validate PR #328” above (or path **A** after an owner-asked
+merge of this PR), then attach the evidence JSON.
 
-If you want a standing Render cron later, create it only after this gate is
-proven once manually; do not point production `mealscout`
-(`srv-d5escdh5pdvs73foo41g`) at gate work.
+Do not point production `mealscout` (`srv-d5escdh5pdvs73foo41g`) at gate work.
 
 ## Pass / fail for step 1
 
