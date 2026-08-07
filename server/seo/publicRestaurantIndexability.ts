@@ -58,7 +58,7 @@ export function isImportSystemOwnerEmail(email: unknown): boolean {
 
 /**
  * Canonical public indexability for restaurant-table entities (trucks, bars,
- * restaurants). Used by bot prerender robots and sitemap membership.
+ * restaurants). Used by public profile prerender robots and sitemap membership.
  */
 export function evaluatePublicRestaurantIndexability(
   input: PublicRestaurantIndexabilityInput,

@@ -12,8 +12,9 @@ const rewrites: Array<Record<string, any>> = Array.isArray(vercelConfig?.rewrite
 const profileSrc =
   "/(restaurant|truck|bar|chef|location|event|events|deal|supplier|suppliers|p|video)/(.*)";
 const profileDest = "https://mealscout.onrender.com/$1/$2";
-const botUserAgentPattern =
-  ".*(bot|Bot|crawler|Crawler|spider|Spider|preview|Preview|fetcher|Fetcher|facebookexternalhit|Facebot|facebot|WhatsApp|whatsapp|TelegramBot|telegrambot|Slackbot|slackbot|Discordbot|discordbot|LinkedInBot|linkedinbot|Twitterbot|twitterbot|Applebot|applebot|GPTBot|gptbot|ClaudeBot|claudebot|PerplexityBot|perplexitybot|Bytespider|bytespider|CCBot|ccbot).*";
+const profileRewriteSource =
+  "/:kind(restaurant|truck|bar|chef|location|event|events|deal|supplier|suppliers|p|video)/:path*";
+const profileRewriteDest = "https://mealscout.onrender.com/:kind/:path*";
 
 const routeIndex = (matcher: (rule: Record<string, any>) => boolean) =>
   routes.findIndex(matcher);
@@ -33,82 +34,54 @@ if (spaFallbackIndex < 0) {
   throw new Error("vercel routes must include SPA fallback");
 }
 
-const prerenderRouteIndex = routeIndex(
+const profileRouteIndex = routeIndex(
   (rule) =>
     rule.src === profileSrc &&
     rule.dest === profileDest &&
-    Array.isArray(rule.has) &&
-    rule.has.some(
-      (entry: Record<string, any>) =>
-        entry.type === "query" && entry.key === "prerender",
-    ),
+    !Array.isArray(rule.has),
 );
-if (prerenderRouteIndex < 0) {
+if (profileRouteIndex < 0) {
   throw new Error(
-    "vercel routes must proxy prerender profile traffic to Render before filesystem fallback",
+    "vercel routes must proxy public profile traffic to Render for all UAs before filesystem fallback",
   );
 }
 
-const botRouteIndex = routeIndex(
+if (profileRouteIndex > filesystemIndex || profileRouteIndex > spaFallbackIndex) {
+  throw new Error(
+    "public profile proxy must be evaluated before filesystem/SPA fallback",
+  );
+}
+
+const profileRewriteIndex = rewriteIndex(
   (rule) =>
-    rule.src === profileSrc &&
-    rule.dest === profileDest &&
-    Array.isArray(rule.has) &&
-    rule.has.some(
-      (entry: Record<string, any>) =>
-        entry.type === "header" &&
-        entry.key === "user-agent" &&
-        entry.value === botUserAgentPattern,
-    ),
+    rule.source === profileRewriteSource &&
+    rule.destination === profileRewriteDest &&
+    !Array.isArray(rule.has),
 );
-if (botRouteIndex < 0) {
+if (profileRewriteIndex < 0) {
   throw new Error(
-    "vercel routes must proxy bot profile traffic to Render before filesystem fallback",
+    "vercel rewrites must forward public profile paths to Render for all UAs",
   );
 }
 
-if (prerenderRouteIndex > filesystemIndex || prerenderRouteIndex > spaFallbackIndex) {
-  throw new Error(
-    "prerender profile proxy must be evaluated before filesystem/SPA fallback",
+const botGatedProfileProxy = [...routes, ...rewrites].some((rule) => {
+  const isProfile =
+    rule.src === profileSrc ||
+    rule.source === profileRewriteSource ||
+    (typeof rule.dest === "string" &&
+      rule.dest.includes("mealscout.onrender.com") &&
+      /\$1\/\$2|:kind\//.test(String(rule.dest || rule.destination || "")));
+  if (!isProfile || !Array.isArray(rule.has)) return false;
+  return rule.has.some(
+    (entry: Record<string, any>) =>
+      entry.type === "header" &&
+      String(entry.key || "").toLowerCase() === "user-agent",
   );
-}
-
-if (botRouteIndex > filesystemIndex || botRouteIndex > spaFallbackIndex) {
+});
+if (botGatedProfileProxy) {
   throw new Error(
-    "bot profile proxy must be evaluated before filesystem/SPA fallback",
+    "public profile proxy must not be gated on user-agent (SSR for all UAs)",
   );
-}
-
-const prerenderRewriteIndex = rewriteIndex(
-  (rule) =>
-    rule.source ===
-      "/:kind(restaurant|truck|bar|chef|location|event|events|deal|supplier|suppliers|p|video)/:path*" &&
-    rule.destination === "https://mealscout.onrender.com/:kind/:path*" &&
-    Array.isArray(rule.has) &&
-    rule.has.some(
-      (entry: Record<string, any>) =>
-        entry.type === "query" && entry.key === "prerender",
-    ),
-);
-if (prerenderRewriteIndex < 0) {
-  throw new Error("vercel rewrites must preserve prerender profile forwarding");
-}
-
-const botRewriteIndex = rewriteIndex(
-  (rule) =>
-    rule.source ===
-      "/:kind(restaurant|truck|bar|chef|location|event|events|deal|supplier|suppliers|p|video)/:path*" &&
-    rule.destination === "https://mealscout.onrender.com/:kind/:path*" &&
-    Array.isArray(rule.has) &&
-    rule.has.some(
-      (entry: Record<string, any>) =>
-        entry.type === "header" &&
-        entry.key === "user-agent" &&
-        entry.value === botUserAgentPattern,
-    ),
-);
-if (botRewriteIndex < 0) {
-  throw new Error("vercel rewrites must preserve bot profile forwarding");
 }
 
 console.log("mealscout-data-factory-intake-routing.contract: PASS");
