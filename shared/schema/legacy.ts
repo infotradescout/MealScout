@@ -5833,6 +5833,11 @@ export const menuItems = pgTable(
     inventoryQty: integer("inventory_qty"),
     // Availability
     isAvailable: boolean("is_available").notNull().default(true),
+    // True only when checkout inventory exhaustion, rather than an owner
+    // decision, made this item unavailable. Cancellation may safely clear it.
+    inventoryAutoUnavailable: boolean("inventory_auto_unavailable")
+      .notNull()
+      .default(false),
     availableFrom: varchar("available_from"), // override menu-level time
     availableTo: varchar("available_to"),
     sortOrder: integer("sort_order").notNull().default(0),
@@ -6875,7 +6880,12 @@ export const insertMenuItemSchema = createInsertSchema(menuItems, {
   priceCents: z.number().int().min(0).nullable(),
   itemType: z.enum(["food", "merchandise"]).default("food"),
   calories: z.number().int().min(0).optional().nullable(),
-}).omit({ id: true, createdAt: true, updatedAt: true });
+}).omit({
+  id: true,
+  inventoryAutoUnavailable: true,
+  createdAt: true,
+  updatedAt: true,
+});
 
 export const insertMenuItemRecommendationSchema = createInsertSchema(
   menuItemRecommendations,

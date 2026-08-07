@@ -1,0 +1,56 @@
+Running migration: D:\AAATraderCorner\TradeScout\MealScout-lane1-proof\migrations\119_menu_inventory_auto_availability.sql
+
+Found 1 SQL statements to execute
+
+[1/1] Executing: ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS inventory_auto_unavailable BOOLEAN NOT NULL DEFAULT...
+Migration failed: DrizzleQueryError: Failed query: ALTER TABLE menu_items
+ADD COLUMN IF NOT EXISTS inventory_auto_unavailable BOOLEAN NOT NULL DEFAULT FALSE
+params: 
+    at NeonPreparedQuery.queryWithCache (D:\AAATraderCorner\TradeScout\MealScout\node_modules\src\pg-core\session.ts:73:11)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async NeonPreparedQuery.execute (D:\AAATraderCorner\TradeScout\MealScout\node_modules\src\neon-serverless\session.ts:147:11)
+    at async runMigration (D:\AAATraderCorner\TradeScout\MealScout-lane1-proof\scripts\runSqlMigration.ts:130:7) {
+  query: 'ALTER TABLE menu_items\r\n' +
+    'ADD COLUMN IF NOT EXISTS inventory_auto_unavailable BOOLEAN NOT NULL DEFAULT FALSE',
+  params: [],
+  cause: ErrorEvent {
+    Symbol(kTarget): WebSocket {
+      _events: [Object: null prototype],
+      _eventsCount: 4,
+      _maxListeners: undefined,
+      _binaryType: 'arraybuffer',
+      _closeCode: 1006,
+      _closeFrameReceived: false,
+      _closeFrameSent: false,
+      _closeMessage: <Buffer >,
+      _closeTimer: null,
+      _errorEmitted: true,
+      _extensions: {},
+      _paused: false,
+      _protocol: '',
+      _readyState: 3,
+      _receiver: null,
+      _sender: null,
+      _socket: null,
+      _bufferedAmount: 0,
+      _isServer: false,
+      _redirects: 0,
+      _autoPong: true,
+      _closeTimeout: 30000,
+      _url: 'wss://127.0.0.1/v2',
+      _req: null,
+      Symbol(shapeMode): false,
+      Symbol(kCapture): false
+    },
+    Symbol(kType): 'error',
+    Symbol(kError): Error: connect ECONNREFUSED 127.0.0.1:443
+        at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1645:16) {
+      errno: -4078,
+      code: 'ECONNREFUSED',
+      syscall: 'connect',
+      address: '127.0.0.1',
+      port: 443
+    },
+    Symbol(kMessage): 'connect ECONNREFUSED 127.0.0.1:443'
+  }
+}

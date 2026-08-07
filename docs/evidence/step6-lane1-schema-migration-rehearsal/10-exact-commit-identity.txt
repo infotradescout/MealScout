@@ -1,0 +1,9 @@
+HEAD=e6fdd93a1db362dfde3a599f0ba6457eafe4aec3
+MERGE_BASE=f6d0b874af353b395f6ac3aee717183a1da58bdf
+ORIGIN_MAIN=f6d0b874af353b395f6ac3aee717183a1da58bdf
+BRANCH=salvage/pr322-lane1-schema-stateful-foundation
+REHEARSAL=ephemeral-docker-postgres16 container=mealscout-lane1-pg-refresh hostPort=55433 db=mealscout_lane1
+MIGRATION_PSQL=PASS
+TSC=PASS
+BUILD=PASS
+GATE_TIP=THIS_COMMIT

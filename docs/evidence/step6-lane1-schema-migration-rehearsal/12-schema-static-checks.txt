@@ -1,0 +1,25 @@
+ docs/PR322_LANE1_SCHEMA_STATEFUL_CHARTER.md        | 23 ++++++++
+ .../01-bootstrap.log                               |  8 +++
+ .../02-pre-migration-column.log                    |  4 ++
+ .../03-apply-119.log                               |  1 +
+ .../04-verify-column-and-defaults.log              | 11 ++++
+ .../05-reapply-idempotent.log                      |  2 +
+ .../06-mixed-version-compat.log                    | 12 +++++
+ .../07-rollback-drop-column.log                    | 11 ++++
+ .../08-rollforward-reapply.log                     |  1 +
+ .../09-post-rollforward-verify.log                 | 11 ++++
+ .../10-exact-commit-identity.txt                   |  6 +++
+ .../11-tsc-check.log                               |  7 +++
+ .../12-schema-static-checks.txt                    |  4 ++
+ .../13-safety-bounds.txt                           |  6 +++
+ .../14-pre-npm-migrate-reset.log                   |  1 +
+ .../15-npm-migrate-sql.log                         | 56 +++++++++++++++++++
+ .../16-npm-migrate-verify.log                      |  4 ++
+ .../17-tsc-exit.txt                                |  1 +
+ .../18-final-psql-apply.log                        |  1 +
+ .../19-final-column-verify.log                     |  5 ++
+ .../PROOF.md                                       | 63 ++++++++++++++++++++++
+ .../VERDICT.env                                    |  9 ++++
+ .../119_menu_inventory_auto_availability.sql       |  2 +
+ shared/schema/legacy.ts                            | 12 ++++-
+ 24 files changed, 260 insertions(+), 1 deletion(-)

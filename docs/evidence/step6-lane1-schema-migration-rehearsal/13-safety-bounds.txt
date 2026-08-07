@@ -1,0 +1,7 @@
+NEON_NOT_USED=true
+database=ephemeral docker postgres:16-alpine container=mealscout-lane1-pg-refresh port=55433 db=mealscout_lane1
+production_neon=NOT_TOUCHED
+rescue_branch=NOT_TOUCHED
+actions_as_release_evidence=NOT_USED
+pr_merge=NOT_PERFORMED
+refreshed_onto_main=f6d0b874af353b395f6ac3aee717183a1da58bdf
