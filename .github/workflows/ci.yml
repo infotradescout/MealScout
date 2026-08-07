@@ -1,3 +1,10 @@
+# RETIRED for MealScout release evidence (owner doctrine).
+# Do not use GitHub Actions billing, re-runs, or required status-check binding
+# as the release gate. Authoritative pre-merge proof is the Actions-free
+# exact-commit gate: `npm run gate:exact-commit` (see
+# docs/MEALSCOUT_ACTIONS_FREE_EXACT_COMMIT_GATE.md).
+# This workflow file is left in place only as historical inventory; it is not
+# accepted as merge or hold-lift evidence.
 name: CI
 
 on:
