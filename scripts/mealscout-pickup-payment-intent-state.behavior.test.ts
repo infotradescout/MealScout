@@ -76,3 +76,73 @@ test("provider intent identity and money must match the deterministic order", ()
     assert.equal(paymentIntentMatchesPickupOrder(mismatch, expected), false);
   }
 });
+
+// Duplicate / stale / out-of-order style proofs for the extracted pure
+// classifier only. Full Stripe webhook replay ports remain charter-only.
+test("duplicate: classifying the same provider status is idempotent", () => {
+  for (const status of [
+    "requires_payment_method",
+    "canceled",
+    "requires_action",
+    "processing",
+    "requires_capture",
+    "succeeded",
+    "requires_confirmation",
+  ]) {
+    const first = classifyPreOrderPaymentIntentStatus(status);
+    const second = classifyPreOrderPaymentIntentStatus(status);
+    assert.equal(second, first);
+  }
+});
+
+test("stale/terminal: canceled and submitted statuses never reopen create_order", () => {
+  for (const status of [
+    "canceled",
+    "processing",
+    "requires_capture",
+    "succeeded",
+  ]) {
+    assert.notEqual(
+      classifyPreOrderPaymentIntentStatus(status),
+      "create_order",
+    );
+  }
+  assert.equal(classifyPreOrderPaymentIntentStatus("canceled"), "cancelled");
+  assert.equal(
+    classifyPreOrderPaymentIntentStatus("succeeded"),
+    "payment_submitted",
+  );
+});
+
+test("out-of-order: gap and submitted statuses fail closed; mismatched intents reject", () => {
+  // Confirmation-gap status (between create and action) must not invent a path.
+  assert.equal(
+    classifyPreOrderPaymentIntentStatus("requires_confirmation"),
+    "unsafe_state",
+  );
+  // Pure classifier is status-keyed: a late submitted/canceled observation never
+  // reopens create_order, even if observed after an earlier create-capable status.
+  const lateObservations = ["succeeded", "processing", "canceled"] as const;
+  assert.deepEqual(
+    lateObservations.map(classifyPreOrderPaymentIntentStatus),
+    ["payment_submitted", "payment_submitted", "cancelled"],
+  );
+
+  const expected = {
+    orderId: "order-a",
+    restaurantId: "restaurant-a",
+    totalCents: 3099,
+    transferGroup: "order_order-a",
+  };
+  const staleIntent = {
+    amount: 3099,
+    currency: "usd",
+    transfer_group: "order_order-a",
+    metadata: {
+      pickupOrderId: "order-stale",
+      orderId: "order-stale",
+      restaurantId: "restaurant-a",
+    },
+  };
+  assert.equal(paymentIntentMatchesPickupOrder(staleIntent, expected), false);
+});

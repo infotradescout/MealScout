@@ -22,5 +22,6 @@ Status: **PARTIAL EXTRACT** — pure PaymentIntent classifier landed; durable we
 ## Excluded
 - `server/routes/actionRoutes.ts` — trusted-principal lane only
 
-## Proof boundary (not claimed here)
-Duplicate/stale/out-of-order/terminal Stripe replay without real provider claim.
+## Proof boundary
+- **Proven (unit/contract, step 6 partial):** pure PaymentIntent classifier + match helper via `npm run test:pickup-payment-intent-state` (includes duplicate / stale-terminal / out-of-order-style cases). No real Stripe calls.
+- **Not claimed:** full webhook replay (duplicate/stale/out-of-order/terminal) until remaining ports below land.
