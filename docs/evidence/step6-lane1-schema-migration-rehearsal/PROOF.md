@@ -4,7 +4,7 @@
 
 **Date:** 2026-08-07
 
-**Lane SHA (implementation tip before this evidence refresh commit):** `c0ffcc22e7cfe6d645c30d6d1ba8dfd80ac1e313`
+**Lane SHA (implementation tip before this evidence refresh commit):** `998650a0db9de1fb173c2e4c85e9479d798d0677`
 
 **Branch:** `salvage/pr322-lane1-schema-stateful-foundation`
 
