@@ -1,12 +1,5 @@
-     id      |     name      | is_available | inventory_qty 
--------------+---------------+--------------+---------------
- item_seed_1 | Taco          | t            |             5
- item_seed_2 | Sold Out Bowl | f            |             0
-(2 rows)
-
 UPDATE 1
-     id      | is_available | inventory_auto_unavailable 
+     id      | is_available | inventory_auto_unavailable
 -------------+--------------+----------------------------
  item_seed_2 | f            | t
 (1 row)
-

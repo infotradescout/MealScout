@@ -1,11 +1,10 @@
-        column_name         | data_type | is_nullable | column_default 
+        column_name         | data_type | is_nullable | column_default
 ----------------------------+-----------+-------------+----------------
  inventory_auto_unavailable | boolean   | NO          | false
 (1 row)
 
-     id      |     name      | is_available | inventory_auto_unavailable 
+     id      |     name      | is_available | inventory_auto_unavailable
 -------------+---------------+--------------+----------------------------
  item_seed_1 | Taco          | t            | f
  item_seed_2 | Sold Out Bowl | f            | f
 (2 rows)
-
