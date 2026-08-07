@@ -17,6 +17,7 @@ import {
   isAdminUserType,
   shouldAssignAffiliateTagForUserType,
 } from "../roleAccess";
+import { isUniqueViolation } from "../utils/isUniqueViolation";
 
 // ── Cached table-info (module-level singleton, matches the instance cache in DatabaseStorage) ──
 
@@ -122,10 +123,6 @@ function shouldAssignAffiliateTag(userType?: string | null): boolean {
 function normalizeEmail(value: unknown): string | null {
   const email = String(value || "").trim().toLowerCase();
   return email || null;
-}
-
-function isUniqueViolation(error: unknown): boolean {
-  return Boolean((error as any)?.code === "23505");
 }
 
 function getSafePublicSignupUserType(userType: User["userType"]): User["userType"] {
@@ -646,7 +643,7 @@ export function createUsersRepository() {
           return user;
         }
       } catch (error: any) {
-        if (error.code === "23505") {
+        if (isUniqueViolation(error)) {
           if (authType === "tradescout") {
             const tsData = userData as TradeScoutUserData;
             const normalizedEmail = normalizeEmail(tsData.email);

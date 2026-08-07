@@ -8,6 +8,7 @@ import { emailService } from "../emailService";
 import { notifyUser } from "../productNotifications";
 import { isAuthenticated, isRestaurantOwner } from "../unifiedAuth";
 import { sanitizeUser } from "../utils/sanitize";
+import { isUniqueViolation } from "../utils/isUniqueViolation";
 import { validateDocuments, checkRateLimit } from "../documentValidation";
 import { vacEvaluateRestaurantSignup } from "../vacLite";
 import { ensurePremiumTrialForUser } from "../services/premiumTrial";
@@ -925,8 +926,10 @@ export function registerRestaurantCoreRoutes(
       });
       await storage.createRestaurantFollow(followData);
       void trackEngagement("restaurant_follow_added", userId, restaurantId);
-    } catch (error: any) {
-      if (error?.code !== "23505") {
+    } catch (error: unknown) {
+      // Already followed (IDX_restaurant_follows_unique) — silent success.
+      // Drizzle wraps pg unique violations as DrizzleQueryError with cause.code.
+      if (!isUniqueViolation(error)) {
         console.error("Error auto-following restaurant:", error);
       }
     }
@@ -973,8 +976,7 @@ export function registerRestaurantCoreRoutes(
         await autoFollowRestaurant(userId, restaurantId);
         res.json(favorite);
       } catch (error: any) {
-        console.error("Error adding restaurant favorite:", error);
-        if (error.code === "23505") {
+        if (isUniqueViolation(error)) {
           void trackEngagement(
             "restaurant_favorite_duplicate",
             req.user?.id,
@@ -986,6 +988,7 @@ export function registerRestaurantCoreRoutes(
             message: "Restaurant already favorited",
           });
         }
+        console.error("Error adding restaurant favorite:", error);
         res
           .status(400)
           .json({ message: error.message || "Failed to add favorite" });
@@ -1070,8 +1073,7 @@ export function registerRestaurantCoreRoutes(
         void trackEngagement("restaurant_follow_added", userId, restaurantId);
         res.json(follow);
       } catch (error: any) {
-        console.error("Error adding restaurant follow:", error);
-        if (error.code === "23505") {
+        if (isUniqueViolation(error)) {
           void trackEngagement(
             "restaurant_follow_duplicate",
             req.user?.id,
@@ -1083,6 +1085,7 @@ export function registerRestaurantCoreRoutes(
             message: "Restaurant already followed",
           });
         }
+        console.error("Error adding restaurant follow:", error);
         res
           .status(400)
           .json({ message: error.message || "Failed to follow restaurant" });
