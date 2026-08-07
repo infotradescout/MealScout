@@ -45,18 +45,6 @@
     },
     {
       "source": "/:kind(restaurant|truck|bar|chef|location|event|events|deal|supplier|suppliers|p|video)/:path*",
-      "has": [{ "type": "query", "key": "prerender" }],
-      "destination": "https://mealscout.onrender.com/:kind/:path*"
-    },
-    {
-      "source": "/:kind(restaurant|truck|bar|chef|location|event|events|deal|supplier|suppliers|p|video)/:path*",
-      "has": [
-        {
-          "type": "header",
-          "key": "user-agent",
-          "value": ".*(bot|Bot|crawler|Crawler|spider|Spider|preview|Preview|fetcher|Fetcher|facebookexternalhit|Facebot|facebot|WhatsApp|whatsapp|TelegramBot|telegrambot|Slackbot|slackbot|Discordbot|discordbot|LinkedInBot|linkedinbot|Twitterbot|twitterbot|Applebot|applebot|GPTBot|gptbot|ClaudeBot|claudebot|PerplexityBot|perplexitybot|Bytespider|bytespider|CCBot|ccbot).*"
-        }
-      ],
       "destination": "https://mealscout.onrender.com/:kind/:path*"
     },
     {
@@ -141,18 +129,6 @@
     },
     {
       "src": "/(restaurant|truck|bar|chef|location|event|events|deal|supplier|suppliers|p|video)/(.*)",
-      "has": [{ "type": "query", "key": "prerender" }],
-      "dest": "https://mealscout.onrender.com/$1/$2"
-    },
-    {
-      "src": "/(restaurant|truck|bar|chef|location|event|events|deal|supplier|suppliers|p|video)/(.*)",
-      "has": [
-        {
-          "type": "header",
-          "key": "user-agent",
-          "value": ".*(bot|Bot|crawler|Crawler|spider|Spider|preview|Preview|fetcher|Fetcher|facebookexternalhit|Facebot|facebot|WhatsApp|whatsapp|TelegramBot|telegrambot|Slackbot|slackbot|Discordbot|discordbot|LinkedInBot|linkedinbot|Twitterbot|twitterbot|Applebot|applebot|GPTBot|gptbot|ClaudeBot|claudebot|PerplexityBot|perplexitybot|Bytespider|bytespider|CCBot|ccbot).*"
-        }
-      ],
       "dest": "https://mealscout.onrender.com/$1/$2"
     },
     {

@@ -34,7 +34,7 @@ Never publish by default:
 
 ## 3. Required first-response facts
 
-For crawler and share-preview user agents, the **first HTTP response body** must contain, without depending on client JavaScript:
+For every user agent (normal browsers and search/share crawlers alike — not crawler-only rendering), the **first HTTP response body** for an eligible public entity URL must contain, without depending on client JavaScript:
 
 - Unique `<title>`
 - Real `<h1>`

@@ -68,6 +68,36 @@ function assertSharedIndexabilityWiring() {
   assert.match(sitemap, /isIndexableRestaurantRow|isPublicRestaurantIndexable/);
   assert.match(sitemap, /applySitemapMembershipCacheHeaders/);
   assert.match(prerender, /publicRestaurantRobotsDirective/);
+  assert.equal(
+    /shouldServePrerender|from "\.\/botDetection"/i.test(prerender),
+    false,
+    "public profile prerender must not gate SSR on botDetection / crawler UA",
+  );
+
+  const vercel = JSON.parse(read("vercel.json"));
+  const profileProxyRules = [
+    ...(vercel.rewrites || []),
+    ...(vercel.routes || []),
+  ].filter((rule: { source?: string; src?: string; destination?: string; dest?: string }) => {
+    const src = String(rule.source || rule.src || "");
+    const dest = String(rule.destination || rule.dest || "");
+    return (
+      /truck/.test(src) &&
+      dest.includes("mealscout.onrender.com") &&
+      !dest.includes("sitemap")
+    );
+  });
+  assert.ok(
+    profileProxyRules.length > 0,
+    "vercel must proxy public truck/profile paths to Render",
+  );
+  for (const rule of profileProxyRules) {
+    assert.equal(
+      Array.isArray(rule.has),
+      false,
+      "vercel public profile proxy must not be UA- or query-gated",
+    );
+  }
 }
 
 function assertProtectedRouteWiring() {
@@ -162,8 +192,61 @@ async function liveProtectedRouteProbes() {
   }
 }
 
+function extractCanonical(html: string): string {
+  const match = html.match(
+    /<link[^>]+rel=["']canonical["'][^>]+href=["']([^"']+)["']/i,
+  ) || html.match(
+    /<link[^>]+href=["']([^"']+)["'][^>]+rel=["']canonical["']/i,
+  );
+  return match?.[1] || "";
+}
+
+function extractRobots(html: string): string {
+  const match = html.match(
+    /<meta[^>]+name=["']robots["'][^>]+content=["']([^"']+)["']/i,
+  ) || html.match(
+    /<meta[^>]+content=["']([^"']+)["'][^>]+name=["']robots["']/i,
+  );
+  return (match?.[1] || "").toLowerCase();
+}
+
+function extractTitle(html: string): string {
+  const match = html.match(/<title>([^<]*)<\/title>/i);
+  return (match?.[1] || "").trim();
+}
+
+function assertClaimedTruckSsrIdentity(label: string, html: string, status: number) {
+  assert.equal(status, 200, `${label}: claimed truck must return 200`);
+  assert.ok(!isAppShell(html), `${label}: must not be generic SPA shell`);
+  assert.equal(
+    html.includes(MARKETING_TITLE),
+    false,
+    `${label}: must not use marketing homepage title`,
+  );
+  assert.ok(/<h1>/i.test(html), `${label}: needs route-specific h1`);
+  const title = extractTitle(html);
+  assert.ok(title.length > 0, `${label}: needs title`);
+  assert.ok(
+    /3d\s*eats/i.test(title) || /3d\s*eats/i.test(html),
+    `${label}: needs truck-specific identity (3D Eats)`,
+  );
+  const robots = extractRobots(html);
+  assert.match(robots, /index\s*,\s*follow/i, `${label}: needs index,follow`);
+  const canonical = extractCanonical(html);
+  assert.ok(canonical, `${label}: needs canonical`);
+  assert.ok(
+    canonical.includes(CLAIMED_TRUCK_SLUG) ||
+      /\/truck\//i.test(canonical),
+    `${label}: canonical must identify claimed truck route`,
+  );
+  return { title, robots, canonical };
+}
+
 async function liveSitemapAndProfileProbes() {
-  const botUa = "GPTBot";
+  const botUa =
+    "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)";
+  const chromeUa =
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
   const claimed = `${liveBase}/truck/${CLAIMED_TRUCK_SLUG}`;
   const thin = `${liveBase}/truck/${THIN_TRUCK_SLUG}`;
 
@@ -213,26 +296,35 @@ async function liveSitemapAndProfileProbes() {
     "thin truck must also be absent from sitemap.xml",
   );
 
-  const claimedPage = await fetchText(claimed, botUa);
-  assert.equal(claimedPage.res.status, 200);
-  assert.ok(
-    /<h1>/i.test(claimedPage.text),
-    "claimed bot response needs h1",
+  const claimedBot = await fetchText(claimed, botUa);
+  const claimedChrome = await fetchText(claimed, chromeUa);
+  const botIdentity = assertClaimedTruckSsrIdentity(
+    "Googlebot",
+    claimedBot.text,
+    claimedBot.res.status,
   );
-  assert.ok(
-    /index\s*,\s*follow/i.test(claimedPage.text),
-    "claimed sample should be indexable",
+  const chromeIdentity = assertClaimedTruckSsrIdentity(
+    "Chrome desktop",
+    claimedChrome.text,
+    claimedChrome.res.status,
   );
-  assert.ok(
-    /rel=["']canonical["']/i.test(claimedPage.text),
-    "claimed sample needs canonical metadata",
+  assert.equal(
+    chromeIdentity.canonical,
+    botIdentity.canonical,
+    "Chrome and Googlebot must share the same claimed-truck canonical",
   );
-  assert.ok(
-    !isAppShell(claimedPage.text),
-    "claimed bot page must not be SPA shell",
+  assert.equal(
+    chromeIdentity.robots,
+    botIdentity.robots,
+    "Chrome and Googlebot must share the same robots directive",
+  );
+  assert.equal(
+    chromeIdentity.title,
+    botIdentity.title,
+    "Chrome and Googlebot must share the same page title identity",
   );
 
-  const thinPage = await fetchText(thin, botUa);
+  const thinPage = await fetchText(thin, chromeUa);
   assert.equal(thinPage.res.status, 200);
   const thinNoindex = /noindex/i.test(thinPage.text);
   assert.ok(thinNoindex, "thin/unclaimed sample should emit noindex");

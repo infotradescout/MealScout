@@ -12,7 +12,6 @@ import {
   suppliers,
   users,
 } from "@shared/schema";
-import { shouldServePrerender } from "./botDetection";
 import { buildOfficialSocialEntityMetaTags } from "./officialSocialEntity";
 import {
   isBarBusinessType,
@@ -926,6 +925,11 @@ const sendPage = (
   res.send(buildHtml(baseUrl, page));
 };
 
+/**
+ * Public discovery profile routes serve entity SSR HTML for every GET, not only
+ * crawler UAs. Authenticated app surfaces (/admin, /dashboard, etc.) are not
+ * registered here and keep the SPA / auth interstitial path.
+ */
 export function registerPublicProfilePrerenderRoutes(
   app: Express,
   canonicalBaseUrl: string,
@@ -933,7 +937,6 @@ export function registerPublicProfilePrerenderRoutes(
   const gate =
     (handler: (req: Request) => Promise<PrerenderPage | null>) =>
     async (req: Request, res: Response, next: NextFunction) => {
-      if (!shouldServePrerender(req)) return next();
       try {
         sendPage(canonicalBaseUrl, res, await handler(req));
       } catch (error) {
