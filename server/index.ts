@@ -34,6 +34,7 @@ import { parseCleanAffiliateBusinessRoute } from "@shared/cleanAffiliateLinks";
 import { and, eq } from "drizzle-orm";
 import { registerAcquisitionPrerenderRoutes } from "./seo/acquisitionPrerender";
 import { registerPublicProfilePrerenderRoutes } from "./seo/publicProfilePrerender";
+import { guardUnauthenticatedProtectedHtml } from "./seo/protectedHtmlRoutes";
 import { resolvePublicBusinessSlug } from "./publicProfiles/publicBusinessSlugResolver";
 import { mirrorInfinityTouch } from "./integrations/infinityShadow";
 import { customProfileDomainRootRedirect } from "./services/customProfileDomain";
@@ -85,6 +86,9 @@ const trackingQueryKeys = new Set([
 ]);
 const privateNoIndexPrefixes = [
   "/admin",
+  "/dashboard",
+  "/vendor-dashboard",
+  "/supplier-portal",
   "/staff",
   "/profile",
   "/settings",
@@ -1194,6 +1198,11 @@ app.use((req, res, next) => {
       console.error("💥 Development error - check logs above");
     }
   });
+
+  // Protected app entry paths: unauthenticated HTML must never fall through to
+  // the marketing homepage SPA shell. Session auth only — never UA detection.
+  // Registered after API/prerender routes and before Vite/static SPA fallback.
+  app.use(guardUnauthenticatedProtectedHtml);
 
   // Root endpoint health guard - handles health checks while preserving SPA functionality
   app.use("/", (req, res, next) => {

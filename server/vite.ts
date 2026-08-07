@@ -4,6 +4,7 @@ import path from "path";
 import { type Server } from "http";
 import { fileURLToPath } from "url";
 import { nanoid } from "nanoid";
+import { guardUnauthenticatedProtectedHtml } from "./seo/protectedHtmlRoutes";
 
 const moduleDir = path.dirname(fileURLToPath(import.meta.url));
 
@@ -43,6 +44,8 @@ export async function setupVite(app: Express, server: Server) {
   });
 
   app.use(vite.middlewares);
+  // Defense in depth: never transform marketing index.html for unauth protected paths.
+  app.use(guardUnauthenticatedProtectedHtml);
   app.use("*", async (req, res, next) => {
     const url = req.originalUrl;
 
@@ -130,6 +133,9 @@ export function serveStatic(app: Express) {
       })
       .send("Asset not found");
   });
+
+  // Defense in depth: never send marketing index.html for unauth protected paths.
+  app.use(guardUnauthenticatedProtectedHtml);
 
   // Fall through to index.html for SPA routes only.
   app.use("*", (_req, res) => {
