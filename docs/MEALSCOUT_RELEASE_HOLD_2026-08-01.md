@@ -33,16 +33,15 @@ remain outside the release lane.
    `artifacts/exact-commit-gate/a23b4579f08d-pr-328.json`. GitHub Actions
    remains **retired** for MealScout release evidence: do not chase Actions
    billing, do not require Actions green, and do not bind Actions status checks
-   to ruleset `20202108`. Do not re-run the long gate unless that evidence file
-   is missing or the #328 SHA changes. Full inventory:
+   to ruleset `20202108`. Full inventory:
    [`MEALSCOUT_ACTIONS_FREE_EXACT_COMMIT_GATE.md`](./MEALSCOUT_ACTIONS_FREE_EXACT_COMMIT_GATE.md).
    Historical Actions billing notes are superseded:
    [`MEALSCOUT_HOSTED_CI_BLOCKER_2026-08-07.md`](./MEALSCOUT_HOSTED_CI_BLOCKER_2026-08-07.md).
-   **Next step:** waiting on owner to authorize merge of #328 (do not merge
+2. Release order **step 2** is **DONE**: PR #328 was squash-merged to `main` at
+   `0259a59231a76d75b7c341d0a5a2c47becc7e038`. Ruleset `20202108` stays active
+   with PR + conversation resolution and no required Actions status checks.
+   **Current work:** follow PR #330 + bound search 502 (do not merge #329/#330
    without an explicit owner ask).
-2. Ruleset `20202108` is active with PR + conversation resolution and no
-   required status checks. Do not add Actions required checks. Step 1 PASS is
-   recorded for #328; ordinary merge still waits on an owner ask.
 3. PR #322 is draft, conflicting, based on an older payment/delivery baseline,
    and must not be merged wholesale.
 4. Static Action API integration tokens establish no user principal,
@@ -161,7 +160,8 @@ Trusted-principal model:                        PENDING
 Actions-free exact-commit gate:                 PASS (a23b4579 / cursor-clean-worktree)
 GitHub Actions:                                 RETIRED (not release evidence)
 Ruleset 20202108:                               PR+conversations; no Actions checks
-PR #328 merge:                                  WAITING ON OWNER AUTHORIZE
+PR #328 merge:                                  DONE (0259a592 on main)
+Current work:                                   FOLLOW #330 + SEARCH 502
 PR #322:                                        HOLD / DECOMPOSE
 Rescue branch:                                  PRESERVED
 Overall status:                                 PARTIAL / HOLD

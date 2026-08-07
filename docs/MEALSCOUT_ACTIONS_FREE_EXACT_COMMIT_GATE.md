@@ -1,17 +1,20 @@
 # MealScout Actions-Free Exact-Commit Gate
 
-Status: `STEP 1 INDEPENDENT PASS — waiting on owner to authorize merge of #328`
+Status: `STEP 1 PASS — STEP 2 DONE (#328 merged)`
 
-Scope: release order step 1 only. Restore executable **exact-commit** verification
-that is **not** GitHub Actions.
+Scope: release order steps 1–2 closed for PR #328. Exact-commit verification
+remains **not** GitHub Actions.
 
 Owner correction (authoritative): **GitHub Actions is retired for MealScout
 release evidence.** Do not chase Actions billing, do not require Actions green,
 and do not bind Actions status checks to ruleset `20202108`.
 
-This record does **not** authorize merge of PR #328 or #322, does **not** deploy,
-and does **not** run production migrations. **Next step:** owner-authorized merge of
-PR #328 (do not merge without an explicit owner ask).
+Step 1 independent PASS is recorded on PR #329 (`afb5303` evidence lane).
+Step 2 is **DONE**: PR #328 was squash-merged to `main` at
+`0259a59231a76d75b7c341d0a5a2c47becc7e038`. This record does **not** authorize
+merge of PR #329/#330/#322, does **not** deploy, and does **not** run production
+migrations. **Current work:** follow PR #330 + bound search 502 (do not merge
+without an explicit owner ask).
 
 ## Inventory (non-Actions verification that already exists)
 
@@ -57,7 +60,7 @@ Ruleset `20202108` stays owner-controlled with PR + conversation resolution and
 
 ## PR #328 step 1 — independent PASS recorded
 
-Proposed head (do not merge without owner ask):
+Step-1 evidence SHA (historical; #328 later squash-merged to main):
 
 - PR: https://github.com/infotradescout/MealScout/pull/328
 - Exact SHA: `a23b4579f08db689141790449be8e0326ddf3546`
@@ -69,8 +72,11 @@ Proposed head (do not merge without owner ask):
 Independent run used path **B** (gate script from this branch on a clean
 `a23b4579` checkout). GitHub Actions was not used and remains retired.
 
-**Next step (release order step 2):** waiting on owner to authorize merge of #328.
-Do not merge, deploy, or run production migrations without that ask.
+**Step 2 (release order):** **DONE** — #328 squash-merged to `main` at
+`0259a59231a76d75b7c341d0a5a2c47becc7e038`. GitHub Actions remains retired.
+
+**Current work:** follow PR #330 + bound search 502. Do not merge #329/#330,
+deploy, or run production migrations without an explicit owner ask.
 
 ### How the independent run was performed (reference)
 
@@ -100,18 +106,21 @@ refresh #328 onto that `main`, then re-run `npm run gate:exact-commit` on the
 | Evidence writer | Executable now |
 | Docs + hold language (Actions retired) | This PR |
 | Independent hosted PASS for step 1 | **PASS** — `a23b4579` / `cursor-clean-worktree` |
-| PR #328 merge | **Waiting on owner authorize** (do not merge without ask) |
-| Actions billing / re-run / ruleset check binding | **Obsolete — do not do** |
+| PR #328 merge (step 2) | **DONE** — squash `0259a59231a76d75b7c341d0a5a2c47becc7e038` on `main` |
+| Actions billing / re-run / ruleset check binding | **Obsolete / retired — do not do** |
+| Current work | Follow PR #330 + bound search 502 (no merge without owner ask) |
 
-## ONE exact owner action (not Actions billing)
+## Current work (not Actions billing)
 
-Independent step-1 PASS is already recorded. The remaining owner action is:
-**authorize merge of PR #328** (explicit ask). Do not merge, deploy, or migrate
-until that authorization.
+Independent step-1 PASS is recorded; step-2 merge of #328 is **DONE** at
+`0259a59231a76d75b7c341d0a5a2c47becc7e038`. GitHub Actions remains retired for
+release evidence.
+
+**Current work:** follow PR #330 + bound search 502. Do not merge #329/#330,
+deploy, or migrate without an explicit owner ask.
 
 Do not point production `mealscout` (`srv-d5escdh5pdvs73foo41g`) at gate work.
-Do not re-run the long gate unless the evidence file is missing or the #328 SHA
-changes.
+Do not re-run the long gate unless the evidence file is missing.
 
 ## Pass / fail for step 1
 
@@ -122,4 +131,5 @@ changes.
 | Independent hosted PASS recorded for a proposed SHA | **PASS** — `a23b4579f08db689141790449be8e0326ddf3546` |
 | Actions status checks bound on ruleset `20202108` | N/A — must remain unbound |
 | Step 1 complete | **YES** — evidence at `artifacts/exact-commit-gate/a23b4579f08d-pr-328.json` |
-| Step 2 (merge #328) | **Waiting on owner authorize** |
+| Step 2 (merge #328) | **DONE** — `0259a59231a76d75b7c341d0a5a2c47becc7e038` |
+| Current work | Follow PR #330 + bound search 502 |
