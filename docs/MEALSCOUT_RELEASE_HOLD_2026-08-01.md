@@ -26,11 +26,22 @@ remain outside the release lane.
 
 ## Confirmed blockers
 
-1. GitHub Actions did not execute for the public-read security slice and were
-   not used as evidence. The owner-directed CI-unavailable security exception
-   relied on independently reviewed local validation, remote tree identity,
-   an exact Render build marker, and controlled production smoke. Required
-   checks and their enforcement remain open release-governance work.
+1. GitHub Actions hosted jobs do not start: check-run annotations report
+   `The job was not started because your account is locked due to a billing
+   issue.` Sampled runs
+   ([30710537840](https://github.com/infotradescout/MealScout/actions/runs/30710537840)
+   on `main`,
+   [30717708199](https://github.com/infotradescout/MealScout/actions/runs/30717708199)
+   on PR #328) conclude `failure` in ~2s with `runner_id: 0`, empty
+   `runner_name`, and `steps: []`. This is an `infotradescout` user-account
+   billing lock, not a `.github/workflows/ci.yml` defect and not absence of
+   self-hosted runners (`ubuntu-latest` is GitHub-hosted). Full evidence:
+   [`MEALSCOUT_HOSTED_CI_BLOCKER_2026-08-07.md`](./MEALSCOUT_HOSTED_CI_BLOCKER_2026-08-07.md).
+   Until unlock, hosted checks cannot validate PR #328 or any merge-to-main
+   path. Do not bind required status checks on ruleset `20202108` until a
+   check has actually executed successfully. Prior security slices used an
+   owner-directed CI-unavailable exception with independent local validation;
+   that exception remains non-substitutable for step-1 hosted-check restoration.
 2. No new branch-protection or ruleset enforcement evidence was established in
    this lane. Required checks and ordinary-merge bypass restrictions therefore
    remain an open control-plane requirement.
