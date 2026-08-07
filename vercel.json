@@ -60,6 +60,38 @@
       "destination": "https://mealscout.onrender.com/:kind/:path*"
     },
     {
+      "source": "/admin",
+      "destination": "https://mealscout.onrender.com/admin"
+    },
+    {
+      "source": "/admin/:path*",
+      "destination": "https://mealscout.onrender.com/admin/:path*"
+    },
+    {
+      "source": "/dashboard",
+      "destination": "https://mealscout.onrender.com/dashboard"
+    },
+    {
+      "source": "/dashboard/:path*",
+      "destination": "https://mealscout.onrender.com/dashboard/:path*"
+    },
+    {
+      "source": "/vendor-dashboard",
+      "destination": "https://mealscout.onrender.com/vendor-dashboard"
+    },
+    {
+      "source": "/vendor-dashboard/:path*",
+      "destination": "https://mealscout.onrender.com/vendor-dashboard/:path*"
+    },
+    {
+      "source": "/supplier-portal",
+      "destination": "https://mealscout.onrender.com/supplier-portal"
+    },
+    {
+      "source": "/supplier-portal/:path*",
+      "destination": "https://mealscout.onrender.com/supplier-portal/:path*"
+    },
+    {
       "source": "/:path((?!assets/|static/).*)",
       "destination": "/index.html"
     }
@@ -122,6 +154,22 @@
         }
       ],
       "dest": "https://mealscout.onrender.com/$1/$2"
+    },
+    {
+      "src": "/admin(/.*)?",
+      "dest": "https://mealscout.onrender.com/admin$1"
+    },
+    {
+      "src": "/dashboard(/.*)?",
+      "dest": "https://mealscout.onrender.com/dashboard$1"
+    },
+    {
+      "src": "/vendor-dashboard(/.*)?",
+      "dest": "https://mealscout.onrender.com/vendor-dashboard$1"
+    },
+    {
+      "src": "/supplier-portal(/.*)?",
+      "dest": "https://mealscout.onrender.com/supplier-portal$1"
     },
     {
       "handle": "filesystem"

@@ -27,6 +27,8 @@ const CLAIMED_TRUCK_SLUG =
 const THIN_TRUCK_SLUG =
   "16-monkeys-concession--cbd132ee-7bcf-4bee-9150-ed8b9918919d";
 
+const MARKETING_TITLE = "MealScout | Discover Local Food Near You";
+
 function read(rel: string): string {
   return readFileSync(path.join(root, rel), "utf8");
 }
@@ -68,9 +70,47 @@ function assertSharedIndexabilityWiring() {
   assert.match(prerender, /publicRestaurantRobotsDirective/);
 }
 
-async function fetchText(url: string, ua: string) {
+function assertProtectedRouteWiring() {
+  const gate = read("server/seo/protectedHtmlRoutes.ts");
+  const indexTs = read("server/index.ts");
+  const viteTs = read("server/vite.ts");
+  assert.match(gate, /guardUnauthenticatedProtectedHtml/);
+  assert.match(gate, /buildProtectedRouteInterstitialHtml/);
+  assert.equal(
+    /\bGPTBot\b|req\.get\(\s*["']user-agent["']|headers\[["']user-agent["']\]/i.test(
+      gate,
+    ),
+    false,
+    "protected-route gate must not detect crawlers by UA",
+  );
+  assert.match(indexTs, /guardUnauthenticatedProtectedHtml/);
+  assert.match(viteTs, /guardUnauthenticatedProtectedHtml/);
+
+  const interstitial = gate.includes("Sign in required");
+  assert.ok(interstitial, "interstitial copy must exist in gate module");
+
+  const vercel = JSON.parse(read("vercel.json"));
+  const rewrites: Array<{ source?: string; destination?: string }> =
+    vercel.rewrites || [];
+  for (const prefix of ["/admin", "/dashboard"]) {
+    assert.ok(
+      rewrites.some(
+        (rule) =>
+          String(rule.source || "").startsWith(prefix) &&
+          String(rule.destination || "").includes("mealscout.onrender.com"),
+      ),
+      `vercel must proxy ${prefix} to Render (not marketing SPA)`,
+    );
+  }
+}
+
+async function fetchText(url: string, ua?: string) {
+  const headers: Record<string, string> = {
+    Accept: "text/html,application/xhtml+xml",
+  };
+  if (ua) headers["user-agent"] = ua;
   const res = await fetch(url, {
-    headers: { "user-agent": ua },
+    headers,
     redirect: "manual",
   });
   const text = await res.text();
@@ -86,7 +126,43 @@ function isAppShell(html: string): boolean {
   );
 }
 
-async function liveProbes() {
+function assertProtectedHtmlResponse(protectedPath: string, text: string, status: number) {
+  assert.ok(
+    !isAppShell(text),
+    `HARD FAIL: ${protectedPath} must not return homepage SPA shell`,
+  );
+  assert.equal(
+    text.includes(MARKETING_TITLE),
+    false,
+    `HARD FAIL: ${protectedPath} must not include marketing homepage title`,
+  );
+  assert.equal(
+    /application\/ld\+json/i.test(text) && /Discover (Local Food|food trucks)/i.test(text),
+    false,
+    `HARD FAIL: ${protectedPath} must not include marketing homepage JSON-LD`,
+  );
+  assert.ok(
+    [401, 403, 404].includes(status) || /noindex/i.test(text),
+    `${protectedPath} must be 401/403/404 or explicit noindex interstitial (status=${status})`,
+  );
+}
+
+async function liveProtectedRouteProbes() {
+  // Unauthenticated requests — any UA. Enforcement must not depend on GPTBot.
+  const browserUa =
+    "Mozilla/5.0 (compatible; MealScoutDiscoveryContract/1.0; +https://www.mealscout.us)";
+  for (const protectedPath of [
+    "/admin",
+    "/dashboard",
+    "/vendor-dashboard",
+    "/supplier-portal",
+  ]) {
+    const page = await fetchText(`${liveBase}${protectedPath}`, browserUa);
+    assertProtectedHtmlResponse(protectedPath, page.text, page.res.status);
+  }
+}
+
+async function liveSitemapAndProfileProbes() {
   const botUa = "GPTBot";
   const claimed = `${liveBase}/truck/${CLAIMED_TRUCK_SLUG}`;
   const thin = `${liveBase}/truck/${THIN_TRUCK_SLUG}`;
@@ -164,20 +240,30 @@ async function liveProbes() {
     !(thinNoindex && thinInSitemap),
     "HARD FAIL: noindex entity must not appear in sitemap (Public Discovery Contract v1 §6)",
   );
+}
 
-  for (const protectedPath of ["/admin", "/dashboard"]) {
-    const page = await fetchText(`${liveBase}${protectedPath}`, botUa);
-    assert.ok(
-      !isAppShell(page.text),
-      `HARD FAIL: ${protectedPath} must not return homepage SPA shell to crawlers`,
+async function liveProbes() {
+  await liveProtectedRouteProbes();
+  console.log("public-discovery-contract-v1 protected-route live probes: PASS");
+
+  const runSitemap = !["0", "false", "no"].includes(
+    String(process.env.PUBLIC_DISCOVERY_LIVE_SITEMAP || "1").toLowerCase(),
+  );
+  if (!runSitemap) {
+    console.log(
+      "public-discovery-contract-v1 sitemap/profile live probes: SKIPPED",
     );
+    return;
   }
+
+  await liveSitemapAndProfileProbes();
 }
 
 async function main() {
   assertContractDoc();
   assertRobotsTemplate();
   assertSharedIndexabilityWiring();
+  assertProtectedRouteWiring();
   console.log("public-discovery-contract-v1 offline checks: PASS");
 
   if (!live) {
