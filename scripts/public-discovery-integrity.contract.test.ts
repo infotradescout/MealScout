@@ -55,10 +55,17 @@ test("sitemap and prerender paths consume the shared integrity policy", () => {
     "server/seo/publicProfilePrerender.ts",
     "utf8",
   );
+  const indexability = readFileSync(
+    "server/seo/publicRestaurantIndexability.ts",
+    "utf8",
+  );
 
-  assert.match(sitemap, /isPublicDiscoveryEligibleEntity/);
+  assert.match(indexability, /isPublicDiscoveryEligibleEntity/);
+  assert.match(indexability, /isSyntheticPublicEntityName/);
+  assert.match(sitemap, /isIndexableRestaurantRow|isPublicRestaurantIndexable/);
   assert.match(sitemap, /const restaurantRows = allRestaurantRows\.filter/);
   assert.match(sitemap, /const supplierRows = allSupplierRows\.filter/);
+  assert.match(prerender, /publicRestaurantRobotsDirective/);
   assert.match(prerender, /isSyntheticPublicEntityName\(name\)/);
   assert.match(
     prerender,

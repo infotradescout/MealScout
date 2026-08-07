@@ -22,6 +22,7 @@ import {
   restaurants,
   suppliers,
   truckManualSchedules,
+  users,
   videoStories,
 } from "@shared/schema";
 import { getIndexNowConfig } from "../services/indexNow";
@@ -35,6 +36,10 @@ import {
   type TruckOperatingPlanRow,
 } from "../services/truckOperatingPlan";
 import { isPublicDiscoveryEligibleEntity } from "@shared/publicDiscoveryIntegrity";
+import {
+  applySitemapMembershipCacheHeaders,
+  isPublicRestaurantIndexable,
+} from "../seo/publicRestaurantIndexability";
 
 const truckBusinessTypeAliases = [
   "food_truck",
@@ -200,7 +205,7 @@ const toSlug = (value: string | null | undefined) =>
     .slice(0, 80);
 
 const buildPublicProfilePath = (input: {
-  profileType: "restaurant" | "location" | "supplier";
+  profileType: "restaurant" | "truck" | "bar" | "location" | "supplier";
   id: string;
   name: string;
 }) => {
@@ -209,8 +214,59 @@ const buildPublicProfilePath = (input: {
     return `/location/${encodeURIComponent(slug)}`;
   if (input.profileType === "supplier")
     return `/supplier/${encodeURIComponent(slug)}`;
+  if (input.profileType === "truck")
+    return `/truck/${encodeURIComponent(slug)}`;
+  if (input.profileType === "bar") return `/bar/${encodeURIComponent(slug)}`;
   return `/restaurant/${encodeURIComponent(slug)}`;
 };
+
+const restaurantSitemapSelect = {
+  id: restaurants.id,
+  name: restaurants.name,
+  city: restaurants.city,
+  state: restaurants.state,
+  address: restaurants.address,
+  cuisineType: restaurants.cuisineType,
+  description: restaurants.description,
+  isFoodTruck: restaurants.isFoodTruck,
+  businessType: restaurants.businessType,
+  updatedAt: restaurants.updatedAt,
+  isActive: restaurants.isActive,
+  ownerId: restaurants.ownerId,
+  ownerEmail: users.email,
+  rawData: restaurants.rawData,
+  phone: restaurants.phone,
+  websiteUrl: restaurants.websiteUrl,
+};
+
+const isIndexableRestaurantRow = (row: {
+  name?: unknown;
+  isActive?: unknown;
+  ownerId?: unknown;
+  ownerEmail?: unknown;
+  address?: unknown;
+  cuisineType?: unknown;
+  description?: unknown;
+  city?: unknown;
+  state?: unknown;
+  rawData?: unknown;
+  phone?: unknown;
+  websiteUrl?: unknown;
+}) =>
+  isPublicRestaurantIndexable({
+    name: row.name,
+    isActive: row.isActive !== false,
+    ownerId: row.ownerId,
+    ownerEmail: row.ownerEmail,
+    address: row.address,
+    cuisineType: row.cuisineType,
+    description: row.description,
+    city: row.city,
+    state: row.state,
+    rawData: row.rawData,
+    phone: row.phone,
+    websiteUrl: row.websiteUrl,
+  });
 
 const resolveSitemapSiteUrl = () => {
   const normalizeCandidate = (raw?: string | null): string | null => {
@@ -301,10 +357,7 @@ const sendUrlsetXml = (
     .join("\n")}\n</urlset>`;
 
   res.setHeader("Content-Type", "application/xml; charset=utf-8");
-  res.setHeader(
-    "Cache-Control",
-    "public, max-age=300, s-maxage=1800, stale-while-revalidate=86400",
-  );
+  applySitemapMembershipCacheHeaders(res);
   res.send(xml);
 };
 
@@ -326,16 +379,9 @@ export function registerSeoRoutes(app: Express) {
         .from(cities)
         .orderBy(desc(cities.createdAt));
       const allRestaurantRows = await db
-        .select({
-          id: restaurants.id,
-          name: restaurants.name,
-          city: restaurants.city,
-          cuisineType: restaurants.cuisineType,
-          isFoodTruck: restaurants.isFoodTruck,
-          businessType: restaurants.businessType,
-          updatedAt: restaurants.updatedAt,
-        })
+        .select(restaurantSitemapSelect)
         .from(restaurants)
+        .innerJoin(users, eq(restaurants.ownerId, users.id))
         .where(eq(restaurants.isActive, true))
         .orderBy(desc(restaurants.updatedAt));
       const allHostRows = await db
@@ -356,10 +402,7 @@ export function registerSeoRoutes(app: Express) {
         .where(eq(suppliers.isActive, true))
         .orderBy(desc(suppliers.updatedAt));
       const restaurantRows = allRestaurantRows.filter((row: any) =>
-        isPublicDiscoveryEligibleEntity({
-          name: row.name,
-          isActive: true,
-        }),
+        isIndexableRestaurantRow(row),
       );
       const hostRows = allHostRows.filter((row: any) =>
         isPublicDiscoveryEligibleEntity({
@@ -489,6 +532,11 @@ export function registerSeoRoutes(app: Express) {
       });
 
       restaurantRows.forEach((row: any) => {
+        const isTruck =
+          Boolean(row.isFoodTruck) || isTruckBusinessType(row.businessType);
+        const isBar = isBarBusinessType(row.businessType);
+        // Trucks/bars have dedicated sitemaps; never emit noncanonical /restaurant/ locs.
+        if (isTruck || isBar) return;
         mergeUrl(
           `${baseUrl}${buildPublicProfilePath({
             profileType: "restaurant",
@@ -732,14 +780,9 @@ export function registerSeoRoutes(app: Express) {
     try {
       const baseUrl = resolveSitemapSiteUrl();
       const rows = await db
-        .select({
-          id: restaurants.id,
-          name: restaurants.name,
-          updatedAt: restaurants.updatedAt,
-          isFoodTruck: restaurants.isFoodTruck,
-          businessType: restaurants.businessType,
-        })
+        .select(restaurantSitemapSelect)
         .from(restaurants)
+        .innerJoin(users, eq(restaurants.ownerId, users.id))
         .where(eq(restaurants.isActive, true))
         .orderBy(desc(restaurants.updatedAt))
         .limit(50000);
@@ -747,14 +790,16 @@ export function registerSeoRoutes(app: Express) {
       const entries = rows
         .filter(
           (row: any) =>
-            isPublicDiscoveryEligibleEntity({
-              name: row.name,
-              isActive: true,
-            }) &&
-            (Boolean(row.isFoodTruck) || isTruckBusinessType(row.businessType)),
+            (Boolean(row.isFoodTruck) ||
+              isTruckBusinessType(row.businessType)) &&
+            isIndexableRestaurantRow(row),
         )
         .map((row: any) => ({
-          loc: `${baseUrl}/truck/${encodeURIComponent(`${toSlug(row.name) || row.id}--${row.id}`)}`,
+          loc: `${baseUrl}${buildPublicProfilePath({
+            profileType: "truck",
+            id: String(row.id),
+            name: String(row.name || ""),
+          })}`,
           lastmod: row.updatedAt,
         }));
 
@@ -769,13 +814,9 @@ export function registerSeoRoutes(app: Express) {
     try {
       const baseUrl = resolveSitemapSiteUrl();
       const rows = await db
-        .select({
-          id: restaurants.id,
-          name: restaurants.name,
-          updatedAt: restaurants.updatedAt,
-          businessType: restaurants.businessType,
-        })
+        .select(restaurantSitemapSelect)
         .from(restaurants)
+        .innerJoin(users, eq(restaurants.ownerId, users.id))
         .where(eq(restaurants.isActive, true))
         .orderBy(desc(restaurants.updatedAt))
         .limit(50000);
@@ -783,13 +824,15 @@ export function registerSeoRoutes(app: Express) {
       const entries = rows
         .filter(
           (row: any) =>
-            isPublicDiscoveryEligibleEntity({
-              name: row.name,
-              isActive: true,
-            }) && isBarBusinessType(row.businessType),
+            isBarBusinessType(row.businessType) &&
+            isIndexableRestaurantRow(row),
         )
         .map((row: any) => ({
-          loc: `${baseUrl}/bar/${encodeURIComponent(`${toSlug(row.name) || row.id}--${row.id}`)}`,
+          loc: `${baseUrl}${buildPublicProfilePath({
+            profileType: "bar",
+            id: String(row.id),
+            name: String(row.name || ""),
+          })}`,
           lastmod: row.updatedAt,
         }));
 

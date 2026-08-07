@@ -68,11 +68,9 @@ assert(
 );
 
 assert(
-  prerender.includes("isSyntheticPublicEntityName(name)") &&
-    prerender.includes(
-      "isUnclaimed || isSyntheticTestEntity ? noindexRobots : indexableRobots",
-    ),
-  "Obvious synthetic test profiles should be noindexed in prerendered public profile HTML.",
+  prerender.includes("publicRestaurantRobotsDirective") &&
+    prerender.includes('from "./publicRestaurantIndexability"'),
+  "Public restaurant/truck robots must use the shared public indexability predicate.",
 );
 
 assert(

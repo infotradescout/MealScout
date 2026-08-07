@@ -25,6 +25,11 @@ import { buildSlotDateTimes } from "../services/timeIntent";
 import { isSlotPublic } from "../services/publicSlotGate";
 import { canExposeAnonymousEventDetail } from "../publicProfiles/publicEventDetailAccess";
 import { isSyntheticPublicEntityName } from "@shared/publicDiscoveryIntegrity";
+import {
+  PUBLIC_RESTAURANT_INDEXABLE_ROBOTS,
+  PUBLIC_RESTAURANT_NOINDEX_ROBOTS,
+  publicRestaurantRobotsDirective,
+} from "./publicRestaurantIndexability";
 
 type PageLink = { label: string; href: string };
 
@@ -59,24 +64,20 @@ const escapeHtml = (value: string | null | undefined) =>
 
 const defaultSocialImagePath = "/og-default.jpg?v=20260506";
 
-const IMPORT_SYSTEM_EMAIL = (
-  process.env.IMPORT_SYSTEM_EMAIL || "system-import@mealscout.us"
-).toLowerCase();
-
 // Unclaimed, import-seeded listings should stay out of Google's index until a
 // real owner claims them - indexing thousands of thin, identical-template
 // pages en masse dilutes crawl budget and search quality for the pages that
 // matter (claimed, real businesses).
-async function isImportSystemOwner(ownerId: string | null): Promise<boolean> {
-  if (!ownerId) return false;
+async function resolveOwnerEmail(
+  ownerId: string | null,
+): Promise<string | null> {
+  if (!ownerId) return null;
   const [owner] = await db
     .select({ email: users.email })
     .from(users)
     .where(eq(users.id, ownerId))
     .limit(1);
-  return Boolean(
-    owner?.email && owner.email.toLowerCase() === IMPORT_SYSTEM_EMAIL,
-  );
+  return owner?.email ? String(owner.email) : null;
 }
 
 const toSlug = (value: string | null | undefined) =>
@@ -151,9 +152,8 @@ const labelize = (value: string | null | undefined) =>
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
 
-const indexableRobots =
-  "index,follow,max-snippet:-1,max-image-preview:large,max-video-preview:-1";
-const noindexRobots = "noindex,follow";
+const indexableRobots = PUBLIC_RESTAURANT_INDEXABLE_ROBOTS;
+const noindexRobots = PUBLIC_RESTAURANT_NOINDEX_ROBOTS;
 
 const friendlyLocationTypeLabel = (value: string | null | undefined) => {
   const normalized = String(value || "")
@@ -371,10 +371,23 @@ async function restaurantPage(baseUrl: string, restaurantId: string) {
     .where(eq(restaurants.id, restaurantId))
     .limit(1);
   if (!row || !row.isActive) return null;
-  const isUnclaimed = await isImportSystemOwner(row.ownerId);
+  const ownerEmail = await resolveOwnerEmail(row.ownerId);
 
   const name = cleanText(row.name, "MealScout business");
-  const isSyntheticTestEntity = isSyntheticPublicEntityName(name);
+  const robots = publicRestaurantRobotsDirective({
+    name,
+    isActive: row.isActive,
+    ownerId: row.ownerId,
+    ownerEmail,
+    address: row.address,
+    cuisineType: row.cuisineType,
+    description: row.description,
+    city: row.city,
+    state: row.state,
+    rawData: row.rawData,
+    phone: row.phone,
+    websiteUrl: row.websiteUrl,
+  });
   const cityState = [row.city, row.state]
     .map((value) => cleanText(value))
     .filter(Boolean)
@@ -491,8 +504,7 @@ async function restaurantPage(baseUrl: string, restaurantId: string) {
     description,
     canonicalPath,
     imageUrl: image,
-    robots:
-      isUnclaimed || isSyntheticTestEntity ? noindexRobots : indexableRobots,
+    robots,
     schema: [localBusiness, ...videoSchemas(baseUrl, videos, name)],
     links: [
       { label: "Open profile", href: canonicalPath },
