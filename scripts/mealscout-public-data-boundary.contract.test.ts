@@ -475,11 +475,28 @@ assert.match(
   /res\.json\(toPublicRestaurantListing\(restaurant\)\)/,
   "GET /api/restaurants/:id must return the sanitized restaurant DTO",
 );
-assert.match(
-  sliceAfter(restaurantRoutesSource, 'app.get("/api/restaurants/search"', 2500),
-  /res\.json\(toPublicRestaurantListingArray\(filteredRestaurants\)\)/,
-  "GET /api/restaurants/search must return sanitized restaurant DTOs",
-);
+{
+  const searchHandler = sliceAfter(
+    restaurantRoutesSource,
+    'app.get("/api/restaurants/search"',
+    2500,
+  );
+  assert.match(
+    searchHandler,
+    /toPublicRestaurantListingArray\(\s*filteredRestaurants\.slice\(\s*0\s*,\s*RESTAURANT_SEARCH_RESULT_LIMIT\s*\)\s*,?\s*\)/,
+    "GET /api/restaurants/search must return sanitized, count-bounded restaurant DTOs",
+  );
+  assert.match(
+    searchHandler,
+    /clampArrayToMaxBytes/,
+    "GET /api/restaurants/search must byte-clamp the public listing",
+  );
+  assert.doesNotMatch(
+    searchHandler,
+    /res\.json\(\s*toPublicRestaurantListingArray\(\s*filteredRestaurants\s*\)\s*\)/,
+    "GET /api/restaurants/search must not return an unbounded restaurant listing",
+  );
+}
 assert.match(
   sliceAfter(restaurantRoutesSource, 'app.get("/api/restaurants/nearby/:lat/:lng"'),
   /res\.json\(toPublicRestaurantListingArray\(restaurants\)\)/,
