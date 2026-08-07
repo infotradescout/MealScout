@@ -8,7 +8,7 @@ import { emailService } from "../emailService";
 import { notifyUser } from "../productNotifications";
 import { isAuthenticated, isRestaurantOwner } from "../unifiedAuth";
 import { sanitizeUser } from "../utils/sanitize";
-import { isUniqueViolation } from "../utils/postgresErrors";
+import { isUniqueViolation } from "../utils/isUniqueViolation";
 import { validateDocuments, checkRateLimit } from "../documentValidation";
 import { vacEvaluateRestaurantSignup } from "../vacLite";
 import { ensurePremiumTrialForUser } from "../services/premiumTrial";
