@@ -1,0 +1,2 @@
+psql:/tmp/119.sql:2: NOTICE:  column "inventory_auto_unavailable" of relation "menu_items" already exists, skipping
+ALTER TABLE

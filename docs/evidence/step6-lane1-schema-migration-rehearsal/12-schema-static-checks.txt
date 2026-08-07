@@ -1,0 +1,4 @@
+PASS schema_column_present
+PASS insert_omit_present
+PASS migration_sql_shape
+DIFF_STAT  1 file changed, 11 insertions(+), 1 deletion(-)

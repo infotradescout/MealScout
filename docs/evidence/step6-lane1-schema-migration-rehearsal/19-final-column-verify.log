@@ -1,0 +1,5 @@
+        column_name         | data_type | is_nullable | column_default 
+----------------------------+-----------+-------------+----------------
+ inventory_auto_unavailable | boolean   | NO          | false
+(1 row)
+

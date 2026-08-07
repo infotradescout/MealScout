@@ -1,0 +1,6 @@
+lane_sha=0be8489f88ef6185690fe9cf6c75907c3bc891aa
+expected_tip=0be8489f88ef6185690fe9cf6c75907c3bc891aa
+branch=salvage/pr322-lane1-schema-stateful-foundation
+base_main=caa9a56639c68da52d4f60d73b6373cdc22c6060
+files_changed:
+docs/PR322_LANE1_SCHEMA_STATEFUL_CHARTER.md migrations/119_menu_inventory_auto_availability.sql shared/schema/legacy.ts

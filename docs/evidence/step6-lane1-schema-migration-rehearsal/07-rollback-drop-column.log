@@ -1,0 +1,11 @@
+ALTER TABLE
+ column_name 
+-------------
+(0 rows)
+
+     id      |     name      | is_available 
+-------------+---------------+--------------
+ item_seed_1 | Taco          | t
+ item_seed_2 | Sold Out Bowl | f
+(2 rows)
+
