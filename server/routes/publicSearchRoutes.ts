@@ -23,6 +23,13 @@ import {
   videoStories,
 } from "@shared/schema";
 import { expandScoutSearchTerms } from "@shared/scoutSearchIntent";
+import {
+  AGGREGATE_SEARCH_DEAL_LIMIT,
+  AGGREGATE_SEARCH_EVENT_LIMIT,
+  AGGREGATE_SEARCH_HOST_LIMIT,
+  AGGREGATE_SEARCH_RESTAURANT_LIMIT,
+  AGGREGATE_SEARCH_VIDEO_LIMIT,
+} from "@shared/searchResponseBounds";
 
 function publicRestaurantActivityScore(restaurant: any): number {
   return (
@@ -308,7 +315,7 @@ export function registerPublicSearchRoutes(app: Express) {
             publicRestaurantActivityScore(b) -
             publicRestaurantActivityScore(a),
         )
-        .slice(0, 24)
+        .slice(0, AGGREGATE_SEARCH_RESTAURANT_LIMIT)
         .map((restaurant: any) => ({
           id: restaurant.id,
           name: restaurant.name,
@@ -346,7 +353,7 @@ export function registerPublicSearchRoutes(app: Express) {
           sortBy: "relevance",
           radius: 9999,
         })
-      ).slice(0, 12);
+      ).slice(0, AGGREGATE_SEARCH_DEAL_LIMIT);
 
       const hostSeriesRows = await db
         .select({
@@ -433,7 +440,7 @@ export function registerPublicSearchRoutes(app: Express) {
           (row: any) =>
             Array.isArray(row.qualityFlags) && row.qualityFlags.length === 0,
         )
-        .slice(0, 12);
+        .slice(0, AGGREGATE_SEARCH_HOST_LIMIT);
 
       const nowSql = sql`NOW()`;
       const videoRows = await db
@@ -460,7 +467,7 @@ export function registerPublicSearchRoutes(app: Express) {
           ),
         )
         .orderBy(desc(videoStories.createdAt))
-        .limit(12);
+        .limit(AGGREGATE_SEARCH_VIDEO_LIMIT);
 
       const eventsRows = await db
         .select({
@@ -491,7 +498,7 @@ export function registerPublicSearchRoutes(app: Express) {
           ),
         )
         .orderBy(asc(events.date))
-        .limit(12);
+        .limit(AGGREGATE_SEARCH_EVENT_LIMIT);
 
       res.json({
         query,

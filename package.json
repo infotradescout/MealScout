@@ -32,6 +32,7 @@
     "test:consumer-entity-foundation": "npx --yes tsx scripts/mealscout-consumer-entity-foundation.contract.test.ts",
     "test:scout-fallback": "npx --yes tsx scripts/mealscout-scout-fallback.contract.test.ts",
     "test:scout-discovery-result": "npx --yes tsx scripts/mealscout-scout-discovery-result.contract.test.ts",
+    "test:search-response-bounds": "npx --yes tsx scripts/mealscout-search-response-bounds.contract.test.ts",
     "test:scout-result-view-model": "npx --yes tsx scripts/mealscout-scout-result-view-model.contract.test.ts",
     "test:map-truth": "npx --yes tsx scripts/mealscout-map-truth.contract.test.ts",
     "test:leaflet-removal": "npx --yes tsx scripts/mealscout-leaflet-removal.contract.test.ts",
