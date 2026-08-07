@@ -1,0 +1,84 @@
+{
+  "schema": "mealscout.exact_commit_release_gate.v1",
+  "actionsFree": true,
+  "githubActionsAccepted": false,
+  "profile": "pr-328",
+  "recordedAt": "2026-08-07T14:36:22.281Z",
+  "hostLabel": "cursor-clean-worktree",
+  "git": {
+    "headSha": "a23b4579f08db689141790449be8e0326ddf3546",
+    "shortSha": "a23b4579f08d",
+    "branch": "HEAD",
+    "expectedSha": "a23b4579f08db689141790449be8e0326ddf3546",
+    "dirty": false,
+    "statusPorcelain": []
+  },
+  "steps": [
+    {
+      "name": "Clean install (npm ci)",
+      "command": "npm ci --include=dev",
+      "exitCode": 0,
+      "startedAt": "2026-08-07T14:36:22.284Z",
+      "finishedAt": "2026-08-07T14:36:45.390Z",
+      "ok": true
+    },
+    {
+      "name": "Typecheck",
+      "command": "npm run check",
+      "exitCode": 0,
+      "startedAt": "2026-08-07T14:36:45.390Z",
+      "finishedAt": "2026-08-07T14:38:25.431Z",
+      "ok": true
+    },
+    {
+      "name": "Repo doctor",
+      "command": "npm run doctor",
+      "exitCode": 0,
+      "startedAt": "2026-08-07T14:38:25.497Z",
+      "finishedAt": "2026-08-07T14:38:27.157Z",
+      "ok": true
+    },
+    {
+      "name": "Action API public-read projection contract",
+      "command": "npm run test:action-api-public-read-projection",
+      "exitCode": 0,
+      "startedAt": "2026-08-07T14:38:27.159Z",
+      "finishedAt": "2026-08-07T14:38:33.703Z",
+      "ok": true
+    },
+    {
+      "name": "Action API write containment contract",
+      "command": "npm run test:action-api-containment",
+      "exitCode": 0,
+      "startedAt": "2026-08-07T14:38:33.704Z",
+      "finishedAt": "2026-08-07T14:38:34.307Z",
+      "ok": true
+    },
+    {
+      "name": "Action availability contract",
+      "command": "npm run test:action-availability",
+      "exitCode": 0,
+      "startedAt": "2026-08-07T14:38:34.308Z",
+      "finishedAt": "2026-08-07T14:38:36.493Z",
+      "ok": true
+    },
+    {
+      "name": "Handoff spine contract",
+      "command": "node --import tsx scripts/mealscout-handoff-spine.contract.test.ts",
+      "exitCode": 0,
+      "startedAt": "2026-08-07T14:38:36.493Z",
+      "finishedAt": "2026-08-07T14:38:36.730Z",
+      "ok": true
+    },
+    {
+      "name": "Build",
+      "command": "npm run build",
+      "exitCode": 0,
+      "startedAt": "2026-08-07T14:38:36.731Z",
+      "finishedAt": "2026-08-07T14:39:02.611Z",
+      "ok": true
+    }
+  ],
+  "verdict": "PASS",
+  "independentReleaseEvidence": true
+}

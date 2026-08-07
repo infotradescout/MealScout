@@ -37,7 +37,9 @@ playwright-report/
 
 # Private operator intake binaries and normalized evidence packages
 /artifacts/manual-intake/
-/artifacts/exact-commit-gate/
+/artifacts/exact-commit-gate/*
+!/artifacts/exact-commit-gate/a23b4579f08d-pr-328.json
+!/artifacts/exact-commit-gate/latest-pr-328.json
 
 .env*.local
 

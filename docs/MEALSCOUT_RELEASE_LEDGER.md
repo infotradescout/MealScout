@@ -2,7 +2,7 @@
 
 > **Current governing release state:** [`MEALSCOUT_RELEASE_HOLD_2026-08-01.md`](./MEALSCOUT_RELEASE_HOLD_2026-08-01.md) supersedes the historical readiness labels below for the August 1, 2026 release decision. Current verdict: `PARTIAL / HOLD`.
 >
-> **Step 1 verification:** GitHub Actions is retired for MealScout release evidence. Use the Actions-free exact-commit gate: [`MEALSCOUT_ACTIONS_FREE_EXACT_COMMIT_GATE.md`](./MEALSCOUT_ACTIONS_FREE_EXACT_COMMIT_GATE.md).
+> **Step 1 verification:** GitHub Actions is retired for MealScout release evidence. Independent exact-commit gate for PR #328 is **PASS** on `a23b4579f08db689141790449be8e0326ddf3546` (`cursor-clean-worktree`; evidence: `artifacts/exact-commit-gate/a23b4579f08d-pr-328.json` on PR #329). **Next step:** waiting on owner to authorize merge of #328. Gate doctrine: [`MEALSCOUT_ACTIONS_FREE_EXACT_COMMIT_GATE.md`](./MEALSCOUT_ACTIONS_FREE_EXACT_COMMIT_GATE.md).
 
 Last updated: 2026-08-07 (America/Chicago)
 

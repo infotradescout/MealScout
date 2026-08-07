@@ -26,23 +26,23 @@ remain outside the release lane.
 
 ## Confirmed blockers
 
-1. Executable **Actions-free** exact-commit verification is not yet proven on an
-   independent host for the next merge candidate. GitHub Actions is **retired**
-   for MealScout release evidence: do not chase Actions billing, do not require
-   Actions green, and do not bind Actions status checks to ruleset `20202108`
-   (PR + conversation resolution without required checks remains fine). The
-   in-repo gate is `npm run gate:exact-commit` /
-   `scripts/exactCommitReleaseGate.mjs`; evidence lands in
-   `artifacts/exact-commit-gate/`. Full inventory, PR #328 commands, and the
-   single owner host action:
+1. Release order **step 1** (Actions-free exact-commit gate) for PR #328 is
+   **PASS** on independent host `cursor-clean-worktree` for SHA
+   `a23b4579f08db689141790449be8e0326ddf3546`
+   (`independentReleaseEvidence: true`). Evidence on PR #329:
+   `artifacts/exact-commit-gate/a23b4579f08d-pr-328.json`. GitHub Actions
+   remains **retired** for MealScout release evidence: do not chase Actions
+   billing, do not require Actions green, and do not bind Actions status checks
+   to ruleset `20202108`. Do not re-run the long gate unless that evidence file
+   is missing or the #328 SHA changes. Full inventory:
    [`MEALSCOUT_ACTIONS_FREE_EXACT_COMMIT_GATE.md`](./MEALSCOUT_ACTIONS_FREE_EXACT_COMMIT_GATE.md).
-   Local-only validation remains non-substitutable for step 1. Historical
-   Actions billing notes are superseded:
+   Historical Actions billing notes are superseded:
    [`MEALSCOUT_HOSTED_CI_BLOCKER_2026-08-07.md`](./MEALSCOUT_HOSTED_CI_BLOCKER_2026-08-07.md).
+   **Next step:** waiting on owner to authorize merge of #328 (do not merge
+   without an explicit owner ask).
 2. Ruleset `20202108` is active with PR + conversation resolution and no
-   required status checks. Do not add Actions required checks. Ordinary
-   merge still waits on the Actions-free exact-commit gate PASS for the
-   proposed SHA, then an owner ask.
+   required status checks. Do not add Actions required checks. Step 1 PASS is
+   recorded for #328; ordinary merge still waits on an owner ask.
 3. PR #322 is draft, conflicting, based on an older payment/delivery baseline,
    and must not be merged wholesale.
 4. Static Action API integration tokens establish no user principal,
@@ -158,9 +158,10 @@ Public-read contract (runtime/API_ACTIONS):     EXPLICIT / PRODUCTION SMOKE PART
 Positive truck/detail-deal item witnesses:      PENDING NATURAL INVENTORY
 EMBED v1 envelope wording:                      OPEN DOCUMENTATION FOLLOW-UP
 Trusted-principal model:                        PENDING
-Actions-free exact-commit gate:                 IN-REPO / INDEPENDENT HOST PENDING
+Actions-free exact-commit gate:                 PASS (a23b4579 / cursor-clean-worktree)
 GitHub Actions:                                 RETIRED (not release evidence)
 Ruleset 20202108:                               PR+conversations; no Actions checks
+PR #328 merge:                                  WAITING ON OWNER AUTHORIZE
 PR #322:                                        HOLD / DECOMPOSE
 Rescue branch:                                  PRESERVED
 Overall status:                                 PARTIAL / HOLD
