@@ -33,7 +33,7 @@ import {
 } from "../utils/marketingEmailWindow";
 import { db } from "../db";
 import { requestLogs, adminDailyReports, cities } from "@shared/schema";
-import { and, gte, lt, desc, sql } from "drizzle-orm";
+import { and, gte, lt, desc, or, sql } from "drizzle-orm";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -540,11 +540,37 @@ export async function registerSchedulers(app: Express): Promise<void> {
     }
   });
 
-  // Request log cleanup — every 15 min, purge logs older than 48 h
+  // Request log cleanup — every 15 min. General request logs keep the existing
+  // 48-hour window. Only allowlisted observatory rows, whose writer strips IP,
+  // user agent, user/session IDs, URL queries, and private payloads, keep 180 d.
   scheduleCron("15 * * * *", async () => {
     try {
-      const cutoff = new Date(Date.now() - 48 * 60 * 60 * 1000);
-      await db.delete(requestLogs).where(lt(requestLogs.createdAt, cutoff));
+      const operationalCutoff = new Date(Date.now() - 48 * 60 * 60 * 1000);
+      const observatoryCutoff = new Date(
+        Date.now() - 180 * 24 * 60 * 60 * 1000,
+      );
+      const sanitizedObservatoryRow = sql<boolean>`coalesce((
+        ${requestLogs.surface} = 'discovery_observatory'
+        and ${requestLogs.method} = 'EVENT'
+        and ${requestLogs.userId} is null
+        and ${requestLogs.sessionId} is null
+        and ${requestLogs.ip} is null
+        and ${requestLogs.userAgent} is null
+        and position('?' in ${requestLogs.path}) = 0
+        and ${requestLogs.metadata}->>'discoveryContractVersion' = '1'
+      ), false)`;
+      await db.delete(requestLogs).where(
+        or(
+          and(
+            lt(requestLogs.createdAt, operationalCutoff),
+            sql`not (${sanitizedObservatoryRow})`,
+          ),
+          and(
+            lt(requestLogs.createdAt, observatoryCutoff),
+            sanitizedObservatoryRow,
+          ),
+        ),
+      );
     } catch (error) {
       console.error("❌ Request log cleanup failed:", error);
     }

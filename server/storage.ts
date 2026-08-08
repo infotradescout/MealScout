@@ -578,6 +578,10 @@ export interface IStorage {
     restaurantId: string;
     userId: string;
   }): Promise<any>;
+  getRestaurantFollowReceipt(
+    restaurantId: string,
+    userId: string,
+  ): Promise<any | null>;
   removeRestaurantFollow(restaurantId: string, userId: string): Promise<void>;
   getUserRestaurantFollows(userId: string): Promise<any[]>;
   createRestaurantUserRecommendation(recommendation: {
@@ -4633,6 +4637,23 @@ export class DatabaseStorage implements IStorage {
       .values(follow)
       .returning();
     return result;
+  }
+
+  async getRestaurantFollowReceipt(
+    restaurantId: string,
+    userId: string,
+  ): Promise<RestaurantFollow | null> {
+    const [result] = await db
+      .select()
+      .from(restaurantFollows)
+      .where(
+        and(
+          eq(restaurantFollows.restaurantId, restaurantId),
+          eq(restaurantFollows.userId, userId),
+        ),
+      )
+      .limit(1);
+    return result || null;
   }
 
   async removeRestaurantFollow(
