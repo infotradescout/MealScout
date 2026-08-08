@@ -1,4 +1,4 @@
-import { and, eq, gte, isNotNull, sql } from "drizzle-orm";
+import { and, eq, gte, isNotNull, isNull, sql } from "drizzle-orm";
 import { menuItems, pickupOrderItems, pickupOrders } from "@shared/schema";
 
 type InventoryReservationLine = {
@@ -33,13 +33,18 @@ async function applyInventoryDelta(
       .update(menuItems)
       .set({
         inventoryQty: sql`${menuItems.inventoryQty} - ${deltaQuantity}`,
-        isAvailable: sql`${menuItems.inventoryQty} - ${deltaQuantity} > 0`,
+        isAvailable: sql`case
+          when ${menuItems.inventoryQty} - ${deltaQuantity} = 0 then false
+          else ${menuItems.isAvailable}
+        end`,
+        inventoryAutoUnavailable: sql`${menuItems.inventoryQty} - ${deltaQuantity} = 0`,
         updatedAt: new Date(),
       })
       .where(
         and(
           eq(menuItems.id, menuItemId),
           eq(menuItems.trackInventory, true),
+          eq(menuItems.isAvailable, true),
           isNotNull(menuItems.inventoryQty),
           gte(menuItems.inventoryQty, deltaQuantity),
         ),
@@ -58,7 +63,16 @@ async function applyInventoryDelta(
     .update(menuItems)
     .set({
       inventoryQty: sql`${menuItems.inventoryQty} + ${deltaQuantity}`,
-      isAvailable: sql`${menuItems.inventoryQty} + ${deltaQuantity} > 0`,
+      isAvailable: sql`case
+        when ${menuItems.inventoryAutoUnavailable}
+          and ${menuItems.inventoryQty} + ${deltaQuantity} > 0 then true
+        else ${menuItems.isAvailable}
+      end`,
+      inventoryAutoUnavailable: sql`case
+        when ${menuItems.inventoryAutoUnavailable}
+          and ${menuItems.inventoryQty} + ${deltaQuantity} > 0 then false
+        else ${menuItems.inventoryAutoUnavailable}
+      end`,
       updatedAt: new Date(),
     })
     .where(
@@ -93,7 +107,24 @@ export async function restoreTrackedInventoryForPickupOrder(
 export async function restoreTrackedInventoryForPickupOrderByOrderId(
   tx: any,
   orderId: string,
-) {
+): Promise<boolean> {
+  const [claimedOrder] = await tx
+    .update(pickupOrders)
+    .set({
+      inventoryRestoredAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(pickupOrders.id, orderId),
+        eq(pickupOrders.status, "cancelled"),
+        isNull(pickupOrders.inventoryRestoredAt),
+      ),
+    )
+    .returning({ id: pickupOrders.id });
+
+  if (!claimedOrder) return false;
+
   const reservedRows = await tx
     .select({
       menuItemId: pickupOrderItems.menuItemId,
@@ -110,9 +141,10 @@ export async function restoreTrackedInventoryForPickupOrderByOrderId(
     }))
     .filter((row: InventoryReservationLine) => row.quantity > 0);
 
-  if (reservedItems.length === 0) return;
+  if (reservedItems.length === 0) return true;
 
   await restoreTrackedInventoryForPickupOrder(tx, reservedItems);
+  return true;
 }
 
 export async function cleanupPendingPickupOrderAfterPaymentSetupFailure(

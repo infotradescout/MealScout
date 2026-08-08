@@ -6292,6 +6292,7 @@ export const pickupOrders = pgTable(
     completedAt: timestamp("completed_at"),
     cancelledAt: timestamp("cancelled_at"),
     cancellationReason: text("cancellation_reason"),
+    inventoryRestoredAt: timestamp("inventory_restored_at"),
     // Notifications
     readyNotificationSent: boolean("ready_notification_sent")
       .notNull()
