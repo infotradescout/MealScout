@@ -310,10 +310,12 @@ export function registerUserAdminRoutes(
           userAgent: req.get("User-Agent") || undefined,
         });
 
+        const requestHost = req.get("host");
         const apiBaseUrl =
-          `${req.protocol}://${req.get("host")}` ||
           process.env.PUBLIC_BASE_URL ||
-          "http://localhost:5000";
+          (requestHost
+            ? `${req.protocol}://${requestHost}`
+            : "http://localhost:5000");
         const verifyUrl = `${apiBaseUrl}/api/auth/verify-email?token=${encodeURIComponent(
           token,
         )}`;
