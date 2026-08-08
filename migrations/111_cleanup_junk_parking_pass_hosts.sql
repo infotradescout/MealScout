@@ -55,6 +55,11 @@ BEGIN
       OR (id = 'a5d30bff-1318-4d7a-8ee2-96190bbf378f' AND business_name = 'The Spot Tavern')
       OR (id = '03371aca-2439-4a58-8269-4599e57279f4' AND business_name = 'The Unique Boutique');
 
+  IF target_count = 0 AND retained_count = 0 THEN
+    RAISE NOTICE 'Host cleanup not applicable on a fresh database.';
+    RETURN;
+  END IF;
+
   IF retained_count <> 4 THEN
     RAISE EXCEPTION 'Host cleanup stopped: expected all 4 retained real hosts, found %', retained_count;
   END IF;

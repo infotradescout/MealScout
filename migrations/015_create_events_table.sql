@@ -19,6 +19,11 @@ CREATE TABLE IF NOT EXISTS events (
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()
 );
+ALTER TABLE events
+  ADD COLUMN IF NOT EXISTS host_price_cents INTEGER,
+  ADD COLUMN IF NOT EXISTS requires_payment BOOLEAN DEFAULT FALSE,
+  ADD COLUMN IF NOT EXISTS stripe_product_id VARCHAR,
+  ADD COLUMN IF NOT EXISTS stripe_price_id VARCHAR;
 CREATE INDEX IF NOT EXISTS idx_events_host ON events(host_id);
 CREATE INDEX IF NOT EXISTS idx_events_series ON events(series_id);
 CREATE INDEX IF NOT EXISTS idx_events_date ON events(date);

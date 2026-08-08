@@ -3,10 +3,10 @@
 -- Tracks reporter reputation and moderation outcomes
 
 -- Add reputation fields to users table
-ALTER TABLE "users" ADD COLUMN "reporter_reputation_score" integer NOT NULL DEFAULT 100;
-ALTER TABLE "users" ADD COLUMN "flagged_count" integer NOT NULL DEFAULT 0;
-ALTER TABLE "users" ADD COLUMN "upheld_against_count" integer NOT NULL DEFAULT 0;
-ALTER TABLE "users" ADD COLUMN "false_flag_count" integer NOT NULL DEFAULT 0;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "reporter_reputation_score" integer NOT NULL DEFAULT 100;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "flagged_count" integer NOT NULL DEFAULT 0;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "upheld_against_count" integer NOT NULL DEFAULT 0;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "false_flag_count" integer NOT NULL DEFAULT 0;
 
 -- Content flags: User reports inappropriate/spam/misleading recommendation
 CREATE TABLE IF NOT EXISTS "recommendation_flags" (
@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS "recommendation_flags" (
   "reason" varchar NOT NULL, -- 'spam', 'inappropriate', 'misleading', 'fake', 'off_topic', 'abuse'
   "description" text,
   "evidence_urls" jsonb DEFAULT '[]'::jsonb, -- URLs/screenshots supporting the flag
-  "case_id" varchar REFERENCES "moderation_cases"("id") ON DELETE SET NULL,
+  "case_id" varchar,
   "flagged_at" timestamp DEFAULT CURRENT_TIMESTAMP,
   "created_at" timestamp DEFAULT CURRENT_TIMESTAMP
 );
@@ -30,7 +30,7 @@ CREATE TABLE IF NOT EXISTS "profile_content_flags" (
   "reason" varchar NOT NULL, -- 'false_info', 'inappropriate', 'misleading', 'policy_violation', 'spam', 'abuse'
   "description" text,
   "evidence_urls" jsonb DEFAULT '[]'::jsonb,
-  "case_id" varchar REFERENCES "moderation_cases"("id") ON DELETE SET NULL,
+  "case_id" varchar,
   "flagged_at" timestamp DEFAULT CURRENT_TIMESTAMP,
   "created_at" timestamp DEFAULT CURRENT_TIMESTAMP
 );
@@ -51,6 +51,30 @@ CREATE TABLE IF NOT EXISTS "moderation_cases" (
   "created_at" timestamp DEFAULT CURRENT_TIMESTAMP,
   "updated_at" timestamp DEFAULT CURRENT_TIMESTAMP
 );
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'recommendation_flags_case_id_moderation_cases_id_fk'
+  ) THEN
+    ALTER TABLE "recommendation_flags"
+      ADD CONSTRAINT "recommendation_flags_case_id_moderation_cases_id_fk"
+      FOREIGN KEY ("case_id") REFERENCES "moderation_cases"("id") ON DELETE SET NULL;
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'profile_content_flags_case_id_moderation_cases_id_fk'
+  ) THEN
+    ALTER TABLE "profile_content_flags"
+      ADD CONSTRAINT "profile_content_flags_case_id_moderation_cases_id_fk"
+      FOREIGN KEY ("case_id") REFERENCES "moderation_cases"("id") ON DELETE SET NULL;
+  END IF;
+END $$;
 
 -- Moderation decisions and outcomes
 CREATE TABLE IF NOT EXISTS "moderation_resolutions" (

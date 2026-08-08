@@ -32,6 +32,11 @@ BEGIN
     FROM hosts
    WHERE id = ANY (retained_ids);
 
+  IF target_count = 0 AND retained_count = 0 THEN
+    RAISE NOTICE 'Remaining test-host cleanup not applicable on a fresh database.';
+    RETURN;
+  END IF;
+
   IF retained_count <> 4 THEN
     RAISE EXCEPTION 'Remaining test-host cleanup stopped: expected all 4 retained real hosts, found %', retained_count;
   END IF;

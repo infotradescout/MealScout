@@ -3,25 +3,25 @@
 
 -- 1. Update hosts table for Stripe Connect
 ALTER TABLE hosts
-ADD COLUMN stripe_connect_account_id VARCHAR(255),
-ADD COLUMN stripe_connect_status VARCHAR(50) DEFAULT 'pending',
-ADD COLUMN stripe_onboarding_completed BOOLEAN DEFAULT false,
-ADD COLUMN stripe_charges_enabled BOOLEAN DEFAULT false,
-ADD COLUMN stripe_payouts_enabled BOOLEAN DEFAULT false;
+ADD COLUMN IF NOT EXISTS stripe_connect_account_id VARCHAR(255),
+ADD COLUMN IF NOT EXISTS stripe_connect_status VARCHAR(50) DEFAULT 'pending',
+ADD COLUMN IF NOT EXISTS stripe_onboarding_completed BOOLEAN DEFAULT false,
+ADD COLUMN IF NOT EXISTS stripe_charges_enabled BOOLEAN DEFAULT false,
+ADD COLUMN IF NOT EXISTS stripe_payouts_enabled BOOLEAN DEFAULT false;
 
-CREATE INDEX idx_hosts_stripe_account ON hosts(stripe_connect_account_id);
+CREATE INDEX IF NOT EXISTS idx_hosts_stripe_account ON hosts(stripe_connect_account_id);
 
 -- 2. Update events table for pricing
 ALTER TABLE events
-ADD COLUMN host_price_cents INTEGER, -- Host sets this, can be NULL for free events
-ADD COLUMN requires_payment BOOLEAN DEFAULT false,
-ADD COLUMN stripe_product_id VARCHAR(255),
-ADD COLUMN stripe_price_id VARCHAR(255);
+ADD COLUMN IF NOT EXISTS host_price_cents INTEGER, -- Host sets this, can be NULL for free events
+ADD COLUMN IF NOT EXISTS requires_payment BOOLEAN DEFAULT false,
+ADD COLUMN IF NOT EXISTS stripe_product_id VARCHAR(255),
+ADD COLUMN IF NOT EXISTS stripe_price_id VARCHAR(255);
 
-CREATE INDEX idx_events_requires_payment ON events(requires_payment);
+CREATE INDEX IF NOT EXISTS idx_events_requires_payment ON events(requires_payment);
 
 -- 3. Create event_bookings table
-CREATE TABLE event_bookings (
+CREATE TABLE IF NOT EXISTS event_bookings (
   id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
   event_id VARCHAR NOT NULL REFERENCES events(id) ON DELETE CASCADE,
   truck_id VARCHAR NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
@@ -59,9 +59,9 @@ CREATE TABLE event_bookings (
   UNIQUE(event_id, truck_id)
 );
 
-CREATE INDEX idx_bookings_event ON event_bookings(event_id);
-CREATE INDEX idx_bookings_truck ON event_bookings(truck_id);
-CREATE INDEX idx_bookings_host ON event_bookings(host_id);
-CREATE INDEX idx_bookings_status ON event_bookings(status);
-CREATE INDEX idx_bookings_payment_intent ON event_bookings(stripe_payment_intent_id);
-CREATE INDEX idx_bookings_created ON event_bookings(created_at);
+CREATE INDEX IF NOT EXISTS idx_bookings_event ON event_bookings(event_id);
+CREATE INDEX IF NOT EXISTS idx_bookings_truck ON event_bookings(truck_id);
+CREATE INDEX IF NOT EXISTS idx_bookings_host ON event_bookings(host_id);
+CREATE INDEX IF NOT EXISTS idx_bookings_status ON event_bookings(status);
+CREATE INDEX IF NOT EXISTS idx_bookings_payment_intent ON event_bookings(stripe_payment_intent_id);
+CREATE INDEX IF NOT EXISTS idx_bookings_created ON event_bookings(created_at);

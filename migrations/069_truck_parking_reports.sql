@@ -39,6 +39,11 @@ BEGIN
     SELECT 1
     FROM pg_constraint
     WHERE conname = 'uq_truck_parking_reports_booking'
+  ) AND NOT EXISTS (
+    SELECT 1
+    FROM pg_class
+    WHERE relkind = 'i'
+      AND relname = 'uq_truck_parking_reports_booking'
   ) THEN
     ALTER TABLE truck_parking_reports
       ADD CONSTRAINT uq_truck_parking_reports_booking UNIQUE (booking_id);
@@ -51,6 +56,11 @@ BEGIN
     SELECT 1
     FROM pg_constraint
     WHERE conname = 'uq_truck_parking_reports_manual'
+  ) AND NOT EXISTS (
+    SELECT 1
+    FROM pg_class
+    WHERE relkind = 'i'
+      AND relname = 'uq_truck_parking_reports_manual'
   ) THEN
     ALTER TABLE truck_parking_reports
       ADD CONSTRAINT uq_truck_parking_reports_manual UNIQUE (manual_schedule_id);
