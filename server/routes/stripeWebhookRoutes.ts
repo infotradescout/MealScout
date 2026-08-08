@@ -53,8 +53,31 @@ function getSubscriptionCustomerId(
 async function deactivateSubscriptionEntitlements(params: {
   userId: string;
   subscriptionId: string;
+  eventId: string;
+  eventCreatedAt: Date;
 }) {
   await db.transaction(async (tx: any) => {
+    const [lockedSubscription] = await tx
+      .select({
+        id: restaurantSubscriptions.id,
+        stripeEventCreatedAt: restaurantSubscriptions.stripeEventCreatedAt,
+      })
+      .from(restaurantSubscriptions)
+      .where(
+        eq(restaurantSubscriptions.stripeSubscriptionId, params.subscriptionId),
+      )
+      .limit(1)
+      .for("update");
+
+    if (!lockedSubscription) return;
+    if (
+      lockedSubscription.stripeEventCreatedAt &&
+      lockedSubscription.stripeEventCreatedAt.getTime() >=
+        params.eventCreatedAt.getTime()
+    ) {
+      return;
+    }
+
     // Serialize delayed cancellation A against activation of replacement B.
     // The second event observes the committed current subscription before it
     // can change user-level access.
@@ -72,11 +95,11 @@ async function deactivateSubscriptionEntitlements(params: {
       .set({
         status: "canceled",
         canceledAt: new Date(),
+        stripeEventId: params.eventId,
+        stripeEventCreatedAt: params.eventCreatedAt,
         updatedAt: new Date(),
       })
-      .where(
-        eq(restaurantSubscriptions.stripeSubscriptionId, params.subscriptionId),
-      );
+      .where(eq(restaurantSubscriptions.id, lockedSubscription.id));
 
     if (
       !lockedUser ||
@@ -114,6 +137,8 @@ async function deactivateSubscriptionEntitlements(params: {
 
 async function retireLegacyProfileSubscription(
   subscriptionId: string,
+  eventId: string,
+  eventCreatedAt: Date,
   customerId?: string | null,
 ) {
   let user = await storage.getUserByStripeSubscriptionId(subscriptionId);
@@ -125,6 +150,46 @@ async function retireLegacyProfileSubscription(
   await deactivateSubscriptionEntitlements({
     userId: user.id,
     subscriptionId,
+    eventId,
+    eventCreatedAt,
+  });
+}
+
+async function recordLegacyProfileSubscriptionEvent(params: {
+  subscriptionId: string;
+  eventId: string;
+  eventCreatedAt: Date;
+}) {
+  await db.transaction(async (tx: any) => {
+    const [lockedSubscription] = await tx
+      .select({
+        id: restaurantSubscriptions.id,
+        stripeEventCreatedAt: restaurantSubscriptions.stripeEventCreatedAt,
+      })
+      .from(restaurantSubscriptions)
+      .where(
+        eq(restaurantSubscriptions.stripeSubscriptionId, params.subscriptionId),
+      )
+      .limit(1)
+      .for("update");
+
+    if (!lockedSubscription) return;
+    if (
+      lockedSubscription.stripeEventCreatedAt &&
+      lockedSubscription.stripeEventCreatedAt.getTime() >=
+        params.eventCreatedAt.getTime()
+    ) {
+      return;
+    }
+
+    await tx
+      .update(restaurantSubscriptions)
+      .set({
+        stripeEventId: params.eventId,
+        stripeEventCreatedAt: params.eventCreatedAt,
+        updatedAt: new Date(),
+      })
+      .where(eq(restaurantSubscriptions.id, lockedSubscription.id));
   });
 }
 
@@ -1673,6 +1738,7 @@ export function registerStripeWebhookRoutes(
 
         case "customer.subscription.updated": {
           const subscriptionUpdated = event.data.object;
+          const eventCreatedAt = new Date(Number(event.created) * 1000);
           const terminalLegacyStatus = [
             "canceled",
             "incomplete_expired",
@@ -1680,9 +1746,16 @@ export function registerStripeWebhookRoutes(
           if (terminalLegacyStatus) {
             await retireLegacyProfileSubscription(
               subscriptionUpdated.id,
+              event.id,
+              eventCreatedAt,
               getSubscriptionCustomerId(subscriptionUpdated.customer),
             );
           } else {
+            await recordLegacyProfileSubscriptionEvent({
+              subscriptionId: subscriptionUpdated.id,
+              eventId: event.id,
+              eventCreatedAt,
+            });
             console.warn(
               `[WEBHOOK] Legacy profile subscription ${subscriptionUpdated.id} changed to ${subscriptionUpdated.status}; no automatic cancellation or access change was made`,
             );
@@ -1694,6 +1767,8 @@ export function registerStripeWebhookRoutes(
           const subscriptionDeleted = event.data.object;
           await retireLegacyProfileSubscription(
             subscriptionDeleted.id,
+            event.id,
+            new Date(Number(event.created) * 1000),
             getSubscriptionCustomerId(subscriptionDeleted.customer),
           );
           break;

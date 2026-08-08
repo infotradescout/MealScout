@@ -77,6 +77,7 @@
     "test:supplier-pay-intent-switch": "tsx scripts/testSupplierPayIntentMethodSwitch.ts",
     "test:ordering-profile-access": "tsx scripts/testOrderingProfileAccess.ts",
     "test:stripe-webhook-safety": "node --import tsx scripts/mealscout-stripe-webhook-verification-mode.contract.test.ts && node --import tsx scripts/mealscout-pickup-webhook-payout-eligibility.behavior.test.ts && node --import tsx scripts/mealscout-stripe-subscription-stale-event-guard.behavior.test.ts && node --import tsx scripts/mealscout-stripe-webhook-subscription-entitlement-guards.contract.test.ts && node --import tsx scripts/mealscout-stripe-webhook-idempotency-guards.contract.test.ts && node --import tsx scripts/mealscout-stripe-webhook-signature-verification.behavior.test.ts",
+    "test:subscription-entitlement-safety": "node --import tsx scripts/mealscout-subscription-entitlement-safety.integration.test.ts",
     "test:stripe-webhook-stateful-replay": "node --import tsx scripts/mealscout-stripe-webhook-stateful-replay.integration.test.ts",
     "test:pickup-order-safety": "node --import tsx scripts/mealscout-pickup-order-safety.integration.test.ts",
     "test:inventory-truth": "node --import tsx scripts/mealscout-inventory-truth.integration.test.ts",

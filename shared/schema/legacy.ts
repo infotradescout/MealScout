@@ -4175,6 +4175,8 @@ export const restaurantSubscriptions = pgTable(
     // Billing
     stripeCustomerId: varchar("stripe_customer_id"),
     stripeSubscriptionId: varchar("stripe_subscription_id"),
+    stripeEventId: varchar("stripe_event_id"),
+    stripeEventCreatedAt: timestamp("stripe_event_created_at"),
     currentPeriodStart: timestamp("current_period_start"),
     currentPeriodEnd: timestamp("current_period_end"),
     canceledAt: timestamp("canceled_at"),

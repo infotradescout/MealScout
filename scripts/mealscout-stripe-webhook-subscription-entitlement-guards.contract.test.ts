@@ -74,8 +74,43 @@ assert.ok(
   "Webhook delivery must never cancel a live Stripe subscription.",
 );
 assert.ok(
-  source.includes('const terminalLegacyStatus = ["canceled", "incomplete_expired"].includes('),
+  /const terminalLegacyStatus = \[[\s\S]*?"canceled",[\s\S]*?"incomplete_expired",?[\s\S]*?\]\.includes\(/.test(
+    source,
+  ),
   "Subscription updates may retire local legacy state only after Stripe reports a terminal status.",
+);
+assert.ok(
+  source.includes("stripeEventCreatedAt.getTime() >=") &&
+    source.includes("params.eventCreatedAt.getTime()"),
+  "Older and duplicate subscription events must not overwrite newer local state.",
+);
+assert.ok(
+  source.includes("recordLegacyProfileSubscriptionEvent({") &&
+    source.includes("eventId: event.id") &&
+    source.includes("eventCreatedAt"),
+  "Nonterminal subscription events must advance the ordering watermark without granting access.",
+);
+
+const paymentFailureSlice = sliceBetween(
+  'case "payment_intent.payment_failed"',
+  'case "customer.subscription.updated"',
+  "food-order payment event routing",
+);
+assert.ok(
+  !paymentFailureSlice.includes("retireLegacyProfileSubscription(") &&
+    !paymentFailureSlice.includes("deactivateSubscriptionEntitlements("),
+  "Food-order payment events must not mutate subscription entitlements.",
+);
+
+const subscriptionSlice = sliceBetween(
+  'case "customer.subscription.updated"',
+  'case "account.updated"',
+  "subscription event routing",
+);
+assert.ok(
+  !subscriptionSlice.includes("pickupOrders") &&
+    !subscriptionSlice.includes("restoreTrackedInventoryForPickupOrderByOrderId"),
+  "Subscription events must not mutate food orders or inventory.",
 );
 
 for (const forbiddenActivation of [
