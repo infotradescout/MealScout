@@ -108,6 +108,8 @@
     "checklist:security:strict": "cross-env CHECKLIST_REQUIRE_SMS=true CHECKLIST_REQUIRE_SLACK=true npm run checklist:security",
     "validate:config": "npx --yes tsx scripts/validateConfig.ts",
     "migrate:sql": "tsx scripts/runSqlMigration.ts",
+    "migrate:chain": "tsx scripts/runMigrationChain.ts",
+    "test:migration-118-upgrade": "tsx scripts/proveMigration118Upgrade.ts",
     "backfill:host-coordinates": "tsx scripts/backfillHostGeocodes.ts",
     "backfill:map-coordinates": "tsx scripts/backfillMapCoordinates.ts",
     "backfill:parking-pass-hours": "tsx scripts/backfillParkingPassHours.ts",
