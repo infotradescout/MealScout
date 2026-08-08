@@ -801,20 +801,20 @@ class UserFlowTester {
         created.body.length > 0 &&
         created.body[0]?.id;
       if (ok) {
-        const tomorrowKey = new Date(Date.now() + 24 * 60 * 60 * 1000)
-          .toISOString()
-          .slice(0, 10);
-        const preferred = created.body.find(
-          (item: any) => typeof item?.id === 'string' && item.id.includes(`:${tomorrowKey}`),
-        );
-        const selectedPass = preferred || created.body[0];
+        const datedPasses = created.body
+          .map((item: any) => {
+            const dateText = String(item?.date || '');
+            const dateKey = /^\d{4}-\d{2}-\d{2}/.test(dateText)
+              ? dateText.slice(0, 10)
+              : String(item?.id || '').split(':').pop();
+            return { item, dateKey };
+          })
+          .filter((candidate: any) => /^\d{4}-\d{2}-\d{2}$/.test(candidate.dateKey || ''))
+          .sort((left: any, right: any) => left.dateKey.localeCompare(right.dateKey));
+        const selected = datedPasses.at(-1);
+        const selectedPass = selected?.item || created.body.at(-1);
         passId = selectedPass.id;
-        if (selectedPass?.date) {
-          const parsed = new Date(selectedPass.date);
-          if (!Number.isNaN(parsed.getTime())) {
-            bookingDateKey = parsed.toISOString().slice(0, 10);
-          }
-        }
+        bookingDateKey = selected?.dateKey;
         if (!bookingDateKey && typeof passId === 'string') {
           const idDate = passId.split(':').pop();
           if (idDate && /^\d{4}-\d{2}-\d{2}$/.test(idDate)) {
