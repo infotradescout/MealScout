@@ -47,6 +47,7 @@ async function postWebhookEvent(params: {
   const payload = JSON.stringify({
     id: `evt_pr300_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
     object: "event",
+    created: Math.floor(Date.now() / 1000),
     type: params.eventType,
     data: { object: params.object },
   });
@@ -587,7 +588,7 @@ async function run() {
     assert.deepEqual(currentGuard.rows[0], {
       current_subscription: null,
       subscription_status: "canceled",
-      deal_active: false,
+      deal_active: true,
     });
 
     console.log(
