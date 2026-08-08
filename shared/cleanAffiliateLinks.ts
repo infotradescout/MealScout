@@ -47,6 +47,7 @@ const RESERVED_PUBLIC_BUSINESS_SLUGS = new Set([
   "map",
   "menu",
   "menu-builder",
+  "merchant-delivery",
   "moderation-policy",
   "online-ordering-platforms",
   "order-confirmation",
