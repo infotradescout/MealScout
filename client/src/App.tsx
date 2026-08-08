@@ -61,6 +61,9 @@ const ModerationPolicy = lazy(() => import("@/pages/public/ModerationPolicy"));
 const AdminAuditLogs = lazy(() => import("@/pages/AdminAuditLogs"));
 const AdminVacLogs = lazy(() => import("@/pages/AdminVacLogs"));
 const AdminTelemetry = lazy(() => import("@/pages/admin-telemetry"));
+const AdminDiscoveryObservatory = lazy(
+  () => import("@/pages/admin-discovery-observatory"),
+);
 const AdminAffiliateManagement = lazy(
   () => import("@/pages/AdminAffiliateManagement"),
 );
@@ -637,6 +640,10 @@ function Router() {
             <Route path="/admin/audit-logs" component={AdminAuditLogs} />
             <Route path="/admin/vac-logs" component={AdminVacLogs} />
             <Route path="/admin/telemetry" component={AdminTelemetry} />
+            <Route
+              path="/admin/discovery-observatory"
+              component={AdminDiscoveryObservatory}
+            />
             <Route path="/admin/geo-ads" component={AdminGeoAds} />
             <Route path="/admin/geo/heatmap" component={AdminMarketHeatmap} />
             <Route

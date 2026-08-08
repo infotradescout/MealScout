@@ -20,6 +20,7 @@ import {
   mergeQuickReviewScores,
 } from "../quickReview/contextIdempotency";
 import { distributedRateLimit } from "../middleware/distributedRateLimit";
+import { recordFollowJourneyOutcome } from "../services/discoveryObservatory";
 import {
   toPublicRestaurantListing,
   toPublicRestaurantListingArray,
@@ -117,6 +118,40 @@ const consumeEngagementWindow = (key: string) => {
   engagementActionLastSeen.set(key, now);
   return { allowed: true, retryAfterSeconds: 0 };
 };
+
+async function recordVerifiedFollowDiscoveryOutcome(input: {
+  req: any;
+  restaurantId: string;
+  userId: string;
+  restaurantName: string;
+  entityType: "truck" | "restaurant";
+  actionObservedAt: string;
+  alreadyExists?: boolean;
+}) {
+  let durableFollow: any = null;
+  try {
+    // Receipt/completion is eligible only after a separate canonical read,
+    // not merely because the insert returned successfully.
+    durableFollow = await storage.getRestaurantFollowReceipt(
+      input.restaurantId,
+      input.userId,
+    );
+  } catch (readError) {
+    console.error("Failed to verify durable restaurant follow:", readError);
+  }
+  await recordFollowJourneyOutcome({
+    req: input.req,
+    restaurantId: input.restaurantId,
+    restaurantName: input.restaurantName,
+    entityType: input.entityType,
+    alreadyExists: input.alreadyExists,
+    actionObservedAt: input.actionObservedAt,
+    durableFollowId: durableFollow?.id || null,
+    durableFollowVerifiedAt: durableFollow ? new Date().toISOString() : null,
+  }).catch((observatoryError) => {
+    console.error("Failed to record discovery follow outcome:", observatoryError);
+  });
+}
 
 export function registerRestaurantCoreRoutes(
   app: Express,
@@ -1066,6 +1101,8 @@ export function registerRestaurantCoreRoutes(
     "/api/restaurants/:restaurantId/follow",
     isAuthenticated,
     async (req: any, res) => {
+      let followRestaurant: any = null;
+      const followActionObservedAt = new Date().toISOString();
       try {
         const { restaurantId } = req.params;
         const userId = req.user.id;
@@ -1080,6 +1117,7 @@ export function registerRestaurantCoreRoutes(
         }
 
         const restaurant = await storage.getRestaurant(restaurantId);
+        followRestaurant = restaurant;
         if (!restaurant) {
           return res.status(404).json({ message: "Restaurant not found" });
         }
@@ -1091,6 +1129,14 @@ export function registerRestaurantCoreRoutes(
 
         const follow = await storage.createRestaurantFollow(followData);
         void trackEngagement("restaurant_follow_added", userId, restaurantId);
+        await recordVerifiedFollowDiscoveryOutcome({
+          req,
+          restaurantId,
+          userId,
+          restaurantName: String(restaurant.name || "Restaurant"),
+          entityType: restaurant.isFoodTruck ? "truck" : "restaurant",
+          actionObservedAt: followActionObservedAt,
+        });
         res.json(follow);
       } catch (error: any) {
         if (isUniqueViolation(error)) {
@@ -1099,6 +1145,17 @@ export function registerRestaurantCoreRoutes(
             req.user?.id,
             req.params?.restaurantId,
           );
+          if (followRestaurant) {
+            await recordVerifiedFollowDiscoveryOutcome({
+              req,
+              restaurantId: String(req.params.restaurantId),
+              userId: String(req.user?.id || ""),
+              restaurantName: String(followRestaurant.name || "Restaurant"),
+              entityType: followRestaurant.isFoodTruck ? "truck" : "restaurant",
+              alreadyExists: true,
+              actionObservedAt: followActionObservedAt,
+            });
+          }
           return res.status(200).json({
             success: true,
             alreadyExists: true,
