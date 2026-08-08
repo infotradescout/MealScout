@@ -138,6 +138,11 @@ export function TruckSchedulePanel({
           </span>
         ) : null}
       </div>
+      {profile.timeZone ? (
+        <p className="text-xs text-[color:var(--profile-muted)]">
+          Schedule times shown in {profile.timeZone}
+        </p>
+      ) : null}
 
       {hasActionableSchedule ? (
         <div className="space-y-2">

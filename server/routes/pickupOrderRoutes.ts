@@ -73,6 +73,7 @@ import {
   hashCustomerAccessToken,
   projectOrderForCustomer,
 } from "../services/merchantDeliverySafety";
+import { loadAuthoritativePickupOrderItems } from "../services/pickupOrderIdentityService";
 
 const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY)
@@ -424,12 +425,11 @@ export function registerPickupOrderRoutes(app: Express) {
 
       // Resolve all menu items
       const itemIds = body.items.map((i) => i.menuItemId);
-      const dbItems: MenuItem[] = await db
-        .select()
-        .from(menuItems)
-        .where(
-          and(inArray(menuItems.id, itemIds), eq(menuItems.isAvailable, true)),
-        );
+      const dbItems: MenuItem[] = await loadAuthoritativePickupOrderItems(db, {
+        restaurantId: body.restaurantId,
+        menuId: body.menuId,
+        menuItemIds: itemIds,
+      });
 
       const itemMap = new Map<string, MenuItem>(dbItems.map((i) => [i.id, i]));
 

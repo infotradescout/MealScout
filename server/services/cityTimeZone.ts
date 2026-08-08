@@ -112,7 +112,7 @@ export async function resolveCityTimeZone(params: {
   return resolveCityTimeZoneSync({ city, state: state || rows?.[0]?.state });
 }
 
-function isValidIanaTimeZone(value: string) {
+export function isValidIanaTimeZone(value: string) {
   try {
     new Intl.DateTimeFormat("en-US", { timeZone: value }).format();
     return true;

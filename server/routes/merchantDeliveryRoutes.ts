@@ -85,50 +85,61 @@ export async function getDeliveryQuote(
   return settings;
 }
 
-export function registerMerchantDeliveryRoutes(app: Express) {
-  app.get("/api/restaurants/:restaurantId/delivery", async (req, res) => {
-    const [restaurant] = await db
-      .select({
-        id: restaurants.id,
-        city: restaurants.city,
-        state: restaurants.state,
-      })
-      .from(restaurants)
-      .where(eq(restaurants.id, req.params.restaurantId));
-    if (!restaurant)
-      return res.status(404).json({ message: "Restaurant not found" });
-    const [settings] = await db
-      .select()
-      .from(merchantDeliverySettings)
-      .where(eq(merchantDeliverySettings.restaurantId, restaurant.id));
-    const timeZone = await resolveCityTimeZoneStrict({
-      city: restaurant.city,
-      state: restaurant.state,
-    });
-    const configured = hasValidMerchantDeliveryConfiguration(settings);
-    const availableNow = Boolean(
-      configured &&
+export async function getPublicMerchantDeliveryAvailability(
+  restaurantId: string,
+) {
+  const [restaurant] = await db
+    .select({
+      id: restaurants.id,
+      city: restaurants.city,
+      state: restaurants.state,
+    })
+    .from(restaurants)
+    .where(eq(restaurants.id, restaurantId));
+  if (!restaurant) return null;
+  const [settings] = await db
+    .select()
+    .from(merchantDeliverySettings)
+    .where(eq(merchantDeliverySettings.restaurantId, restaurant.id));
+  const timeZone = await resolveCityTimeZoneStrict({
+    city: restaurant.city,
+    state: restaurant.state,
+  });
+  const configured = hasValidMerchantDeliveryConfiguration(settings);
+  const availableNow = Boolean(
+    configured &&
       isDeliveryScheduleAvailable({
         deliveryHours: settings.deliveryHours,
         timeZone: timeZone ?? undefined,
       }),
+  );
+  return {
+    enabled: configured,
+    configured,
+    availableNow,
+    feeCents: settings?.feeCents ?? 0,
+    minimumOrderCents: settings?.minimumOrderCents ?? 0,
+    estimatedMinutes: settings?.estimatedMinutes ?? 45,
+    postalCodes: settings?.postalCodes ?? [],
+    deliveryHours: settings?.deliveryHours ?? {},
+    instructions: settings?.instructions ?? null,
+    timeZone,
+    unavailableReason: !configured
+      ? "Merchant delivery is not currently configured"
+      : !availableNow
+        ? "Merchant delivery is unavailable at this time"
+        : null,
+  };
+}
+
+export function registerMerchantDeliveryRoutes(app: Express) {
+  app.get("/api/restaurants/:restaurantId/delivery", async (req, res) => {
+    const availability = await getPublicMerchantDeliveryAvailability(
+      req.params.restaurantId,
     );
-    res.json({
-      enabled: configured,
-      configured,
-      availableNow,
-      feeCents: settings?.feeCents ?? 0,
-      minimumOrderCents: settings?.minimumOrderCents ?? 0,
-      estimatedMinutes: settings?.estimatedMinutes ?? 45,
-      postalCodes: settings?.postalCodes ?? [],
-      deliveryHours: settings?.deliveryHours ?? {},
-      instructions: settings?.instructions ?? null,
-      unavailableReason: !configured
-        ? "Merchant delivery is not currently configured"
-        : !availableNow
-          ? "Merchant delivery is unavailable at this time"
-          : null,
-    });
+    if (!availability)
+      return res.status(404).json({ message: "Restaurant not found" });
+    res.json(availability);
   });
 
   app.get(

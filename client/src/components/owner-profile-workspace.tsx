@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 export interface OwnerProfileDraft {
+  isActive?: boolean;
   name: string;
   description: string;
   cuisineType: string;
@@ -445,6 +446,22 @@ export default function OwnerProfileWorkspace({
           }}
         >
           <section className="rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-4 sm:p-5">
+            <label className="mb-5 flex items-start gap-3 rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface-muted)] p-3">
+              <input
+                type="checkbox"
+                checked={draft.isActive !== false}
+                onChange={(event) => update("isActive", event.target.checked)}
+                className="mt-1 h-4 w-4"
+              />
+              <span>
+                <span className="block text-sm font-black text-[color:var(--text-primary)]">
+                  Public profile visible
+                </span>
+                <span className="block text-xs leading-5 text-[color:var(--text-muted)]">
+                  Turn this off to hide the claimed profile and pause its public website.
+                </span>
+              </span>
+            </label>
             <div className="mb-4 flex items-start gap-3">
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-orange-100 text-orange-700">
                 <Store className="h-5 w-5" aria-hidden="true" />
@@ -586,7 +603,7 @@ export default function OwnerProfileWorkspace({
                 <FieldLabel key={key} label={label}>
                   <Input
                     type="url"
-                    value={draft[key]}
+                    value={String(draft[key] ?? "")}
                     onChange={(event) => update(key, event.target.value)}
                     placeholder="https://"
                   />

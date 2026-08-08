@@ -823,6 +823,7 @@ export function registerRestaurantOperationsRoutes(
         }
 
         const profileSchema = z.object({
+          isActive: z.boolean().optional(),
           name: z.string().trim().min(1).max(160).optional(),
           description: z.string().trim().max(4000).optional().nullable(),
           cuisineType: z.string().trim().max(160).optional().nullable(),
@@ -871,7 +872,10 @@ export function registerRestaurantOperationsRoutes(
         const baseUpdates = Object.fromEntries(
           Object.entries(parsed)
             .filter(([key, value]) => value !== undefined && !actionLinkKeys.has(key))
-            .map(([key, value]) => [key, normalize(value)]),
+            .map(([key, value]) => [
+              key,
+              key === "isActive" ? value : normalize(value),
+            ]),
         );
 
         const actionLinkUpdates = Object.fromEntries(
@@ -890,6 +894,12 @@ export function registerRestaurantOperationsRoutes(
         const updatedRestaurant = await withLockedRestaurantSettings(
           restaurantId,
           async (tx, lockedRestaurant) => {
+            if (parsed.isActive === true && lockedRestaurant.isVerified !== true) {
+              throw Object.assign(
+                new Error("Only a verified claimed profile can be published"),
+                { statusCode: 409 },
+              );
+            }
             const updates: Record<string, unknown> = {
               ...baseUpdates,
               updatedAt: new Date(),

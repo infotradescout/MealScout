@@ -28,6 +28,16 @@ const forbiddenPublicKeys = new Set([
   "session",
   "role",
   "permissions",
+  "deliveryaddress",
+  "deliverycity",
+  "deliverystate",
+  "deliverypostalcode",
+  "deliveryinstructions",
+  "stripepaymentintentid",
+  "stripetransfergroupid",
+  "customeraccesstoken",
+  "customeraccesstokenhash",
+  "checkoutrequestid",
 ]);
 
 type PublicGuardMode = "throw" | "throw-prod-safe";

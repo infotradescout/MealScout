@@ -184,6 +184,7 @@ const buildOwnerProfileDraft = (
       ? row.socialAutopostSettings.publicActionLinks
       : {};
   return {
+    isActive: row?.isActive !== false,
     name: String(row?.name || ""),
     description: String(row?.description || ""),
     cuisineType: String(row?.cuisineType || ""),
@@ -244,6 +245,7 @@ export default function RestaurantOwnerDashboard() {
     "week" | "month" | "quarter"
   >("month");
   const [profileDraft, setProfileDraft] = useState<OwnerProfileDraft>({
+    isActive: true,
     name: "",
     description: "",
     cuisineType: "",
