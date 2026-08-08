@@ -40,6 +40,10 @@ import {
   applySitemapMembershipCacheHeaders,
   isPublicRestaurantIndexable,
 } from "../seo/publicRestaurantIndexability";
+import {
+  isIsolatedDeploymentRequest,
+  isIsolatedSitemapPath,
+} from "../seo/previewIsolation";
 
 const truckBusinessTypeAliases = [
   "food_truck",
@@ -362,6 +366,16 @@ const sendUrlsetXml = (
 };
 
 export function registerSeoRoutes(app: Express) {
+  app.use((req, res, next) => {
+    if (!isIsolatedDeploymentRequest(req) || !isIsolatedSitemapPath(req.path)) {
+      return next();
+    }
+
+    res.setHeader("Cache-Control", "no-store");
+    res.setHeader("X-Robots-Tag", "noindex, nofollow, noarchive");
+    return res.status(404).end();
+  });
+
   const indexNowConfig = getIndexNowConfig();
   if (indexNowConfig.enabled && indexNowConfig.key) {
     const keyPath = `/${indexNowConfig.key}.txt`;
@@ -1414,9 +1428,9 @@ export function registerSeoRoutes(app: Express) {
     }
   });
 
-  app.get("/robots.txt", async (_req, res) => {
+  app.get("/robots.txt", async (req, res) => {
     try {
-      if (process.env.MEALSCOUT_PREVIEW_NOINDEX === "true") {
+      if (isIsolatedDeploymentRequest(req)) {
         res.setHeader("Content-Type", "text/plain; charset=utf-8");
         res.setHeader("Cache-Control", "no-store");
         res.setHeader("X-Robots-Tag", "noindex, nofollow, noarchive");
