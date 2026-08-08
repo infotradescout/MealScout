@@ -26,6 +26,7 @@ import { storage } from "../storage";
 import { shouldAttemptPickupWebhookPayoutTransfer } from "../utils/pickupWebhookPayout";
 import { shouldRevokeUserSubscriptionEntitlements } from "../utils/stripeSubscriptionEntitlements";
 import { decideStripeWebhookVerificationMode } from "../utils/stripeWebhookVerification";
+import { restoreTrackedInventoryForPickupOrderByOrderId } from "../services/pickupInventoryService";
 const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY)
   : null;
@@ -1533,8 +1534,72 @@ export function registerStripeWebhookRoutes(
           console.log(`[WEBHOOK] PaymentIntent ${failedIntent.id} failed`);
 
           try {
-            const { eventBookings } = await import("@shared/schema");
+            const { eventBookings, pickupOrders } = await import("@shared/schema");
             const metadata = (failedIntent as any).metadata || {};
+
+            // Pickup order payment failure
+            const pickupOrderId = String(
+              metadata.pickupOrderId || metadata.orderId || "",
+            ).trim();
+            if (pickupOrderId) {
+              try {
+                const [order] = await db
+                  .select()
+                  .from(pickupOrders)
+                  .where(eq(pickupOrders.id, pickupOrderId))
+                  .limit(1);
+                if (!order) {
+                  throw new Error(
+                    `Pickup order ${pickupOrderId} not found for failed PaymentIntent ${failedIntent.id}`,
+                  );
+                }
+
+                const storedIntentId = String(
+                  (order as any).stripePaymentIntentId || "",
+                ).trim();
+                if (storedIntentId && storedIntentId !== failedIntent.id) {
+                  console.warn(
+                    `[WEBHOOK] Pickup order ${pickupOrderId} ignored failed PaymentIntent ${failedIntent.id}; expected ${storedIntentId}`,
+                  );
+                  break;
+                }
+
+                await db.transaction(async (tx: any) => {
+                  const [updated] = await tx
+                    .update(pickupOrders)
+                    .set({
+                      status: "cancelled",
+                      cancelledAt: new Date(),
+                      cancellationReason: "Payment failed",
+                      updatedAt: new Date(),
+                    })
+                    .where(
+                      and(
+                        eq(pickupOrders.id, order.id),
+                        eq(pickupOrders.status, "pending"),
+                      ),
+                    )
+                    .returning();
+                  if (!updated) {
+                    console.log(
+                      `[WEBHOOK] Pickup order ${order.id} already left pending state during failure replay`,
+                    );
+                    return;
+                  }
+                  await restoreTrackedInventoryForPickupOrderByOrderId(
+                    tx,
+                    order.id,
+                  );
+                });
+              } catch (pickupError) {
+                console.error(
+                  "[WEBHOOK] Pickup order failure update failed:",
+                  pickupError,
+                );
+                throw pickupError;
+              }
+              break;
+            }
 
             // Supplier marketplace order payment failure
             const supplierOrderId = metadata.supplierOrderId;

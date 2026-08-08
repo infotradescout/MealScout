@@ -62,6 +62,11 @@ import {
   sendPickupOrderCancelledNotification,
   sendPickupOrderConfirmedNotifications,
 } from "../services/pickupOrderNotificationService";
+import {
+  cleanupPendingPickupOrderAfterPaymentSetupFailure,
+  restoreTrackedInventoryForPickupOrderByOrderId,
+  reserveTrackedInventoryForPickupOrder,
+} from "../services/pickupInventoryService";
 
 const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY)
@@ -564,39 +569,69 @@ export function registerPickupOrderRoutes(app: Express) {
       }
       const totalCents = baseTotalCents + deliveryFeeCents;
 
-      // Insert order
-      const [order] = await db
-        .insert(pickupOrders)
-        .values({
-          restaurantId: body.restaurantId,
-          customerId: req.user?.id ?? null,
-          customerName: body.customerName,
-          customerEmail: body.customerEmail ?? null,
-          customerPhone: body.customerPhone ?? null,
-          orderType: body.orderType,
-          status: ORDER_STATUS.PENDING,
-          subtotalCents,
-          platformFeeCents,
-          feePaidByBusiness,
-          totalCents,
-          paymentMethod: body.paymentMethod,
-          specialInstructions: body.specialInstructions ?? null,
-          prepTimeMinutes: 20,
-          scheduledFor: body.scheduledFor ? new Date(body.scheduledFor) : null,
-          deliveryAddress:
-            body.orderType === "delivery" ? body.deliveryAddress : null,
-          deliveryCity:
-            body.orderType === "delivery" ? body.deliveryCity : null,
-          deliveryState:
-            body.orderType === "delivery" ? body.deliveryState : null,
-          deliveryPostalCode:
-            body.orderType === "delivery" ? body.deliveryPostalCode : null,
-          deliveryFeeCents,
-          deliveryEstimateMinutes,
-          deliveryInstructions:
-            body.orderType === "delivery" ? body.deliveryInstructions : null,
-        })
-        .returning();
+      let order: PickupOrder;
+      try {
+        order = await db.transaction(async (tx: any) => {
+          const [createdOrder] = await tx
+            .insert(pickupOrders)
+            .values({
+              restaurantId: body.restaurantId,
+              customerId: req.user?.id ?? null,
+              customerName: body.customerName,
+              customerEmail: body.customerEmail ?? null,
+              customerPhone: body.customerPhone ?? null,
+              orderType: body.orderType,
+              status: ORDER_STATUS.PENDING,
+              subtotalCents,
+              platformFeeCents,
+              feePaidByBusiness,
+              totalCents,
+              paymentMethod: body.paymentMethod,
+              specialInstructions:
+                (body.specialInstructions ?? "").trim() || null,
+              prepTimeMinutes: 20,
+              scheduledFor: body.scheduledFor ? new Date(body.scheduledFor) : null,
+              deliveryAddress:
+                body.orderType === "delivery" ? body.deliveryAddress : null,
+              deliveryCity:
+                body.orderType === "delivery" ? body.deliveryCity : null,
+              deliveryState:
+                body.orderType === "delivery" ? body.deliveryState : null,
+              deliveryPostalCode:
+                body.orderType === "delivery" ? body.deliveryPostalCode : null,
+              deliveryFeeCents,
+              deliveryEstimateMinutes,
+              deliveryInstructions:
+                body.orderType === "delivery" ? body.deliveryInstructions : null,
+            })
+            .returning();
+
+          if (!createdOrder) {
+            throw new Error("Unable to create pickup order");
+          }
+
+          // Insert line items
+          await tx
+            .insert(pickupOrderItems)
+            .values(lineItems.map((li) => ({ ...li, orderId: createdOrder.id })));
+
+          await reserveTrackedInventoryForPickupOrder(
+            tx,
+            lineItems.map((li) => ({
+              menuItemId: li.menuItemId,
+              quantity: li.quantity,
+            })),
+          );
+
+          return createdOrder;
+        });
+      } catch (err: any) {
+        const statusCode = Number(err?.statusCode || 0);
+        if (statusCode === 409) {
+          return res.status(409).json({ message: err.message });
+        }
+        throw err;
+      }
 
       if (body.promotionToken) {
         await consumePromotionAttribution({
@@ -607,27 +642,6 @@ export function registerPickupOrderRoutes(app: Express) {
           eligibleOrderCents: subtotalCents,
           commissionEligible: body.paymentMethod === "card",
         });
-      }
-
-      // Insert line items
-      await db
-        .insert(pickupOrderItems)
-        .values(lineItems.map((li) => ({ ...li, orderId: order.id })));
-
-      // Deduct inventory for tracked items
-      for (const reqItem of body.items) {
-        const dbItem = itemMap.get(reqItem.menuItemId)!;
-        if (dbItem.trackInventory && dbItem.inventoryQty !== null) {
-          const newQty = dbItem.inventoryQty - reqItem.quantity;
-          await db
-            .update(menuItems)
-            .set({
-              inventoryQty: newQty,
-              isAvailable: newQty > 0,
-              updatedAt: new Date(),
-            })
-            .where(eq(menuItems.id, dbItem.id));
-        }
       }
 
       // For cash orders: confirm immediately, no Stripe needed
@@ -671,7 +685,7 @@ export function registerPickupOrderRoutes(app: Express) {
       // Card payment: create Stripe PaymentIntent
       if (!stripe) {
         // No Stripe configured – should not happen in production
-        await db.delete(pickupOrders).where(eq(pickupOrders.id, order.id));
+        await cleanupPendingPickupOrderAfterPaymentSetupFailure(db, order.id);
         return res
           .status(503)
           .json({ message: "Payment processing is not configured" });
@@ -701,7 +715,7 @@ export function registerPickupOrderRoutes(app: Express) {
         });
       } catch (stripeErr: any) {
         // Clean up pending order if Stripe fails
-        await db.delete(pickupOrders).where(eq(pickupOrders.id, order.id));
+        await cleanupPendingPickupOrderAfterPaymentSetupFailure(db, order.id);
         console.error(
           "[pickupOrderRoutes] Stripe PI creation failed:",
           stripeErr,
@@ -1058,11 +1072,37 @@ export function registerPickupOrderRoutes(app: Express) {
           (req.body as any).cancellationReason || "Cancelled by restaurant";
       }
 
-      const [updated] = await db
-        .update(pickupOrders)
-        .set(updates)
-        .where(eq(pickupOrders.id, orderId))
-        .returning();
+      const updated = await db.transaction(async (tx: any) => {
+        const [updatedOrder] = await tx
+          .update(pickupOrders)
+          .set(updates)
+          .where(
+            and(
+              eq(pickupOrders.id, orderId),
+              eq(pickupOrders.status, order.status),
+            ),
+          )
+          .returning();
+
+        if (!updatedOrder) {
+          return null;
+        }
+
+        if (status === ORDER_STATUS.CANCELLED) {
+          await restoreTrackedInventoryForPickupOrderByOrderId(
+            tx,
+            updatedOrder.id,
+          );
+        }
+
+        return updatedOrder;
+      });
+
+      if (!updated) {
+        return res.status(409).json({
+          message: "Order status changed before this update could be applied",
+        });
+      }
 
       if (status === ORDER_STATUS.CANCELLED) {
         sendPickupOrderCancelledNotification(updated).catch(console.error);
