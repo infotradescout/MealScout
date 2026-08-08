@@ -6266,6 +6266,8 @@ export const pickupOrders = pgTable(
     // 'card' | 'cash'
     stripePaymentIntentId: varchar("stripe_payment_intent_id"),
     stripeTransferGroupId: varchar("stripe_transfer_group_id"),
+    checkoutRequestId: varchar("checkout_request_id").unique(),
+    customerAccessTokenHash: varchar("customer_access_token_hash"),
     payoutStatus: varchar("payout_status").notNull().default("pending"),
     // 'pending' | 'transferred' | 'failed'
     // Fulfillment
@@ -6277,6 +6279,9 @@ export const pickupOrders = pgTable(
     deliveryState: varchar("delivery_state"),
     deliveryPostalCode: varchar("delivery_postal_code"),
     deliveryFeeCents: integer("delivery_fee_cents").notNull().default(0),
+    taxCents: integer("tax_cents").notNull().default(0),
+    tipCents: integer("tip_cents").notNull().default(0),
+    discountCents: integer("discount_cents").notNull().default(0),
     deliveryEstimateMinutes: integer("delivery_estimate_minutes"),
     deliveryInstructions: text("delivery_instructions"),
     outForDeliveryAt: timestamp("out_for_delivery_at"),
@@ -6357,6 +6362,7 @@ export const orderNotifications = pgTable(
     sentAt: timestamp("sent_at").defaultNow(),
     status: varchar("status").notNull().default("sent"), // 'sent' | 'failed'
     errorMessage: text("error_message"),
+    dedupeKey: varchar("dedupe_key").unique(),
   },
   (table) => [
     index("idx_order_notifications_order").on(table.orderId),

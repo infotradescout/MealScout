@@ -1,10 +1,18 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import fs from "node:fs";
 import {
   evaluateDeliveryEligibility,
   isDeliveryScheduleAvailable,
   normalizeDeliverySchedule,
 } from "../server/services/deliveryEligibility";
+import {
+  calculateAuthoritativeMerchantDeliveryTotals,
+  customerAccessTokenMatches,
+  hasValidMerchantDeliveryConfiguration,
+  hashCustomerAccessToken,
+  projectOrderForCustomer,
+} from "../server/services/merchantDeliverySafety";
 
 const base = {
   enabled: true,
@@ -15,6 +23,45 @@ const base = {
   activeOrders: 1,
   maxConcurrentOrders: 5,
 };
+
+test("delivery is off until the merchant has a bounded service area", () => {
+  assert.equal(hasValidMerchantDeliveryConfiguration(undefined), false);
+  assert.equal(hasValidMerchantDeliveryConfiguration({ enabled: true, feeCents: 500, minimumOrderCents: 2000, estimatedMinutes: 45, maxConcurrentOrders: 5, postalCodes: [] }), false);
+  assert.equal(hasValidMerchantDeliveryConfiguration({ enabled: true, feeCents: 500, minimumOrderCents: 2000, estimatedMinutes: 45, maxConcurrentOrders: 5, postalCodes: ["75201"] }), true);
+});
+
+test("authoritative totals include delivery once and isolate pickup", () => {
+  assert.deepEqual(calculateAuthoritativeMerchantDeliveryTotals({ subtotalCents: 3000, platformFeeCents: 100, deliveryFeeCents: 500 }), {
+    subtotalCents: 3000, platformFeeCents: 100, deliveryFeeCents: 500,
+    taxCents: 0, tipCents: 0, discountCents: 0, totalCents: 3600,
+  });
+  assert.equal(calculateAuthoritativeMerchantDeliveryTotals({ subtotalCents: 3000, platformFeeCents: 100, deliveryFeeCents: 0 }).totalCents, 3100);
+});
+
+test("guest access token protects delivery data", () => {
+  const token = "a".repeat(64);
+  const hash = hashCustomerAccessToken(token);
+  assert.equal(customerAccessTokenMatches(token, hash), true);
+  assert.equal(customerAccessTokenMatches("b".repeat(64), hash), false);
+  const order = { id: "order-1", customerEmail: "customer@example.com", deliveryAddress: "1 Private Way", customerAccessTokenHash: hash, stripePaymentIntentId: "pi_private" };
+  assert.equal(projectOrderForCustomer(order, false).deliveryAddress, undefined);
+  assert.equal(projectOrderForCustomer(order, true).deliveryAddress, "1 Private Way");
+  assert.equal(projectOrderForCustomer(order, true).stripePaymentIntentId, undefined);
+});
+
+test("checkout and notification integration retain server authority and replay guards", () => {
+  const route = fs.readFileSync(new URL("../server/routes/pickupOrderRoutes.ts", import.meta.url), "utf8");
+  const notifications = fs.readFileSync(new URL("../server/services/pickupOrderNotificationService.ts", import.meta.url), "utf8");
+  const checkout = fs.readFileSync(new URL("../client/src/pages/pickup-checkout.tsx", import.meta.url), "utf8");
+  assert.match(route, /checkoutRequestId: z\.string\(\)\.uuid\(\)/);
+  assert.match(route, /getDeliveryQuote\([\s\S]*?tx,[\s\S]*?true/);
+  assert.match(route, /projectOrderForCustomer/);
+  assert.doesNotMatch(route, /totalCents:\s*z\./);
+  assert.match(notifications, /onConflictDoNothing/);
+  assert.match(notifications, /merchant_new_order/);
+  assert.match(checkout, /!orderType/);
+  assert.match(checkout, /deliveryInfo\.availableNow/);
+});
 
 test("merchant delivery accepts an eligible order", () => {
   assert.deepEqual(evaluateDeliveryEligibility(base), { ok: true });

@@ -34,6 +34,12 @@ const defaults: Settings = {
   deliveryHours: {},
 };
 
+const deliveryDays = [
+  ["mon", "Monday"], ["tue", "Tuesday"], ["wed", "Wednesday"],
+  ["thu", "Thursday"], ["fri", "Friday"], ["sat", "Saturday"],
+  ["sun", "Sunday"],
+] as const;
+
 export default function MerchantDeliveryPage() {
   const search = useSearch();
   const [, setLocation] = useLocation();
@@ -114,6 +120,20 @@ export default function MerchantDeliveryPage() {
             <div><Label>Estimated delivery minutes</Label><Input type="number" min="10" max="240" value={settings.estimatedMinutes} onChange={(e) => setSettings((v) => ({ ...v, estimatedMinutes: Number(e.target.value) }))} /></div>
             <div><Label>Maximum active delivery orders</Label><Input type="number" min="1" max="100" value={settings.maxConcurrentOrders} onChange={(e) => setSettings((v) => ({ ...v, maxConcurrentOrders: Number(e.target.value) }))} /></div>
             <div className="sm:col-span-2"><Label>Delivery ZIP codes</Label><Input value={postalCodes} onChange={(e) => setPostalCodes(e.target.value)} placeholder="75201, 75202, 75203" /><p className="mt-1 text-xs text-muted-foreground">Comma-separated. Customers outside these ZIP codes cannot submit delivery orders.</p></div>
+            <div className="sm:col-span-2 space-y-3">
+              <div><Label>Delivery hours</Label><p className="text-xs text-muted-foreground">Times use the business location timezone. Leave every day off to accept eligible orders whenever ordering is open.</p></div>
+              {deliveryDays.map(([key, label]) => {
+                const windows = Array.isArray(settings.deliveryHours?.[key]) ? settings.deliveryHours[key] as Array<{ start?: string; end?: string }> : [];
+                const window = windows[0];
+                return (
+                  <div key={key} className="grid grid-cols-[1fr_auto_auto] items-center gap-3 rounded-xl border p-3">
+                    <div className="flex items-center gap-3"><Switch checked={Boolean(window)} onCheckedChange={(enabled) => setSettings((value) => ({ ...value, deliveryHours: { ...value.deliveryHours, [key]: enabled ? [{ start: "09:00", end: "17:00" }] : [] } }))} /><span className="font-semibold">{label}</span></div>
+                    <Input aria-label={`${label} delivery start`} type="time" disabled={!window} value={window?.start || "09:00"} onChange={(event) => setSettings((value) => ({ ...value, deliveryHours: { ...value.deliveryHours, [key]: [{ start: event.target.value, end: window?.end || "17:00" }] } }))} />
+                    <Input aria-label={`${label} delivery end`} type="time" disabled={!window} value={window?.end || "17:00"} onChange={(event) => setSettings((value) => ({ ...value, deliveryHours: { ...value.deliveryHours, [key]: [{ start: window?.start || "09:00", end: event.target.value }] } }))} />
+                  </div>
+                );
+              })}
+            </div>
             <div className="sm:col-span-2"><Label>Customer-facing delivery note</Label><Input value={settings.instructions || ""} onChange={(e) => setSettings((v) => ({ ...v, instructions: e.target.value }))} placeholder="Delivery entrance, coverage note, or timing details" /></div>
             <Button className="sm:col-span-2" onClick={save} disabled={saving}>{saving ? "Saving…" : "Save delivery settings"}</Button>
           </CardContent>

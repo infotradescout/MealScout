@@ -16,6 +16,7 @@ import {
   normalizeDeliverySchedule,
 } from "../services/deliveryEligibility";
 import { resolveCityTimeZoneStrict } from "../services/cityTimeZone";
+import { hasValidMerchantDeliveryConfiguration } from "../services/merchantDeliverySafety";
 
 async function canManage(user: any, restaurantId: string) {
   if (isAdminUserType(user?.userType)) return true;
@@ -27,16 +28,20 @@ export async function getDeliveryQuote(
   subtotalCents: number,
   postalCode: string,
   scheduledFor?: Date | null,
+  executor: any = db,
+  lockSettings = false,
 ) {
-  const [settings] = await db
+  let settingsQuery = executor
     .select()
     .from(merchantDeliverySettings)
     .where(eq(merchantDeliverySettings.restaurantId, restaurantId));
-  if (!settings)
+  if (lockSettings) settingsQuery = settingsQuery.for("update");
+  const [settings] = await settingsQuery;
+  if (!hasValidMerchantDeliveryConfiguration(settings))
     throw Object.assign(new Error("Delivery is not available"), {
       statusCode: 400,
     });
-  const [restaurant] = await db
+  const [restaurant] = await executor
     .select({ city: restaurants.city, state: restaurants.state })
     .from(restaurants)
     .where(eq(restaurants.id, restaurantId));
@@ -44,7 +49,7 @@ export async function getDeliveryQuote(
     city: restaurant?.city,
     state: restaurant?.state,
   });
-  const [{ count }] = await db
+  const [{ count }] = await executor
     .select({ count: sql<number>`count(*)::int` })
     .from(pickupOrders)
     .where(
@@ -100,15 +105,17 @@ export function registerMerchantDeliveryRoutes(app: Express) {
       city: restaurant.city,
       state: restaurant.state,
     });
+    const configured = hasValidMerchantDeliveryConfiguration(settings);
     const availableNow = Boolean(
-      settings?.enabled &&
+      configured &&
       isDeliveryScheduleAvailable({
         deliveryHours: settings.deliveryHours,
         timeZone: timeZone ?? undefined,
       }),
     );
     res.json({
-      enabled: Boolean(settings?.enabled),
+      enabled: configured,
+      configured,
       availableNow,
       feeCents: settings?.feeCents ?? 0,
       minimumOrderCents: settings?.minimumOrderCents ?? 0,
@@ -116,6 +123,11 @@ export function registerMerchantDeliveryRoutes(app: Express) {
       postalCodes: settings?.postalCodes ?? [],
       deliveryHours: settings?.deliveryHours ?? {},
       instructions: settings?.instructions ?? null,
+      unavailableReason: !configured
+        ? "Merchant delivery is not currently configured"
+        : !availableNow
+          ? "Merchant delivery is unavailable at this time"
+          : null,
     });
   });
 
@@ -185,6 +197,26 @@ export function registerMerchantDeliveryRoutes(app: Express) {
         ],
         updatedAt: new Date(),
       };
+      if (values.enabled && values.postalCodes.length === 0) {
+        return res.status(400).json({
+          message: "At least one delivery ZIP code is required before enabling delivery",
+        });
+      }
+      if (values.enabled && Object.keys(deliveryHours).length > 0) {
+        const [restaurant] = await db
+          .select({ city: restaurants.city, state: restaurants.state })
+          .from(restaurants)
+          .where(eq(restaurants.id, restaurantId));
+        const timeZone = await resolveCityTimeZoneStrict({
+          city: restaurant?.city,
+          state: restaurant?.state,
+        });
+        if (!timeZone) {
+          return res.status(400).json({
+            message: "A valid restaurant city and state are required for scheduled delivery hours",
+          });
+        }
+      }
       const [settings] = await db
         .insert(merchantDeliverySettings)
         .values(values)

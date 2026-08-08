@@ -67,6 +67,12 @@ import {
   restoreTrackedInventoryForPickupOrderByOrderId,
   reserveTrackedInventoryForPickupOrder,
 } from "../services/pickupInventoryService";
+import {
+  calculateAuthoritativeMerchantDeliveryTotals,
+  customerAccessTokenMatches,
+  hashCustomerAccessToken,
+  projectOrderForCustomer,
+} from "../services/merchantDeliverySafety";
 
 const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY)
@@ -351,9 +357,50 @@ export function registerPickupOrderRoutes(app: Express) {
         specialInstructions: z.string().max(500).optional().nullable(),
         scheduledFor: z.string().datetime().optional().nullable(),
         promotionToken: z.string().max(200).optional().nullable(),
+        checkoutRequestId: z.string().uuid().optional().nullable(),
+        customerAccessToken: z.string().min(32).max(200).optional().nullable(),
       });
 
       const body = bodySchema.parse(req.body);
+      if (
+        body.orderType === "delivery" &&
+        (!body.checkoutRequestId || !body.customerAccessToken)
+      ) {
+        return res.status(400).json({
+          message: "Delivery checkout requires a durable request and access token",
+        });
+      }
+
+      if (body.checkoutRequestId) {
+        const [existing] = await db
+          .select()
+          .from(pickupOrders)
+          .where(eq(pickupOrders.checkoutRequestId, body.checkoutRequestId))
+          .limit(1);
+        if (existing) {
+          if (
+            !customerAccessTokenMatches(
+              body.customerAccessToken,
+              existing.customerAccessTokenHash,
+            )
+          ) {
+            return res.status(409).json({ message: "Checkout request already exists" });
+          }
+          let clientSecret: string | null = null;
+          if (stripe && existing.stripePaymentIntentId) {
+            const intent = await stripe.paymentIntents.retrieve(
+              existing.stripePaymentIntentId,
+            );
+            clientSecret = intent.client_secret;
+          }
+          return res.status(200).json({
+            order: projectOrderForCustomer(existing, true),
+            clientSecret,
+            customerAccessToken: body.customerAccessToken,
+            replayed: true,
+          });
+        }
+      }
 
       // Fetch menu to check acceptsCash + hidePlatformFee
       const [menu] = await db
@@ -559,19 +606,31 @@ export function registerPickupOrderRoutes(app: Express) {
                 "Delivery address, city, state, and postal code are required",
             });
         }
-        const delivery = await getDeliveryQuote(
-          body.restaurantId,
-          subtotalCents,
-          body.deliveryPostalCode,
-        );
-        deliveryFeeCents = delivery.feeCents;
-        deliveryEstimateMinutes = delivery.estimatedMinutes;
       }
-      const totalCents = baseTotalCents + deliveryFeeCents;
+      let totalCents = baseTotalCents;
 
       let order: PickupOrder;
       try {
         order = await db.transaction(async (tx: any) => {
+          if (body.orderType === "delivery") {
+            const delivery = await getDeliveryQuote(
+              body.restaurantId,
+              subtotalCents,
+              body.deliveryPostalCode!,
+              body.scheduledFor ? new Date(body.scheduledFor) : null,
+              tx,
+              true,
+            );
+            deliveryFeeCents = delivery.feeCents;
+            deliveryEstimateMinutes = delivery.estimatedMinutes;
+          }
+          const authoritativeTotals =
+            calculateAuthoritativeMerchantDeliveryTotals({
+              subtotalCents,
+              platformFeeCents,
+              deliveryFeeCents,
+            });
+          totalCents = authoritativeTotals.totalCents;
           const [createdOrder] = await tx
             .insert(pickupOrders)
             .values({
@@ -587,6 +646,12 @@ export function registerPickupOrderRoutes(app: Express) {
               feePaidByBusiness,
               totalCents,
               paymentMethod: body.paymentMethod,
+              checkoutRequestId:
+                body.orderType === "delivery" ? body.checkoutRequestId : null,
+              customerAccessTokenHash:
+                body.orderType === "delivery"
+                  ? hashCustomerAccessToken(body.customerAccessToken!)
+                  : null,
               specialInstructions:
                 (body.specialInstructions ?? "").trim() || null,
               prepTimeMinutes: 20,
@@ -600,6 +665,9 @@ export function registerPickupOrderRoutes(app: Express) {
               deliveryPostalCode:
                 body.orderType === "delivery" ? body.deliveryPostalCode : null,
               deliveryFeeCents,
+              taxCents: authoritativeTotals.taxCents,
+              tipCents: authoritativeTotals.tipCents,
+              discountCents: authoritativeTotals.discountCents,
               deliveryEstimateMinutes,
               deliveryInstructions:
                 body.orderType === "delivery" ? body.deliveryInstructions : null,
@@ -629,6 +697,15 @@ export function registerPickupOrderRoutes(app: Express) {
         const statusCode = Number(err?.statusCode || 0);
         if (statusCode === 409) {
           return res.status(409).json({ message: err.message });
+        }
+        if (
+          String(err?.code || err?.cause?.code || "") === "23505" &&
+          body.checkoutRequestId
+        ) {
+          return res.status(409).json({
+            message: "This delivery checkout is already being processed",
+            code: "DUPLICATE_CHECKOUT",
+          });
         }
         throw err;
       }
@@ -679,7 +756,11 @@ export function registerPickupOrderRoutes(app: Express) {
           })
           .catch(() => {});
 
-        return res.status(201).json({ order: confirmed, clientSecret: null });
+        return res.status(201).json({
+          order: projectOrderForCustomer(confirmed, true),
+          clientSecret: null,
+          customerAccessToken: body.customerAccessToken ?? null,
+        });
       }
 
       // Card payment: create Stripe PaymentIntent
@@ -756,8 +837,9 @@ export function registerPickupOrderRoutes(app: Express) {
         .catch(() => {});
 
       res.status(201).json({
-        order: updatedOrder,
+        order: projectOrderForCustomer(updatedOrder, true),
         clientSecret: paymentIntent.client_secret,
+        customerAccessToken: body.customerAccessToken ?? null,
       });
     }),
   );
@@ -797,13 +879,19 @@ export function registerPickupOrderRoutes(app: Express) {
             userId,
           )));
 
-      const safeOrder = isOwner
-        ? order
-        : {
-            ...order,
-            stripePaymentIntentId: undefined,
-            stripeTransferGroupId: undefined,
-          };
+      const accessToken = String(
+        req.get("x-order-access-token") || req.query.accessToken || "",
+      ).trim();
+      const safeOrder = projectOrderForCustomer(
+        order,
+        Boolean(
+          isOwner ||
+            customerAccessTokenMatches(
+              accessToken,
+              order.customerAccessTokenHash,
+            ),
+        ),
+      );
 
       res.json({ order: safeOrder, items });
     }),
@@ -825,12 +913,19 @@ export function registerPickupOrderRoutes(app: Express) {
 
       if (!order) return res.status(404).json({ message: "Order not found" });
 
+      const userId = (req as any)?.user?.id;
+      const canView =
+        userId &&
+        (order.customerId === userId ||
+          (await storage.verifyRestaurantOwnership(order.restaurantId, userId)));
+      if (!canView) return res.status(403).json({ message: "Not authorized" });
+
       const items = await db
         .select()
         .from(pickupOrderItems)
         .where(eq(pickupOrderItems.orderId, order.id));
 
-      res.json({ order, items });
+      res.json({ order: projectOrderForCustomer(order, true), items });
     }),
   );
 

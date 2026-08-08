@@ -83,6 +83,9 @@ interface MenuInfo {
 
 interface DeliveryInfo {
   enabled: boolean;
+  configured: boolean;
+  availableNow: boolean;
+  unavailableReason?: string | null;
   feeCents: number;
   minimumOrderCents: number;
   estimatedMinutes: number;
@@ -109,7 +112,7 @@ export default function CheckoutPage() {
   const [readiness, setReadiness] = useState<OrderingReadiness | null>(null);
   const [orderingEnabled, setOrderingEnabled] = useState(true);
   const [paymentMethod, setPaymentMethod] = useState<"card" | "cash">("card");
-  const [orderType, setOrderType] = useState<"pickup" | "dine_in" | "delivery">("pickup");
+  const [orderType, setOrderType] = useState<"pickup" | "dine_in" | "delivery" | null>(null);
   const [deliveryInfo, setDeliveryInfo] = useState<DeliveryInfo | null>(null);
   const [deliveryAddress, setDeliveryAddress] = useState({
     address: "",
@@ -127,11 +130,18 @@ export default function CheckoutPage() {
   const [isCreating, setIsCreating] = useState(false);
   const [orderId, setOrderId] = useState<string | null>(null);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
+  const [checkoutRequestId] = useState(() => crypto.randomUUID());
+  const [deliveryAccessToken] = useState(() =>
+    Array.from(crypto.getRandomValues(new Uint8Array(32)), (value) =>
+      value.toString(16).padStart(2, "0"),
+    ).join(""),
+  );
   const [serverTotals, setServerTotals] = useState<{
     subtotalCents: number;
     platformFeeCents: number;
     totalCents: number;
     feePaidByBusiness: boolean;
+    deliveryFeeCents: number;
   } | null>(null);
   const hostileBrowser = isPaymentHostileBrowser();
 
@@ -234,6 +244,10 @@ export default function CheckoutPage() {
       setOrderError("Please enter your name.");
       return;
     }
+    if (!orderType) {
+      setOrderError("Choose pickup, dine in, or merchant delivery.");
+      return;
+    }
     if (paymentMethod === "card" && hostileBrowser) {
       setOrderError("Open this page in Chrome or Safari to complete card payment.");
       return;
@@ -252,6 +266,8 @@ export default function CheckoutPage() {
         customerEmail: contact.email.trim() || undefined,
         customerPhone: contact.phone.trim() || undefined,
         orderType,
+        checkoutRequestId: orderType === "delivery" ? checkoutRequestId : undefined,
+        customerAccessToken: orderType === "delivery" ? deliveryAccessToken : undefined,
         deliveryAddress: orderType === "delivery" ? deliveryAddress.address.trim() : undefined,
         deliveryCity: orderType === "delivery" ? deliveryAddress.city.trim() : undefined,
         deliveryState: orderType === "delivery" ? deliveryAddress.state.trim() : undefined,
@@ -280,12 +296,19 @@ export default function CheckoutPage() {
       if (!res.ok) throw new Error(data.message || "Failed to create order");
 
       setOrderId(data.order.id);
+      if (data.customerAccessToken) {
+        window.sessionStorage.setItem(
+          `mealscout:order-access:${data.order.id}`,
+          data.customerAccessToken,
+        );
+      }
       setServerTotals({
         subtotalCents: Number(data.order.subtotalCents || subtotal) || subtotal,
         platformFeeCents:
           Number(data.order.platformFeeCents || platformFee) || platformFee,
         totalCents: Number(data.order.totalCents || total) || total,
         feePaidByBusiness: Boolean(data.order.feePaidByBusiness),
+        deliveryFeeCents: Number(data.order.deliveryFeeCents || 0) || 0,
       });
 
       if (paymentMethod === "cash") {
@@ -316,7 +339,7 @@ export default function CheckoutPage() {
           secondaryLabel="Menu"
         />
         <main className="mx-auto w-full max-w-2xl px-4 py-6 sm:py-8">
-          <p className="profile-section-label">Pickup order</p>
+          <p className="profile-section-label">{orderType === "delivery" ? "Merchant delivery" : "Pickup order"}</p>
           <h1 className="mb-6 mt-1 text-3xl font-black tracking-tight text-[color:var(--profile-ink)]">
             Payment
           </h1>
@@ -341,6 +364,12 @@ export default function CheckoutPage() {
                   <span>{formatMoney(displayedFee)}</span>
                 </div>
               )}
+              {Number(serverTotals?.deliveryFeeCents || 0) > 0 && (
+                <div className="flex justify-between text-sm mb-1">
+                  <span className="text-muted-foreground">Merchant delivery</span>
+                  <span>{formatMoney(serverTotals?.deliveryFeeCents || 0)}</span>
+                </div>
+              )}
               <div className="mt-2 flex justify-between border-t border-[#ead7c7] pt-2 font-black">
                 <span>Total</span>
                 <span>{formatMoney(displayedTotal)}</span>
@@ -352,11 +381,11 @@ export default function CheckoutPage() {
             options={{ clientSecret, appearance: { theme: "stripe" } }}
           >
             <StripePaymentForm
-              orderId={orderId}
-              restaurantId={restaurantId ?? ""}
-              onSuccess={() => {
-                clearCartForRestaurant(restaurantId ?? "");
-                navigate(`/order-confirmation/${orderId}`);
+                orderId={orderId}
+                restaurantId={restaurantId ?? ""}
+                onSuccess={() => {
+                  clearCartForRestaurant(restaurantId ?? "");
+                  navigate(`/order-confirmation/${orderId}`);
               }}
             />
           </Elements>
@@ -517,7 +546,7 @@ export default function CheckoutPage() {
           </CardHeader>
           <CardContent>
             <RadioGroup
-              value={orderType}
+              value={orderType || ""}
               onValueChange={(v) => setOrderType(v as "pickup" | "dine_in" | "delivery")}
               className="flex flex-wrap gap-4"
             >
@@ -539,7 +568,7 @@ export default function CheckoutPage() {
                   Dine In
                 </Label>
               </div>
-              {deliveryInfo?.enabled && (
+              {deliveryInfo?.enabled && deliveryInfo.availableNow && (
                 <div className="flex items-center gap-2">
                   <RadioGroupItem value="delivery" id="ot-delivery" />
                   <Label htmlFor="ot-delivery" className="cursor-pointer font-normal">
@@ -548,6 +577,11 @@ export default function CheckoutPage() {
                 </div>
               )}
             </RadioGroup>
+            {deliveryInfo?.configured && !deliveryInfo.availableNow ? (
+              <p className="mt-3 text-sm text-muted-foreground">
+                {deliveryInfo.unavailableReason || "Merchant delivery is unavailable at this time."}
+              </p>
+            ) : null}
           </CardContent>
         </Card>
 
@@ -631,6 +665,7 @@ export default function CheckoutPage() {
           disabled={
             isCreating ||
             !contact.name.trim() ||
+            !orderType ||
             !orderingEnabled ||
             (paymentMethod === "card" && hostileBrowser)
           }

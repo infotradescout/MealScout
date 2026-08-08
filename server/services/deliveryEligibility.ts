@@ -1,4 +1,5 @@
 import { DateTime } from "luxon";
+import { hasValidMerchantDeliveryConfiguration } from "./merchantDeliverySafety";
 
 const DELIVERY_DAY_KEYS = [
   "sun",
@@ -178,7 +179,16 @@ export function evaluateDeliveryEligibility(input: {
   now?: Date;
   timeZone?: string;
 }) {
-  if (!input.enabled)
+  if (
+    !hasValidMerchantDeliveryConfiguration({
+      enabled: input.enabled,
+      feeCents: 0,
+      minimumOrderCents: input.minimumOrderCents,
+      estimatedMinutes: 45,
+      maxConcurrentOrders: input.maxConcurrentOrders,
+      postalCodes: input.postalCodes,
+    })
+  )
     return { ok: false, statusCode: 400, message: "Delivery is not available" };
   if (
     !isDeliveryScheduleAvailable({
