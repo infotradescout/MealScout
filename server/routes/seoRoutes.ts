@@ -1416,6 +1416,13 @@ export function registerSeoRoutes(app: Express) {
 
   app.get("/robots.txt", async (_req, res) => {
     try {
+      if (process.env.MEALSCOUT_PREVIEW_NOINDEX === "true") {
+        res.setHeader("Content-Type", "text/plain; charset=utf-8");
+        res.setHeader("Cache-Control", "no-store");
+        res.setHeader("X-Robots-Tag", "noindex, nofollow, noarchive");
+        return res.send(["User-agent: *", "Disallow: /", ""].join("\n"));
+      }
+
       const baseUrl = resolveSitemapSiteUrl();
       const robots = [
         "User-agent: *",

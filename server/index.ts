@@ -146,13 +146,20 @@ app.use((req, res, next) => {
   if (!["GET", "HEAD"].includes(req.method)) return next();
 
   const pathValue = String(req.path || "/");
+  const previewNoIndex = process.env.MEALSCOUT_PREVIEW_NOINDEX === "true";
   const isApiOrAsset =
     pathValue.startsWith("/api/") ||
     pathValue.startsWith("/assets/") ||
     pathValue.startsWith("/static/") ||
     pathValue.startsWith("/@") ||
     /\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|map|txt|xml)$/i.test(pathValue);
-  if (isApiOrAsset) return next();
+  if (isApiOrAsset && !(previewNoIndex && /\.(txt|xml)$/i.test(pathValue))) {
+    return next();
+  }
+
+  if (previewNoIndex) {
+    res.setHeader("X-Robots-Tag", "noindex, nofollow, noarchive");
+  }
 
   const requestUrl = new URL(req.originalUrl || req.url || "/", canonicalBaseUrl);
   const hasTrackingParams = Array.from(requestUrl.searchParams.keys()).some((key) =>
