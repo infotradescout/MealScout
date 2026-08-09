@@ -70,6 +70,7 @@ import { isAuthenticated } from "../unifiedAuth";
 import { deriveProfileEvidenceQuarantineVisibility } from "../services/profileEvidenceQuarantine";
 import { buildOrderingReadiness } from "./menuRoutes";
 import { getPublicMerchantDeliveryAvailability } from "./merchantDeliveryRoutes";
+import { buildProfileAnalyticsDiscoveryMetadata } from "../services/discoveryObservatory";
 
 const toSlug = (value: string | null | undefined) =>
   String(value || "")
@@ -1350,10 +1351,26 @@ export function registerPublicDiscoveryRoutes(app: Express) {
         .update(`${String(req.ip || "unknown")}|${userAgent.slice(0, 160)}`)
         .digest("hex")
         .slice(0, 20);
+      const profilePath = `/p/${parsed.profileEntity}/${parsed.profileId}`;
+      const discoveryMetadata = buildProfileAnalyticsDiscoveryMetadata({
+        req,
+        actionType: parsed.actionType,
+        entity: {
+          type:
+            parsed.profileEntity === "location"
+              ? "host"
+              : parsed.profileEntity === "truck"
+                ? "truck"
+                : "restaurant",
+          id: parsed.profileId,
+          name: null,
+        },
+        displayedPage: profilePath,
+      });
 
       await db.insert(requestLogs).values({
         method: "EVENT",
-        path: `/p/${parsed.profileEntity}/${parsed.profileId}`,
+        path: profilePath,
         statusCode: 200,
         durationMs: 0,
         userId: (req as any).user?.id || null,
@@ -1381,6 +1398,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           source,
           referrer: String(req.get("referer") || ""),
           timestamp: new Date().toISOString(),
+          ...discoveryMetadata,
         },
       });
 

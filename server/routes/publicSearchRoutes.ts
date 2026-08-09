@@ -23,6 +23,7 @@ import {
   videoStories,
 } from "@shared/schema";
 import { expandScoutSearchTerms } from "@shared/scoutSearchIntent";
+import { recordInternalSearchOutcome } from "../services/discoveryObservatory";
 import {
   AGGREGATE_SEARCH_DEAL_LIMIT,
   AGGREGATE_SEARCH_EVENT_LIMIT,
@@ -568,6 +569,24 @@ export function registerPublicSearchRoutes(app: Express) {
         res.setHeader("X-MealScout-Search-Truncated", "1");
         res.setHeader("X-MealScout-Search-Bytes", String(bounded.bytes));
       }
+      const resultCount = [
+        payload.restaurants,
+        payload.deals,
+        payload.parkingPassHosts,
+        payload.videos,
+        payload.events,
+      ].reduce(
+        (total, bucket) => total + (Array.isArray(bucket) ? bucket.length : 0),
+        0,
+      );
+      await recordInternalSearchOutcome({ req, query, resultCount }).catch(
+        (observatoryError) => {
+          console.error(
+            "Failed to record internal search outcome:",
+            observatoryError,
+          );
+        },
+      );
       res.json(bounded.value);
     } catch (error) {
       if (isDeadlineError(error)) {

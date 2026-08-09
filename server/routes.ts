@@ -69,6 +69,7 @@ import { registerHiringRoutes } from "./routes/hiringRoutes";
 import { registerAdminMarketHeatmapRoutes } from "./routes/adminMarketHeatmapRoutes";
 import { registerSupportRoutes } from "./routes/supportRoutes";
 import { registerRecommendationRoutes } from "./routes/recommendationRoutes";
+import { registerDiscoveryObservatoryRoutes } from "./routes/discoveryObservatoryRoutes";
 import { registerScoutcoinRoutes } from "./routes/scoutcoinRoutes";
 import { registerParkingRoutePlanningRoutes } from "./routes/parkingRoutePlanningRoutes";
 import {
@@ -108,6 +109,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerMediaRoutes(app);
 
   registerAnalyticsRoutes(app);
+  registerDiscoveryObservatoryRoutes(app);
   registerAwardsRoutes(app);
 
   registerClaimRoutes(app, { sendDealClaimedNotification });
