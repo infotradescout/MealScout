@@ -41,7 +41,7 @@ import {
   isPublicRestaurantIndexable,
 } from "../seo/publicRestaurantIndexability";
 import {
-  isIsolatedDeploymentRequest,
+  isIsolatedDeployment,
   isIsolatedSitemapPath,
 } from "../seo/previewIsolation";
 
@@ -367,7 +367,7 @@ const sendUrlsetXml = (
 
 export function registerSeoRoutes(app: Express) {
   app.use((req, res, next) => {
-    if (!isIsolatedDeploymentRequest(req) || !isIsolatedSitemapPath(req.path)) {
+    if (!isIsolatedDeployment() || !isIsolatedSitemapPath(req.path)) {
       return next();
     }
 
@@ -1428,9 +1428,9 @@ export function registerSeoRoutes(app: Express) {
     }
   });
 
-  app.get("/robots.txt", async (req, res) => {
+  app.get("/robots.txt", async (_req, res) => {
     try {
-      if (isIsolatedDeploymentRequest(req)) {
+      if (isIsolatedDeployment()) {
         res.setHeader("Content-Type", "text/plain; charset=utf-8");
         res.setHeader("Cache-Control", "no-store");
         res.setHeader("X-Robots-Tag", "noindex, nofollow, noarchive");

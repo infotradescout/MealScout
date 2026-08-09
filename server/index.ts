@@ -38,7 +38,7 @@ import { guardUnauthenticatedProtectedHtml } from "./seo/protectedHtmlRoutes";
 import { resolvePublicBusinessSlug } from "./publicProfiles/publicBusinessSlugResolver";
 import { mirrorInfinityTouch } from "./integrations/infinityShadow";
 import { customProfileDomainRootRedirect } from "./services/customProfileDomain";
-import { isIsolatedDeploymentRequest } from "./seo/previewIsolation";
+import { isIsolatedDeployment } from "./seo/previewIsolation";
 
 validateEnv();
 
@@ -147,7 +147,7 @@ app.use((req, res, next) => {
   if (!["GET", "HEAD"].includes(req.method)) return next();
 
   const pathValue = String(req.path || "/");
-  const previewNoIndex = isIsolatedDeploymentRequest(req);
+  const previewNoIndex = isIsolatedDeployment();
   const isApiOrAsset =
     pathValue.startsWith("/api/") ||
     pathValue.startsWith("/assets/") ||
