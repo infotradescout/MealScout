@@ -9,34 +9,45 @@ const USER_AGENT = "MealScoutLinkImport/1.0 (+https://www.mealscout.us)";
 
 export class WebsiteImportError extends Error {}
 
-function isBlockedIp(ip: string): boolean {
-  if (net.isIPv4(ip)) {
-    const [a, b] = ip.split(".").map(Number);
-    if (a === 127) return true; // loopback
-    if (a === 10) return true; // private
-    if (a === 0) return true; // "this" network
-    if (a === 169 && b === 254) return true; // link-local / cloud metadata
-    if (a === 172 && b >= 16 && b <= 31) return true; // private
-    if (a === 192 && b === 168) return true; // private
-    if (a === 100 && b >= 64 && b <= 127) return true; // carrier-grade NAT
-    if (a >= 224) return true; // multicast/reserved
-    return false;
-  }
-  if (net.isIPv6(ip)) {
-    const normalized = ip.toLowerCase();
-    if (normalized === "::1") return true; // loopback
-    if (normalized.startsWith("fe80:")) return true; // link-local
-    if (normalized.startsWith("fc") || normalized.startsWith("fd")) return true; // unique local
-    if (normalized.startsWith("::ffff:")) {
-      const mapped = normalized.split("::ffff:")[1];
-      if (mapped && net.isIPv4(mapped)) return isBlockedIp(mapped);
-    }
-    return false;
-  }
-  return true; // unrecognized format, refuse rather than guess
+const blockedAddresses = new net.BlockList();
+for (const [network, prefix] of [
+  ["0.0.0.0", 8],
+  ["10.0.0.0", 8],
+  ["100.64.0.0", 10],
+  ["127.0.0.0", 8],
+  ["169.254.0.0", 16],
+  ["172.16.0.0", 12],
+  ["192.0.0.0", 24],
+  ["192.0.2.0", 24],
+  ["192.168.0.0", 16],
+  ["198.18.0.0", 15],
+  ["198.51.100.0", 24],
+  ["203.0.113.0", 24],
+  ["224.0.0.0", 4],
+  ["240.0.0.0", 4],
+] as const) {
+  blockedAddresses.addSubnet(network, prefix, "ipv4");
+}
+for (const [network, prefix] of [
+  ["::", 128],
+  ["::1", 128],
+  ["::ffff:0:0", 96],
+  ["64:ff9b::", 96],
+  ["100::", 64],
+  ["2001:db8::", 32],
+  ["fc00::", 7],
+  ["fe80::", 10],
+  ["ff00::", 8],
+] as const) {
+  blockedAddresses.addSubnet(network, prefix, "ipv6");
 }
 
-export async function assertPublicHostname(hostname: string): Promise<void> {
+function isBlockedIp(ip: string): boolean {
+  const family = net.isIPv4(ip) ? "ipv4" : net.isIPv6(ip) ? "ipv6" : null;
+  return !family || blockedAddresses.check(ip, family);
+}
+
+export async function resolvePublicHostname(hostname: string) {
   const lower = hostname.toLowerCase();
   if (lower === "localhost" || lower.endsWith(".local")) {
     throw new WebsiteImportError("That link isn't reachable.");
@@ -50,6 +61,11 @@ export async function assertPublicHostname(hostname: string): Promise<void> {
       throw new WebsiteImportError("That link isn't reachable.");
     }
   }
+  return records;
+}
+
+export async function assertPublicHostname(hostname: string): Promise<void> {
+  await resolvePublicHostname(hostname);
 }
 
 async function fetchHtml(startUrl: string): Promise<string> {

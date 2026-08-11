@@ -56,6 +56,7 @@ export {
   reportLeadSequenceSends,
   socialPostQueue,
   socialPublishingConnections,
+  ownerAiActionDrafts,
   searchQueryEvents,
 } from "./legacy";
 
@@ -108,6 +109,8 @@ export type {
   InsertSocialPostQueueItem,
   SocialPublishingConnection,
   InsertSocialPublishingConnection,
+  OwnerAiActionDraft,
+  InsertOwnerAiActionDraft,
   SearchQueryEvent,
   InsertSearchQueryEvent,
 } from "./legacy";

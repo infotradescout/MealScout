@@ -141,6 +141,7 @@ const BusinessTeamAcceptPage = lazy(
   () => import("@/pages/business-team-accept"),
 );
 const MenuBuilderPage = lazy(() => import("@/pages/menu-builder"));
+const OwnerAiActionsPage = lazy(() => import("@/pages/owner-ai-actions"));
 const KitchenDisplayPage = lazy(() => import("@/pages/kitchen-display"));
 const OnlineMenuPage = lazy(() => import("@/pages/online-menu"));
 const PickupCheckoutPage = lazy(() => import("@/pages/pickup-checkout"));
@@ -672,6 +673,7 @@ function Router() {
             <Route path="/parking-pass-manage" component={ParkingPassManage} />
             <Route path="/business-team" component={BusinessTeamPage} />
             <Route path="/menu-builder" component={MenuBuilderPage} />
+            <Route path="/owner-ai" component={OwnerAiActionsPage} />
             <Route path="/kitchen" component={KitchenDisplayPage} />
             <Route
               path="/:businessSlug/:refTag"
@@ -705,6 +707,7 @@ function App() {
   const usesBusinessWorkspace =
     currentPath === "/restaurant-owner-dashboard" ||
     currentPath === "/menu-builder" ||
+    currentPath === "/owner-ai" ||
     currentPath === "/deal-creation" ||
     currentPath.startsWith("/deal-edit/") ||
     currentPath === "/orders" ||

@@ -179,6 +179,7 @@ export function useAuth() {
     const pathname = window.location.pathname || "";
     const setupOnlyRoutes =
       pathname.startsWith("/restaurant-owner-dashboard") ||
+      pathname.startsWith("/owner-ai") ||
       pathname.startsWith("/deal-creation") ||
       pathname.startsWith("/kitchen") ||
       pathname.startsWith("/orders");

@@ -1840,7 +1840,7 @@ export function registerRestaurantOperationsRoutes(
           response_type: "code",
           client_id: clientId,
           redirect_uri: `${getPublicBaseUrl(req)}/api/social-connections/x/callback`,
-          scope: "tweet.read tweet.write users.read offline.access",
+          scope: "tweet.read tweet.write users.read media.write offline.access",
           state,
           code_challenge: createPkceChallenge(codeVerifier),
           code_challenge_method: "S256",
