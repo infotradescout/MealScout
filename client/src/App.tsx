@@ -181,7 +181,8 @@ const RedirectToLogin = () => {
   const [location, setLocation] = useLocation();
 
   useEffect(() => {
-    const redirect = encodeURIComponent(location || "/dashboard");
+    const redirectTarget = `${location || "/dashboard"}${window.location.search || ""}`;
+    const redirect = encodeURIComponent(redirectTarget);
     setLocation(`/login?redirect=${redirect}`);
   }, [location, setLocation]);
 

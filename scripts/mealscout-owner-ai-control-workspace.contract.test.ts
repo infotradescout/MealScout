@@ -12,6 +12,10 @@ const seo = read("client/src/components/seo-head.tsx");
 assert.match(app, /const OwnerAiActionsPage = lazy/);
 assert.match(app, /path="\/owner-ai" component=\{OwnerAiActionsPage\}/);
 assert.match(app, /currentPath === "\/owner-ai"/);
+assert.match(
+  app,
+  /const redirectTarget = `\$\{location \|\| "\/dashboard"\}\$\{window\.location\.search \|\| ""\}`/,
+);
 const guestProtectedRoutes = app.slice(
   app.indexOf("function GuestProtectedRoutes"),
   app.indexOf("function SharedPublicRoutes"),
