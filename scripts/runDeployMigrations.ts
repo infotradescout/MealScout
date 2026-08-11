@@ -23,6 +23,7 @@ export type DeployMigration = {
   number: number;
   path: string;
   sha256: string;
+  compatibleSha256s: readonly string[];
 };
 
 export type AppliedDeployMigration = {
@@ -30,6 +31,26 @@ export type AppliedDeployMigration = {
   migrationNumber: number;
   sha256: string;
 };
+
+const sha256 = (value: string) =>
+  createHash("sha256").update(value, "utf8").digest("hex");
+
+export function normalizeMigrationSqlForFingerprint(sqlText: string): string {
+  return sqlText.replace(/\r\n?/g, "\n");
+}
+
+export function migrationFingerprints(sqlText: string): {
+  canonical: string;
+  compatible: readonly string[];
+} {
+  const canonicalSql = normalizeMigrationSqlForFingerprint(sqlText);
+  const canonical = sha256(canonicalSql);
+  const legacyCrLf = sha256(canonicalSql.replace(/\n/g, "\r\n"));
+  return {
+    canonical,
+    compatible: [...new Set([canonical, legacyCrLf])],
+  };
+}
 
 export function discoverDeployMigrations(
   migrationsDirectory = path.resolve(__dirname, "../migrations"),
@@ -44,13 +65,15 @@ export function discoverDeployMigrations(
       const number = Number(match[1]);
       if (number < floor) return null;
       const migrationPath = path.join(migrationsDirectory, entry.name);
+      const fingerprints = migrationFingerprints(
+        fs.readFileSync(migrationPath, "utf8"),
+      );
       return {
         filename: entry.name,
         number,
         path: migrationPath,
-        sha256: createHash("sha256")
-          .update(fs.readFileSync(migrationPath))
-          .digest("hex"),
+        sha256: fingerprints.canonical,
+        compatibleSha256s: fingerprints.compatible,
       };
     })
     .filter((entry): entry is DeployMigration => entry !== null)
@@ -81,7 +104,7 @@ export function planDeployMigrations(
     }
     if (
       migration.number !== record.migrationNumber ||
-      migration.sha256 !== record.sha256
+      !migration.compatibleSha256s.includes(record.sha256)
     ) {
       throw new Error(
         `Applied migration changed after execution: ${record.filename}`,
