@@ -28,6 +28,7 @@ import {
 } from "@shared/schema";
 import {
   OWNER_AI_CONNECTOR_SCOPES,
+  OWNER_AI_DRAFT_ONLY_SCOPES,
   OWNER_AI_PLATFORMS,
   ownerAiActionPacketSchema,
   ownerAiDraftRequestSchema,
@@ -603,7 +604,13 @@ async function getOwnerAiContextSnapshot(
     ...dealHistoryRows,
   ];
   const connections = await database
-    .select({ platform: socialPublishingConnections.platform, displayName: socialPublishingConnections.displayName, status: socialPublishingConnections.status, updatedAt: socialPublishingConnections.updatedAt })
+    .select({
+      platform: socialPublishingConnections.platform,
+      displayName: socialPublishingConnections.displayName,
+      status: socialPublishingConnections.status,
+      accessToken: socialPublishingConnections.accessToken,
+      updatedAt: socialPublishingConnections.updatedAt,
+    })
     .from(socialPublishingConnections)
     .where(eq(socialPublishingConnections.restaurantId, restaurantId));
   const expectedVersions = await computeOwnerAiExpectedVersions(
@@ -672,7 +679,15 @@ async function getOwnerAiContextSnapshot(
     },
     socialConnections: OWNER_AI_PLATFORMS.map((platform) => {
       const connection = connections.find((row: any) => row.platform === platform);
-      return { platform, connected: connection?.status === "active", displayName: connection?.displayName || null, status: connection?.status || "not_connected", updatedAt: connection?.updatedAt || null };
+      return {
+        platform,
+        connected: Boolean(
+          connection?.status === "active" && connection?.accessToken,
+        ),
+        displayName: connection?.displayName || null,
+        status: connection?.status || "not_connected",
+        updatedAt: connection?.updatedAt || null,
+      };
     }),
     expectedVersions,
     draftRequest: { packet: { schemaVersion: "1.0", intent: "Describe the proposed owner changes" }, expectedVersions },
@@ -710,7 +725,7 @@ const parseScopes = (scope: unknown) =>
 
 export async function authenticateOwnerAiConnector(
   bearerToken: string,
-  requiredScope: (typeof OWNER_AI_CONNECTOR_SCOPES)[number],
+  requiredScope?: (typeof OWNER_AI_CONNECTOR_SCOPES)[number],
 ): Promise<OwnerAiConnectorPrincipal> {
   const token = String(bearerToken || "").trim();
   if (!token || token.length < 24) throw new OwnerAiActionError(401, "CONNECTOR_AUTH_REQUIRED", "Valid connector bearer token required");
@@ -729,7 +744,7 @@ export async function authenticateOwnerAiConnector(
     }
     if (!matches) continue;
     const scopes = parseScopes(candidate.scope);
-    if (!scopes.includes(requiredScope)) throw new OwnerAiActionError(403, "CONNECTOR_SCOPE_REQUIRED", `Connector lacks ${requiredScope}`);
+    if (requiredScope && !scopes.includes(requiredScope)) throw new OwnerAiActionError(403, "CONNECTOR_SCOPE_REQUIRED", `Connector lacks ${requiredScope}`);
     const [restaurant] = await db.select({ ownerId: restaurants.ownerId }).from(restaurants).where(and(eq(restaurants.id, candidate.restaurantId), eq(restaurants.ownerId, candidate.userId))).limit(1);
     if (!restaurant) throw new OwnerAiActionError(403, "CONNECTOR_OWNERSHIP_INVALID", "Connector is no longer attached to its owner and business");
     await db.update(apiKeys).set({ lastUsedAt: new Date(), updatedAt: new Date() }).where(eq(apiKeys.id, candidate.id));
@@ -761,7 +776,7 @@ export async function createOwnerAiConnectorCredential(input: {
       name: input.name?.trim() || "Owner AI connector",
       keyHash: await bcrypt.hash(rawToken, 12),
       keyPrefix: rawToken.slice(0, 8),
-      scope: OWNER_AI_CONNECTOR_SCOPES.join(" "),
+      scope: OWNER_AI_DRAFT_ONLY_SCOPES.join(" "),
       purpose: "owner_ai_connector",
       isActive: true,
       expiresAt: input.expiresAt || null,
@@ -773,11 +788,56 @@ export async function createOwnerAiConnectorCredential(input: {
 
 export async function listOwnerAiConnectorCredentials(userId: string, restaurantId: string) {
   await assertActualRestaurantOwner(userId, restaurantId);
-  return db
+  const credentials = await db
     .select({ id: apiKeys.id, name: apiKeys.name, keyPrefix: apiKeys.keyPrefix, scope: apiKeys.scope, isActive: apiKeys.isActive, lastUsedAt: apiKeys.lastUsedAt, expiresAt: apiKeys.expiresAt, revokedAt: apiKeys.revokedAt, createdAt: apiKeys.createdAt })
     .from(apiKeys)
     .where(and(eq(apiKeys.userId, userId), eq(apiKeys.restaurantId, restaurantId), eq(apiKeys.purpose, "owner_ai_connector")))
     .orderBy(desc(apiKeys.createdAt));
+  const refreshRows = await db
+    .select({
+      name: apiKeys.name,
+      isActive: apiKeys.isActive,
+      revokedAt: apiKeys.revokedAt,
+      expiresAt: apiKeys.expiresAt,
+    })
+    .from(apiKeys)
+    .where(
+      and(
+        eq(apiKeys.userId, userId),
+        eq(apiKeys.restaurantId, restaurantId),
+        eq(apiKeys.purpose, "owner_ai_oauth_refresh"),
+      ),
+    );
+  const refreshByAccessKeyId = new Map<string, (typeof refreshRows)[number]>();
+  for (const refresh of refreshRows) {
+    try {
+      const metadata = JSON.parse(String(refresh.name || ""));
+      if (
+        metadata?.kind === "owner_ai_oauth_refresh" &&
+        typeof metadata.accessKeyId === "string"
+      ) {
+        refreshByAccessKeyId.set(metadata.accessKeyId, refresh);
+      }
+    } catch {
+      // Ignore malformed historical rows; they do not establish a connection.
+    }
+  }
+  return credentials.map((credential: any) => {
+    const refresh = refreshByAccessKeyId.get(credential.id);
+    const refreshActive = Boolean(
+      refresh &&
+        refresh.isActive !== false &&
+        !refresh?.revokedAt &&
+        (!refresh?.expiresAt || refresh.expiresAt > new Date()),
+    );
+    return {
+      ...credential,
+      connectionKind: refresh ? "oauth" : "legacy",
+      connectionExpiresAt: refreshActive
+        ? refresh?.expiresAt || null
+        : credential.expiresAt,
+    };
+  });
 }
 
 export async function revokeOwnerAiConnectorCredential(userId: string, credentialId: string) {
@@ -785,7 +845,7 @@ export async function revokeOwnerAiConnectorCredential(userId: string, credentia
   if (!candidate || candidate.purpose !== "owner_ai_connector" || !candidate.restaurantId) throw new OwnerAiActionError(404, "CONNECTOR_NOT_FOUND", "Connector credential not found");
   await assertActualRestaurantOwner(userId, candidate.restaurantId);
   if (candidate.userId !== userId) throw new OwnerAiActionError(403, "ACTUAL_OWNER_REQUIRED", "Only the credential owner can revoke it");
-  const [row] = await db.update(apiKeys).set({ isActive: false, revokedAt: new Date(), updatedAt: new Date() }).where(eq(apiKeys.id, credentialId)).returning({ id: apiKeys.id, isActive: apiKeys.isActive, revokedAt: apiKeys.revokedAt });
+  const [row] = await db.update(apiKeys).set({ isActive: false, revokedAt: new Date(), updatedAt: new Date() }).where(eq(apiKeys.id, credentialId)).returning({ id: apiKeys.id, restaurantId: apiKeys.restaurantId, isActive: apiKeys.isActive, revokedAt: apiKeys.revokedAt });
   return row;
 }
 
@@ -1182,7 +1242,21 @@ export async function getOwnerAiDraftForConnector(
     restaurantId: draft.restaurantId,
     status: draft.status,
     revision: draft.revision,
+    packet: draft.packet,
+    currentSnapshot: draft.currentSnapshot,
     normalizedPlan: draft.normalizedPlan,
+    socialDrafts: draft.socialDrafts,
+    mediaPreviews: buildOwnerAiMediaPreviewDescriptors(
+      draft.id,
+      draft.packet,
+    ).map((preview) => ({
+      ...preview,
+      contentSha256:
+        findMediaManifestEntry(
+          draft.mediaManifest,
+          String(preview.assetKey || ""),
+        )?.sha256 || null,
+    })),
     expiresAt: draft.expiresAt,
     approvedAt: draft.approvedAt,
     appliedAt: draft.appliedAt,
@@ -1203,9 +1277,15 @@ export async function getOwnerAiDraftForConnector(
       canReadOwnDraftStatus: true,
       canEdit: false,
       canCancel: false,
-      canApprove: false,
-      canApply: false,
-      canPublish: false,
+      canApproveWithOwnerConsent: principal.scopes.includes(
+        "owner_ai:drafts:approve",
+      ),
+      canApplyWithOwnerConsent: principal.scopes.includes(
+        "owner_ai:drafts:approve",
+      ),
+      canPublishWithOwnerConsent: principal.scopes.includes(
+        "owner_ai:drafts:approve",
+      ),
     },
   };
 }
@@ -1729,6 +1809,47 @@ export async function approveOwnerAiDraft(input: { userId: string; draftId: stri
   if (!applied) {
     const packet = ownerAiActionPacketSchema.parse(initial.packet);
     const socialDrafts = asArray<Record<string, any>>(initial.socialDrafts);
+    const requestedSocialPlatforms = [
+      ...new Set(
+        socialDrafts
+          .map((social) => String(social.platform || "").trim())
+          .filter(Boolean),
+      ),
+    ];
+    if (requestedSocialPlatforms.length) {
+      const connectedRows = await db
+        .select({
+          platform: socialPublishingConnections.platform,
+          status: socialPublishingConnections.status,
+          accessToken: socialPublishingConnections.accessToken,
+        })
+        .from(socialPublishingConnections)
+        .where(
+          and(
+            eq(socialPublishingConnections.restaurantId, initial.restaurantId),
+            inArray(
+              socialPublishingConnections.platform,
+              requestedSocialPlatforms,
+            ),
+          ),
+        );
+      const connectedPlatforms = new Set(
+        connectedRows
+          .filter((row: any) => row.status === "active" && row.accessToken)
+          .map((row: any) => row.platform),
+      );
+      const missingPlatforms = requestedSocialPlatforms.filter(
+        (platform) => !connectedPlatforms.has(platform),
+      );
+      if (missingPlatforms.length) {
+        throw new OwnerAiActionError(
+          409,
+          "SOCIAL_CONNECTION_REQUIRED",
+          `Connect ${missingPlatforms.join(", ")} to MealScout before approving this draft`,
+          { missingPlatforms },
+        );
+      }
+    }
     const [mediaState] = await db
       .select({ mediaManifest: ownerAiActionDrafts.mediaManifest })
       .from(ownerAiActionDrafts)
@@ -1748,6 +1869,44 @@ export async function approveOwnerAiDraft(input: { userId: string; draftId: stri
       if (lockedDraft.revision !== input.expectedRevision) throw new OwnerAiActionError(409, "STALE_DRAFT_REVISION", "Draft changed before approval completed", { currentRevision: lockedDraft.revision });
       const [restaurant] = await tx.select().from(restaurants).where(eq(restaurants.id, lockedDraft.restaurantId)).limit(1).for("update");
       if (!restaurant || restaurant.ownerId !== input.userId) throw new OwnerAiActionError(403, "ACTUAL_OWNER_REQUIRED", "Only the current actual restaurant owner can approve");
+      if (requestedSocialPlatforms.length) {
+        const lockedConnections = await tx
+          .select({
+            platform: socialPublishingConnections.platform,
+            status: socialPublishingConnections.status,
+            accessToken: socialPublishingConnections.accessToken,
+          })
+          .from(socialPublishingConnections)
+          .where(
+            and(
+              eq(
+                socialPublishingConnections.restaurantId,
+                lockedDraft.restaurantId,
+              ),
+              inArray(
+                socialPublishingConnections.platform,
+                requestedSocialPlatforms,
+              ),
+            ),
+          )
+          .for("update");
+        const stillConnected = new Set(
+          lockedConnections
+            .filter((row: any) => row.status === "active" && row.accessToken)
+            .map((row: any) => row.platform),
+        );
+        const disconnectedDuringApproval = requestedSocialPlatforms.filter(
+          (platform) => !stillConnected.has(platform),
+        );
+        if (disconnectedDuringApproval.length) {
+          throw new OwnerAiActionError(
+            409,
+            "SOCIAL_CONNECTION_REQUIRED",
+            `A social connection changed before approval. Reconnect ${disconnectedDuringApproval.join(", ")}; nothing was applied or published.`,
+            { missingPlatforms: disconnectedDuringApproval },
+          );
+        }
+      }
       const currentVersions = await computeOwnerAiExpectedVersions(
         lockedDraft.restaurantId,
         tx,

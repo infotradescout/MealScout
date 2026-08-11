@@ -26,6 +26,20 @@ import {
   updateOwnerAiDraft,
   type OwnerAiConnectorPrincipal,
 } from "../services/ownerAiActions";
+import {
+  OwnerAiOAuthError,
+  authorizeOwnerAiClient,
+  denyOwnerAiClient,
+  exchangeOwnerAiOAuthToken,
+  ownerAiAuthorizationServerMetadata,
+  ownerAiOAuthChallengeHeader,
+  ownerAiProtectedResourceMetadata,
+  prepareOwnerAiAuthorization,
+  registerOwnerAiOAuthClient,
+  revokeOwnerAiOAuthToken,
+  revokeRefreshTokensForAccessKey,
+} from "../services/ownerAiOAuth";
+import { handleOwnerAiMcpRequest } from "../services/ownerAiMcp";
 
 type ConnectorRequest = Request & { ownerAiConnector?: OwnerAiConnectorPrincipal };
 
@@ -114,19 +128,31 @@ const updateDraftSchema = z
   })
   .strict();
 
+const oauthAuthorizationFields = (value: Record<string, unknown>) => ({
+  response_type: value.response_type,
+  client_id: value.client_id,
+  redirect_uri: value.redirect_uri,
+  code_challenge: value.code_challenge,
+  code_challenge_method: value.code_challenge_method,
+  scope: value.scope,
+  state: value.state,
+  resource: value.resource,
+  ...(value.restaurant_id ? { restaurant_id: value.restaurant_id } : {}),
+});
+
 const instructions = {
   name: "MealScout Owner AI Actions",
   version: "1.0",
   modelNeutral: true,
   purpose:
-    "Let any HTTP-capable AI or tool prepare owner-scoped MealScout changes without granting it approval or publishing authority.",
+    "Let an owner use a remote-tool-capable AI to prepare MealScout changes and, after explicit consent to one exact revision, execute approval and publishing. Portable and copied-key fallbacks remain draft-only.",
   sequence: [
-    "The owner creates a revocable connector key while signed in to MealScout.",
-    "The AI reads /api/owner-ai/connector/context with that key.",
+    "The owner adds https://www.mealscout.us/api/owner-ai/mcp to a tool-capable AI and signs in with MealScout through OAuth, or uses the portable JSON fallback.",
+    "The AI reads current MealScout context through the owner-bound connection.",
     "The AI submits the same portable JSON draft request used by the owner UI.",
     "MealScout generates deterministic platform copy and branded SVG image previews, while preserving any AI-supplied alternatives.",
-    "The signed-in actual owner reviews the packet, media-rights affirmation, generated copy, and generated image previews.",
-    "Only explicit owner approval commits MealScout changes and then attempts Facebook, Instagram, and X sequentially.",
+    "The AI shows the actual owner the exact packet, media-rights affirmation, generated copy, generated image previews, and connected destinations in their current chat.",
+    "Only an exact-revision consent handle plus explicit owner approval in that chat (or the MealScout review page fallback) commits MealScout changes and then attempts the selected connected socials sequentially.",
     "The same connector can read only its own draft status and safe per-platform results so the AI chat can report the outcome.",
   ],
   safety: {
@@ -134,23 +160,36 @@ const instructions = {
       "read its attached business context",
       "create drafts",
       "read status/results for drafts created by that exact connector key and business",
+      "after explicit per-revision owner consent, apply that exact draft and publish its approved social posts",
     ],
     connectorCannot: [
       "choose a user or business in request payload",
       "update or cancel a draft",
-      "approve",
-      "apply MealScout changes",
-      "publish social posts",
+      "approve a revision the owner has not been shown",
+      "reuse consent after the revision changes or the short-lived consent handle expires",
+      "publish to a social account that is not connected in MealScout",
     ],
     remoteMedia:
       "Any supplied logo, cover, gallery, menu, deal, or social image URL requires a packet-level owner rights/usage affirmation visible during approval. MealScout-generated fallback cards require no claim.",
     mutationBoundary:
-      "No canonical content write, image hosting, social intent, or social publication occurs before session-authenticated owner approval.",
+      "No canonical content write, image hosting, social intent, or social publication occurs before explicit actual-owner approval of the exact immutable revision, captured through MCP consent or the MealScout review page.",
   },
   portablePacket: {
     schema: "/api/owner-ai/schema",
     openapi: "/api/owner-ai/openapi.json",
     note: "An AI without tool access can return this exact JSON object for the owner to paste into MealScout.",
+  },
+  remoteMcp: {
+    url: "/api/owner-ai/mcp",
+    authorization: "OAuth 2.1 authorization code with PKCE and MealScout owner consent",
+    tools: [
+      "get_mealscout_context",
+      "create_mealscout_draft",
+      "get_mealscout_draft_status",
+      "prepare_mealscout_approval",
+      "get_mealscout_media_preview",
+      "approve_mealscout_draft",
+    ],
   },
 };
 
@@ -158,14 +197,26 @@ const openApiDocument = {
   openapi: "3.1.0",
   info: {
     title: "MealScout Owner AI Actions",
-    version: "1.0.0",
+    version: "1.1.0",
     description:
-      "Vendor-neutral, draft-only connector API. Connector credentials never approve, apply, or publish.",
+      "Vendor-neutral owner AI API. OAuth/MCP connections can apply and publish an exact immutable revision only after per-revision owner consent; manually copied legacy bearer keys remain draft-only.",
   },
   servers: [{ url: "https://www.mealscout.us" }],
   components: {
     securitySchemes: {
       connectorBearer: { type: "http", scheme: "bearer" },
+      mealScoutOAuth: {
+        type: "oauth2",
+        flows: {
+          authorizationCode: {
+            authorizationUrl: "https://www.mealscout.us/owner-ai/authorize",
+            tokenUrl: "https://www.mealscout.us/api/owner-ai/oauth/token",
+            scopes: Object.fromEntries(
+              OWNER_AI_CONNECTOR_SCOPES.map((scope) => [scope, scope]),
+            ),
+          },
+        },
+      },
       ownerSession: { type: "apiKey", in: "cookie", name: "connect.sid" },
     },
     schemas: { OwnerAiDraftRequest: OWNER_AI_PACKET_JSON_SCHEMA },
@@ -175,7 +226,10 @@ const openApiDocument = {
       get: {
         operationId: "getMealScoutOwnerContext",
         summary: "Read context for the business encoded in the connector key",
-        security: [{ connectorBearer: [] }],
+        security: [
+          { mealScoutOAuth: ["owner_ai:context"] },
+          { connectorBearer: [] },
+        ],
         responses: { "200": { description: "Owner-scoped business context and versions" } },
       },
     },
@@ -183,7 +237,10 @@ const openApiDocument = {
       post: {
         operationId: "createMealScoutOwnerDraft",
         summary: "Create a non-mutating owner approval draft",
-        security: [{ connectorBearer: [] }],
+        security: [
+          { mealScoutOAuth: ["owner_ai:drafts:create"] },
+          { connectorBearer: [] },
+        ],
         parameters: [
           {
             name: "Idempotency-Key",
@@ -216,7 +273,10 @@ const openApiDocument = {
         operationId: "getMealScoutOwnerDraftStatus",
         summary:
           "Read status/results only for a draft created by this exact connector and business",
-        security: [{ connectorBearer: [] }],
+        security: [
+          { mealScoutOAuth: ["owner_ai:drafts:read"] },
+          { connectorBearer: [] },
+        ],
         parameters: [
           {
             name: "draftId",
@@ -255,6 +315,164 @@ export function registerOwnerAiActionRoutes(app: Express) {
     windowMs: 60 * 1000,
     key: connectorRateKey,
   });
+  const oauthRegistrationLimiter = distributedRateLimit({
+    scope: "owner-ai:oauth-register",
+    limit: 30,
+    windowMs: 60 * 60 * 1000,
+    key: (req) => req.ip || "unknown",
+  });
+  const oauthTokenLimiter = distributedRateLimit({
+    scope: "owner-ai:oauth-token",
+    limit: 120,
+    windowMs: 60 * 60 * 1000,
+    key: (req) => req.ip || "unknown",
+  });
+  const mcpLimiter = distributedRateLimit({
+    scope: "owner-ai:mcp",
+    limit: 180,
+    windowMs: 60 * 1000,
+    key: connectorRateKey,
+  });
+
+  app.get("/.well-known/oauth-authorization-server", (_req, res) =>
+    res.json(ownerAiAuthorizationServerMetadata()),
+  );
+  app.get("/.well-known/oauth-protected-resource", (_req, res) =>
+    res.json(ownerAiProtectedResourceMetadata()),
+  );
+  app.get(
+    "/.well-known/oauth-protected-resource/api/owner-ai/mcp",
+    (_req, res) => res.json(ownerAiProtectedResourceMetadata()),
+  );
+
+  app.post(
+    "/api/owner-ai/oauth/register",
+    oauthRegistrationLimiter,
+    asyncRoute(async (req, res) => {
+      res.status(201).json(registerOwnerAiOAuthClient(req.body));
+    }),
+  );
+
+  app.get(
+    "/api/owner-ai/oauth/authorize/prepare",
+    isAuthenticated,
+    asyncRoute(async (req: any, res) => {
+      res.setHeader("Cache-Control", "private, no-store");
+      res.json(
+        await prepareOwnerAiAuthorization(
+          oauthAuthorizationFields(req.query as Record<string, unknown>),
+          String(req.user.id),
+        ),
+      );
+    }),
+  );
+
+  app.post(
+    "/api/owner-ai/oauth/authorize",
+    isAuthenticated,
+    asyncRoute(async (req: any, res) => {
+      res.setHeader("Cache-Control", "private, no-store");
+      res.json(
+        await authorizeOwnerAiClient(
+          oauthAuthorizationFields(req.body as Record<string, unknown>),
+          String(req.user.id),
+        ),
+      );
+    }),
+  );
+
+  app.post(
+    "/api/owner-ai/oauth/authorize/deny",
+    isAuthenticated,
+    asyncRoute(async (req: any, res) => {
+      res.setHeader("Cache-Control", "private, no-store");
+      res.json(
+        await denyOwnerAiClient(
+          oauthAuthorizationFields(req.body as Record<string, unknown>),
+          String(req.user.id),
+        ),
+      );
+    }),
+  );
+
+  app.post(
+    "/api/owner-ai/oauth/token",
+    oauthTokenLimiter,
+    asyncRoute(async (req, res) => {
+      res.setHeader("Cache-Control", "no-store");
+      res.setHeader("Pragma", "no-cache");
+      res.json(await exchangeOwnerAiOAuthToken(req.body));
+    }),
+  );
+
+  app.post(
+    "/api/owner-ai/oauth/revoke",
+    oauthTokenLimiter,
+    asyncRoute(async (req, res) => {
+      await revokeOwnerAiOAuthToken(req.body);
+      res.status(200).send();
+    }),
+  );
+
+  app.get("/api/owner-ai/mcp", (_req, res) => {
+    res.setHeader("Allow", "POST");
+    res.status(405).json({ error: "Use Streamable HTTP POST for MealScout MCP" });
+  });
+  app.post(
+    "/api/owner-ai/mcp",
+    asyncRoute(async (req: ConnectorRequest, res) => {
+      try {
+        req.ownerAiConnector = await authenticateOwnerAiConnector(
+          bearerToken(req),
+        );
+      } catch (error) {
+        if (error instanceof OwnerAiActionError && error.status === 401) {
+          res.setHeader("WWW-Authenticate", ownerAiOAuthChallengeHeader());
+          return res.status(401).json({
+            jsonrpc: "2.0",
+            id: null,
+            error: { code: -32001, message: "MealScout sign-in required" },
+          });
+        }
+        throw error;
+      }
+      await new Promise<void>((resolve, reject) =>
+        mcpLimiter(req, res, (error?: unknown) =>
+          error ? reject(error) : resolve(),
+        ),
+      );
+      if (res.headersSent) return;
+      const protocolVersion = String(
+        req.headers["mcp-protocol-version"] || "2025-11-25",
+      );
+      const methodHeader = String(req.headers["mcp-method"] || "");
+      const nameHeader = String(req.headers["mcp-name"] || "");
+      const bodyMethod = String((req.body as any)?.method || "");
+      const bodyName = String((req.body as any)?.params?.name || "");
+      if (
+        (methodHeader && methodHeader !== bodyMethod) ||
+        (nameHeader && bodyName && nameHeader !== bodyName)
+      ) {
+        return res.status(400).json({
+          jsonrpc: "2.0",
+          id: (req.body as any)?.id ?? null,
+          error: {
+            code: -32600,
+            message: "MCP routing headers do not match the request body",
+          },
+        });
+      }
+      const response = await handleOwnerAiMcpRequest(
+        req.ownerAiConnector,
+        req.body,
+        { protocolVersion },
+      );
+      res.setHeader("MCP-Protocol-Version", protocolVersion);
+      res.setHeader("Cache-Control", "no-store");
+      if (response === null) return res.status(202).send();
+      res.json(response);
+    }),
+  );
 
   app.get("/api/owner-ai/instructions", (_req, res) => res.json(instructions));
   app.get("/api/owner-ai/schema", (_req, res) =>
@@ -358,12 +576,18 @@ export function registerOwnerAiActionRoutes(app: Express) {
     "/api/owner-ai/credentials/:credentialId/revoke",
     isAuthenticated,
     asyncRoute(async (req: any, res) => {
-      res.json({
-        credential: await revokeOwnerAiConnectorCredential(
+      const credential = await revokeOwnerAiConnectorCredential(
+        String(req.user.id),
+        String(req.params.credentialId),
+      );
+      if (credential.restaurantId) {
+        await revokeRefreshTokensForAccessKey(
           String(req.user.id),
+          credential.restaurantId,
           String(req.params.credentialId),
-        ),
-      });
+        );
+      }
+      res.json({ credential });
     }),
   );
 
@@ -507,6 +731,12 @@ export function registerOwnerAiActionRoutes(app: Express) {
           error: error.message,
           code: error.code,
           details: error.details,
+        });
+      }
+      if (error instanceof OwnerAiOAuthError) {
+        return res.status(error.status).json({
+          error: error.oauthError,
+          error_description: error.message,
         });
       }
       next(error);

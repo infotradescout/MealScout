@@ -2,10 +2,14 @@ import { z } from "zod";
 
 export const OWNER_AI_SCHEMA_VERSION = "1.0" as const;
 export const OWNER_AI_PLATFORMS = ["facebook", "instagram", "x"] as const;
-export const OWNER_AI_CONNECTOR_SCOPES = [
+export const OWNER_AI_DRAFT_ONLY_SCOPES = [
   "owner_ai:context",
   "owner_ai:drafts:create",
   "owner_ai:drafts:read",
+] as const;
+export const OWNER_AI_CONNECTOR_SCOPES = [
+  ...OWNER_AI_DRAFT_ONLY_SCOPES,
+  "owner_ai:drafts:approve",
 ] as const;
 
 const optionalHttpUrl = z

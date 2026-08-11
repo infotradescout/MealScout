@@ -8,6 +8,7 @@ import {
   MapPin,
   Phone,
   Save,
+  Sparkles,
   Store,
   Upload,
 } from "lucide-react";
@@ -73,6 +74,7 @@ type OwnerProfileWorkspaceProps = {
   isUpdatingApproval: boolean;
   publicProfileHref?: string | null;
   photosHref: string;
+  ownerAiHref?: string | null;
   isFoodTruck: boolean;
 };
 
@@ -167,6 +169,7 @@ export default function OwnerProfileWorkspace({
   isUpdatingApproval,
   publicProfileHref,
   photosHref,
+  ownerAiHref,
   isFoodTruck,
 }: OwnerProfileWorkspaceProps) {
   const update = <K extends keyof OwnerProfileDraft>(
@@ -185,6 +188,34 @@ export default function OwnerProfileWorkspace({
       source !== "cover_image"
     );
   });
+  const ownerAiEntry = ownerAiHref ? (
+    <section
+      className="flex flex-col gap-4 rounded-2xl border border-orange-200 bg-orange-50 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5"
+      data-testid="owner-profile-ai-entry"
+    >
+      <div className="flex items-start gap-3">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-orange-600 text-white">
+          <Sparkles className="h-5 w-5" aria-hidden="true" />
+        </span>
+        <div>
+          <p className="font-black text-orange-950">
+            Update this profile with any AI
+          </p>
+          <p className="mt-1 max-w-3xl text-sm leading-6 text-orange-900/80">
+            Your current free or paid AI can prepare these details, logos and
+            photos, menus and prices, hours or schedules, events, deals, and
+            matching social previews together. Link that AI through your
+            MealScout account and connect your socials; nothing changes or
+            publishes until you approve the exact revision in the AI chat or
+            on MealScout.
+          </p>
+        </div>
+      </div>
+      <Button asChild className="min-h-11 shrink-0">
+        <Link href={ownerAiHref}>Open AI Control</Link>
+      </Button>
+    </section>
+  ) : null;
 
   if (mode === "media") {
     return (
@@ -215,6 +246,8 @@ export default function OwnerProfileWorkspace({
             </Button>
           ) : null}
         </header>
+
+        {ownerAiEntry}
 
         <section className="grid gap-4 lg:grid-cols-[minmax(0,1.65fr)_minmax(15rem,0.75fr)]">
           <div className="overflow-hidden rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface)]">
@@ -436,6 +469,8 @@ export default function OwnerProfileWorkspace({
           </Button>
         ) : null}
       </header>
+
+      {ownerAiEntry}
 
       <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1.35fr)_minmax(18rem,0.65fr)]">
         <form

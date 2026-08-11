@@ -5,10 +5,12 @@ const restaurantSignup = readFileSync("client/src/pages/restaurant-signup.tsx", 
 
 const requiredContinuationSnippets = [
   'nextRequiredStep = "menu";',
-  'continuationPath = "/menu-builder";',
   'nextRequiredStep = "schedule";',
-  'continuationPath = "/restaurant-owner-dashboard?setup=schedule";',
+  'source: "onboarding",',
+  'focus: "menu",',
+  'focus: "schedule",',
   'nextRequiredStep = "verification";',
+  'continuationPath = "/restaurant-owner-dashboard?setup=verification";',
   'reason = "Verification details are still missing, but setup can continue.";',
 ];
 
@@ -26,6 +28,15 @@ if (menuStepIndex < 0 || verificationStepIndex < 0 || verificationStepIndex < me
 
 if (!restaurantSignup.includes('data-testid="button-skip-verification"')) {
   throw new Error("Restaurant signup must expose non-blocking verification skip/continue action");
+}
+
+if (
+  !restaurantSignup.includes('data-testid="owner-ai-onboarding-handoff"') ||
+  (restaurantSignup.match(/setLocation\(ownerAiSetupHref\)/g) || []).length !== 2
+) {
+  throw new Error(
+    "Restaurant signup must send both verification outcomes to the same owner AI setup handoff",
+  );
 }
 
 console.log("business-onboarding-verification-order.contract: PASS");

@@ -296,9 +296,11 @@ requireIncludes(
 ].forEach((snippet) => requireIncludes(dashboardSwitcher, snippet, `dashboard switcher evidence ${snippet}`));
 
 [
-  'continuationPath = "/restaurant-owner-dashboard?setup=profile"',
-  'continuationPath = "/menu-builder"',
-  'continuationPath = "/restaurant-owner-dashboard?setup=schedule"',
+  "buildOwnerAiHref({",
+  'focus: "profile"',
+  'focus: "media"',
+  'focus: "menu"',
+  'focus: "schedule"',
   'continuationPath = "/restaurant-owner-dashboard?setup=verification"',
 ].forEach((snippet) => requireIncludes(loginContinuation, snippet, `login continuation evidence ${snippet}`));
 

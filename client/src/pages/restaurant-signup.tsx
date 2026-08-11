@@ -27,7 +27,15 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { Mail, Eye, EyeOff, ArrowLeft, ArrowRight, Store } from "lucide-react";
+import {
+  Mail,
+  Eye,
+  EyeOff,
+  ArrowLeft,
+  ArrowRight,
+  Sparkles,
+  Store,
+} from "lucide-react";
 import DocumentUpload from "@/components/document-upload";
 import { BackHeader } from "@/components/back-header";
 import { SEOHead } from "@/components/seo-head";
@@ -39,6 +47,7 @@ import {
 import { HOST_ONBOARDING_COPY as COPY } from "@/copy/hostOnboarding.copy";
 import { PASSWORD_REGEX, PASSWORD_REQUIREMENTS } from "@/utils/passwordPolicy";
 import { authUrl } from "@/lib/api";
+import { buildOwnerAiHref } from "@shared/ownerAiNavigation";
 
 /**
  * Host Onboarding v1  COPY LOCK
@@ -390,24 +399,6 @@ export default function RestaurantSignup() {
     }
   }, []);
 
-  const menuBuilderHref = useMemo(() => {
-    const params = new URLSearchParams({ src: "onboarding" });
-    if (menuSourceUrl) params.set("menuSource", menuSourceUrl);
-    if (createdRestaurant?.id)
-      params.set("restaurantId", String(createdRestaurant.id));
-    return `/menu-builder?${params.toString()}`;
-  }, [createdRestaurant?.id, menuSourceUrl]);
-
-  const scheduleSetupHref = useMemo(() => {
-    const params = new URLSearchParams({
-      src: "onboarding",
-      setup: "schedule",
-    });
-    if (createdRestaurant?.id)
-      params.set("restaurantId", String(createdRestaurant.id));
-    return `/restaurant-owner-dashboard?${params.toString()}`;
-  }, [createdRestaurant?.id]);
-
   const persistMenuImportDraft = (restaurantId?: string | null) => {
     if (typeof window === "undefined") return;
     if (!menuSourceUrl && !restaurantId) return;
@@ -499,6 +490,21 @@ export default function RestaurantSignup() {
   });
 
   const selectedBusinessType = form.watch("businessType");
+  const ownerAiSetupHref = useMemo(
+    () =>
+      buildOwnerAiHref({
+        restaurantId: createdRestaurant?.id,
+        source: "onboarding",
+        focus:
+          selectedBusinessType === "food_truck"
+            ? "schedule"
+            : selectedBusinessType === "restaurant"
+              ? "menu"
+              : "all",
+        menuSource: menuSourceUrl,
+      }),
+    [createdRestaurant?.id, menuSourceUrl, selectedBusinessType],
+  );
   const signupAcceptedTerms = signupForm.watch("acceptTerms");
   const mainHero =
     selectedBusinessType === "food_truck"
@@ -877,11 +883,7 @@ export default function RestaurantSignup() {
         title: COPY.notifications.verification.successTitle,
         description: COPY.notifications.verification.successDescription,
       });
-      setLocation(
-        selectedBusinessType === "food_truck"
-          ? `${scheduleSetupHref}&truck=1`
-          : menuBuilderHref,
-      );
+      setLocation(ownerAiSetupHref);
     },
     onError: (error) => {
       toast({
@@ -958,11 +960,7 @@ export default function RestaurantSignup() {
       title: COPY.notifications.verification.skippedTitle,
       description: COPY.notifications.verification.skippedDescription,
     });
-    setLocation(
-      selectedBusinessType === "food_truck"
-        ? `${scheduleSetupHref}&truck=1`
-        : menuBuilderHref,
-    );
+    setLocation(ownerAiSetupHref);
   };
 
   const isAutoBusinessVerified = Boolean(
@@ -2436,6 +2434,27 @@ export default function RestaurantSignup() {
                   ))}
                 </ul>
               </div>
+              <div
+                className="rounded-xl border border-orange-200 bg-orange-50 p-4"
+                data-testid="owner-ai-onboarding-handoff"
+              >
+                <div className="flex items-start gap-3">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-orange-600 text-white">
+                    <Sparkles className="h-4 w-4" aria-hidden="true" />
+                  </span>
+                  <div>
+                    <p className="text-sm font-black text-orange-950">
+                      {COPY.verification.aiSetupTitle}
+                    </p>
+                    <p className="mt-1 text-xs leading-5 text-orange-900/80">
+                      {COPY.verification.aiSetupDescription}
+                    </p>
+                    <p className="mt-2 text-xs font-semibold leading-5 text-orange-950">
+                      {COPY.verification.aiSetupSafety}
+                    </p>
+                  </div>
+                </div>
+              </div>
               {!isAutoBusinessVerified && (
                 <>
                   {selectedBusinessType === "food_truck" &&
@@ -2523,7 +2542,7 @@ export default function RestaurantSignup() {
                       data-testid="button-continue-verified"
                     >
                       <ArrowRight className="mr-2 h-4 w-4" />
-                      Continue to setup
+                      {COPY.verification.continueAiButton}
                     </Button>
                   )}
                 </div>

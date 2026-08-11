@@ -11,7 +11,7 @@ Why it is dangerous:
 - It is the shared dashboard for `restaurant_owner` and `food_truck` users, with staff/admin access paths also present.
 - It owns restaurant/truck profile setup, public profile readiness, menu entry points, live truck session controls, owner analytics, deals, bookings, media upload, QR/public profile links, onboarding completion prompts, and Parking Pass entry points in one file.
 - It calls read and mutation endpoints for profile basics, location, operating hours, media uploads, deals, bookings, truck sessions, analytics export, and owner completion actions.
-- It is tied to login continuation through `/restaurant-owner-dashboard?setup=...`, `/menu-builder`, and `/parking-pass-manage`; cleanup must not change continuation behavior.
+- It is tied to login continuation through owner-scoped `/owner-ai?...&src=onboarding&focus=...`, with `/restaurant-owner-dashboard?setup=...`, `/menu-builder`, and `/parking-pass-manage` retained as manual destinations. AI Control now also reports owner login, OAuth AI connection, and social publishing readiness; cleanup must not break that chain or the exact-revision consent boundary.
 - It displays insurance and verification-related state that must not be confused with email verification, claim verification, menu discoverability, or Parking Pass booking eligibility.
 - It owns browser lifecycle code for `navigator.geolocation.watchPosition`, live truck location broadcasting, and `useFoodTruckSocket`; these are high-risk GPS/WebSocket areas and must not be extracted casually.
 - It owns Canvas/QR generation through `downloadQrPng`, `downloadBrandedQrAsset`, `downloadAllBrandedQrAssets`, and `downloadSocialQrGraphic`; these are high-risk asset-generation areas and must not be extracted casually.
@@ -257,7 +257,7 @@ A future developer can extract one component only when:
 - Route map protects `/restaurant-owner-dashboard`, `/restaurant/dashboard`, `/menu-builder`, `/menu/:restaurantId`, `/parking-pass`, `/parking-pass-manage`, and related API route boundaries.
 - Admin dashboard map stays linked because admin surfaces may view or repair owner/truck/profile/verification state.
 - Parking Pass decomposition map stays linked because owner/truck schedule and Parking Pass management entry points share truck, schedule, insurance, and booking assumptions.
-- Auth onboarding alignment stays linked because login continuation can send owners to `/restaurant-owner-dashboard?setup=profile`, `/menu-builder`, `/parking-pass-manage`, or verification setup.
+- Auth onboarding alignment stays linked because incomplete profile, media, menu, and schedule continuation now enters owner-scoped `/owner-ai` with a focus hint, while manual dashboard/menu destinations and the separate verification setup remain available. OAuth authorization at `/owner-ai/authorize` must remain actual-owner scoped, require a usable social connection, and preserve per-revision chat consent before the AI can approve and publish.
 - Future GPS/WebSocket extraction should be blocked until live location lifecycle, auto-timeout, and session cleanup are isolated and guarded.
 - Future Canvas/QR extraction should be blocked until canonical QR URLs, Canvas dimensions/copy, and download filenames are documented and guarded.
 

@@ -6,6 +6,7 @@ import {
   truckManualSchedules,
   verificationRequests,
 } from "@shared/schema";
+import { buildOwnerAiHref } from "@shared/ownerAiNavigation";
 import { getBusinessVerificationState } from "./businessVerificationState";
 
 type LinkState = "linked" | "not_attached";
@@ -229,20 +230,36 @@ export async function resolveUserContinuation(params: {
 
   if (isBusinessUser && !profileComplete) {
     nextRequiredStep = "profile";
-    continuationPath = "/restaurant-owner-dashboard?setup=profile";
+    continuationPath = buildOwnerAiHref({
+      restaurantId: primaryBusinessId,
+      source: "onboarding",
+      focus: "profile",
+    });
     reason = "Business profile is missing required basics.";
   } else if (isBusinessUser && !profileVisualComplete) {
     nextRequiredStep = "profile_visual";
-    continuationPath = "/restaurant-owner-dashboard?setup=profile-media";
+    continuationPath = buildOwnerAiHref({
+      restaurantId: primaryBusinessId,
+      source: "onboarding",
+      focus: "media",
+    });
     reason =
       "Add a logo, profile photo, or banner so customers can recognize your business.";
   } else if (isBusinessUser && menuRequired) {
     nextRequiredStep = "menu";
-    continuationPath = "/menu-builder";
+    continuationPath = buildOwnerAiHref({
+      restaurantId: primaryBusinessId,
+      source: "onboarding",
+      focus: "menu",
+    });
     reason = "Add at least one menu item so customers can discover your business.";
   } else if (isBusinessUser && scheduleRequired && !hasSchedule) {
     nextRequiredStep = "schedule";
-    continuationPath = "/restaurant-owner-dashboard?setup=schedule";
+    continuationPath = buildOwnerAiHref({
+      restaurantId: primaryBusinessId,
+      source: "onboarding",
+      focus: "schedule",
+    });
     reason = "Schedule and location setup is still required.";
   } else if (isBusinessUser && verificationRequired && !businessInsuranceSubmitted) {
     nextRequiredStep = "verification";

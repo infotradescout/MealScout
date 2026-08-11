@@ -89,13 +89,18 @@ function requireIncludes(source: string, snippet: string, label = snippet) {
   "Password reset email is sent only by explicit `/forgot-password` form submit",
   "bare `/account-setup` is not a valid setup completion surface without a token",
   "## SetupMode URL Boundary And Preservation Edge",
-  "Setup-mode continuation parameters such as `?setup=schedule`",
+  "Setup context such as `?setup=schedule`",
+  "`?src=onboarding&focus=schedule` on `/owner-ai`",
   "auth timeout or `/api/auth/user` 401",
   "Invalid or unsafe setup targets must not be blindly trusted",
-  "This section is documentation only and does not implement runtime behavior",
+  "## Owner AI Identity And Consent Boundary",
+  "the owner's chosen AI is OAuth-bound to one exact MealScout owner/business pair",
+  "OAuth connection consent and content consent are separate",
+  "After the actual owner explicitly consents in that AI chat, the AI may call MealScout's approval tool",
+  "Manually copied legacy keys remain draft-only",
   "Email verification, business/profile setup, insurance verification, claim verification, password reset, and forced password change are separate lifecycle steps",
   "`/api/business-access/me` represents linked business-team access and must not collapse admin identity into business identity",
-  "Food truck schedule-required continuation uses `/restaurant-owner-dashboard?setup=schedule`",
+  "Food truck schedule-required continuation uses owner-scoped `/owner-ai?...&focus=schedule`",
   "`/parking-pass` is a public discovery/search and truck-side booking/schedule surface",
   "food truck owners must not be routed into host-only management",
   "## Blessed Berry Isolation Boundary",
@@ -245,7 +250,8 @@ if (
   'user?.userType === "restaurant_owner"',
   'user?.userType === "food_truck"',
   'setupMode === "schedule"',
-  'href="/parking-pass-manage"',
+  "currentDatedStopScheduleHref",
+  "/parking-pass?setup=schedule&truckId=",
 ].forEach((snippet) =>
   requireIncludes(
     ownerDashboard,
@@ -351,7 +357,8 @@ if (
 [
   'continuationPath: "/account-setup"',
   '"/restaurant-signup?businessType=food_truck&source=auth&claim=1"',
-  'continuationPath = "/restaurant-owner-dashboard?setup=schedule"',
+  'source: "onboarding"',
+  'focus: "schedule"',
   'continuationPath = "/restaurant-owner-dashboard?setup=verification"',
 ].forEach((snippet) =>
   requireIncludes(

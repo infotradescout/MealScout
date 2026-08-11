@@ -142,6 +142,7 @@ const BusinessTeamAcceptPage = lazy(
 );
 const MenuBuilderPage = lazy(() => import("@/pages/menu-builder"));
 const OwnerAiActionsPage = lazy(() => import("@/pages/owner-ai-actions"));
+const OwnerAiAuthorizePage = lazy(() => import("@/pages/owner-ai-authorize"));
 const KitchenDisplayPage = lazy(() => import("@/pages/kitchen-display"));
 const OnlineMenuPage = lazy(() => import("@/pages/online-menu"));
 const PickupCheckoutPage = lazy(() => import("@/pages/pickup-checkout"));
@@ -364,6 +365,7 @@ function GuestProtectedRoutes() {
       <Route path="/business-team" component={RedirectToLogin} />
       <Route path="/menu-builder" component={RedirectToLogin} />
       <Route path="/owner-ai" component={RedirectToLogin} />
+      <Route path="/owner-ai/authorize" component={RedirectToLogin} />
       <Route path="/kitchen" component={RedirectToLogin} />
     </>
   );
@@ -676,6 +678,7 @@ function Router() {
             <Route path="/business-team" component={BusinessTeamPage} />
             <Route path="/menu-builder" component={MenuBuilderPage} />
             <Route path="/owner-ai" component={OwnerAiActionsPage} />
+            <Route path="/owner-ai/authorize" component={OwnerAiAuthorizePage} />
             <Route path="/kitchen" component={KitchenDisplayPage} />
             <Route
               path="/:businessSlug/:refTag"
