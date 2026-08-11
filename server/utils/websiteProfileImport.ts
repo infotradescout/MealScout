@@ -9,7 +9,11 @@ const USER_AGENT = "MealScoutLinkImport/1.0 (+https://www.mealscout.us)";
 
 export class WebsiteImportError extends Error {}
 
-const blockedAddresses = new net.BlockList();
+// Keep IPv4 and IPv6 ranges in separate blocklists. Node normalizes IPv4
+// addresses to IPv4-mapped IPv6 values when a BlockList contains IPv6 rules,
+// so combining these lists makes the ::ffff:0:0/96 rule match every IPv4
+// address, including public ones.
+const blockedIpv4Addresses = new net.BlockList();
 for (const [network, prefix] of [
   ["0.0.0.0", 8],
   ["10.0.0.0", 8],
@@ -26,8 +30,9 @@ for (const [network, prefix] of [
   ["224.0.0.0", 4],
   ["240.0.0.0", 4],
 ] as const) {
-  blockedAddresses.addSubnet(network, prefix, "ipv4");
+  blockedIpv4Addresses.addSubnet(network, prefix, "ipv4");
 }
+const blockedIpv6Addresses = new net.BlockList();
 for (const [network, prefix] of [
   ["::", 128],
   ["::1", 128],
@@ -39,12 +44,14 @@ for (const [network, prefix] of [
   ["fe80::", 10],
   ["ff00::", 8],
 ] as const) {
-  blockedAddresses.addSubnet(network, prefix, "ipv6");
+  blockedIpv6Addresses.addSubnet(network, prefix, "ipv6");
 }
 
-function isBlockedIp(ip: string): boolean {
+export function isBlockedIp(ip: string): boolean {
   const family = net.isIPv4(ip) ? "ipv4" : net.isIPv6(ip) ? "ipv6" : null;
-  return !family || blockedAddresses.check(ip, family);
+  if (family === "ipv4") return blockedIpv4Addresses.check(ip, "ipv4");
+  if (family === "ipv6") return blockedIpv6Addresses.check(ip, "ipv6");
+  return true;
 }
 
 export async function resolvePublicHostname(hostname: string) {

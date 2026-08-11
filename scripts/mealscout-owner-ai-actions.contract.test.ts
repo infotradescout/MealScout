@@ -20,9 +20,18 @@ const {
   mergeOwnerAiProfileActionLinks,
   buildOwnerAiMediaPreviewDescriptors,
 } = await import("../server/services/ownerAiActions");
+const { isBlockedIp } = await import("../server/utils/websiteProfileImport");
 const { fetchPinnedPublicImage } = await import(
   "../server/utils/pinnedPublicImageFetch"
 );
+
+assert.equal(isBlockedIp("127.0.0.1"), true);
+assert.equal(isBlockedIp("10.10.10.10"), true);
+assert.equal(isBlockedIp("64.29.17.65"), false);
+assert.equal(isBlockedIp("185.199.111.133"), false);
+assert.equal(isBlockedIp("::1"), true);
+assert.equal(isBlockedIp("::ffff:127.0.0.1"), true);
+assert.equal(isBlockedIp("2606:50c0:8000::154"), false);
 
 await assert.rejects(
   fetchPinnedPublicImage("http://127.0.0.1/private.png", {
