@@ -51,3 +51,67 @@ export function expandScoutSearchTerms(query: string): string[] {
     ),
   );
 }
+
+export type ScoutSearchCandidate = {
+  name?: string | null;
+  cuisineType?: string | null;
+  description?: string | null;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+};
+
+const normalizeSearchText = (value: unknown): string =>
+  String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+
+/**
+ * Rank an exact business-name intent ahead of broad token and cuisine matches.
+ *
+ * Aggregate search intentionally expands terms (for example, tacos -> mexican),
+ * but those aliases must not bury the business whose name the person typed.
+ */
+export function scoutSearchRelevanceScore(
+  candidate: ScoutSearchCandidate,
+  query: string,
+): number {
+  const normalizedQuery = normalizeSearchText(query);
+  if (!normalizedQuery) return 0;
+
+  const name = normalizeSearchText(candidate.name);
+  const fields = [
+    candidate.cuisineType,
+    candidate.description,
+    candidate.address,
+    candidate.city,
+    candidate.state,
+  ].map(normalizeSearchText);
+
+  let score = 0;
+  if (name === normalizedQuery) score += 1_000_000;
+  else if (name.startsWith(normalizedQuery)) score += 800_000;
+  else if (name.includes(normalizedQuery)) score += 600_000;
+
+  const intentTokens = tokenizeScoutSearchIntent(normalizedQuery);
+  for (const token of intentTokens) {
+    if (name === token) score += 20_000;
+    else if (name.startsWith(token)) score += 12_000;
+    else if (name.includes(token)) score += 8_000;
+
+    for (const field of fields) {
+      if (field.includes(token)) score += 500;
+    }
+  }
+
+  const expandedOnlyTerms = expandScoutSearchTerms(normalizedQuery).filter(
+    (term) => !intentTokens.includes(term),
+  );
+  for (const term of expandedOnlyTerms) {
+    if (name.includes(term)) score += 250;
+    if (fields.some((field) => field.includes(term))) score += 50;
+  }
+
+  return score;
+}
