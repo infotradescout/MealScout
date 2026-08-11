@@ -1,6 +1,6 @@
 # MealScout Payment/Webhook Safety Map
 
-Status: Current. Profile access is a non-expiring, no-card free trial. Stripe remains in MealScout only for separate order, delivery, booking, supplier, payout, and other transaction flows, plus retirement of legacy recurring subscriptions.
+Status: Current. C9 payment/webhook safety hardening is complete as documented, with profile access a non-expiring, no-card free trial. Stripe remains in MealScout for separate order, delivery, booking, supplier, payout, and other transaction flows, plus retirement of legacy recurring subscriptions.
 
 ## Scope
 
@@ -216,7 +216,7 @@ Coverage shape:
 - Supplier intent method-switch tests are static/unit style around reuse/cancel/conflict decisions.
 - Webhook verification behavior uses fabricated local-only Stripe fixture strings and the real Stripe SDK HMAC implementation; it makes no Stripe API calls.
 - Webhook processing failure behavior uses an intentionally unreachable fixture database and proves a primary write failure returns 500.
-- Mutation-level database idempotency remains opt-in and requires an explicitly identified disposable Neon branch and endpoint host. The stateful replay covers transaction reconciliation and stale legacy-subscription retirement without using subscription state as a product entitlement.
+- Mutation-level database idempotency remains opt-in and requires an explicitly identified disposable Neon branch and endpoint host. On 2026-07-26, the synthetic stateful replay passed signed duplicate/out-of-order delivery checks for Parking Pass host earnings and committed credit debits, pickup order confirmation and canceled-order non-regression, supplier payment non-regression, and stale/current subscription cancellation behavior.
 
 ## Audit Findings And Follow-Ups
 

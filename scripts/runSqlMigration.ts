@@ -8,17 +8,7 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const fileArg = process.argv[2];
-if (!fileArg) {
-  console.error("Usage: tsx scripts/runSqlMigration.ts <migration-file.sql>");
-  process.exit(1);
-}
-
-const migrationPath = path.isAbsolute(fileArg)
-  ? fileArg
-  : path.join(__dirname, "../migrations", fileArg);
-
-function splitSqlStatements(sqlText: string): string[] {
+export function splitSqlStatements(sqlText: string): string[] {
   const statements: string[] = [];
   let current = "";
   let i = 0;
@@ -114,35 +104,50 @@ function splitSqlStatements(sqlText: string): string[] {
   return statements;
 }
 
-async function runMigration() {
-  console.log(`Running migration: ${migrationPath}\n`);
+export async function runMigrationFile(
+  fileArg: string,
+  options: { quiet?: boolean } = {},
+) {
+  const migrationPath = path.isAbsolute(fileArg)
+    ? fileArg
+    : path.join(__dirname, "../migrations", fileArg);
+  const log = options.quiet ? () => undefined : console.log;
+  log(`Running migration: ${migrationPath}\n`);
 
   const migrationSQL = fs.readFileSync(migrationPath, "utf-8");
   const statements = splitSqlStatements(migrationSQL);
-  console.log(`Found ${statements.length} SQL statements to execute\n`);
+  log(`Found ${statements.length} SQL statements to execute\n`);
 
   for (let i = 0; i < statements.length; i++) {
     const statement = statements[i];
     const preview = statement.substring(0, 100).replace(/\s+/g, " ");
 
     try {
-      console.log(`[${i + 1}/${statements.length}] Executing: ${preview}...`);
+      log(`[${i + 1}/${statements.length}] Executing: ${preview}...`);
       await db.execute(sql.raw(statement));
-      console.log("Success\n");
+      log("Success\n");
     } catch (error: any) {
       if (error?.code === "42701" || error?.message?.includes("already exists")) {
-        console.log("Skipped (already exists)\n");
+        log("Skipped (already exists)\n");
         continue;
       }
       throw error;
     }
   }
 
-  console.log("Migration completed successfully!\n");
+  log("Migration completed successfully!\n");
 }
 
-runMigration().catch((error) => {
-  console.error("Migration failed:", error);
-  process.exit(1);
-});
+const invokedPath = process.argv[1] ? path.resolve(process.argv[1]) : "";
+if (invokedPath === __filename) {
+  const fileArg = process.argv[2];
+  if (!fileArg) {
+    console.error("Usage: tsx scripts/runSqlMigration.ts <migration-file.sql>");
+    process.exit(1);
+  }
 
+  runMigrationFile(fileArg).catch((error) => {
+    console.error("Migration failed:", error);
+    process.exit(1);
+  });
+}

@@ -40,6 +40,10 @@ import {
   applySitemapMembershipCacheHeaders,
   isPublicRestaurantIndexable,
 } from "../seo/publicRestaurantIndexability";
+import {
+  isIsolatedDeployment,
+  isIsolatedSitemapPath,
+} from "../seo/previewIsolation";
 
 const truckBusinessTypeAliases = [
   "food_truck",
@@ -362,6 +366,16 @@ const sendUrlsetXml = (
 };
 
 export function registerSeoRoutes(app: Express) {
+  app.use((req, res, next) => {
+    if (!isIsolatedDeployment() || !isIsolatedSitemapPath(req.path)) {
+      return next();
+    }
+
+    res.setHeader("Cache-Control", "no-store");
+    res.setHeader("X-Robots-Tag", "noindex, nofollow, noarchive");
+    return res.status(404).end();
+  });
+
   const indexNowConfig = getIndexNowConfig();
   if (indexNowConfig.enabled && indexNowConfig.key) {
     const keyPath = `/${indexNowConfig.key}.txt`;
@@ -1416,6 +1430,13 @@ export function registerSeoRoutes(app: Express) {
 
   app.get("/robots.txt", async (_req, res) => {
     try {
+      if (isIsolatedDeployment()) {
+        res.setHeader("Content-Type", "text/plain; charset=utf-8");
+        res.setHeader("Cache-Control", "no-store");
+        res.setHeader("X-Robots-Tag", "noindex, nofollow, noarchive");
+        return res.send(["User-agent: *", "Disallow: /", ""].join("\n"));
+      }
+
       const baseUrl = resolveSitemapSiteUrl();
       const robots = [
         "User-agent: *",

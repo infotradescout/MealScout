@@ -7,6 +7,7 @@
  */
 import type { PublicRestaurantProfile } from "@shared/publicProfiles";
 import { Clock3 } from "lucide-react";
+import { shouldShowPublicClaimPrompt } from "./profileClaimPromptPolicy";
 
 function parseOpenStatus(openStatus: string | null): {
   isOpen: boolean | null;
@@ -87,17 +88,24 @@ export function RestaurantHoursPanel({
               </p>
             </div>
           ) : null}
+          {profile.timeZone ? (
+            <p className="border-t border-[color:var(--profile-border)] px-4 py-2 text-xs text-[color:var(--profile-muted)]">
+              Times shown in {profile.timeZone}
+            </p>
+          ) : null}
         </div>
       ) : (
         /* Thin state */
         <div className="rounded-2xl border border-[color:var(--profile-border)] bg-[color:var(--profile-surface-soft)] px-4 py-5 text-center space-y-2">
           <p className="text-sm text-[color:var(--profile-muted)]">Hours not posted yet.</p>
-          <a
-            href="/claim-business"
-            className="inline-block text-xs font-semibold text-[#b93619] hover:text-[#8f2a14]"
-          >
-            Own this place? Add your hours →
-          </a>
+          {shouldShowPublicClaimPrompt(profile) ? (
+            <a
+              href="/claim-business"
+              className="inline-block text-xs font-semibold text-[#b93619] hover:text-[#8f2a14]"
+            >
+              Own this place? Add your hours →
+            </a>
+          ) : null}
         </div>
       )}
     </section>

@@ -18,6 +18,10 @@ import { readFileSync } from "node:fs";
 // database assertion.
 
 const source = readFileSync("server/routes/stripeWebhookRoutes.ts", "utf8");
+const pickupOrderSource = readFileSync(
+  "server/routes/pickupOrderRoutes.ts",
+  "utf8",
+);
 const hostEarningsSource = readFileSync(
   "server/hostEarningsService.ts",
   "utf8",
@@ -165,6 +169,40 @@ requireIncludes(
 requireIncludes(
   "idempotencyKey: `pickup-order:${order.id}:transfer`",
   "pickup transfer Stripe idempotency key",
+);
+requireIncludes(
+  "const pickupOrderId = String(",
+  "pickup order payment failure uses pickupOrderId/orderId metadata",
+);
+requireIncludes(
+  'metadata.pickupOrderId || metadata.orderId || ""',
+  "pickup payment_failed branch reads fallback metadata",
+);
+requireIncludes(
+  "if (storedIntentId && storedIntentId !== failedIntent.id)",
+  "pickup payment_failed stored-intent mismatch guard",
+);
+requireIncludes(
+  'eq(pickupOrders.status, "pending")',
+  "pickup payment_failed only transitions pending orders",
+);
+requireIncludes(
+  "restoreTrackedInventoryForPickupOrderByOrderId(",
+  "pickup payment_failed restores tracked inventory when cancelling pending orders",
+);
+assert.ok(
+  pickupOrderSource.includes("cleanupPendingPickupOrderAfterPaymentSetupFailure"),
+  "Missing idempotency guard: pickup payment setup failures use atomic inventory cleanup",
+);
+assert.equal(
+  (pickupOrderSource.match(/cleanupPendingPickupOrderAfterPaymentSetupFailure/g) || [])
+    .length,
+  3,
+  "Missing Stripe and Stripe creation failure must share the same cleanup path.",
+);
+assert.ok(
+  pickupOrderSource.includes("eq(pickupOrders.status, order.status)"),
+  "Missing idempotency guard: owner cancellation expected-status compare-and-swap",
 );
 
 // Primary mutation failures must escape their local diagnostic catches and

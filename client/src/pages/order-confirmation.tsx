@@ -3,7 +3,7 @@
  * Shows live order status with auto-polling.
  */
 import { useEffect, useState } from "react";
-import { Link, useParams } from "wouter";
+import { Link, useParams, useSearch } from "wouter";
 import { PublicOrderingTopBar } from "@/components/public-ordering/PublicOrderingTopBar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -47,6 +47,18 @@ const STATUS_CONFIG: Record<
     icon: Package,
     color: "text-green-600",
     description: "Your order is ready! Come grab it now.",
+  },
+  out_for_delivery: {
+    label: "Out for Delivery",
+    icon: Package,
+    color: "text-violet-600",
+    description: "The merchant is bringing your order to the delivery address.",
+  },
+  delivered: {
+    label: "Delivered",
+    icon: CheckCircle,
+    color: "text-green-600",
+    description: "The merchant marked your order as delivered.",
   },
   completed: {
     label: "Order Complete",
@@ -93,6 +105,12 @@ interface Order {
   readyAt: string | null;
   completedAt: string | null;
   scheduledFor: string | null;
+  deliveryFeeCents?: number;
+  deliveryAddress?: string | null;
+  deliveryCity?: string | null;
+  deliveryState?: string | null;
+  deliveryPostalCode?: string | null;
+  deliveryInstructions?: string | null;
   items: OrderItem[];
 }
 
@@ -115,6 +133,10 @@ function normalizeOrderPayload(payload: any): Order | null {
 
 export default function OrderConfirmationPage() {
   const { orderId } = useParams<{ orderId: string }>();
+  const search = useSearch();
+  const accessToken =
+    new URLSearchParams(search).get("accessToken") ||
+    window.sessionStorage.getItem(`mealscout:order-access:${orderId}`);
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -125,6 +147,7 @@ export default function OrderConfirmationPage() {
         `/api/pickup-orders/${encodeURIComponent(orderId ?? "")}`,
         {
           credentials: "include",
+          headers: accessToken ? { "X-Order-Access-Token": accessToken } : {},
         },
       );
       if (!res.ok) {
@@ -219,6 +242,9 @@ export default function OrderConfirmationPage() {
   const StatusIcon = config.icon;
   const orderNum = order.id.slice(-6).toUpperCase();
   const isTerminal = ["completed", "cancelled"].includes(order.status);
+  const statusOrder = order.orderType === "delivery"
+    ? ["pending", "confirmed", "preparing", "ready", "out_for_delivery", "delivered", "completed"]
+    : STATUS_ORDER;
 
   return (
     <div
@@ -244,8 +270,8 @@ export default function OrderConfirmationPage() {
         {/* Progress bar (for non-cancelled orders) */}
         {order.status !== "cancelled" && (
           <div className="flex items-center justify-between mb-8 px-2">
-            {STATUS_ORDER.slice(0, -1).map((s, idx) => {
-              const stepIdx = STATUS_ORDER.indexOf(order.status);
+            {statusOrder.slice(0, -1).map((s, idx) => {
+              const stepIdx = statusOrder.indexOf(order.status);
               const isDone = idx < stepIdx;
               const isCurrent = idx === stepIdx;
               return (
@@ -261,7 +287,7 @@ export default function OrderConfirmationPage() {
                   >
                     {isDone ? "✓" : idx + 1}
                   </div>
-                  {idx < 3 && (
+                  {idx < statusOrder.length - 2 && (
                     <div
                       className={`h-1 flex-1 mx-1 ${
                         isDone ? "bg-green-500" : "bg-muted"
@@ -307,11 +333,24 @@ export default function OrderConfirmationPage() {
                   <span>{formatMoney(order.platformFeeCents)}</span>
                 </div>
               )}
+              {Number(order.deliveryFeeCents || 0) > 0 ? (
+                <div className="flex justify-between text-sm text-muted-foreground">
+                  <span>Merchant delivery</span>
+                  <span>{formatMoney(order.deliveryFeeCents || 0)}</span>
+                </div>
+              ) : null}
               <div className="flex justify-between font-black">
                 <span>Total</span>
                 <span>{formatMoney(order.totalCents)}</span>
               </div>
             </div>
+            {order.orderType === "delivery" && order.deliveryAddress ? (
+              <div className="mt-3 rounded-xl border border-[color:var(--profile-border)] p-3 text-sm">
+                <p className="font-black">Deliver to</p>
+                <p>{[order.deliveryAddress, order.deliveryCity, order.deliveryState, order.deliveryPostalCode].filter(Boolean).join(", ")}</p>
+                {order.deliveryInstructions ? <p className="mt-1 text-xs text-muted-foreground">{order.deliveryInstructions}</p> : null}
+              </div>
+            ) : null}
             <div className="text-xs text-muted-foreground pt-1 flex gap-3 flex-wrap">
               <span className="capitalize">
                 {order.orderType.replace("_", " ")}

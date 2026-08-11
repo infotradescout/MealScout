@@ -62,6 +62,10 @@ import { isAuthenticated, isStaffOrAdmin } from "../unifiedAuth";
 import { distributedRateLimit } from "../middleware/distributedRateLimit";
 import { storage } from "../storage";
 import { buildPublicTruckOperatingPlan } from "../services/truckOperatingPlan";
+import {
+  isValidIanaTimeZone,
+  resolveCityTimeZoneStrict,
+} from "../services/cityTimeZone";
 import { parseMenuCsv } from "../utils/menuCsvParser";
 import { parsePdfMenuWithAi } from "../utils/menuPdfParser";
 import {
@@ -177,14 +181,32 @@ function minutesFromTime(value: unknown): number | null {
   return hour * 60 + minute;
 }
 
-function isRestaurantOpenNow(operatingHours: unknown): boolean | null {
+export function isRestaurantOpenNow(
+  operatingHours: unknown,
+  timeZone: string | null,
+  now = new Date(),
+): boolean | null {
   if (!operatingHours || typeof operatingHours !== "object") return null;
-  const todayKey = dayKeys[new Date().getDay()];
+  if (!timeZone || !isValidIanaTimeZone(timeZone)) return null;
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    weekday: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(now);
+  const weekday = String(parts.find((part) => part.type === "weekday")?.value || "")
+    .slice(0, 3)
+    .toLowerCase();
+  const todayKey = dayKeys.find((key) => key === weekday);
+  if (!todayKey) return null;
   const windows = (operatingHours as Record<string, unknown>)[todayKey];
   if (!Array.isArray(windows)) return null;
   if (windows.length === 0) return false;
-  const now = new Date();
-  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  const hour = Number(parts.find((part) => part.type === "hour")?.value);
+  const minute = Number(parts.find((part) => part.type === "minute")?.value);
+  if (!Number.isFinite(hour) || !Number.isFinite(minute)) return null;
+  const nowMinutes = hour * 60 + minute;
   return windows.some((window: any) => {
     const open = minutesFromTime(window?.open ?? window?.start);
     const close = minutesFromTime(window?.close ?? window?.end);
@@ -196,13 +218,14 @@ function isRestaurantOpenNow(operatingHours: unknown): boolean | null {
   });
 }
 
-async function buildOrderingReadiness(restaurantId: string) {
+export async function buildOrderingReadiness(restaurantId: string) {
   const [restaurantRow] = await db
     .select({
       id: restaurants.id,
       ownerId: restaurants.ownerId,
       name: restaurants.name,
       city: restaurants.city,
+      state: restaurants.state,
       isFoodTruck: restaurants.isFoodTruck,
       cuisineType: restaurants.cuisineType,
       isActive: restaurants.isActive,
@@ -234,7 +257,14 @@ async function buildOrderingReadiness(restaurantId: string) {
   const acceptsCash = restaurantMenus.some((menu: any) => menu.acceptsCash);
   const stripeConfigured = Boolean(process.env.STRIPE_SECRET_KEY);
   const profileOwnerReady = Boolean(restaurantRow?.ownerId);
-  const openNow = isRestaurantOpenNow(restaurantRow?.operatingHours);
+  const timeZone = await resolveCityTimeZoneStrict({
+    city: restaurantRow?.city,
+    state: restaurantRow?.state,
+  });
+  const openNow = isRestaurantOpenNow(
+    restaurantRow?.operatingHours,
+    timeZone,
+  );
   const truckPlan = restaurantRow?.isFoodTruck
     ? await buildPublicTruckOperatingPlan(restaurantId)
     : null;
@@ -324,6 +354,7 @@ async function buildOrderingReadiness(restaurantId: string) {
     activeMenuCount: restaurantMenus.length,
     availableItemCount: items.length,
     openNow,
+    timeZone,
     currentTruckStop,
     checks,
     blockingReasons,
@@ -1498,7 +1529,14 @@ export function registerMenuRoutes(app: Express) {
 
       const [updated] = await db
         .update(menus)
-        .set({ ...updates, updatedAt: new Date() })
+        .set({
+          ...updates,
+          ...(Object.prototype.hasOwnProperty.call(updates, "isAvailable") ||
+          Object.prototype.hasOwnProperty.call(updates, "inventoryQty")
+            ? { inventoryAutoUnavailable: false }
+            : {}),
+          updatedAt: new Date(),
+        })
         .where(eq(menus.id, menuId))
         .returning();
       res.json({ menu: updated });
@@ -1654,7 +1692,11 @@ export function registerMenuRoutes(app: Express) {
 
       await db
         .update(menuItems)
-        .set({ isAvailable: false, updatedAt: new Date() })
+        .set({
+          isAvailable: false,
+          inventoryAutoUnavailable: false,
+          updatedAt: new Date(),
+        })
         .where(eq(menuItems.id, itemId));
       res.json({ success: true });
     }),
@@ -1683,6 +1725,7 @@ export function registerMenuRoutes(app: Express) {
         .set({
           inventoryQty,
           isAvailable: inventoryQty > 0,
+          inventoryAutoUnavailable: false,
           updatedAt: new Date(),
         })
         .where(eq(menuItems.id, itemId))

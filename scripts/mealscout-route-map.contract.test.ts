@@ -102,6 +102,7 @@ if (
 [
   "/restaurant-owner-dashboard",
   "/restaurant/dashboard",
+  "/merchant-delivery",
   "/claim-truck",
   "/account-setup",
   "/owner/verify",
@@ -182,6 +183,10 @@ if (
 
 requireMatch(/registerPublicDiscoveryRoutes[\s\S]*registerPublicMapRoutes/i, "public backend registrations");
 requireMatch(/registerHostRoutes[\s\S]*registerBookingRoutes/i, "host booking backend registrations");
+requireMatch(
+  /registerMerchantDeliveryRoutes/i,
+  "merchant delivery registration",
+);
 requireMatch(/registerStripeWebhookRoutes/i, "stripe webhook registration");
 
 if (/Merlin[^.\n]*active project/i.test(routeMap) || /active project[^.\n]*Merlin/i.test(routeMap)) {

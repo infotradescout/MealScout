@@ -19,19 +19,20 @@ async function sendOnce(input: {
   html: string;
   text: string;
 }) {
-  const [existing] = await db
-    .select({ id: orderNotifications.id })
-    .from(orderNotifications)
-    .where(
-      and(
-        eq(orderNotifications.orderId, input.orderId),
-        eq(orderNotifications.channel, "email"),
-        eq(orderNotifications.type, input.type),
-        eq(orderNotifications.recipient, input.recipient),
-      ),
-    )
-    .limit(1);
-  if (existing) return;
+  const dedupeKey = `${input.orderId}:email:${input.type}:${input.recipient.toLowerCase()}`;
+  const [claim] = await db
+    .insert(orderNotifications)
+    .values({
+      orderId: input.orderId,
+      channel: "email",
+      type: input.type,
+      recipient: input.recipient,
+      status: "pending",
+      dedupeKey,
+    })
+    .onConflictDoNothing({ target: orderNotifications.dedupeKey })
+    .returning({ id: orderNotifications.id });
+  if (!claim) return;
 
   let status = "failed";
   let errorMessage: string | undefined;
@@ -49,14 +50,10 @@ async function sendOnce(input: {
     errorMessage = String(error?.message || error);
   }
 
-  await db.insert(orderNotifications).values({
-    orderId: input.orderId,
-    channel: "email",
-    type: input.type,
-    recipient: input.recipient,
-    status,
-    errorMessage,
-  });
+  await db
+    .update(orderNotifications)
+    .set({ status, errorMessage })
+    .where(eq(orderNotifications.id, claim.id));
 }
 
 export async function sendPickupOrderConfirmedNotifications(

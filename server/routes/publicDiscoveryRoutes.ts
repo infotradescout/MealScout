@@ -68,6 +68,8 @@ import { canExposeAnonymousEventDetail } from "../publicProfiles/publicEventDeta
 import { buildPublicProfilePath } from "../publicProfiles/publicProfileUtils";
 import { isAuthenticated } from "../unifiedAuth";
 import { deriveProfileEvidenceQuarantineVisibility } from "../services/profileEvidenceQuarantine";
+import { buildOrderingReadiness } from "./menuRoutes";
+import { getPublicMerchantDeliveryAvailability } from "./merchantDeliveryRoutes";
 import { buildProfileAnalyticsDiscoveryMetadata } from "../services/discoveryObservatory";
 
 const toSlug = (value: string | null | undefined) =>
@@ -542,12 +544,13 @@ const buildPublicEventsPayload = async (input: {
   };
 };
 
-const buildPublicMenuPayload = async (
+const buildPublicMenuPayloadCore = async (
   restaurantId: string,
   context?: {
     preferredMenuId?: string | null;
     eventId?: string | null;
     viewerUserId?: string | null;
+    authoritativeProfile?: boolean;
   },
 ) => {
   // These exact structured rows feed both the rendered payload and its
@@ -595,6 +598,9 @@ const buildPublicMenuPayload = async (
     : [];
 
   const listingMenuSections =
+    context?.authoritativeProfile === true
+      ? []
+      :
     listingMenuItems.length > 0
       ? Object.values(
           listingMenuItems.reduce(
@@ -699,7 +705,9 @@ const buildPublicMenuPayload = async (
       and(
         inArray(menuItems.menuId, menuIds),
         eq(menuItems.restaurantId, restaurantId),
-        eq(menuItems.isAvailable, true),
+        context?.authoritativeProfile === true
+          ? undefined
+          : eq(menuItems.isAvailable, true),
       ),
     );
 
@@ -893,6 +901,11 @@ const buildPublicMenuPayload = async (
             : null;
         })(),
         featured: false,
+        isAvailable: item.isAvailable !== false,
+        orderable:
+          item.isAvailable !== false &&
+          item.priceCents !== null &&
+          item.priceCents !== undefined,
         recommendationCount:
           recommendationCountByItem.get(String(item.id || "")) || 0,
         userRecommended: viewerRecommendedItemIds.has(String(item.id || "")),
@@ -946,6 +959,11 @@ const buildPublicMenuPayload = async (
             : null;
         })(),
         featured: false,
+        isAvailable: item.isAvailable !== false,
+        orderable:
+          item.isAvailable !== false &&
+          item.priceCents !== null &&
+          item.priceCents !== undefined,
         recommendationCount:
           recommendationCountByItem.get(String(item.id || "")) || 0,
         userRecommended: viewerRecommendedItemIds.has(String(item.id || "")),
@@ -1000,6 +1018,12 @@ const buildPublicMenuPayload = async (
           description: item.description,
           imageUrl: item.imageUrl,
           featured: Boolean(item.featured),
+          priceCents:
+            Number.isFinite(Number(item.priceCents)) && item.priceCents != null
+              ? Number(item.priceCents)
+              : null,
+          isAvailable: item.isAvailable !== false,
+          orderable: item.orderable === true,
           recommendationCount: Number(item.recommendationCount || 0),
           userRecommended: Boolean(item.userRecommended),
         })),
@@ -1035,6 +1059,8 @@ const buildPublicMenuPayload = async (
           description: item.description,
           imageUrl: item.imageUrl,
           featured: Boolean(item.featured),
+          isAvailable: item.isAvailable !== false,
+          orderable: item.orderable === true,
           recommendationCount: Number(item.recommendationCount || 0),
           userRecommended: Boolean(item.userRecommended),
         })),
@@ -1054,6 +1080,112 @@ const buildPublicMenuPayload = async (
     hasStructuredMenu: activeSections.length > 0,
     menuRevision: menuRevisionEvidence.revision,
     menuRevisionCoversRenderedMenu: true,
+  };
+};
+
+const buildClaimedWebsiteTruth = async (row: any, menuPayload: any) => {
+  const claimedProfile = Boolean(row?.ownerId && row?.isVerified === true);
+  const orderingPath =
+    claimedProfile && menuPayload?.activeMenuId
+      ? `/menu/${encodeURIComponent(String(row.id))}`
+      : null;
+  if (!claimedProfile) {
+    return {
+      claimedProfile: false,
+      timeZone: null,
+      ordering: {
+        path: null,
+        enabled: false,
+        unavailableReason: "This profile is not yet claimed and verified",
+      },
+      fulfillment: {
+        pickup: {
+          enabled: false,
+          unavailableReason: "Pickup ordering is not available",
+        },
+        delivery: {
+          configured: false,
+          enabled: false,
+          availableNow: false,
+          feeCents: 0,
+          estimatedMinutes: null,
+          unavailableReason: "Merchant delivery is not available",
+        },
+      },
+    };
+  }
+
+  const [readiness, delivery] = await Promise.all([
+    buildOrderingReadiness(String(row.id)),
+    getPublicMerchantDeliveryAvailability(String(row.id)),
+  ]);
+  const pickupEnabled = Boolean(orderingPath && readiness.orderingEnabled);
+  const deliveryEnabled = Boolean(
+    pickupEnabled && delivery?.configured && delivery?.availableNow,
+  );
+  return {
+    claimedProfile: true,
+    timeZone: readiness.timeZone || delivery?.timeZone || null,
+    ordering: {
+      path: orderingPath,
+      enabled: pickupEnabled || deliveryEnabled,
+      unavailableReason:
+        pickupEnabled || deliveryEnabled
+          ? null
+          : readiness.blockingReasons.join(", ") ||
+            "Online ordering is not available",
+    },
+    fulfillment: {
+      pickup: {
+        enabled: pickupEnabled,
+        unavailableReason: pickupEnabled
+          ? null
+          : readiness.blockingReasons.join(", ") ||
+            "Pickup ordering is not available",
+      },
+      delivery: {
+        configured: Boolean(delivery?.configured),
+        enabled: deliveryEnabled,
+        availableNow: Boolean(delivery?.availableNow),
+        feeCents: Number(delivery?.feeCents || 0),
+        estimatedMinutes: delivery?.estimatedMinutes ?? null,
+        unavailableReason: deliveryEnabled
+          ? null
+          : delivery?.unavailableReason ||
+            readiness.blockingReasons.join(", ") ||
+            "Merchant delivery is not available",
+      },
+    },
+  };
+};
+
+export const buildPublicMenuPayload = async (
+  restaurantId: string,
+  context?: {
+    preferredMenuId?: string | null;
+    eventId?: string | null;
+    viewerUserId?: string | null;
+  },
+) => {
+  const [profileAuthority] = await db
+    .select({
+      id: restaurants.id,
+      ownerId: restaurants.ownerId,
+      isVerified: restaurants.isVerified,
+    })
+    .from(restaurants)
+    .where(eq(restaurants.id, restaurantId))
+    .limit(1);
+  const authoritativeProfile = Boolean(
+    profileAuthority?.ownerId && profileAuthority?.isVerified === true,
+  );
+  const payload = await buildPublicMenuPayloadCore(restaurantId, {
+    ...context,
+    authoritativeProfile,
+  });
+  return {
+    ...payload,
+    ...(await buildClaimedWebsiteTruth(profileAuthority, payload)),
   };
 };
 
@@ -2256,7 +2388,6 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           cleanBusinessPath,
           canonicalUrl: mapped.seo.canonicalUrl,
           websiteUrl: mapped.websiteUrl,
-          profileSettings,
           social: mapped.socialLinks,
         });
       }
@@ -2314,7 +2445,6 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           cleanBusinessPath,
           canonicalUrl: mapped.seo.canonicalUrl,
           websiteUrl: mapped.websiteUrl,
-          profileSettings,
           social: mapped.socialLinks,
         });
       }
@@ -2374,7 +2504,6 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           cleanBusinessPath,
           canonicalUrl: mapped.seo.canonicalUrl,
           websiteUrl: mapped.websiteUrl,
-          profileSettings,
           social: mapped.socialLinks,
         });
       }
@@ -2433,7 +2562,6 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           cleanBusinessPath,
           canonicalUrl: mapped.seo.canonicalUrl,
           websiteUrl: mapped.websiteUrl,
-          profileSettings,
           social: mapped.socialLinks,
         });
       }
@@ -2495,7 +2623,6 @@ export function registerPublicDiscoveryRoutes(app: Express) {
             cleanBusinessPath,
             canonicalUrl: mapped.seo.canonicalUrl,
             websiteUrl: mapped.websiteUrl,
-            profileSettings,
             social: mapped.socialLinks,
           });
         }
@@ -2531,7 +2658,6 @@ export function registerPublicDiscoveryRoutes(app: Express) {
             cleanBusinessPath,
             canonicalUrl: mapped.seo.canonicalUrl,
             websiteUrl: mapped.websiteUrl,
-            profileSettings,
             social: mapped.socialLinks,
           });
         }
@@ -2567,7 +2693,6 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           cleanBusinessPath,
           canonicalUrl: mapped.seo.canonicalUrl,
           websiteUrl: mapped.websiteUrl,
-          profileSettings,
           social: mapped.socialLinks,
         });
       }
@@ -2614,7 +2739,6 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           cleanBusinessPath,
           canonicalUrl: mapped.seo.canonicalUrl,
           websiteUrl: mapped.websiteUrl,
-          profileSettings,
           social: mapped.socialLinks,
         });
       }
@@ -2669,7 +2793,6 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           cleanBusinessPath,
           canonicalUrl: mapped.seo.canonicalUrl,
           websiteUrl: mapped.websiteUrl,
-          profileSettings,
           metrics: {
             activeProductCount: mapped.activeProductCount,
           },

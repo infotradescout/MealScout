@@ -129,6 +129,8 @@ export function toPublicRestaurantProfile(input: {
           : "restaurant");
   const capabilities = getBusinessCapabilities(canonicalBusinessType || profileType);
   const id = String(row.id || "");
+  const claimedProfile = Boolean(row.claimedProfile ?? row.isVerified);
+  const orderingPath = String(row?.ordering?.path || "").trim() || null;
   const displayName = String(row.name || "MealScout business");
   const slug = toSlug(displayName) || id;
   const canonicalPath = buildPublicProfilePath({
@@ -201,31 +203,35 @@ export function toPublicRestaurantProfile(input: {
       : String(row.websiteUrl || "").trim() || null;
   const onlineOrderingUrl =
     String(
-      row.onlineOrderingUrl ||
+      (claimedProfile && orderingPath ? orderingPath : null) ||
+        row.onlineOrderingUrl ||
         publicActionLinks.onlineOrderingUrl ||
         row.orderingUrl ||
         row.orderUrl ||
         row.onlineOrderUrl ||
         "",
     ).trim() || null;
-  const deliveryUrl =
-    String(
-      row.deliveryUrl ||
-        publicActionLinks.deliveryUrl ||
-        row.doordashUrl ||
-        publicActionLinks.doordashUrl ||
-        row.uberEatsUrl ||
-        publicActionLinks.uberEatsUrl ||
-        row.toastUrl ||
-        publicActionLinks.toastUrl ||
-        row.squareUrl ||
-        publicActionLinks.squareUrl ||
-        row.chowNowUrl ||
-        publicActionLinks.chowNowUrl ||
-        row.grubhubUrl ||
-        publicActionLinks.grubhubUrl ||
-        "",
-    ).trim() || null;
+  const deliveryUrl = claimedProfile && orderingPath
+    ? row?.fulfillment?.delivery?.enabled
+      ? orderingPath
+      : null
+    : String(
+        row.deliveryUrl ||
+          publicActionLinks.deliveryUrl ||
+          row.doordashUrl ||
+          publicActionLinks.doordashUrl ||
+          row.uberEatsUrl ||
+          publicActionLinks.uberEatsUrl ||
+          row.toastUrl ||
+          publicActionLinks.toastUrl ||
+          row.squareUrl ||
+          publicActionLinks.squareUrl ||
+          row.chowNowUrl ||
+          publicActionLinks.chowNowUrl ||
+          row.grubhubUrl ||
+          publicActionLinks.grubhubUrl ||
+          "",
+      ).trim() || null;
   const cateringUrl =
     String(
       publicActionLinks.cateringInquiryUrl ||
@@ -375,10 +381,18 @@ export function toPublicRestaurantProfile(input: {
           return {
             menuItemId: String((item as any)?.menuItemId || "").trim() || null,
             name: itemName,
+            priceCents:
+              hasPrice && Number.isFinite(priceValue) ? priceValue : null,
             priceLabel,
             description: String(item?.description || "").trim() || null,
             imageUrl: String(item?.imageUrl || "").trim() || null,
             featured: Boolean(item?.featured),
+            isAvailable: item?.isAvailable !== false,
+            orderable:
+              item?.orderable === true ||
+              (item?.isAvailable !== false &&
+                hasPrice &&
+                Number.isFinite(priceValue)),
             recommendationCount: Math.max(
               0,
               Number(item?.recommendationCount || 0) || 0,
@@ -421,10 +435,17 @@ export function toPublicRestaurantProfile(input: {
                 menuItemId:
                   String((item as any)?.menuItemId || "").trim() || null,
                 name: itemName,
+                priceCents:
+                  item?.priceCents != null &&
+                  Number.isFinite(Number(item.priceCents))
+                    ? Number(item.priceCents)
+                    : null,
                 priceLabel,
                 description: String(item?.description || "").trim() || null,
                 imageUrl: String(item?.imageUrl || "").trim() || null,
                 featured: Boolean(item?.featured),
+                isAvailable: item?.isAvailable !== false,
+                orderable: item?.orderable === true,
                 recommendationCount: Math.max(
                   0,
                   Number(item?.recommendationCount || 0) || 0,
@@ -921,9 +942,44 @@ export function toPublicRestaurantProfile(input: {
             row.claimVerified ??
             false,
           ),
+    claimedProfile,
     locallyOwned: Boolean(
       row.locallyOwned ?? row.isLocallyOwned ?? row.localOwned ?? false,
     ),
+    timeZone: String(row.timeZone || "").trim() || null,
+    ordering: {
+      path: orderingPath,
+      enabled: Boolean(row?.ordering?.enabled),
+      unavailableReason:
+        String(row?.ordering?.unavailableReason || "").trim() || null,
+    },
+    fulfillment: {
+      pickup: {
+        enabled: Boolean(row?.fulfillment?.pickup?.enabled),
+        unavailableReason:
+          String(row?.fulfillment?.pickup?.unavailableReason || "").trim() ||
+          null,
+      },
+      delivery: {
+        configured: Boolean(row?.fulfillment?.delivery?.configured),
+        enabled: Boolean(row?.fulfillment?.delivery?.enabled),
+        availableNow: Boolean(row?.fulfillment?.delivery?.availableNow),
+        feeCents: Math.max(
+          0,
+          Number(row?.fulfillment?.delivery?.feeCents || 0) || 0,
+        ),
+        estimatedMinutes:
+          row?.fulfillment?.delivery?.estimatedMinutes == null
+            ? null
+            : Math.max(
+                0,
+                Number(row.fulfillment.delivery.estimatedMinutes) || 0,
+              ),
+        unavailableReason:
+          String(row?.fulfillment?.delivery?.unavailableReason || "").trim() ||
+          null,
+      },
+    },
     menuSections: publicMenuSections,
     menuVariants: publicMenuVariants,
     activeMenuId: String(row.activeMenuId || "").trim() || null,

@@ -62,6 +62,18 @@ import {
   sendPickupOrderCancelledNotification,
   sendPickupOrderConfirmedNotifications,
 } from "../services/pickupOrderNotificationService";
+import {
+  cleanupPendingPickupOrderAfterPaymentSetupFailure,
+  restoreTrackedInventoryForPickupOrderByOrderId,
+  reserveTrackedInventoryForPickupOrder,
+} from "../services/pickupInventoryService";
+import {
+  calculateAuthoritativeMerchantDeliveryTotals,
+  customerAccessTokenMatches,
+  hashCustomerAccessToken,
+  projectOrderForCustomer,
+} from "../services/merchantDeliverySafety";
+import { loadAuthoritativePickupOrderItems } from "../services/pickupOrderIdentityService";
 
 const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY)
@@ -346,9 +358,50 @@ export function registerPickupOrderRoutes(app: Express) {
         specialInstructions: z.string().max(500).optional().nullable(),
         scheduledFor: z.string().datetime().optional().nullable(),
         promotionToken: z.string().max(200).optional().nullable(),
+        checkoutRequestId: z.string().uuid().optional().nullable(),
+        customerAccessToken: z.string().min(32).max(200).optional().nullable(),
       });
 
       const body = bodySchema.parse(req.body);
+      if (
+        body.orderType === "delivery" &&
+        (!body.checkoutRequestId || !body.customerAccessToken)
+      ) {
+        return res.status(400).json({
+          message: "Delivery checkout requires a durable request and access token",
+        });
+      }
+
+      if (body.checkoutRequestId) {
+        const [existing] = await db
+          .select()
+          .from(pickupOrders)
+          .where(eq(pickupOrders.checkoutRequestId, body.checkoutRequestId))
+          .limit(1);
+        if (existing) {
+          if (
+            !customerAccessTokenMatches(
+              body.customerAccessToken,
+              existing.customerAccessTokenHash,
+            )
+          ) {
+            return res.status(409).json({ message: "Checkout request already exists" });
+          }
+          let clientSecret: string | null = null;
+          if (stripe && existing.stripePaymentIntentId) {
+            const intent = await stripe.paymentIntents.retrieve(
+              existing.stripePaymentIntentId,
+            );
+            clientSecret = intent.client_secret;
+          }
+          return res.status(200).json({
+            order: projectOrderForCustomer(existing, true),
+            clientSecret,
+            customerAccessToken: body.customerAccessToken,
+            replayed: true,
+          });
+        }
+      }
 
       // Fetch menu to check acceptsCash + hidePlatformFee
       const [menu] = await db
@@ -372,12 +425,11 @@ export function registerPickupOrderRoutes(app: Express) {
 
       // Resolve all menu items
       const itemIds = body.items.map((i) => i.menuItemId);
-      const dbItems: MenuItem[] = await db
-        .select()
-        .from(menuItems)
-        .where(
-          and(inArray(menuItems.id, itemIds), eq(menuItems.isAvailable, true)),
-        );
+      const dbItems: MenuItem[] = await loadAuthoritativePickupOrderItems(db, {
+        restaurantId: body.restaurantId,
+        menuId: body.menuId,
+        menuItemIds: itemIds,
+      });
 
       const itemMap = new Map<string, MenuItem>(dbItems.map((i) => [i.id, i]));
 
@@ -554,49 +606,109 @@ export function registerPickupOrderRoutes(app: Express) {
                 "Delivery address, city, state, and postal code are required",
             });
         }
-        const delivery = await getDeliveryQuote(
-          body.restaurantId,
-          subtotalCents,
-          body.deliveryPostalCode,
-        );
-        deliveryFeeCents = delivery.feeCents;
-        deliveryEstimateMinutes = delivery.estimatedMinutes;
       }
-      const totalCents = baseTotalCents + deliveryFeeCents;
+      let totalCents = baseTotalCents;
 
-      // Insert order
-      const [order] = await db
-        .insert(pickupOrders)
-        .values({
-          restaurantId: body.restaurantId,
-          customerId: req.user?.id ?? null,
-          customerName: body.customerName,
-          customerEmail: body.customerEmail ?? null,
-          customerPhone: body.customerPhone ?? null,
-          orderType: body.orderType,
-          status: ORDER_STATUS.PENDING,
-          subtotalCents,
-          platformFeeCents,
-          feePaidByBusiness,
-          totalCents,
-          paymentMethod: body.paymentMethod,
-          specialInstructions: body.specialInstructions ?? null,
-          prepTimeMinutes: 20,
-          scheduledFor: body.scheduledFor ? new Date(body.scheduledFor) : null,
-          deliveryAddress:
-            body.orderType === "delivery" ? body.deliveryAddress : null,
-          deliveryCity:
-            body.orderType === "delivery" ? body.deliveryCity : null,
-          deliveryState:
-            body.orderType === "delivery" ? body.deliveryState : null,
-          deliveryPostalCode:
-            body.orderType === "delivery" ? body.deliveryPostalCode : null,
-          deliveryFeeCents,
-          deliveryEstimateMinutes,
-          deliveryInstructions:
-            body.orderType === "delivery" ? body.deliveryInstructions : null,
-        })
-        .returning();
+      let order: PickupOrder;
+      try {
+        order = await db.transaction(async (tx: any) => {
+          if (body.orderType === "delivery") {
+            const delivery = await getDeliveryQuote(
+              body.restaurantId,
+              subtotalCents,
+              body.deliveryPostalCode!,
+              body.scheduledFor ? new Date(body.scheduledFor) : null,
+              tx,
+              true,
+            );
+            deliveryFeeCents = delivery.feeCents;
+            deliveryEstimateMinutes = delivery.estimatedMinutes;
+          }
+          const authoritativeTotals =
+            calculateAuthoritativeMerchantDeliveryTotals({
+              subtotalCents,
+              platformFeeCents,
+              deliveryFeeCents,
+            });
+          totalCents = authoritativeTotals.totalCents;
+          const [createdOrder] = await tx
+            .insert(pickupOrders)
+            .values({
+              restaurantId: body.restaurantId,
+              customerId: req.user?.id ?? null,
+              customerName: body.customerName,
+              customerEmail: body.customerEmail ?? null,
+              customerPhone: body.customerPhone ?? null,
+              orderType: body.orderType,
+              status: ORDER_STATUS.PENDING,
+              subtotalCents,
+              platformFeeCents,
+              feePaidByBusiness,
+              totalCents,
+              paymentMethod: body.paymentMethod,
+              checkoutRequestId:
+                body.orderType === "delivery" ? body.checkoutRequestId : null,
+              customerAccessTokenHash:
+                body.orderType === "delivery"
+                  ? hashCustomerAccessToken(body.customerAccessToken!)
+                  : null,
+              specialInstructions:
+                (body.specialInstructions ?? "").trim() || null,
+              prepTimeMinutes: 20,
+              scheduledFor: body.scheduledFor ? new Date(body.scheduledFor) : null,
+              deliveryAddress:
+                body.orderType === "delivery" ? body.deliveryAddress : null,
+              deliveryCity:
+                body.orderType === "delivery" ? body.deliveryCity : null,
+              deliveryState:
+                body.orderType === "delivery" ? body.deliveryState : null,
+              deliveryPostalCode:
+                body.orderType === "delivery" ? body.deliveryPostalCode : null,
+              deliveryFeeCents,
+              taxCents: authoritativeTotals.taxCents,
+              tipCents: authoritativeTotals.tipCents,
+              discountCents: authoritativeTotals.discountCents,
+              deliveryEstimateMinutes,
+              deliveryInstructions:
+                body.orderType === "delivery" ? body.deliveryInstructions : null,
+            })
+            .returning();
+
+          if (!createdOrder) {
+            throw new Error("Unable to create pickup order");
+          }
+
+          // Insert line items
+          await tx
+            .insert(pickupOrderItems)
+            .values(lineItems.map((li) => ({ ...li, orderId: createdOrder.id })));
+
+          await reserveTrackedInventoryForPickupOrder(
+            tx,
+            lineItems.map((li) => ({
+              menuItemId: li.menuItemId,
+              quantity: li.quantity,
+            })),
+          );
+
+          return createdOrder;
+        });
+      } catch (err: any) {
+        const statusCode = Number(err?.statusCode || 0);
+        if (statusCode === 409) {
+          return res.status(409).json({ message: err.message });
+        }
+        if (
+          String(err?.code || err?.cause?.code || "") === "23505" &&
+          body.checkoutRequestId
+        ) {
+          return res.status(409).json({
+            message: "This delivery checkout is already being processed",
+            code: "DUPLICATE_CHECKOUT",
+          });
+        }
+        throw err;
+      }
 
       if (body.promotionToken) {
         await consumePromotionAttribution({
@@ -607,27 +719,6 @@ export function registerPickupOrderRoutes(app: Express) {
           eligibleOrderCents: subtotalCents,
           commissionEligible: body.paymentMethod === "card",
         });
-      }
-
-      // Insert line items
-      await db
-        .insert(pickupOrderItems)
-        .values(lineItems.map((li) => ({ ...li, orderId: order.id })));
-
-      // Deduct inventory for tracked items
-      for (const reqItem of body.items) {
-        const dbItem = itemMap.get(reqItem.menuItemId)!;
-        if (dbItem.trackInventory && dbItem.inventoryQty !== null) {
-          const newQty = dbItem.inventoryQty - reqItem.quantity;
-          await db
-            .update(menuItems)
-            .set({
-              inventoryQty: newQty,
-              isAvailable: newQty > 0,
-              updatedAt: new Date(),
-            })
-            .where(eq(menuItems.id, dbItem.id));
-        }
       }
 
       // For cash orders: confirm immediately, no Stripe needed
@@ -665,13 +756,17 @@ export function registerPickupOrderRoutes(app: Express) {
           })
           .catch(() => {});
 
-        return res.status(201).json({ order: confirmed, clientSecret: null });
+        return res.status(201).json({
+          order: projectOrderForCustomer(confirmed, true),
+          clientSecret: null,
+          customerAccessToken: body.customerAccessToken ?? null,
+        });
       }
 
       // Card payment: create Stripe PaymentIntent
       if (!stripe) {
         // No Stripe configured – should not happen in production
-        await db.delete(pickupOrders).where(eq(pickupOrders.id, order.id));
+        await cleanupPendingPickupOrderAfterPaymentSetupFailure(db, order.id);
         return res
           .status(503)
           .json({ message: "Payment processing is not configured" });
@@ -701,7 +796,7 @@ export function registerPickupOrderRoutes(app: Express) {
         });
       } catch (stripeErr: any) {
         // Clean up pending order if Stripe fails
-        await db.delete(pickupOrders).where(eq(pickupOrders.id, order.id));
+        await cleanupPendingPickupOrderAfterPaymentSetupFailure(db, order.id);
         console.error(
           "[pickupOrderRoutes] Stripe PI creation failed:",
           stripeErr,
@@ -742,8 +837,9 @@ export function registerPickupOrderRoutes(app: Express) {
         .catch(() => {});
 
       res.status(201).json({
-        order: updatedOrder,
+        order: projectOrderForCustomer(updatedOrder, true),
         clientSecret: paymentIntent.client_secret,
+        customerAccessToken: body.customerAccessToken ?? null,
       });
     }),
   );
@@ -783,13 +879,19 @@ export function registerPickupOrderRoutes(app: Express) {
             userId,
           )));
 
-      const safeOrder = isOwner
-        ? order
-        : {
-            ...order,
-            stripePaymentIntentId: undefined,
-            stripeTransferGroupId: undefined,
-          };
+      const accessToken = String(
+        req.get("x-order-access-token") || req.query.accessToken || "",
+      ).trim();
+      const safeOrder = projectOrderForCustomer(
+        order,
+        Boolean(
+          isOwner ||
+            customerAccessTokenMatches(
+              accessToken,
+              order.customerAccessTokenHash,
+            ),
+        ),
+      );
 
       res.json({ order: safeOrder, items });
     }),
@@ -811,12 +913,19 @@ export function registerPickupOrderRoutes(app: Express) {
 
       if (!order) return res.status(404).json({ message: "Order not found" });
 
+      const userId = (req as any)?.user?.id;
+      const canView =
+        userId &&
+        (order.customerId === userId ||
+          (await storage.verifyRestaurantOwnership(order.restaurantId, userId)));
+      if (!canView) return res.status(403).json({ message: "Not authorized" });
+
       const items = await db
         .select()
         .from(pickupOrderItems)
         .where(eq(pickupOrderItems.orderId, order.id));
 
-      res.json({ order, items });
+      res.json({ order: projectOrderForCustomer(order, true), items });
     }),
   );
 
@@ -1058,11 +1167,37 @@ export function registerPickupOrderRoutes(app: Express) {
           (req.body as any).cancellationReason || "Cancelled by restaurant";
       }
 
-      const [updated] = await db
-        .update(pickupOrders)
-        .set(updates)
-        .where(eq(pickupOrders.id, orderId))
-        .returning();
+      const updated = await db.transaction(async (tx: any) => {
+        const [updatedOrder] = await tx
+          .update(pickupOrders)
+          .set(updates)
+          .where(
+            and(
+              eq(pickupOrders.id, orderId),
+              eq(pickupOrders.status, order.status),
+            ),
+          )
+          .returning();
+
+        if (!updatedOrder) {
+          return null;
+        }
+
+        if (status === ORDER_STATUS.CANCELLED) {
+          await restoreTrackedInventoryForPickupOrderByOrderId(
+            tx,
+            updatedOrder.id,
+          );
+        }
+
+        return updatedOrder;
+      });
+
+      if (!updated) {
+        return res.status(409).json({
+          message: "Order status changed before this update could be applied",
+        });
+      }
 
       if (status === ORDER_STATUS.CANCELLED) {
         sendPickupOrderCancelledNotification(updated).catch(console.error);

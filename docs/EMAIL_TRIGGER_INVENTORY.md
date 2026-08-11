@@ -1,6 +1,6 @@
 # Email Trigger Inventory
 
-Last updated: 2026-05-15
+Last updated: 2026-08-08
 
 This file tracks MealScout email sends by trigger class so optional notifications do not drift into spammy behavior. Global delivery is centralized in `server/emailService.ts`.
 
@@ -29,7 +29,7 @@ These confirm purchases or direct order state and should generally remain delive
 | Trigger | Recipient | Source | Guardrails |
 | --- | --- | --- | --- |
 | Parking Pass booking confirmation | Truck owner and host | `routes/stripeWebhookRoutes.ts` | Stripe webhook-driven |
-| Pickup order confirmation/ready | Customer | `routes/pickupOrderRoutes.ts` | Ready notification has per-order sent flag; provider skips are logged as failed |
+| Pickup order confirmation/ready | Customer | `services/pickupOrderNotificationService.ts` | Durable dedupe key and per-order ready marker prevent duplicate sends; provider skips are logged as failed |
 | Supplier accepted/delivery update | Buyer | `routes/suppliers/requestsRoutes.ts` | Respects `orderUpdates` email preference |
 
 ## Optional Product Notifications
@@ -46,7 +46,7 @@ These should respect user preferences and/or idempotency.
 | Truck interest in location request | Host/request owner | `emailNotifications.ts` | `businessMessages` preference |
 | Location demand threshold crossed | Host and interested trucks | `routes/locationDemandRoutes.ts` | Fires only on first threshold crossing; host uses `businessMessages`, trucks use `nearbyEvents` |
 | Location demand activation reminder | Location request owner | `services/locationDemandActivation.ts` | Step idempotency, max 100/run, `businessMessages`, marketing category |
-| Event interest accepted/declined | Truck owner | `routes/hostInterestRoutes.ts`, `routes/hosts/eventsRoutes.ts` | `nearbyEvents` preference |
+| Event interest accepted/declined | Truck owner | `routes/eventCoordinatorRoutes.ts`, `routes/hostInterestRoutes.ts`, `routes/hosts/eventsRoutes.ts` | `nearbyEvents` preference |
 | Series cancellation | Affected truck owners and coordinator | `routes/openCallSeriesRoutes.ts` | Truck owner `nearbyEvents`; coordinator email/topic checks |
 | Truck event/series matching | Truck owner | `truckEventMatchService.ts` | Idempotent telemetry, `nearbyEvents` preference |
 | Unbooked event opportunity | Nearby truck owners | `eventNotificationCron.ts` | Event-level sent marker, host/truck coordinate radius, `nearbyEvents`; radius env `UNBOOKED_EVENT_NOTIFICATION_RADIUS_KM` |

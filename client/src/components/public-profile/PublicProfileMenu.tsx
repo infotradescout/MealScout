@@ -15,6 +15,7 @@ import {
   partitionPublicMenuSections,
 } from "@/lib/publicProfileMenu";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 
 type PublicProfileMenuProps = {
   profile: PublicRestaurantProfile;
@@ -88,6 +89,11 @@ function PublicProfileMenuItem({
             <h3 className="min-w-0 text-sm font-black leading-snug text-[color:var(--profile-ink)] sm:text-base">
               {item.name}
             </h3>
+            {item.isAvailable === false ? (
+              <Badge className="shrink-0 border-0 bg-stone-100 text-stone-700 hover:bg-stone-100">
+                Sold out
+              </Badge>
+            ) : null}
             {item.priceLabel ? (
               <span className="shrink-0 text-sm font-black text-[color:var(--profile-accent)]">
                 {item.priceLabel}
@@ -290,6 +296,7 @@ export function PublicProfileMenu({
     profile.menuUrl ||
     null;
   const menuActionHref = internalMenuHref || fallbackMenuHref;
+  const nativeOrderHref = profile.ordering?.path || null;
   const menuCompleteness = assessPublicMenuCompleteness({
     menuSections: organizedSections,
     featuredMenuItems: featuredItems,
@@ -415,6 +422,36 @@ export function PublicProfileMenu({
           )
         ) : null}
       </div>
+
+      {profile.claimedProfile ? (
+        <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-[color:var(--profile-border)] bg-[color:var(--profile-surface-soft)] px-4 py-3 text-xs font-bold text-[color:var(--profile-ink-soft)]">
+          <Badge variant={profile.fulfillment?.pickup.enabled ? "default" : "outline"}>
+            {profile.fulfillment?.pickup.enabled
+              ? "Pickup available"
+              : "Pickup unavailable"}
+          </Badge>
+          <Badge variant={profile.fulfillment?.delivery.enabled ? "default" : "outline"}>
+            {profile.fulfillment?.delivery.enabled
+              ? "Merchant delivery available"
+              : "Merchant delivery unavailable"}
+          </Badge>
+          {nativeOrderHref && profile.ordering?.enabled ? (
+            <Link
+              href={nativeOrderHref}
+              data-analytics-action="order_click"
+              data-analytics-target-type="claimed_profile_ordering"
+              className="ml-auto inline-flex min-h-9 items-center rounded-full bg-[color:var(--profile-accent)] px-4 font-black text-white"
+            >
+              Start order
+            </Link>
+          ) : (
+            <span className="w-full text-[color:var(--profile-muted)]">
+              {profile.ordering?.unavailableReason ||
+                "Online ordering is not available right now."}
+            </span>
+          )}
+        </div>
+      ) : null}
 
       <div className="profile-surface overflow-hidden rounded-[1.75rem]">
         {menuVariants.length > 1 ? (

@@ -26,6 +26,7 @@ import { storage } from "../storage";
 import { shouldAttemptPickupWebhookPayoutTransfer } from "../utils/pickupWebhookPayout";
 import { shouldRevokeUserSubscriptionEntitlements } from "../utils/stripeSubscriptionEntitlements";
 import { decideStripeWebhookVerificationMode } from "../utils/stripeWebhookVerification";
+import { restoreTrackedInventoryForPickupOrderByOrderId } from "../services/pickupInventoryService";
 const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY)
   : null;
@@ -52,8 +53,31 @@ function getSubscriptionCustomerId(
 async function deactivateSubscriptionEntitlements(params: {
   userId: string;
   subscriptionId: string;
+  eventId: string;
+  eventCreatedAt: Date;
 }) {
   await db.transaction(async (tx: any) => {
+    const [lockedSubscription] = await tx
+      .select({
+        id: restaurantSubscriptions.id,
+        stripeEventCreatedAt: restaurantSubscriptions.stripeEventCreatedAt,
+      })
+      .from(restaurantSubscriptions)
+      .where(
+        eq(restaurantSubscriptions.stripeSubscriptionId, params.subscriptionId),
+      )
+      .limit(1)
+      .for("update");
+
+    if (!lockedSubscription) return;
+    if (
+      lockedSubscription.stripeEventCreatedAt &&
+      lockedSubscription.stripeEventCreatedAt.getTime() >=
+        params.eventCreatedAt.getTime()
+    ) {
+      return;
+    }
+
     // Serialize delayed cancellation A against activation of replacement B.
     // The second event observes the committed current subscription before it
     // can change user-level access.
@@ -71,11 +95,11 @@ async function deactivateSubscriptionEntitlements(params: {
       .set({
         status: "canceled",
         canceledAt: new Date(),
+        stripeEventId: params.eventId,
+        stripeEventCreatedAt: params.eventCreatedAt,
         updatedAt: new Date(),
       })
-      .where(
-        eq(restaurantSubscriptions.stripeSubscriptionId, params.subscriptionId),
-      );
+      .where(eq(restaurantSubscriptions.id, lockedSubscription.id));
 
     if (
       !lockedUser ||
@@ -113,6 +137,8 @@ async function deactivateSubscriptionEntitlements(params: {
 
 async function retireLegacyProfileSubscription(
   subscriptionId: string,
+  eventId: string,
+  eventCreatedAt: Date,
   customerId?: string | null,
 ) {
   let user = await storage.getUserByStripeSubscriptionId(subscriptionId);
@@ -124,6 +150,46 @@ async function retireLegacyProfileSubscription(
   await deactivateSubscriptionEntitlements({
     userId: user.id,
     subscriptionId,
+    eventId,
+    eventCreatedAt,
+  });
+}
+
+async function recordLegacyProfileSubscriptionEvent(params: {
+  subscriptionId: string;
+  eventId: string;
+  eventCreatedAt: Date;
+}) {
+  await db.transaction(async (tx: any) => {
+    const [lockedSubscription] = await tx
+      .select({
+        id: restaurantSubscriptions.id,
+        stripeEventCreatedAt: restaurantSubscriptions.stripeEventCreatedAt,
+      })
+      .from(restaurantSubscriptions)
+      .where(
+        eq(restaurantSubscriptions.stripeSubscriptionId, params.subscriptionId),
+      )
+      .limit(1)
+      .for("update");
+
+    if (!lockedSubscription) return;
+    if (
+      lockedSubscription.stripeEventCreatedAt &&
+      lockedSubscription.stripeEventCreatedAt.getTime() >=
+        params.eventCreatedAt.getTime()
+    ) {
+      return;
+    }
+
+    await tx
+      .update(restaurantSubscriptions)
+      .set({
+        stripeEventId: params.eventId,
+        stripeEventCreatedAt: params.eventCreatedAt,
+        updatedAt: new Date(),
+      })
+      .where(eq(restaurantSubscriptions.id, lockedSubscription.id));
   });
 }
 
@@ -1533,8 +1599,72 @@ export function registerStripeWebhookRoutes(
           console.log(`[WEBHOOK] PaymentIntent ${failedIntent.id} failed`);
 
           try {
-            const { eventBookings } = await import("@shared/schema");
+            const { eventBookings, pickupOrders } = await import("@shared/schema");
             const metadata = (failedIntent as any).metadata || {};
+
+            // Pickup order payment failure
+            const pickupOrderId = String(
+              metadata.pickupOrderId || metadata.orderId || "",
+            ).trim();
+            if (pickupOrderId) {
+              try {
+                const [order] = await db
+                  .select()
+                  .from(pickupOrders)
+                  .where(eq(pickupOrders.id, pickupOrderId))
+                  .limit(1);
+                if (!order) {
+                  throw new Error(
+                    `Pickup order ${pickupOrderId} not found for failed PaymentIntent ${failedIntent.id}`,
+                  );
+                }
+
+                const storedIntentId = String(
+                  (order as any).stripePaymentIntentId || "",
+                ).trim();
+                if (storedIntentId && storedIntentId !== failedIntent.id) {
+                  console.warn(
+                    `[WEBHOOK] Pickup order ${pickupOrderId} ignored failed PaymentIntent ${failedIntent.id}; expected ${storedIntentId}`,
+                  );
+                  break;
+                }
+
+                await db.transaction(async (tx: any) => {
+                  const [updated] = await tx
+                    .update(pickupOrders)
+                    .set({
+                      status: "cancelled",
+                      cancelledAt: new Date(),
+                      cancellationReason: "Payment failed",
+                      updatedAt: new Date(),
+                    })
+                    .where(
+                      and(
+                        eq(pickupOrders.id, order.id),
+                        eq(pickupOrders.status, "pending"),
+                      ),
+                    )
+                    .returning();
+                  if (!updated) {
+                    console.log(
+                      `[WEBHOOK] Pickup order ${order.id} already left pending state during failure replay`,
+                    );
+                    return;
+                  }
+                  await restoreTrackedInventoryForPickupOrderByOrderId(
+                    tx,
+                    order.id,
+                  );
+                });
+              } catch (pickupError) {
+                console.error(
+                  "[WEBHOOK] Pickup order failure update failed:",
+                  pickupError,
+                );
+                throw pickupError;
+              }
+              break;
+            }
 
             // Supplier marketplace order payment failure
             const supplierOrderId = metadata.supplierOrderId;
@@ -1608,6 +1738,7 @@ export function registerStripeWebhookRoutes(
 
         case "customer.subscription.updated": {
           const subscriptionUpdated = event.data.object;
+          const eventCreatedAt = new Date(Number(event.created) * 1000);
           const terminalLegacyStatus = [
             "canceled",
             "incomplete_expired",
@@ -1615,9 +1746,16 @@ export function registerStripeWebhookRoutes(
           if (terminalLegacyStatus) {
             await retireLegacyProfileSubscription(
               subscriptionUpdated.id,
+              event.id,
+              eventCreatedAt,
               getSubscriptionCustomerId(subscriptionUpdated.customer),
             );
           } else {
+            await recordLegacyProfileSubscriptionEvent({
+              subscriptionId: subscriptionUpdated.id,
+              eventId: event.id,
+              eventCreatedAt,
+            });
             console.warn(
               `[WEBHOOK] Legacy profile subscription ${subscriptionUpdated.id} changed to ${subscriptionUpdated.status}; no automatic cancellation or access change was made`,
             );
@@ -1629,6 +1767,8 @@ export function registerStripeWebhookRoutes(
           const subscriptionDeleted = event.data.object;
           await retireLegacyProfileSubscription(
             subscriptionDeleted.id,
+            event.id,
+            new Date(Number(event.created) * 1000),
             getSubscriptionCustomerId(subscriptionDeleted.customer),
           );
           break;

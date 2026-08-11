@@ -123,10 +123,13 @@ export type PublicEventItem = {
 export type PublicMenuItem = {
   menuItemId?: string | null;
   name: string;
+  priceCents?: number | null;
   priceLabel: string | null;
   description: string | null;
   imageUrl: string | null;
   featured: boolean;
+  isAvailable?: boolean;
+  orderable?: boolean;
   recommendationCount?: number;
   userRecommended?: boolean;
 };
@@ -244,7 +247,28 @@ export type PublicRestaurantProfile = {
   logoUrl: string | null;
   galleryImages: PublicImageAsset[];
   verifiedProfile: boolean;
+  claimedProfile?: boolean;
   locallyOwned: boolean;
+  timeZone?: string | null;
+  ordering?: {
+    path: string | null;
+    enabled: boolean;
+    unavailableReason: string | null;
+  };
+  fulfillment?: {
+    pickup: {
+      enabled: boolean;
+      unavailableReason: string | null;
+    };
+    delivery: {
+      configured: boolean;
+      enabled: boolean;
+      availableNow: boolean;
+      feeCents: number;
+      estimatedMinutes: number | null;
+      unavailableReason: string | null;
+    };
+  };
   menuSections: PublicMenuSection[];
   menuVariants: PublicMenuVariant[];
   activeMenuId: string | null;

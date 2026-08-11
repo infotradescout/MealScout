@@ -128,10 +128,11 @@ export function guardUnauthenticatedProtectedHtml(
     if (isAuthenticatedRequest(req)) return next();
     res.setHeader("X-Robots-Tag", "noindex, nofollow, noarchive");
     res.setHeader("Cache-Control", "no-store");
-    return res.status(401).json({
+    res.status(401).json({
       error: "authentication_required",
       path: pathValue,
     });
+    return;
   }
 
   if (isAuthenticatedRequest(req)) return next();
