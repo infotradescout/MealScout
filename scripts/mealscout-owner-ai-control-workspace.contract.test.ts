@@ -8,6 +8,7 @@ const app = read("client/src/App.tsx");
 const shell = read("client/src/components/business-workspace-shell.tsx");
 const navigation = read("client/src/components/navigation.tsx");
 const seo = read("client/src/components/seo-head.tsx");
+const api = read("client/src/lib/api.ts");
 
 assert.match(app, /const OwnerAiActionsPage = lazy/);
 assert.match(app, /path="\/owner-ai" component=\{OwnerAiActionsPage\}/);
@@ -28,6 +29,10 @@ assert.match(shell, /id: "ai"/);
 assert.match(shell, /href: buildWorkspaceHref\("\/owner-ai", business\.id\)/);
 assert.match(navigation, /currentPath === "\/owner-ai"/);
 assert.match(seo, /"\/owner-ai"/);
+assert.match(
+  api,
+  /host\.endsWith\("\.vercel\.app"\) \|\| host\.endsWith\("\.onrender\.com"\)/,
+);
 
 for (const copy of [
   "Run MealScout from the AI you already use",

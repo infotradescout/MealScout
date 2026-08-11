@@ -21,9 +21,10 @@ function resolveApiBaseUrl() {
   }
 
   const host = window.location.hostname.toLowerCase();
-  // Vercel preview domains should use same-origin API calls so platform rewrites
-  // can proxy /api/* without cross-origin/CORS failures.
-  if (host.endsWith(".vercel.app")) {
+  // Deployment hosts should use same-origin API calls. Vercel proxies /api/*
+  // through its rewrite, while each Render service owns its matching backend
+  // and session cookie (including isolated preview services).
+  if (host.endsWith(".vercel.app") || host.endsWith(".onrender.com")) {
     return "";
   }
 
