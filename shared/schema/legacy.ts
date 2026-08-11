@@ -1623,11 +1623,16 @@ export const apiKeys = pgTable(
     userId: varchar("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
+    restaurantId: varchar("restaurant_id").references(() => restaurants.id, {
+      onDelete: "cascade",
+    }),
     name: varchar("name").notNull(), // 'POS Integration', 'Live Location Service', etc.
     keyHash: text("key_hash").notNull(), // bcrypt hashed (never store plaintext)
     keyPrefix: varchar("key_prefix", { length: 8 }), // First 8 chars for display (e.g., 'sk_live_abc123')
     scope: varchar("scope").notNull(), // 'read', 'write', 'admin'
+    purpose: varchar("purpose").notNull().default("general"),
     isActive: boolean("is_active").default(true),
+    revokedAt: timestamp("revoked_at"),
     lastUsedAt: timestamp("last_used_at"),
     expiresAt: timestamp("expires_at"), // Optional - null means no expiration
     createdAt: timestamp("created_at").defaultNow(),
@@ -1635,6 +1640,7 @@ export const apiKeys = pgTable(
   },
   (table) => [
     index("IDX_api_keys_user").on(table.userId, table.isActive),
+    index("IDX_api_keys_restaurant").on(table.restaurantId, table.isActive),
     index("IDX_api_keys_prefix").on(table.keyPrefix),
     index("IDX_api_keys_active").on(table.isActive, table.expiresAt),
   ],
@@ -5418,6 +5424,62 @@ export type ReportLeadSequenceSend =
 export type InsertReportLeadSequenceSend =
   typeof reportLeadSequenceSends.$inferInsert;
 
+export const ownerAiActionDrafts = pgTable(
+  "owner_ai_action_drafts",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    restaurantId: varchar("restaurant_id")
+      .notNull()
+      .references(() => restaurants.id, { onDelete: "cascade" }),
+    createdByUserId: varchar("created_by_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    connectorApiKeyId: varchar("connector_api_key_id").references(
+      () => apiKeys.id,
+      { onDelete: "set null" },
+    ),
+    idempotencyKey: varchar("idempotency_key", { length: 64 }),
+    requestHash: varchar("request_hash", { length: 64 }),
+    status: varchar("status").notNull().default("draft"),
+    revision: integer("revision").notNull().default(1),
+    packet: jsonb("packet").notNull(),
+    normalizedPlan: jsonb("normalized_plan").notNull(),
+    currentSnapshot: jsonb("current_snapshot").notNull().default(sql`'{}'::jsonb`),
+    socialDrafts: jsonb("social_drafts").notNull().default(sql`'[]'::jsonb`),
+    mediaManifest: jsonb("media_manifest").notNull().default(sql`'[]'::jsonb`),
+    expectedVersions: jsonb("expected_versions").notNull(),
+    approvedByUserId: varchar("approved_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    approvedAt: timestamp("approved_at"),
+    appliedAt: timestamp("applied_at"),
+    cancelledAt: timestamp("cancelled_at"),
+    expiresAt: timestamp("expires_at").notNull(),
+    errors: jsonb("errors").notNull().default(sql`'[]'::jsonb`),
+    result: jsonb("result"),
+    socialPublishLeaseId: varchar("social_publish_lease_id", { length: 64 }),
+    socialPublishLeaseExpiresAt: timestamp("social_publish_lease_expires_at"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_owner_ai_drafts_restaurant_status").on(
+      table.restaurantId,
+      table.status,
+    ),
+    index("idx_owner_ai_drafts_creator").on(table.createdByUserId),
+    index("idx_owner_ai_drafts_expires").on(table.expiresAt),
+    uniqueIndex("uq_owner_ai_drafts_connector_idempotency")
+      .on(table.connectorApiKeyId, table.idempotencyKey)
+      .where(
+        sql`${table.connectorApiKeyId} IS NOT NULL AND ${table.idempotencyKey} IS NOT NULL`,
+      ),
+  ],
+);
+
+export type OwnerAiActionDraft = typeof ownerAiActionDrafts.$inferSelect;
+export type InsertOwnerAiActionDraft = typeof ownerAiActionDrafts.$inferInsert;
+
 export const socialPostQueue = pgTable(
   "social_post_queue",
   {
@@ -5436,6 +5498,10 @@ export const socialPostQueue = pgTable(
       onDelete: "set null",
     }),
     source: varchar("source"),
+    ownerAiActionDraftId: varchar("owner_ai_action_draft_id").references(
+      () => ownerAiActionDrafts.id,
+      { onDelete: "set null" },
+    ),
     metadata: jsonb("metadata"),
     status: varchar("status").notNull().default("pending"),
     errorMessage: text("error_message"),
@@ -5446,6 +5512,12 @@ export const socialPostQueue = pgTable(
     index("idx_social_post_queue_status").on(table.status),
     index("idx_social_post_queue_platform").on(table.platform),
     index("idx_social_post_queue_created").on(table.createdAt),
+    index("idx_social_post_queue_owner_ai_draft").on(
+      table.ownerAiActionDraftId,
+    ),
+    uniqueIndex("uq_social_post_queue_owner_ai_draft_platform")
+      .on(table.ownerAiActionDraftId, table.platform)
+      .where(sql`${table.ownerAiActionDraftId} IS NOT NULL`),
   ],
 );
 

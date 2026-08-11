@@ -313,7 +313,9 @@ app.use((req, res, next) => {
   const pathValue = String(req.path || "");
   if (
     pathValue.startsWith("/api/actions") ||
-    pathValue.startsWith("/api/admin/lisa/price-scout-feed")
+    pathValue.startsWith("/api/admin/lisa/price-scout-feed") ||
+    (req.method === "POST" &&
+      pathValue === "/api/owner-ai/connector/drafts")
   ) {
     return next();
   }

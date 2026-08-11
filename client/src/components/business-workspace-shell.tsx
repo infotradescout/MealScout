@@ -10,6 +10,7 @@ import {
   MapPin,
   MoreHorizontal,
   Radio,
+  Sparkles,
   Settings,
   ShoppingBag,
   Store,
@@ -31,6 +32,7 @@ import {
 
 export type BusinessWorkspaceModuleId =
   | "overview"
+  | "ai"
   | "profile"
   | "menu"
   | "availability"
@@ -153,6 +155,14 @@ export default function BusinessWorkspaceShell({
       visible: capabilities.overview !== false,
     },
     {
+      id: "ai",
+      label: "AI control",
+      description: "Draft every update, then approve once",
+      href: buildWorkspaceHref("/owner-ai", business.id),
+      icon: Sparkles,
+      visible: capabilities.profile !== false,
+    },
+    {
       id: "profile",
       label: "Public profile",
       description: "Identity, details, and links",
@@ -263,7 +273,7 @@ export default function BusinessWorkspaceShell({
   const modules = allModules.filter((module) => module.visible);
   const mobilePrimaryModuleIds = new Set<BusinessWorkspaceModuleId>([
     "overview",
-    "profile",
+    "ai",
     "menu",
     "availability",
   ]);

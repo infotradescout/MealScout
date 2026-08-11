@@ -55,6 +55,7 @@ for (const publicRoute of [
   "/for-hosts",
   "/for-events",
   "/host-location-partner",
+  "/owner-ai",
 ]) {
   assert.equal(
     parseCleanAffiliateBusinessRoute(publicRoute),

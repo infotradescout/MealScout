@@ -72,6 +72,7 @@ import { registerRecommendationRoutes } from "./routes/recommendationRoutes";
 import { registerDiscoveryObservatoryRoutes } from "./routes/discoveryObservatoryRoutes";
 import { registerScoutcoinRoutes } from "./routes/scoutcoinRoutes";
 import { registerParkingRoutePlanningRoutes } from "./routes/parkingRoutePlanningRoutes";
+import { registerOwnerAiActionRoutes } from "./routes/ownerAiActionRoutes";
 import {
   notifyNearbyDealSubscribers,
   notifyRestaurantFollowersOfDeal,
@@ -100,6 +101,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerNotificationRoutes(app);
   registerSupportRoutes(app);
   registerParkingRoutePlanningRoutes(app);
+  registerOwnerAiActionRoutes(app);
 
   registerLocationDemandRoutes(app);
   registerLocationUtilityRoutes(app, { hasCompleteProfileAccess });

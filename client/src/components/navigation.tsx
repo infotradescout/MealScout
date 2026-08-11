@@ -262,6 +262,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
   const isBusinessWorkspaceRoute =
     currentPath === "/restaurant-owner-dashboard" ||
     currentPath === "/menu-builder" ||
+    currentPath === "/owner-ai" ||
     currentPath === "/deal-creation" ||
     currentPath.startsWith("/deal-edit/") ||
     currentPath === "/kitchen" ||

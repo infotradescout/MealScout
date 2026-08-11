@@ -53,6 +53,7 @@ const RESERVED_PUBLIC_BUSINESS_SLUGS = new Set([
   "order-confirmation",
   "orders",
   "owner",
+  "owner-ai",
   "p",
   "parking-pass",
   "parking-pass-manage",

@@ -1,6 +1,7 @@
 import { v2 as cloudinary } from 'cloudinary';
 import multer from 'multer';
 import { Request } from 'express';
+import { fetchPinnedPublicImage } from "./utils/pinnedPublicImageFetch";
 
 // Configure Cloudinary
 cloudinary.config({
@@ -79,6 +80,87 @@ export async function uploadToCloudinary(
     );
 
     uploadStream.end(fileBuffer);
+  });
+}
+
+/**
+ * Social previews are authored as deterministic SVG, but Instagram's publish
+ * API requires a public raster asset. Force Cloudinary to rasterize the SVG to
+ * PNG and reject any response that is not a verified https raster URL.
+ */
+export async function uploadGeneratedSocialCardToCloudinary(
+  svg: string,
+  publicId: string,
+): Promise<string | null> {
+  if (!isCloudinaryConfigured()) return null;
+  const safePublicId = String(publicId || "")
+    .trim()
+    .replace(/[^a-zA-Z0-9_-]/g, "-")
+    .slice(0, 160);
+  if (!safePublicId || !String(svg || "").trim().startsWith("<svg")) {
+    return null;
+  }
+
+  return new Promise((resolve, reject) => {
+    const uploadStream = cloudinary.uploader.upload_stream(
+      {
+        folder: "mealscout/owner-ai-social",
+        public_id: safePublicId,
+        resource_type: "image",
+        format: "png",
+        overwrite: true,
+        transformation: [
+          { width: 1080, height: 1080, crop: "fill" },
+          { quality: "auto:good" },
+        ],
+      },
+      (error, result) => {
+        if (error) return reject(error);
+        const format = String(result?.format || "").toLowerCase();
+        const secureUrl = String(result?.secure_url || "");
+        if (
+          !result ||
+          format !== "png" ||
+          !/^https:\/\//i.test(secureUrl) ||
+          !/\.png(?:$|\?)/i.test(secureUrl)
+        ) {
+          return reject(
+            new Error("Generated social card was not returned as a public PNG"),
+          );
+        }
+        resolve(secureUrl);
+      },
+    );
+    uploadStream.end(Buffer.from(svg, "utf8"));
+  });
+}
+
+const OWNER_AI_PREVIEW_MAX_BYTES = 8 * 1024 * 1024;
+const OWNER_AI_PREVIEW_TIMEOUT_MS = 8_000;
+const OWNER_AI_PREVIEW_MAX_REDIRECTS = 2;
+const OWNER_AI_PREVIEW_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+  "image/avif",
+]);
+
+/**
+ * Fetches an owner-approved draft image for authenticated preview without ever
+ * exposing the remote URL to the browser. Every redirect is DNS/IP validated,
+ * response types are raster-only, and streaming stops at a fixed byte bound.
+ */
+export async function fetchOwnerAiRemoteImagePreview(
+  sourceUrl: string,
+): Promise<{ buffer: Buffer; contentType: string }> {
+  return fetchPinnedPublicImage(sourceUrl, {
+    maxBytes: OWNER_AI_PREVIEW_MAX_BYTES,
+    timeoutMs: OWNER_AI_PREVIEW_TIMEOUT_MS,
+    maxRedirects: OWNER_AI_PREVIEW_MAX_REDIRECTS,
+    allowedContentTypes: OWNER_AI_PREVIEW_TYPES,
+    accept: "image/avif,image/webp,image/png,image/jpeg,image/gif",
+    userAgent: "MealScoutOwnerDraftPreview/1.0 (+https://www.mealscout.us)",
   });
 }
 
