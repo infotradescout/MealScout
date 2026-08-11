@@ -22,7 +22,10 @@ import {
   restaurants,
   videoStories,
 } from "@shared/schema";
-import { expandScoutSearchTerms } from "@shared/scoutSearchIntent";
+import {
+  expandScoutSearchTerms,
+  scoutSearchRelevanceScore,
+} from "@shared/scoutSearchIntent";
 import { recordInternalSearchOutcome } from "../services/discoveryObservatory";
 import {
   AGGREGATE_SEARCH_DEAL_LIMIT,
@@ -64,6 +67,109 @@ function restaurantSearchMatchSql(searchTerms: string[]) {
       );
     }),
   );
+}
+
+export async function searchPublicRestaurantResults(
+  database: any,
+  query: string,
+) {
+  const searchTerm = query.trim().toLowerCase();
+  const searchTerms = expandScoutSearchTerms(searchTerm);
+  const searchValue = `%${searchTerm}%`;
+  const searchPrefixValue = `${searchTerm}%`;
+
+  // The phrase order must run in SQL before the cap. Otherwise broad imported
+  // token matches can discard the exact business before JS relevance runs.
+  const restaurantMatches = await database
+    .select({
+      id: restaurants.id,
+      name: restaurants.name,
+      cuisineType: restaurants.cuisineType,
+      address: restaurants.address,
+      city: restaurants.city,
+      state: restaurants.state,
+      description: restaurants.description,
+      logoUrl: restaurants.logoUrl,
+      coverImageUrl: restaurants.coverImageUrl,
+      businessType: restaurants.businessType,
+      isFoodTruck: restaurants.isFoodTruck,
+      isVerified: restaurants.isVerified,
+      rankingScore: restaurants.rankingScore,
+    })
+    .from(restaurants)
+    .where(
+      and(
+        eq(restaurants.isActive, true),
+        restaurantSearchMatchSql(searchTerms),
+      ),
+    )
+    .orderBy(
+      asc(sql`case
+        when lower(${restaurants.name}) = ${searchTerm} then 0
+        when lower(${restaurants.name}) like ${searchPrefixValue} then 1
+        when lower(${restaurants.name}) like ${searchValue} then 2
+        else 3
+      end`),
+      desc(restaurants.isVerified),
+      desc(restaurants.rankingScore),
+      asc(restaurants.name),
+    )
+    .limit(AGGREGATE_SEARCH_RESTAURANT_CANDIDATE_LIMIT);
+
+  return restaurantMatches
+    .filter((restaurant: any) => {
+      if (!isPublicBusinessVisible(restaurant)) return false;
+      const haystack = [
+        restaurant.name,
+        restaurant.cuisineType,
+        restaurant.address,
+        restaurant.city,
+        restaurant.state,
+        restaurant.description,
+      ]
+        .map((value) => String(value || "").toLowerCase())
+        .join(" ");
+      return searchTerms.some((term) => haystack.includes(term));
+    })
+    .sort((a: any, b: any) => {
+      const relevanceDelta =
+        scoutSearchRelevanceScore(b, searchTerm) -
+        scoutSearchRelevanceScore(a, searchTerm);
+      if (relevanceDelta !== 0) return relevanceDelta;
+
+      const verifiedDelta =
+        Number(Boolean(b.isVerified)) - Number(Boolean(a.isVerified));
+      if (verifiedDelta !== 0) return verifiedDelta;
+
+      const activityDelta =
+        publicRestaurantActivityScore(b) - publicRestaurantActivityScore(a);
+      if (activityDelta !== 0) return activityDelta;
+
+      return String(a.name || "").localeCompare(String(b.name || ""));
+    })
+    .slice(0, AGGREGATE_SEARCH_RESTAURANT_LIMIT)
+    .map((restaurant: any) => ({
+      id: restaurant.id,
+      name: restaurant.name,
+      cuisineType: restaurant.cuisineType,
+      address: restaurant.address,
+      city: restaurant.city || null,
+      state: restaurant.state || null,
+      slug: null,
+      description: restaurant.description || null,
+      logoUrl: restaurant.logoUrl || null,
+      coverImageUrl: restaurant.coverImageUrl || null,
+      imageUrl: restaurant.coverImageUrl || restaurant.logoUrl || null,
+      businessType: restaurant.businessType || null,
+      isFoodTruck: Boolean(restaurant.isFoodTruck),
+      isVerified: Boolean(restaurant.isVerified),
+      activeDealCount: 0,
+      favoriteCount: 0,
+      followCount: 0,
+      recommendationCount: 0,
+      communityActivityCount: 0,
+      homeRankingScore: Number(restaurant.rankingScore || 0),
+    }));
 }
 
 export function registerPublicSearchRoutes(app: Express) {
@@ -318,78 +424,8 @@ export function registerPublicSearchRoutes(app: Express) {
       const payload = await withDeadline(
         (async () => {
           const searchTerm = query.toLowerCase();
-          const searchTerms = expandScoutSearchTerms(searchTerm);
           const searchValue = `%${searchTerm}%`;
-
-          // Cap candidate fetch — never load the full restaurants table for typeahead.
-          const restaurantMatches = await db
-            .select({
-              id: restaurants.id,
-              name: restaurants.name,
-              cuisineType: restaurants.cuisineType,
-              address: restaurants.address,
-              city: restaurants.city,
-              state: restaurants.state,
-              description: restaurants.description,
-              logoUrl: restaurants.logoUrl,
-              coverImageUrl: restaurants.coverImageUrl,
-              businessType: restaurants.businessType,
-              isFoodTruck: restaurants.isFoodTruck,
-              isVerified: restaurants.isVerified,
-              rankingScore: restaurants.rankingScore,
-            })
-            .from(restaurants)
-            .where(
-              and(
-                eq(restaurants.isActive, true),
-                restaurantSearchMatchSql(searchTerms),
-              ),
-            )
-            .limit(AGGREGATE_SEARCH_RESTAURANT_CANDIDATE_LIMIT);
-
-          const restaurantsOut = restaurantMatches
-            .filter((restaurant: any) => {
-              if (!isPublicBusinessVisible(restaurant)) return false;
-              const haystack = [
-                restaurant.name,
-                restaurant.cuisineType,
-                restaurant.address,
-                restaurant.city,
-                restaurant.state,
-                restaurant.description,
-              ]
-                .map((value) => String(value || "").toLowerCase())
-                .join(" ");
-              return searchTerms.some((term) => haystack.includes(term));
-            })
-            .sort(
-              (a: any, b: any) =>
-                publicRestaurantActivityScore(b) -
-                publicRestaurantActivityScore(a),
-            )
-            .slice(0, AGGREGATE_SEARCH_RESTAURANT_LIMIT)
-            .map((restaurant: any) => ({
-              id: restaurant.id,
-              name: restaurant.name,
-              cuisineType: restaurant.cuisineType,
-              address: restaurant.address,
-              city: restaurant.city || null,
-              state: restaurant.state || null,
-              slug: null,
-              description: restaurant.description || null,
-              logoUrl: restaurant.logoUrl || null,
-              coverImageUrl: restaurant.coverImageUrl || null,
-              imageUrl: restaurant.coverImageUrl || restaurant.logoUrl || null,
-              businessType: restaurant.businessType || null,
-              isFoodTruck: Boolean(restaurant.isFoodTruck),
-              isVerified: Boolean(restaurant.isVerified),
-              activeDealCount: 0,
-              favoriteCount: 0,
-              followCount: 0,
-              recommendationCount: 0,
-              communityActivityCount: 0,
-              homeRankingScore: Number(restaurant.rankingScore || 0),
-            }));
+          const restaurantsOut = await searchPublicRestaurantResults(db, query);
 
           const dealsOut = (
             await storage.searchDeals({

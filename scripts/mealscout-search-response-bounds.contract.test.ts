@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { performance } from "node:perf_hooks";
 
 import { toPublicRestaurantListingArray } from "../server/publicProfiles/toPublicRestaurantListing";
+import { scoutSearchRelevanceScore } from "../shared/scoutSearchIntent";
 import {
   AGGREGATE_SEARCH_DEAL_LIMIT,
   AGGREGATE_SEARCH_EVENT_LIMIT,
@@ -263,6 +264,16 @@ assert.match(
 );
 assert.match(
   aggregateSource,
+  /scoutSearchRelevanceScore/,
+  "aggregate /api/search must rank business-name intent before activity",
+);
+assert.match(
+  aggregateSource,
+  /when lower\(\$\{restaurants\.name\}\) = \$\{searchTerm\} then 0/,
+  "aggregate /api/search must prioritize exact names before the SQL candidate cap",
+);
+assert.match(
+  aggregateSource,
   /withDeadline\(/,
   "aggregate /api/search must wrap assembly in withDeadline",
 );
@@ -281,6 +292,64 @@ assert.doesNotMatch(
   /storage\.getAllRestaurants\(/,
   "aggregate /api/search must not load the full restaurants table",
 );
+
+{
+  const target = {
+    id: "f1ed3d1d-3ea8-4f54-85b9-af48d1d884e0",
+    name: "The Florida Kitchen Island Cuisine",
+    cuisineType: "Poke bowls and island-inspired food",
+  };
+  const broadMatches = Array.from({ length: 120 }, (_, index) => ({
+    id: `bulk-kitchen-${index}`,
+    name: `Imported Kitchen ${index}`,
+    cuisineType: "food_truck",
+  }));
+  const uncapped = [...broadMatches, target];
+  assert.equal(
+    uncapped
+      .slice(0, AGGREGATE_SEARCH_RESTAURANT_CANDIDATE_LIMIT)
+      .some((candidate) => candidate.id === target.id),
+    false,
+    "the fixture must prove an unordered SQL cap can discard the canonical match",
+  );
+  const sqlOrderedCandidates = uncapped
+    .sort((a, b) => {
+      const priority = (name: string) => {
+        const normalized = name.toLowerCase();
+        if (normalized === "florida kitchen") return 0;
+        if (normalized.startsWith("florida kitchen")) return 1;
+        if (normalized.includes("florida kitchen")) return 2;
+        return 3;
+      };
+      return priority(a.name) - priority(b.name);
+    })
+    .slice(0, AGGREGATE_SEARCH_RESTAURANT_CANDIDATE_LIMIT);
+  assert.ok(
+    sqlOrderedCandidates.some((candidate) => candidate.id === target.id),
+    "phrase ordering must preserve the canonical match before the SQL cap",
+  );
+  const ranked = sqlOrderedCandidates.sort(
+    (a, b) =>
+      scoutSearchRelevanceScore(b, "Florida Kitchen") -
+      scoutSearchRelevanceScore(a, "Florida Kitchen"),
+  );
+  assert.equal(
+    ranked[0]?.id,
+    target.id,
+    "a phrase-matching canonical profile must outrank broad imported token matches",
+  );
+  assert.ok(
+    scoutSearchRelevanceScore(
+      { name: "All gas no brakes reloaded" },
+      "All gas no brakes reloaded",
+    ) >
+      scoutSearchRelevanceScore(
+        { name: "Something Asian & More", description: "no brakes" },
+        "All gas no brakes reloaded",
+      ),
+    "an exact business name must outrank incidental field matches",
+  );
+}
 assert.match(
   restaurantSearchSource,
   /RESTAURANT_SEARCH_RESULT_LIMIT/,

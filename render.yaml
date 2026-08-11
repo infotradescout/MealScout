@@ -4,6 +4,7 @@ services:
     runtime: node
     plan: starter
     buildCommand: npm ci --include=dev && npm run build:platform
+    preDeployCommand: npm run migrate:deploy
     startCommand: npm run start
     autoDeploy: true
     envVars:
