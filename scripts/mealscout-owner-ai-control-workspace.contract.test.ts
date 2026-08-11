@@ -12,6 +12,14 @@ const seo = read("client/src/components/seo-head.tsx");
 assert.match(app, /const OwnerAiActionsPage = lazy/);
 assert.match(app, /path="\/owner-ai" component=\{OwnerAiActionsPage\}/);
 assert.match(app, /currentPath === "\/owner-ai"/);
+const guestProtectedRoutes = app.slice(
+  app.indexOf("function GuestProtectedRoutes"),
+  app.indexOf("function SharedPublicRoutes"),
+);
+assert.match(
+  guestProtectedRoutes,
+  /path="\/owner-ai" component=\{RedirectToLogin\}/,
+);
 assert.match(shell, /id: "ai"/);
 assert.match(shell, /href: buildWorkspaceHref\("\/owner-ai", business\.id\)/);
 assert.match(navigation, /currentPath === "\/owner-ai"/);
