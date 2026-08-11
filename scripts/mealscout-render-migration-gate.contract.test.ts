@@ -6,9 +6,29 @@ import {
   DEPLOY_MIGRATION_LOCK_TIMEOUT_MS,
   assertTransactionCompatibleMigration,
   discoverDeployMigrations,
+  migrationFingerprints,
+  normalizeMigrationSqlForFingerprint,
   planDeployMigrations,
   resolveMigrationDatabaseUrl,
 } from "./runDeployMigrations";
+
+assert.equal(
+  normalizeMigrationSqlForFingerprint("select 1;\r\nselect 2;\r"),
+  "select 1;\nselect 2;\n",
+  "migration fingerprints must not depend on checkout line endings",
+);
+const lfFingerprints = migrationFingerprints("select 1;\nselect 2;\n");
+const crlfFingerprints = migrationFingerprints("select 1;\r\nselect 2;\r\n");
+assert.equal(
+  lfFingerprints.canonical,
+  crlfFingerprints.canonical,
+  "LF and CRLF copies of the same migration must share a canonical fingerprint",
+);
+assert.deepEqual(
+  lfFingerprints.compatible,
+  crlfFingerprints.compatible,
+  "legacy compatibility must be deterministic on every operating system",
+);
 
 const migrations = discoverDeployMigrations();
 assert.ok(migrations.length >= 4, "release migration set must include 119-122");
@@ -32,6 +52,30 @@ assert.deepEqual(
   planDeployMigrations(migrations, applied),
   [],
   "an intact ledger must make repeated deploys a no-op",
+);
+const migrationWithLegacyCrLfHash = migrations.find(
+  (migration) => migration.compatibleSha256s.length > 1,
+);
+assert.ok(
+  migrationWithLegacyCrLfHash,
+  "the contract fixture must exercise the legacy Windows CRLF ledger path",
+);
+assert.deepEqual(
+  planDeployMigrations(migrations, [
+    {
+      filename: migrationWithLegacyCrLfHash.filename,
+      migrationNumber: migrationWithLegacyCrLfHash.number,
+      sha256: migrationWithLegacyCrLfHash.compatibleSha256s.find(
+        (fingerprint) => fingerprint !== migrationWithLegacyCrLfHash.sha256,
+      )!,
+    },
+  ]).map((migration) => migration.filename),
+  migrations
+    .filter(
+      (migration) => migration.filename !== migrationWithLegacyCrLfHash.filename,
+    )
+    .map((migration) => migration.filename),
+  "a previously recorded CRLF hash must be accepted without replaying its migration",
 );
 assert.throws(
   () =>
