@@ -90,6 +90,7 @@ export async function listSocialConnectionStatus(restaurantId: string) {
       externalAccountUrl: socialPublishingConnections.externalAccountUrl,
       scopes: socialPublishingConnections.scopes,
       status: socialPublishingConnections.status,
+      accessToken: socialPublishingConnections.accessToken,
       tokenExpiresAt: socialPublishingConnections.tokenExpiresAt,
       lastPublishAt: socialPublishingConnections.lastPublishAt,
       lastError: socialPublishingConnections.lastError,
@@ -103,12 +104,11 @@ export async function listSocialConnectionStatus(restaurantId: string) {
   );
   return ["facebook", "instagram", "x"].map((platform) => {
     const row = byPlatform.get(platform);
+    const { accessToken: _accessToken, ...safeRow } = row || {};
     return {
       platform,
-      connected: Boolean(row && row.status === "active"),
-      ...(row || {}),
-      accessTokenStored: undefined,
-      refreshTokenStored: undefined,
+      connected: Boolean(row && row.status === "active" && row.accessToken),
+      ...safeRow,
     };
   });
 }

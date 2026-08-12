@@ -34,7 +34,7 @@ Guest users can enter through discovery with `?ref` and then move through signup
 | --- | --- | --- |
 | `/customer-signup?role=diner` | Customer | Legacy URL alias maps to the Customer signup card. It submits `accountType: "customer"` through `/api/auth/customer/register`; there is no backend diner user type. |
 | `/customer-signup?role=business&businessType=restaurant` | Restaurant | Business signup redirects to `/restaurant-signup` and uses `/api/auth/restaurant/register`; continuation is restaurant owner setup. |
-| `/customer-signup?role=business&businessType=food_truck` | Food Truck | Business signup redirects to `/restaurant-signup?businessType=food_truck`; continuation may require schedule setup on `/restaurant-owner-dashboard?setup=schedule`. |
+| `/customer-signup?role=business&businessType=food_truck` | Food Truck | Business signup redirects to `/restaurant-signup?businessType=food_truck`; after the truck is attached, incomplete setup continues through owner-scoped `/owner-ai?...&src=onboarding&focus=schedule`, with the manual schedule workspace still available. |
 | `/customer-signup?role=business&businessType=bar` | Bar | Business signup uses the existing restaurant owner account path with business subtype metadata. |
 | `/customer-signup?role=business&businessType=caterer` | Caterer | Business signup uses the existing restaurant owner account path with business subtype metadata. |
 | `/customer-signup?role=business&businessType=private_chef` | Private Chef | Business signup uses the existing restaurant owner account path with business subtype metadata. |
@@ -77,13 +77,19 @@ Public profile URLs expose business discovery surfaces, not account ownership. A
 Existing continuation targets are:
 
 - Customers return to discovery/customer dashboard surfaces such as `/scout` or `/dashboard`.
-- Restaurant owners use `/restaurant-owner-dashboard` with setup modes such as profile, media, menu, schedule, or verification.
-- Food truck schedule-required continuation uses `/restaurant-owner-dashboard?setup=schedule`.
+- Restaurant owners use `/owner-ai?restaurantId=...&src=onboarding&focus=...` as the primary incomplete profile, media, menu, or schedule continuation after a business is attached. The manual `/restaurant-owner-dashboard?setup=...` and `/menu-builder` workspaces remain available.
+- Food truck schedule-required continuation uses owner-scoped `/owner-ai?...&focus=schedule`; business-document verification remains `/restaurant-owner-dashboard?setup=verification`.
 - Hosts use `/host/dashboard`.
 - Event organizers use `/event-coordinator/dashboard?setup=onboarding`.
 - Suppliers use `/supplier/dashboard`.
 - Staff use `/staff`; admin, duper_admin, and super_admin use `/admin/dashboard`.
 - Restaurant owner or food truck users without linked business profile are sent to `/restaurant-signup` with the existing `source=auth&claim=1` continuation.
+
+## Owner AI Identity And Consent Boundary
+
+The minimum remote-AI chain is three linked identities: the actual owner is signed into MealScout, the owner's chosen AI is OAuth-bound to one exact MealScout owner/business pair, and that MealScout business has at least one usable social publishing connection. `/owner-ai/authorize` is the protected OAuth consent surface. It lists only businesses actually owned by the signed-in user and does not complete authorization until a social account with stored publishing access is available.
+
+OAuth connection consent and content consent are separate. Connecting the AI grants bounded context/draft/read/approval scopes; it does not pre-approve content. The AI must create and display an immutable revision, including every MealScout change, destination, description, and image. After the actual owner explicitly consents in that AI chat, the AI may call MealScout's approval tool. MealScout revalidates owner/business binding, revision, content fingerprint, current canonical versions, and requested social connections before applying that exact revision and publishing its exact posts. Manually copied legacy keys remain draft-only. The authenticated `/owner-ai` review page remains a fallback for AIs without remote-tool support.
 
 ## Parking Pass Boundaries
 
@@ -99,11 +105,11 @@ Password reset requests must not reveal whether an email exists. Reset emails ar
 
 ## SetupMode URL Boundary And Preservation Edge
 
-Setup-mode continuation parameters such as `?setup=schedule` are URL-level hints that must be validated through existing safe continuation logic. If a user hits auth timeout or `/api/auth/user` 401 and returns through login, safe intended setup targets can be preserved after auth is re-confirmed. Invalid or unsafe setup targets must not be blindly trusted. This section is documentation only and does not implement runtime behavior.
+Setup context such as `?setup=schedule` on a manual workspace or `?src=onboarding&focus=schedule` on `/owner-ai` is a URL-level hint that must be validated through existing safe continuation logic. OAuth parameters on `/owner-ai/authorize` must likewise survive the login redirect without being treated as authority before MealScout validates the client, redirect URI, PKCE challenge, resource, requested scopes, session owner, selected business, and social readiness. If a user hits auth timeout or `/api/auth/user` 401 and returns through login, safe intended setup targets can be preserved after auth is re-confirmed. Invalid or unsafe setup targets must not be blindly trusted.
 
 ## Blessed Berry Isolation Boundary
 
-The Blessed Berry class of failure is a routing-context isolation issue, not a role-repair issue. Schedule-required `food_truck` users continue to `/restaurant-owner-dashboard?setup=schedule`. `food_truck` users must not be routed into host-only `/parking-pass-manage`, and host rows must not be created to repair truck routing.
+The Blessed Berry class of failure is a routing-context isolation issue, not a role-repair issue. Schedule-required `food_truck` users continue to owner-scoped `/owner-ai?...&focus=schedule`, with `/restaurant-owner-dashboard?setup=schedule` retained as the manual fallback. `food_truck` users must not be routed into host-only `/parking-pass-manage`, and host rows must not be created to repair truck routing.
 
 ## Multi-Role And Admin Context
 

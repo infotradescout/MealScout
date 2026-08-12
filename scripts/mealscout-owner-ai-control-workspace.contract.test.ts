@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 const read = (path: string) => readFileSync(path, "utf8");
 
 const page = read("client/src/pages/owner-ai-actions.tsx");
+const authorizePage = read("client/src/pages/owner-ai-authorize.tsx");
 const app = read("client/src/App.tsx");
 const shell = read("client/src/components/business-workspace-shell.tsx");
 const navigation = read("client/src/components/navigation.tsx");
@@ -11,7 +12,12 @@ const seo = read("client/src/components/seo-head.tsx");
 const api = read("client/src/lib/api.ts");
 
 assert.match(app, /const OwnerAiActionsPage = lazy/);
+assert.match(app, /const OwnerAiAuthorizePage = lazy/);
 assert.match(app, /path="\/owner-ai" component=\{OwnerAiActionsPage\}/);
+assert.match(
+  app,
+  /path="\/owner-ai\/authorize" component=\{OwnerAiAuthorizePage\}/,
+);
 assert.match(app, /currentPath === "\/owner-ai"/);
 assert.match(
   app,
@@ -49,14 +55,21 @@ for (const copy of [
   "Continue approved posts",
   "Copy current context for any AI",
   "Exact validated MealScout values",
+  "Complete the one-surface connection",
+  "Copy tool URL",
+  "Social accounts held by MealScout",
 ]) {
   assert.ok(page.includes(copy), `Missing owner AI workflow copy: ${copy}`);
 }
 
-// A connector can prepare only. The authenticated MealScout page owns the
-// explicit approval and exposes per-channel results after canonical commit.
-assert.match(page, /revocable key can read this business and prepare drafts/);
-assert.match(page, /cannot approve, alter MealScout, or publish a post/);
+// MealScout OAuth is the primary connection. Legacy copied keys remain
+// draft-only, while signed-in AIs can execute an exact revision after consent.
+assert.match(page, /api\/owner-ai\/mcp/);
+assert.match(page, /Sign in with MealScout/);
+assert.match(page, /manually copied key can prepare drafts only/i);
+assert.match(page, /cannot\s+carry in-chat owner consent, apply changes, or publish/i);
+assert.match(page, /social-connections\/status/);
+assert.match(page, /missingDraftSocialPlatforms/);
 assert.match(page, /\/api\/owner-ai\/credentials/);
 assert.match(page, /\/api\/owner-ai\/drafts/);
 assert.match(page, /\/approve/);
@@ -71,6 +84,10 @@ assert.match(page, /localOwnerAiPreviewUrl/);
 assert.match(page, /canContinueSocial/);
 assert.match(page, /requiredPreviewKeys/);
 assert.match(page, /MEDIA_CHANGED|image changed/i);
+assert.match(authorizePage, /Sign in to your AI with MealScout/);
+assert.match(authorizePage, /owner_ai:drafts:approve/);
+assert.match(authorizePage, /Connect at least one social account/);
+assert.match(authorizePage, /\/api\/owner-ai\/oauth\/authorize/);
 
 // Free chats use the same strict packet submitted by direct tool clients.
 assert.match(page, /JSON\.parse\(packetText\)/);

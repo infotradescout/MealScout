@@ -2952,6 +2952,9 @@ export class DatabaseStorage implements IStorage {
   async ensureAdminExists(): Promise<void> {
     const adminEmail = process.env.ADMIN_EMAIL;
     const adminPassword = process.env.ADMIN_PASSWORD;
+    const syncExistingAdminPassword =
+      String(process.env.ADMIN_PASSWORD_SYNC_ON_STARTUP || "").toLowerCase() ===
+      "true";
 
     if (!adminEmail || !adminPassword) {
       console.log(
@@ -2974,15 +2977,28 @@ export class DatabaseStorage implements IStorage {
             existingAdmin.passwordHash,
           );
           if (!matches) {
-            console.log(
-              "ðŸ”„ Admin password differs from configured ADMIN_PASSWORD â€“ updating hash",
-            );
-            const newHash = await bcrypt.hash(adminPassword, 12);
-            await db
-              .update(users)
-              .set({ passwordHash: newHash, userType: "super_admin" })
-              .where(eq(users.id, existingAdmin.id));
-            console.log("âœ… Admin password updated to match environment");
+            if (syncExistingAdminPassword) {
+              console.log(
+                "ðŸ”„ Admin password sync explicitly enabled â€“ updating hash",
+              );
+              const newHash = await bcrypt.hash(adminPassword, 12);
+              await db
+                .update(users)
+                .set({ passwordHash: newHash, userType: "super_admin" })
+                .where(eq(users.id, existingAdmin.id));
+              console.log("âœ… Admin password updated to match environment");
+            } else {
+              console.warn(
+                "[admin] Stored password differs from ADMIN_PASSWORD; startup sync is disabled. Set ADMIN_PASSWORD_SYNC_ON_STARTUP=true only for an intentional one-time rotation.",
+              );
+              if (existingAdmin.userType !== "super_admin") {
+                await db
+                  .update(users)
+                  .set({ userType: "super_admin" })
+                  .where(eq(users.id, existingAdmin.id));
+                console.log("âœ… Admin upgraded to super_admin");
+              }
+            }
           } else if (existingAdmin.userType !== "super_admin") {
             // Ensure the admin is super_admin
             await db

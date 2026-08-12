@@ -65,6 +65,8 @@ Frontend routes:
 - `/claim-truck` - claim imported truck/profile.
 - `/account-setup`, `/owner/verify`, `/post-verification` - account and verification continuation surfaces.
 - `/restaurant-owner-dashboard`, `/restaurant/dashboard` - owner dashboard aliases.
+- `/owner-ai` - owner-scoped model-neutral AI workspace for connection readiness, inert complete-business drafts, exact-revision consent, canonical MealScout apply, and connected-social publishing.
+- `/owner-ai/authorize` - protected OAuth consent surface that binds a compatible remote AI to one exact owner/business pair; requires at least one usable MealScout social publishing connection before authorization.
 - `/deal-creation`, `/deal-edit/:dealId` - deal creation/edit.
 - `/menu-builder`, `/kitchen` - menu setup and kitchen display.
 - `/merchant-delivery` - authenticated merchant-operated delivery controls; guests are redirected to login.
@@ -84,8 +86,11 @@ Main backend groups:
 - `registerDealManagementRoutes`
 - `registerBusinessTeamRoutes`
 - `registerMenuRoutes`
+- `registerOwnerAiActionRoutes`
 - `registerPickupOrderRoutes`
 - `registerSubscriptionRoutes`
+
+Owner AI remote-tool routes registered by `registerOwnerAiActionRoutes` include OAuth authorization-code/PKCE discovery and token lifecycle endpoints plus Streamable HTTP `POST /api/owner-ai/mcp`. The MCP approval tool may apply and publish only the immutable revision the owner explicitly approved in chat. Legacy `/api/owner-ai/connector/*` bearer-key routes remain draft-only.
 
 ## Host / Event Routes
 

@@ -5,6 +5,7 @@ import type { Restaurant } from "@shared/schema";
 import { isBarBusinessType, isTruckBusinessType } from "@shared/businessTypes";
 import {
   Bell,
+  Bot,
   Building2,
   CheckCircle2,
   CircleHelp,
@@ -12,10 +13,13 @@ import {
   ExternalLink,
   Eye,
   Image,
+  Link2,
   Loader2,
   LockKeyhole,
   Settings2,
   ShieldCheck,
+  Share2,
+  Sparkles,
   UserRound,
   Users,
 } from "lucide-react";
@@ -23,13 +27,19 @@ import BusinessWorkspaceShell from "@/components/business-workspace-shell";
 import { BackHeader } from "@/components/back-header";
 import NotificationSettings from "@/components/notification-settings";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import {
+  isScopedBusinessOwner,
+  type BusinessAccessContext,
+} from "@/lib/business-access";
 import { buildPublicProfilePath } from "@/lib/public-profile-path";
+import { buildOwnerAiHref } from "@shared/ownerAiNavigation";
 
 type SettingsPayload = {
   accountSettings?: Record<string, unknown>;
@@ -45,10 +55,28 @@ type SettingsPayload = {
   }>;
 };
 
-type SettingsTab = "account" | "notifications" | "visibility";
+type SettingsTab = "account" | "ai" | "notifications" | "visibility";
+
+type SettingsAiCredential = {
+  id: string;
+  name?: string | null;
+  scope?: string | null;
+  connectionKind?: "oauth" | "legacy" | string | null;
+  connectionExpiresAt?: string | null;
+  isActive?: boolean | null;
+  revokedAt?: string | null;
+  expiresAt?: string | null;
+};
+
+type SettingsSocialConnection = {
+  platform: "facebook" | "instagram" | "x";
+  connected: boolean;
+  displayName?: string | null;
+};
 
 const validTabs = new Set<SettingsTab>([
   "account",
+  "ai",
   "notifications",
   "visibility",
 ]);
@@ -151,6 +179,14 @@ export default function SettingsPage() {
     refetchOnWindowFocus: false,
   });
 
+  const { data: businessAccess, isLoading: businessAccessLoading } =
+    useQuery<BusinessAccessContext>({
+      queryKey: ["/api/business-access/me"],
+      enabled: Boolean(user && canUseBusinessWorkspace),
+      retry: false,
+      refetchOnWindowFocus: false,
+    });
+
   const currentBusiness = useMemo(() => {
     if (!businesses.length) return null;
     return (
@@ -186,6 +222,67 @@ export default function SettingsPage() {
     : null;
 
   const selectedBusinessId = currentBusiness?.id || requestedRestaurantId;
+  const ownsCurrentBusiness = isScopedBusinessOwner(
+    businessAccess,
+    selectedBusinessId,
+  );
+  const ownerAiHref = buildOwnerAiHref({
+    restaurantId: selectedBusinessId,
+    source: "settings",
+    focus: "all",
+  });
+  const { data: aiCredentialPayload } = useQuery<{
+    credentials?: SettingsAiCredential[];
+  }>({
+    queryKey: ["settings-owner-ai-credentials", selectedBusinessId],
+    queryFn: async () => {
+      const response = await fetch(
+        `/api/owner-ai/restaurants/${encodeURIComponent(selectedBusinessId)}/credentials`,
+        { credentials: "include" },
+      );
+      if (!response.ok) return { credentials: [] };
+      return response.json();
+    },
+    enabled: Boolean(selectedBusinessId && ownsCurrentBusiness),
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+  const { data: socialConnectionPayload } = useQuery<{
+    connections?: SettingsSocialConnection[];
+  }>({
+    queryKey: ["settings-social-connections", selectedBusinessId],
+    queryFn: async () => {
+      const response = await fetch(
+        `/api/restaurants/${encodeURIComponent(selectedBusinessId)}/social-connections/status`,
+        { credentials: "include" },
+      );
+      if (!response.ok) return { connections: [] };
+      return response.json();
+    },
+    enabled: Boolean(selectedBusinessId && ownsCurrentBusiness),
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+  const activeAiConnections = (aiCredentialPayload?.credentials || []).filter(
+    (credential) => {
+      const approvalEnabled = String(credential.scope || "")
+        .split(/\s+/)
+        .includes("owner_ai:drafts:approve");
+      const effectiveExpiry =
+        credential.connectionExpiresAt || credential.expiresAt;
+      return (
+        credential.connectionKind === "oauth" &&
+        approvalEnabled &&
+        credential.isActive !== false &&
+        !credential.revokedAt &&
+        (!effectiveExpiry ||
+          new Date(effectiveExpiry).getTime() > Date.now())
+      );
+    },
+  );
+  const connectedSocials = (
+    socialConnectionPayload?.connections || []
+  ).filter((connection) => connection.connected);
   const buildBusinessHref = (
     pathname: string,
     extra?: Record<string, string>,
@@ -283,7 +380,7 @@ export default function SettingsPage() {
 
   if (
     settingsLoading ||
-    (canUseBusinessWorkspace && businessesLoading)
+    (canUseBusinessWorkspace && (businessesLoading || businessAccessLoading))
   ) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[var(--bg-layered)] text-stone-600">
@@ -332,7 +429,8 @@ export default function SettingsPage() {
               {accountName}
             </h2>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-700">
-              Account access, browser notifications, support, and public contact visibility.
+              Account access, AI connections, browser notifications, support,
+              and public contact visibility.
             </p>
           </div>
           {user?.email ? (
@@ -342,9 +440,12 @@ export default function SettingsPage() {
       </section>
 
       <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-5">
-        <TabsList className="grid h-auto w-full grid-cols-3 rounded-2xl bg-stone-100 p-1">
+        <TabsList className="grid h-auto w-full grid-cols-2 rounded-2xl bg-stone-100 p-1 sm:grid-cols-4">
           <TabsTrigger value="account" className="min-h-10 rounded-xl">
             Account
+          </TabsTrigger>
+          <TabsTrigger value="ai" className="min-h-10 rounded-xl">
+            AI & apps
           </TabsTrigger>
           <TabsTrigger value="notifications" className="min-h-10 rounded-xl">
             Notifications
@@ -379,12 +480,20 @@ export default function SettingsPage() {
                 description="Open a support request or review existing tickets."
               />
               {selectedBusinessId ? (
-                <SettingsLinkCard
-                  href={buildBusinessHref("/subscribe")}
-                  icon={CreditCard}
-                  title="Profile access"
-                  description="Review the free trial and everything included with the profile."
-                />
+                <>
+                  <SettingsLinkCard
+                    href={buildBusinessHref("/settings", { tab: "ai" })}
+                    icon={Sparkles}
+                    title="AI and app access"
+                    description="Link your favorite AI through MealScout sign-in and connect the social accounts it can publish to with your consent."
+                  />
+                  <SettingsLinkCard
+                    href={buildBusinessHref("/subscribe")}
+                    icon={CreditCard}
+                    title="Profile access"
+                    description="Review the free trial and everything included with the profile."
+                  />
+                </>
               ) : null}
             </CardContent>
           </Card>
@@ -434,6 +543,190 @@ export default function SettingsPage() {
               </CardContent>
             </Card>
           ) : null}
+        </TabsContent>
+
+        <TabsContent value="ai" className="space-y-5">
+          {selectedBusinessId && currentBusiness ? (
+            <>
+              <Card
+                className="overflow-hidden border-orange-200 bg-[linear-gradient(135deg,#fff7ed,#fffbeb)] shadow-clean"
+                data-testid="settings-owner-ai-entry"
+              >
+                <CardContent className="p-5 sm:p-6">
+                  <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="max-w-3xl">
+                      <div className="flex items-center gap-2 text-sm font-black text-orange-800">
+                        <Sparkles className="h-4 w-4" aria-hidden="true" />
+                        One control surface for {currentBusiness.name}
+                      </div>
+                      <h3 className="mt-2 text-2xl font-black tracking-tight text-stone-950">
+                        Use the AI you already have
+                      </h3>
+                      <p className="mt-3 text-sm leading-6 text-stone-700">
+                        Link any compatible free or paid AI by signing into
+                        MealScout from that AI. It can prepare profile details,
+                        menus, prices, logos, images, hours, schedules, events,
+                        deals, and matching social descriptions and artwork as
+                        one exact revision. Once you consent to that exact
+                        revision in chat, the AI can approve it and tell
+                        MealScout to apply and publish it.
+                      </p>
+                    </div>
+                    {ownsCurrentBusiness ? (
+                      <Button asChild className="min-h-11 shrink-0">
+                        <Link href={ownerAiHref}>
+                          <Bot className="mr-2 h-4 w-4" aria-hidden="true" />
+                          Open AI Control
+                        </Link>
+                      </Button>
+                    ) : null}
+                  </div>
+
+                  <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                    {[
+                      ["AI prepares", "Draft and previews only"],
+                      ["Owner approves in chat", "Exact complete revision"],
+                      ["AI calls MealScout", "Then linked socials publish"],
+                    ].map(([title, detail]) => (
+                      <div
+                        key={title}
+                        className="rounded-2xl border border-orange-200 bg-white/80 p-4"
+                      >
+                        <p className="text-sm font-black text-stone-950">
+                          {title}
+                        </p>
+                        <p className="mt-1 text-xs leading-5 text-stone-600">
+                          {detail}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {ownsCurrentBusiness ? (
+                <Card className="border-[color:var(--border-subtle)] bg-[var(--bg-surface)] shadow-clean">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-xl">
+                      <Link2 className="h-5 w-5 text-orange-700" aria-hidden="true" />
+                      Connection readiness
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      {[
+                        {
+                          title: "MealScout",
+                          detail: "Signed in",
+                          ready: true,
+                          icon: ShieldCheck,
+                        },
+                        {
+                          title: "Favorite AI",
+                          detail: activeAiConnections.length
+                            ? `${activeAiConnections.length} active`
+                            : "Not linked yet",
+                          ready: activeAiConnections.length > 0,
+                          icon: Bot,
+                        },
+                        {
+                          title: "Social publishing",
+                          detail: connectedSocials.length
+                            ? connectedSocials
+                                .map((connection) =>
+                                  connection.platform === "x"
+                                    ? "X"
+                                    : connection.platform[0].toUpperCase() +
+                                      connection.platform.slice(1),
+                                )
+                                .join(", ")
+                            : "Connect at least one",
+                          ready: connectedSocials.length > 0,
+                          icon: Share2,
+                        },
+                      ].map(({ title, detail, ready, icon: Icon }) => (
+                        <div
+                          key={title}
+                          className={`rounded-2xl border p-4 ${
+                            ready
+                              ? "border-emerald-200 bg-emerald-50"
+                              : "border-amber-200 bg-amber-50"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <Icon className="h-5 w-5 text-stone-800" aria-hidden="true" />
+                            <Badge variant={ready ? "default" : "outline"}>
+                              {ready ? "Ready" : "Needed"}
+                            </Badge>
+                          </div>
+                          <p className="mt-3 text-sm font-black text-stone-950">
+                            {title}
+                          </p>
+                          <p className="mt-1 text-xs text-stone-600">{detail}</p>
+                        </div>
+                      ))}
+                    </div>
+                    <Button asChild>
+                      <Link href={ownerAiHref}>
+                        Finish AI and social connections
+                      </Link>
+                    </Button>
+                  </CardContent>
+                </Card>
+              ) : null}
+
+              <Card className="border-[color:var(--border-subtle)] bg-[var(--bg-surface)] shadow-clean">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-xl">
+                    <ShieldCheck className="h-5 w-5 text-emerald-700" aria-hidden="true" />
+                    Connection and approval boundary
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4 text-sm leading-6 text-stone-700">
+                  {ownsCurrentBusiness ? (
+                    <>
+                      <p>
+                        A signed-in AI is bound to this exact owner and
+                        business. It may apply and publish only the immutable
+                        revision it showed you after you explicitly approve it
+                        in that chat. Manually copied legacy keys remain
+                        draft-only.
+                      </p>
+                      <p className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 font-semibold text-emerald-950">
+                        Nothing changes in MealScout or on social media until
+                        you review and approve the exact preview as the actual
+                        owner—inside your AI chat or on the MealScout fallback
+                        review page.
+                      </p>
+                    </>
+                  ) : (
+                    <p className="rounded-2xl border border-amber-200 bg-amber-50 p-4 font-semibold text-amber-950">
+                        Only the actual owner can authorize an AI connection or
+                        give per-revision consent. The signed-in AI can then
+                        approve and publish that exact revision; team access does
+                        not inherit this authority.
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            </>
+          ) : (
+            <Card className="border-amber-200 bg-amber-50 shadow-clean">
+              <CardContent className="p-6 text-center">
+                <Building2 className="mx-auto h-9 w-9 text-amber-800" aria-hidden="true" />
+                <h3 className="mt-4 text-xl font-black text-amber-950">
+                  Connect a business first
+                </h3>
+                <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-amber-900/80">
+                  AI Control is scoped to one business you own so another
+                  profile can never receive its drafts or approvals.
+                </p>
+                <Button asChild className="mt-5">
+                  <Link href="/restaurant-signup">Connect or claim a business</Link>
+                </Button>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
         <TabsContent value="notifications">

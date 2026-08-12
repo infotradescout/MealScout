@@ -10,7 +10,10 @@ const requiredPostVerificationSnippets = [
   'title: "Email not verified yet"',
   "const isBarSetup",
   'label: "Bar setup"',
-  '"Personal login", "Bar profile", "Hours", "Events or specials"',
+  '"Personal login", "Bar profile", "AI-prepared setup", "Owner approval"',
+  'data-testid="post-verification-owner-ai-handoff"',
+  "Sign your favorite AI into MealScout and connect the social",
+  "apply and publish only after the actual owner approves that",
   "Food menu (if serves food)",
   "Host food trucks (if enabled)",
   "const redirectBusinessType",
@@ -18,7 +21,7 @@ const requiredPostVerificationSnippets = [
 ];
 
 const forbiddenBarBaseSnippets = [
-  '"Personal login", "Business profile", "Menu setup", "Hours"',
+  '"Personal login", "Business profile", "AI-prepared setup", "Owner approval"',
 ];
 
 const requiredAuthSnippets = [

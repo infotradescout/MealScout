@@ -102,6 +102,7 @@ if (
 [
   "/restaurant-owner-dashboard",
   "/restaurant/dashboard",
+  "/owner-ai",
   "/merchant-delivery",
   "/claim-truck",
   "/account-setup",

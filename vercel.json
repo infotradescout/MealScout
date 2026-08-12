@@ -36,6 +36,18 @@
       "destination": "https://mealscout.onrender.com/ai.txt"
     },
     {
+      "source": "/.well-known/oauth-authorization-server",
+      "destination": "https://mealscout.onrender.com/.well-known/oauth-authorization-server"
+    },
+    {
+      "source": "/.well-known/oauth-protected-resource",
+      "destination": "https://mealscout.onrender.com/.well-known/oauth-protected-resource"
+    },
+    {
+      "source": "/.well-known/oauth-protected-resource/:path*",
+      "destination": "https://mealscout.onrender.com/.well-known/oauth-protected-resource/:path*"
+    },
+    {
       "source": "/:indexNowKey([A-Za-z0-9_-]{8,128}).txt",
       "destination": "https://mealscout.onrender.com/:indexNowKey.txt"
     },
@@ -104,6 +116,18 @@
     {
       "src": "/ai.txt",
       "dest": "https://mealscout.onrender.com/ai.txt"
+    },
+    {
+      "src": "/\\.well-known/oauth-authorization-server",
+      "dest": "https://mealscout.onrender.com/.well-known/oauth-authorization-server"
+    },
+    {
+      "src": "/\\.well-known/oauth-protected-resource",
+      "dest": "https://mealscout.onrender.com/.well-known/oauth-protected-resource"
+    },
+    {
+      "src": "/\\.well-known/oauth-protected-resource/(.*)",
+      "dest": "https://mealscout.onrender.com/.well-known/oauth-protected-resource/$1"
     },
     {
       "src": "/([A-Za-z0-9_-]{8,128})\\.txt",

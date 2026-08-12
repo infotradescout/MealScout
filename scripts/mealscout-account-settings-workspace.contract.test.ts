@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 
 const settings = readFileSync(
-  "client/src/pages/settings.tsx",
+  "client/src/pages/profile/settings.tsx",
   "utf8",
 );
 const shell = readFileSync(
@@ -38,6 +38,17 @@ for (const snippet of [
   'setup: "profile-media"',
   'buildBusinessHref("/business-team")',
   'buildBusinessHref("/subscribe")',
+  'type SettingsTab = "account" | "ai" | "notifications" | "visibility"',
+  '<TabsTrigger value="ai"',
+  'data-testid="settings-owner-ai-entry"',
+  "Use the AI you already have",
+  "Link any compatible free or paid AI by signing into",
+  "Once you consent to that exact",
+  "the AI can approve it and tell",
+  "Manually copied legacy keys remain",
+  "draft-only",
+  "Nothing changes in MealScout or on social media until",
+  'source: "settings"',
 ]) {
   if (!settings.includes(snippet)) {
     throw new Error(`Account settings workspace contract missing: ${snippet}`);
@@ -70,7 +81,7 @@ for (const presentationOnlySurface of [
 
 for (const snippet of [
   'label: "Settings"',
-  'description: "Account access, visibility, and help"',
+  'description: "Account, AI access, visibility, and help"',
   'href: buildWorkspaceHref("/settings", business.id)',
 ]) {
   if (!shell.includes(snippet)) {

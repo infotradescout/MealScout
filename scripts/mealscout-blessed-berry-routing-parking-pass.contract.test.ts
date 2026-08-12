@@ -50,9 +50,13 @@ if (!scheduleBranch.includes('nextRequiredStep = "schedule"')) {
   throw new Error("Schedule-required food truck continuation must still mark the schedule step");
 }
 
-if (!scheduleBranch.includes('continuationPath = "/restaurant-owner-dashboard?setup=schedule"')) {
+if (
+  !scheduleBranch.includes("continuationPath = buildOwnerAiHref({") ||
+  !scheduleBranch.includes('source: "onboarding"') ||
+  !scheduleBranch.includes('focus: "schedule"')
+) {
   throw new Error(
-    "Schedule-required food truck continuation must route to /restaurant-owner-dashboard?setup=schedule",
+    "Schedule-required food truck continuation must enter owner AI onboarding with schedule focus",
   );
 }
 
@@ -81,9 +85,12 @@ if (
 if (
   !app.includes('/parking-pass-manage') ||
   !routeMap.includes("/parking-pass-manage") ||
-  !parkingPassManage.includes('/api/hosts/me')
+  !parkingPassManage.includes('/api/restaurants/my-restaurants') ||
+  !parkingPassManage.includes('/parking-pass?setup=host')
 ) {
-  throw new Error("Host-oriented /parking-pass-manage behavior must remain present");
+  throw new Error(
+    "Parking Pass management redirect must keep truck selection and host fallback behavior",
+  );
 }
 
 if (

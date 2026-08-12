@@ -33,15 +33,19 @@ requireIncludes(
 
 for (const requiredCopy of [
   "Your food profile, built for hungry customers.",
-  "Create your standard MealScout Profile for free",
-  "Most profiles are $100",
+  "Create your complete MealScout Profile for free",
+  "Most simple done-for-you",
   "A restaurant website tells people you exist.",
   "A MealScout Profile helps people decide what to eat.",
   "For restaurants, food trucks, bakeries, caterers, meal prep sellers, pop-ups, farmers market vendors, and online food brands.",
-  "Standard MealScout Profile",
+  "Complete MealScout Profile",
   "Done-For-You Setup",
-  "Custom MealScout Build",
+  "Custom Setup Service",
   "Square One Brand Package",
+  "Use the AI you already have",
+  "Any free or paid AI can prepare your profile",
+  "the owner can consent in that chat",
+  "approve, apply, and publish it through MealScout",
   "Availability may vary by category, location, vendor, and",
   "offer.",
 ]) {
