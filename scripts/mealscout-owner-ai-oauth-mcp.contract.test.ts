@@ -39,6 +39,13 @@ assert.deepEqual(OWNER_AI_CONNECTOR_SCOPES, [
 
 const resource = ownerAiMcpResourceUrl();
 assert.equal(resource, "https://www.mealscout.us/api/owner-ai/mcp");
+process.env.PUBLIC_BASE_URL = "https://mealscout.us/";
+assert.equal(
+  ownerAiMcpResourceUrl(),
+  "https://www.mealscout.us/api/owner-ai/mcp",
+  "Owner AI must normalize the legacy apex production origin to canonical www",
+);
+process.env.PUBLIC_BASE_URL = "https://www.mealscout.us";
 assert.deepEqual(ownerAiProtectedResourceMetadata(), {
   resource,
   authorization_servers: ["https://www.mealscout.us"],
@@ -183,6 +190,7 @@ const authorizePage = read("client/src/pages/owner-ai-authorize.tsx");
 const settings = read("client/src/pages/profile/settings.tsx");
 const ownerAiPage = read("client/src/pages/owner-ai-actions.tsx");
 const docs = read("OWNER_AI_ACTIONS.md");
+const vercel = JSON.parse(read("vercel.json"));
 
 for (const path of [
   "/.well-known/oauth-authorization-server",
@@ -200,6 +208,36 @@ assert.match(routes, /WWW-Authenticate/);
 assert.match(routes, /ownerAiOAuthChallengeHeader/);
 assert.match(routes, /MCP-Protocol-Version/);
 assert.match(routes, /OAuth\/MCP connections can apply and publish/);
+
+for (const discoveryPath of [
+  "/.well-known/oauth-authorization-server",
+  "/.well-known/oauth-protected-resource",
+  "/.well-known/oauth-protected-resource/:path*",
+]) {
+  assert.ok(
+    vercel.rewrites.some(
+      (rewrite: any) =>
+        rewrite.source === discoveryPath &&
+        rewrite.destination.startsWith(
+          "https://mealscout.onrender.com/.well-known/",
+        ),
+    ),
+    `Vercel must proxy OAuth discovery to Render: ${discoveryPath}`,
+  );
+}
+assert.ok(
+  vercel.routes.some(
+    (route: any) => route.src === "/\\.well-known/oauth-authorization-server",
+  ),
+  "Vercel routes must preserve OAuth authorization-server discovery",
+);
+assert.ok(
+  vercel.routes.some(
+    (route: any) =>
+      route.src === "/\\.well-known/oauth-protected-resource/(.*)",
+  ),
+  "Vercel routes must preserve path-specific protected-resource discovery",
+);
 
 assert.match(oauth, /code_challenge_method: z\.literal\("S256"\)/);
 assert.match(oauth, /resource !== ownerAiMcpResourceUrl\(\)/);

@@ -67,12 +67,23 @@ export class OwnerAiOAuthError extends Error {
   }
 }
 
-const oauthBaseUrl = () =>
-  String(
-    process.env.PUBLIC_BASE_URL ||
+const oauthBaseUrl = () => {
+  const configured = String(
+    process.env.OWNER_AI_PUBLIC_BASE_URL ||
+      process.env.PUBLIC_BASE_URL ||
       process.env.APP_BASE_URL ||
       "https://www.mealscout.us",
   ).replace(/\/+$/, "");
+  try {
+    const parsed = new URL(configured);
+    if (parsed.hostname.toLowerCase() === "mealscout.us") {
+      parsed.hostname = "www.mealscout.us";
+    }
+    return parsed.toString().replace(/\/+$/, "");
+  } catch {
+    return configured;
+  }
+};
 
 export const ownerAiMcpResourceUrl = () => `${oauthBaseUrl()}/api/owner-ai/mcp`;
 
