@@ -357,7 +357,7 @@ assert.match(routes, /X-Content-Type-Options/);
 assert.match(routeRegistry, /registerOwnerAiActionRoutes\(app\)/);
 assert.match(
   serverIndex,
-  /req\.method === "POST"[\s\S]*pathValue === "\/api\/owner-ai\/connector\/drafts"/,
+  /const ownerAiServerToServerPaths = new Set\(\[[\s\S]*"\/api\/owner-ai\/connector\/drafts"[\s\S]*ownerAiServerToServerPaths\.has\(pathValue\)/,
 );
 
 assert.match(service, /eq\(apiKeys\.purpose, "owner_ai_connector"\)/);

@@ -186,6 +186,7 @@ const mcp = read("server/services/ownerAiMcp.ts");
 const routes = read("server/routes/ownerAiActionRoutes.ts");
 const actions = read("server/services/ownerAiActions.ts");
 const socialPublishing = read("server/services/socialPublishing.ts");
+const serverIndex = read("server/index.ts");
 const authorizePage = read("client/src/pages/owner-ai-authorize.tsx");
 const settings = read("client/src/pages/profile/settings.tsx");
 const ownerAiPage = read("client/src/pages/owner-ai-actions.tsx");
@@ -208,6 +209,31 @@ assert.match(routes, /WWW-Authenticate/);
 assert.match(routes, /ownerAiOAuthChallengeHeader/);
 assert.match(routes, /MCP-Protocol-Version/);
 assert.match(routes, /OAuth\/MCP connections can apply and publish/);
+
+const serverToServerPaths = serverIndex.slice(
+  serverIndex.indexOf("const ownerAiServerToServerPaths"),
+  serverIndex.indexOf("// Basic CSRF guard"),
+);
+for (const path of [
+  "/api/owner-ai/connector/drafts",
+  "/api/owner-ai/oauth/register",
+  "/api/owner-ai/oauth/token",
+  "/api/owner-ai/oauth/revoke",
+  "/api/owner-ai/mcp",
+]) {
+  assert.ok(
+    serverToServerPaths.includes(path),
+    `Server-to-server Owner AI route must not require browser Origin: ${path}`,
+  );
+}
+assert.ok(
+  !serverToServerPaths.includes("/api/owner-ai/oauth/authorize"),
+  "Owner approval must remain protected by the browser same-origin guard",
+);
+assert.ok(
+  !serverToServerPaths.includes("/api/owner-ai/oauth/authorize/deny"),
+  "Owner denial must remain protected by the browser same-origin guard",
+);
 
 for (const discoveryPath of [
   "/.well-known/oauth-authorization-server",

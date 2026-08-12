@@ -301,21 +301,29 @@ app.use((req, res, next) => {
   next();
 });
 
-// Basic CSRF guard: require same-origin for state-changing requests.
+const ownerAiServerToServerPaths = new Set([
+  "/api/owner-ai/connector/drafts",
+  "/api/owner-ai/oauth/register",
+  "/api/owner-ai/oauth/token",
+  "/api/owner-ai/oauth/revoke",
+  "/api/owner-ai/mcp",
+]);
+
+// Basic CSRF guard: require same-origin for state-changing browser requests.
 const csrfSafeMethods = new Set(["GET", "HEAD", "OPTIONS"]);
 app.use((req, res, next) => {
   if (csrfSafeMethods.has(req.method)) {
     return next();
   }
 
-  // /api/actions is a server-to-server integration surface (Bearer token auth),
-  // so it must not require browser Origin/Referer headers.
+  // Bearer-authenticated integrations and OAuth protocol endpoints are
+  // server-to-server surfaces, so they must not require browser Origin/Referer
+  // headers. Owner approval and denial remain protected browser-session POSTs.
   const pathValue = String(req.path || "");
   if (
     pathValue.startsWith("/api/actions") ||
     pathValue.startsWith("/api/admin/lisa/price-scout-feed") ||
-    (req.method === "POST" &&
-      pathValue === "/api/owner-ai/connector/drafts")
+    ownerAiServerToServerPaths.has(pathValue)
   ) {
     return next();
   }
