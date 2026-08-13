@@ -46,6 +46,7 @@ type AuthorizationPreparation = {
     registrationKind: "client_metadata_document" | "dynamic";
   };
   scopes: string[];
+  targetRestaurantId?: string | null;
   businesses: OAuthBusiness[];
 };
 
@@ -68,7 +69,9 @@ async function fetchPreparation(query: string) {
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
     throw new Error(
-      body.error_description || body.error || "This AI connection request is invalid.",
+      body.error_description ||
+        body.error ||
+        "This AI connection request is invalid.",
     );
   }
   return body as AuthorizationPreparation;
@@ -110,7 +113,9 @@ export default function OwnerAiAuthorizePage() {
     (business) => business.id === effectiveBusinessId,
   );
   const connectedSocials =
-    selectedBusiness?.socialConnections.filter((connection) => connection.connected) || [];
+    selectedBusiness?.socialConnections.filter(
+      (connection) => connection.connected,
+    ) || [];
   const returnPath = `/owner-ai/authorize?${oauthQuery}`;
 
   const authorizeMutation = useMutation({
@@ -191,12 +196,14 @@ export default function OwnerAiAuthorizePage() {
 
         <Alert className="border-emerald-200 bg-emerald-50 text-emerald-950">
           <ShieldCheck className="h-4 w-4" />
-          <AlertTitle>Approval is granted one exact revision at a time</AlertTitle>
+          <AlertTitle>
+            Approval is granted one exact revision at a time
+          </AlertTitle>
           <AlertDescription>
             The AI can read the selected business and prepare a complete
-            preview. MealScout lets it apply and publish only after it shows
-            you that immutable revision and you explicitly approve it in your
-            chat. Only social accounts connected below are eligible.
+            preview. MealScout lets it apply and publish only after it shows you
+            that immutable revision and you explicitly approve it in your chat.
+            Only social accounts connected below are eligible.
           </AlertDescription>
         </Alert>
 
@@ -230,9 +237,15 @@ export default function OwnerAiAuthorizePage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Choose the MealScout business</CardTitle>
+            <CardTitle>
+              {preparation.targetRestaurantId
+                ? "Confirm this MealScout profile"
+                : "Choose the MealScout business"}
+            </CardTitle>
             <CardDescription>
-              The connection is permanently scoped to this owner-business pair.
+              {preparation.targetRestaurantId
+                ? "The pasted profile link and this connection are bound to the same owner-business pair."
+                : "The connection is permanently scoped to this owner-business pair."}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -252,9 +265,13 @@ export default function OwnerAiAuthorizePage() {
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <p className="font-black text-stone-950">{business.name}</p>
+                        <p className="font-black text-stone-950">
+                          {business.name}
+                        </p>
                         <p className="mt-1 text-xs text-stone-600">
-                          {business.isFoodTruck ? "Food truck" : business.businessType || "Food business"}
+                          {business.isFoodTruck
+                            ? "Food truck"
+                            : business.businessType || "Food business"}
                         </p>
                       </div>
                       {selected ? (
@@ -268,7 +285,9 @@ export default function OwnerAiAuthorizePage() {
               <Alert>
                 <AlertTitle>No owner business is attached</AlertTitle>
                 <AlertDescription>
-                  Finish or claim your business in MealScout before connecting an AI.
+                  {preparation.targetRestaurantId
+                    ? "Sign in as the owner of this profile, or claim it in MealScout, before connecting the AI."
+                    : "Finish or claim your business in MealScout before connecting an AI."}
                 </AlertDescription>
               </Alert>
             )}
@@ -301,7 +320,9 @@ export default function OwnerAiAuthorizePage() {
                       <p className="text-sm font-black text-stone-900">
                         {platformLabel(connection.platform)}
                       </p>
-                      <Badge variant={connection.connected ? "default" : "outline"}>
+                      <Badge
+                        variant={connection.connected ? "default" : "outline"}
+                      >
                         {connection.connected
                           ? "Connected"
                           : connectedSocials.length
@@ -314,7 +335,12 @@ export default function OwnerAiAuthorizePage() {
                         ? connection.displayName || "Ready to publish"
                         : "Not linked to MealScout"}
                     </p>
-                    <Button asChild size="sm" variant="outline" className="mt-3 w-full">
+                    <Button
+                      asChild
+                      size="sm"
+                      variant="outline"
+                      className="mt-3 w-full"
+                    >
                       <a href={connectHref}>
                         {connection.connected ? "Reconnect" : "Connect"}
                         <ExternalLink className="ml-2 h-3 w-3" />

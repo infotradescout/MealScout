@@ -2,11 +2,11 @@
 
 MealScout Owner AI Actions is a model-neutral owner workflow. An owner can connect a compatible AI or automation tool they already have, free or paid, through the remote MealScout MCP tool and MealScout OAuth login. The AI can prepare a complete business update and, after the owner explicitly consents to that exact immutable revision in the AI chat, call MealScout to approve, apply, and publish it. A portable JSON packet remains available for AIs that cannot call remote tools.
 
-The actual owner is always the source of consent; the signed-in AI may be the executor. OAuth binds the AI connection to one exact owner/business pair. A draft has no effect until the owner sees its exact values, descriptions, destinations, and images and approves that revision. Manually copied legacy bearer keys remain draft-only and cannot execute approval or publishing.
+The actual owner is always the source of consent; the signed-in AI may be the executor. OAuth binds the AI connection to one exact owner/business pair. Every public MealScout business profile advertises a profile-specific Selective Intelligence manifest and MCP resource, so pasting that profile link into a compatible AI can begin the correct sign-in flow without asking the owner for an ID, token, or technical setup. A draft has no effect until the owner sees its exact values, descriptions, destinations, and images and approves that revision. Manually copied legacy bearer keys remain draft-only and cannot execute approval or publishing.
 
 ## Safety and execution order
 
-1. The owner's AI discovers `/api/owner-ai/mcp`, starts OAuth authorization-code login with PKCE, and receives access only after the signed-in actual owner chooses a business that has at least one usable social publishing connection.
+1. The owner's AI either discovers `/api/owner-ai/mcp` directly or reads the profile-specific links advertised by a pasted public profile. The profile resource starts OAuth authorization-code login with PKCE and limits the authorization screen to that exact profile. Access is issued only when the signed-in actual owner owns that business and has at least one usable social publishing connection.
 2. The AI reads that owner-scoped context and the current version fingerprints.
 3. It creates a draft using an idempotency key. Nothing is mutated, hosted, queued, or published.
 4. MealScout creates deterministic Facebook, Instagram, and X copy plus branded SVG previews. When the AI supplies platform-specific copy or an image, that exact selected alternative becomes the approval preview.
@@ -44,10 +44,13 @@ Supplied remote images are never hotlinked into the approval browser. Draft crea
 The primary connection is the remote MCP URL:
 
 - `POST /api/owner-ai/mcp`
+- `POST /api/owner-ai/profiles/:restaurantId/mcp` for a public-profile-link trigger bound to one exact target
+- `GET /api/owner-ai/profiles/:restaurantId/selective-intelligence` for the public, non-authorizing capability manifest
 
 OAuth discovery and lifecycle routes:
 
 - `GET /.well-known/oauth-protected-resource/api/owner-ai/mcp`
+- `GET /.well-known/oauth-protected-resource/api/owner-ai/profiles/:restaurantId/mcp`
 - `GET /.well-known/oauth-authorization-server`
 - `GET /api/owner-ai/oauth/authorize/prepare`
 - `POST /api/owner-ai/oauth/authorize`
@@ -56,7 +59,7 @@ OAuth discovery and lifecycle routes:
 - `POST /api/owner-ai/oauth/revoke`
 - `POST /api/owner-ai/oauth/register` as a backwards-compatible dynamic-client-registration path; Client ID Metadata Documents are preferred when the AI supports them.
 
-Authorization requires PKCE `S256` and a resource indicator equal to the MealScout MCP URL. Access tokens last one hour. Refresh tokens last up to 90 days and rotate on every use. Revoking an OAuth access connection also revokes its linked refresh token.
+Authorization requires PKCE `S256` and a resource indicator equal to either the general MealScout MCP URL or the canonical profile-specific MCP URL. A profile-specific resource filters authorization to that exact public profile and denies a connector token attached to a different business. Access tokens last one hour. Refresh tokens last up to 90 days and rotate on every use. Revoking an OAuth access connection also revokes its linked refresh token.
 
 An approved OAuth connection can receive:
 

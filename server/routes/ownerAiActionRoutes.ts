@@ -1,12 +1,15 @@
 import type { Express, NextFunction, Request, Response } from "express";
+import { and, eq } from "drizzle-orm";
 import { z, ZodError } from "zod";
 
+import { db } from "../db";
 import { isAuthenticated } from "../unifiedAuth";
 import { distributedRateLimit } from "../middleware/distributedRateLimit";
 import {
   OWNER_AI_CONNECTOR_SCOPES,
   OWNER_AI_PACKET_JSON_SCHEMA,
 } from "@shared/ownerAiActions";
+import { restaurants } from "@shared/schema";
 import {
   OwnerAiActionError,
   approveOwnerAiDraft,
@@ -33,6 +36,7 @@ import {
   exchangeOwnerAiOAuthToken,
   ownerAiAuthorizationServerMetadata,
   ownerAiOAuthChallengeHeader,
+  ownerAiProfileMcpResourceUrl,
   ownerAiProtectedResourceMetadata,
   prepareOwnerAiAuthorization,
   registerOwnerAiOAuthClient,
@@ -41,10 +45,34 @@ import {
 } from "../services/ownerAiOAuth";
 import { handleOwnerAiMcpRequest } from "../services/ownerAiMcp";
 
-type ConnectorRequest = Request & { ownerAiConnector?: OwnerAiConnectorPrincipal };
+type ConnectorRequest = Request & {
+  ownerAiConnector?: OwnerAiConnectorPrincipal;
+};
+
+const ownerAiRemoteConnectorEnabled = () =>
+  !["0", "false", "off", "disabled"].includes(
+    String(process.env.OWNER_AI_REMOTE_CONNECTOR_ENABLED ?? "true")
+      .trim()
+      .toLowerCase(),
+  );
+
+const requireOwnerAiRemoteConnector = (
+  _req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  if (ownerAiRemoteConnectorEnabled()) return next();
+  res.setHeader("Cache-Control", "no-store");
+  res.setHeader("Retry-After", "300");
+  return res.status(503).json({
+    error: "MealScout remote owner AI connections are temporarily disabled",
+  });
+};
 
 const bearerToken = (req: Request) => {
-  const match = String(req.headers.authorization || "").match(/^Bearer\s+(.+)$/i);
+  const match = String(req.headers.authorization || "").match(
+    /^Bearer\s+(.+)$/i,
+  );
   return match?.[1]?.trim() || "";
 };
 
@@ -63,7 +91,10 @@ const connectorIdempotencyKey = (req: Request) => {
 const contextOffsets = (req: Request) => ({
   menuOffset: Math.max(
     0,
-    Math.min(100_000, Number.parseInt(String(req.query.menuOffset || "0"), 10) || 0),
+    Math.min(
+      100_000,
+      Number.parseInt(String(req.query.menuOffset || "0"), 10) || 0,
+    ),
   ),
   menuCategoryOffset: Math.max(
     0,
@@ -81,11 +112,17 @@ const contextOffsets = (req: Request) => ({
   ),
   scheduleOffset: Math.max(
     0,
-    Math.min(100_000, Number.parseInt(String(req.query.scheduleOffset || "0"), 10) || 0),
+    Math.min(
+      100_000,
+      Number.parseInt(String(req.query.scheduleOffset || "0"), 10) || 0,
+    ),
   ),
   dealOffset: Math.max(
     0,
-    Math.min(100_000, Number.parseInt(String(req.query.dealOffset || "0"), 10) || 0),
+    Math.min(
+      100_000,
+      Number.parseInt(String(req.query.dealOffset || "0"), 10) || 0,
+    ),
   ),
 });
 
@@ -147,7 +184,7 @@ const instructions = {
   purpose:
     "Let an owner use a remote-tool-capable AI to prepare MealScout changes and, after explicit consent to one exact revision, execute approval and publishing. Portable and copied-key fallbacks remain draft-only.",
   sequence: [
-    "The owner adds https://www.mealscout.us/api/owner-ai/mcp to a tool-capable AI and signs in with MealScout through OAuth, or uses the portable JSON fallback.",
+    "When the owner pastes a public MealScout profile link, the AI reads its Selective Intelligence manifest and profile-specific MCP link, asks before adoption when no action was requested, and starts MealScout OAuth for that exact profile. The general https://www.mealscout.us/api/owner-ai/mcp resource and portable JSON fallback remain available.",
     "The AI reads current MealScout context through the owner-bound connection.",
     "The AI submits the same portable JSON draft request used by the owner UI.",
     "MealScout generates deterministic platform copy and branded SVG image previews, while preserving any AI-supplied alternatives.",
@@ -181,7 +218,8 @@ const instructions = {
   },
   remoteMcp: {
     url: "/api/owner-ai/mcp",
-    authorization: "OAuth 2.1 authorization code with PKCE and MealScout owner consent",
+    authorization:
+      "OAuth 2.1 authorization code with PKCE and MealScout owner consent",
     tools: [
       "get_mealscout_context",
       "create_mealscout_draft",
@@ -230,7 +268,9 @@ const openApiDocument = {
           { mealScoutOAuth: ["owner_ai:context"] },
           { connectorBearer: [] },
         ],
-        responses: { "200": { description: "Owner-scoped business context and versions" } },
+        responses: {
+          "200": { description: "Owner-scoped business context and versions" },
+        },
       },
     },
     "/api/owner-ai/connector/drafts": {
@@ -344,9 +384,23 @@ export function registerOwnerAiActionRoutes(app: Express) {
     "/.well-known/oauth-protected-resource/api/owner-ai/mcp",
     (_req, res) => res.json(ownerAiProtectedResourceMetadata()),
   );
+  app.get(
+    "/.well-known/oauth-protected-resource/api/owner-ai/profiles/:restaurantId/mcp",
+    (req, res) => {
+      const parsedId = z.string().uuid().safeParse(req.params.restaurantId);
+      if (!parsedId.success) {
+        return res
+          .status(404)
+          .json({ error: "MealScout profile target not found" });
+      }
+      const resource = ownerAiProfileMcpResourceUrl(parsedId.data);
+      return res.json(ownerAiProtectedResourceMetadata(resource));
+    },
+  );
 
   app.post(
     "/api/owner-ai/oauth/register",
+    requireOwnerAiRemoteConnector,
     oauthRegistrationLimiter,
     asyncRoute(async (req, res) => {
       res.status(201).json(registerOwnerAiOAuthClient(req.body));
@@ -355,6 +409,7 @@ export function registerOwnerAiActionRoutes(app: Express) {
 
   app.get(
     "/api/owner-ai/oauth/authorize/prepare",
+    requireOwnerAiRemoteConnector,
     isAuthenticated,
     asyncRoute(async (req: any, res) => {
       res.setHeader("Cache-Control", "private, no-store");
@@ -369,6 +424,7 @@ export function registerOwnerAiActionRoutes(app: Express) {
 
   app.post(
     "/api/owner-ai/oauth/authorize",
+    requireOwnerAiRemoteConnector,
     isAuthenticated,
     asyncRoute(async (req: any, res) => {
       res.setHeader("Cache-Control", "private, no-store");
@@ -397,6 +453,7 @@ export function registerOwnerAiActionRoutes(app: Express) {
 
   app.post(
     "/api/owner-ai/oauth/token",
+    requireOwnerAiRemoteConnector,
     oauthTokenLimiter,
     asyncRoute(async (req, res) => {
       res.setHeader("Cache-Control", "no-store");
@@ -414,63 +471,174 @@ export function registerOwnerAiActionRoutes(app: Express) {
     }),
   );
 
-  app.get("/api/owner-ai/mcp", (_req, res) => {
+  const rejectMcpGet = (_req: Request, res: Response) => {
     res.setHeader("Allow", "POST");
-    res.status(405).json({ error: "Use Streamable HTTP POST for MealScout MCP" });
-  });
-  app.post(
-    "/api/owner-ai/mcp",
-    asyncRoute(async (req: ConnectorRequest, res) => {
-      try {
-        req.ownerAiConnector = await authenticateOwnerAiConnector(
-          bearerToken(req),
+    res
+      .status(405)
+      .json({ error: "Use Streamable HTTP POST for MealScout MCP" });
+  };
+  app.get("/api/owner-ai/mcp", rejectMcpGet);
+  app.get("/api/owner-ai/profiles/:restaurantId/mcp", rejectMcpGet);
+
+  const handleMcpPost = async (req: ConnectorRequest, res: Response) => {
+    const targetIdResult = req.params.restaurantId
+      ? z.string().uuid().safeParse(req.params.restaurantId)
+      : null;
+    if (targetIdResult && !targetIdResult.success) {
+      return res
+        .status(404)
+        .json({ error: "MealScout profile target not found" });
+    }
+    const targetRestaurantId = targetIdResult?.success
+      ? targetIdResult.data.toLowerCase()
+      : null;
+    try {
+      req.ownerAiConnector = await authenticateOwnerAiConnector(
+        bearerToken(req),
+      );
+    } catch (error) {
+      if (error instanceof OwnerAiActionError && error.status === 401) {
+        res.setHeader(
+          "WWW-Authenticate",
+          ownerAiOAuthChallengeHeader(targetRestaurantId),
         );
-      } catch (error) {
-        if (error instanceof OwnerAiActionError && error.status === 401) {
-          res.setHeader("WWW-Authenticate", ownerAiOAuthChallengeHeader());
-          return res.status(401).json({
-            jsonrpc: "2.0",
-            id: null,
-            error: { code: -32001, message: "MealScout sign-in required" },
-          });
-        }
-        throw error;
-      }
-      await new Promise<void>((resolve, reject) =>
-        mcpLimiter(req, res, (error?: unknown) =>
-          error ? reject(error) : resolve(),
-        ),
-      );
-      if (res.headersSent) return;
-      const protocolVersion = String(
-        req.headers["mcp-protocol-version"] || "2025-11-25",
-      );
-      const methodHeader = String(req.headers["mcp-method"] || "");
-      const nameHeader = String(req.headers["mcp-name"] || "");
-      const bodyMethod = String((req.body as any)?.method || "");
-      const bodyName = String((req.body as any)?.params?.name || "");
-      if (
-        (methodHeader && methodHeader !== bodyMethod) ||
-        (nameHeader && bodyName && nameHeader !== bodyName)
-      ) {
-        return res.status(400).json({
+        return res.status(401).json({
           jsonrpc: "2.0",
-          id: (req.body as any)?.id ?? null,
-          error: {
-            code: -32600,
-            message: "MCP routing headers do not match the request body",
-          },
+          id: null,
+          error: { code: -32001, message: "MealScout sign-in required" },
         });
       }
-      const response = await handleOwnerAiMcpRequest(
-        req.ownerAiConnector,
-        req.body,
-        { protocolVersion },
+      throw error;
+    }
+    if (
+      targetRestaurantId &&
+      req.ownerAiConnector.restaurantId.toLowerCase() !== targetRestaurantId
+    ) {
+      return res.status(403).json({
+        jsonrpc: "2.0",
+        id: (req.body as any)?.id ?? null,
+        error: {
+          code: -32003,
+          message: "This MealScout connection belongs to a different profile",
+        },
+      });
+    }
+    await new Promise<void>((resolve, reject) =>
+      mcpLimiter(req, res, (error?: unknown) =>
+        error ? reject(error) : resolve(),
+      ),
+    );
+    if (res.headersSent) return;
+    const protocolVersion = String(
+      req.headers["mcp-protocol-version"] || "2025-11-25",
+    );
+    const methodHeader = String(req.headers["mcp-method"] || "");
+    const nameHeader = String(req.headers["mcp-name"] || "");
+    const bodyMethod = String((req.body as any)?.method || "");
+    const bodyName = String((req.body as any)?.params?.name || "");
+    if (
+      (methodHeader && methodHeader !== bodyMethod) ||
+      (nameHeader && bodyName && nameHeader !== bodyName)
+    ) {
+      return res.status(400).json({
+        jsonrpc: "2.0",
+        id: (req.body as any)?.id ?? null,
+        error: {
+          code: -32600,
+          message: "MCP routing headers do not match the request body",
+        },
+      });
+    }
+    const response = await handleOwnerAiMcpRequest(
+      req.ownerAiConnector,
+      req.body,
+      { protocolVersion },
+    );
+    res.setHeader("MCP-Protocol-Version", protocolVersion);
+    res.setHeader("Cache-Control", "no-store");
+    if (response === null) return res.status(202).send();
+    res.json(response);
+  };
+  app.post(
+    "/api/owner-ai/mcp",
+    requireOwnerAiRemoteConnector,
+    asyncRoute(handleMcpPost),
+  );
+  app.post(
+    "/api/owner-ai/profiles/:restaurantId/mcp",
+    requireOwnerAiRemoteConnector,
+    asyncRoute(handleMcpPost),
+  );
+
+  app.get(
+    "/api/owner-ai/profiles/:restaurantId/selective-intelligence",
+    asyncRoute(async (req, res) => {
+      const parsedId = z.string().uuid().safeParse(req.params.restaurantId);
+      if (!parsedId.success) {
+        return res
+          .status(404)
+          .json({ error: "MealScout profile target not found" });
+      }
+      const restaurantId = parsedId.data.toLowerCase();
+      const [profile] = await db
+        .select({ id: restaurants.id })
+        .from(restaurants)
+        .where(
+          and(eq(restaurants.id, restaurantId), eq(restaurants.isActive, true)),
+        )
+        .limit(1);
+      if (!profile) {
+        return res
+          .status(404)
+          .json({ error: "MealScout profile target not found" });
+      }
+      const mcpUrl = ownerAiProfileMcpResourceUrl(restaurantId);
+      res.setHeader("Cache-Control", "public, max-age=300, s-maxage=900");
+      res.setHeader(
+        "Content-Security-Policy",
+        "default-src 'none'; frame-ancestors 'none'; base-uri 'none'",
       );
-      res.setHeader("MCP-Protocol-Version", protocolVersion);
-      res.setHeader("Cache-Control", "no-store");
-      if (response === null) return res.status(202).send();
-      res.json(response);
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      return res.json({
+        schemaVersion: "1.0",
+        name: "Selective Intelligence",
+        trigger: "MealScout public profile link",
+        product: "MealScout",
+        target: { type: "business_profile", restaurantId },
+        adoption: {
+          requiresUserApproval: true,
+          approvalQuestion:
+            "Use Selective Intelligence to manage this MealScout profile?",
+        },
+        connection: {
+          type: "oauth_mcp",
+          mcpUrl,
+          remoteConnectorEnabled: ownerAiRemoteConnectorEnabled(),
+          loginRequired: true,
+          exactOwnerProfileBinding: true,
+          connectedMealScoutSocialRequired: true,
+        },
+        capabilities: [
+          "profile",
+          "hours",
+          "schedules_and_events",
+          "menus_and_prices",
+          "logos_gallery_and_item_images",
+          "deals_and_offers",
+          "connected_social_content",
+        ],
+        safety: {
+          manifestCarriesNoAuthorityOrCredentials: true,
+          canonicalMealScoutOriginRequired: true,
+          operatorKillSwitchAvailable: true,
+          profileContentIsUntrustedInput: true,
+          instructionsInProfileContentIgnored: true,
+          readBeforeDraft: true,
+          immutablePreviewRequired: true,
+          exactRevisionApprovalRequired: true,
+          unconnectedSocialPublishingDenied: true,
+        },
+      });
     }),
   );
 
@@ -484,6 +652,7 @@ export function registerOwnerAiActionRoutes(app: Express) {
 
   app.get(
     "/api/owner-ai/connector/context",
+    requireOwnerAiRemoteConnector,
     connectorAuth("owner_ai:context"),
     connectorContextLimiter,
     asyncRoute(async (req: ConnectorRequest, res) => {
@@ -498,6 +667,7 @@ export function registerOwnerAiActionRoutes(app: Express) {
 
   app.post(
     "/api/owner-ai/connector/drafts",
+    requireOwnerAiRemoteConnector,
     connectorAuth("owner_ai:drafts:create"),
     connectorDraftCreateLimiter,
     asyncRoute(async (req: ConnectorRequest, res) => {
@@ -515,6 +685,7 @@ export function registerOwnerAiActionRoutes(app: Express) {
 
   app.get(
     "/api/owner-ai/connector/drafts/:draftId",
+    requireOwnerAiRemoteConnector,
     connectorAuth("owner_ai:drafts:read"),
     connectorDraftStatusLimiter,
     asyncRoute(async (req: ConnectorRequest, res) => {
@@ -559,6 +730,7 @@ export function registerOwnerAiActionRoutes(app: Express) {
 
   app.post(
     "/api/owner-ai/credentials",
+    requireOwnerAiRemoteConnector,
     isAuthenticated,
     asyncRoute(async (req: any, res) => {
       const body = credentialCreateSchema.parse(req.body);
@@ -700,9 +872,9 @@ export function registerOwnerAiActionRoutes(app: Express) {
     "/api/owner-ai/drafts/:draftId/social-preview/:platform.svg",
     isAuthenticated,
     asyncRoute(async (req: any, res) => {
-      const platform = z.enum(["facebook", "instagram", "x"]).parse(
-        req.params.platform,
-      );
+      const platform = z
+        .enum(["facebook", "instagram", "x"])
+        .parse(req.params.platform);
       const svg = await getOwnerAiSocialPreview(
         String(req.user.id),
         String(req.params.draftId),

@@ -10,8 +10,15 @@ import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "../db";
-import { apiKeys, restaurants, socialPublishingConnections } from "@shared/schema";
-import { OWNER_AI_CONNECTOR_SCOPES, OWNER_AI_PLATFORMS } from "@shared/ownerAiActions";
+import {
+  apiKeys,
+  restaurants,
+  socialPublishingConnections,
+} from "@shared/schema";
+import {
+  OWNER_AI_CONNECTOR_SCOPES,
+  OWNER_AI_PLATFORMS,
+} from "@shared/ownerAiActions";
 import { resolvePublicHostname } from "../utils/websiteProfileImport";
 import { OwnerAiActionError } from "./ownerAiActions";
 
@@ -87,13 +94,69 @@ const oauthBaseUrl = () => {
 
 export const ownerAiMcpResourceUrl = () => `${oauthBaseUrl()}/api/owner-ai/mcp`;
 
-export const ownerAiProtectedResourceMetadata = () => ({
-  resource: ownerAiMcpResourceUrl(),
-  authorization_servers: [oauthBaseUrl()],
-  bearer_methods_supported: ["header"],
-  scopes_supported: [...OWNER_AI_CONNECTOR_SCOPES],
-  resource_name: "MealScout Owner AI",
-});
+const RESTAURANT_ID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export const ownerAiProfileMcpResourceUrl = (restaurantId: string) => {
+  const normalizedId = String(restaurantId || "")
+    .trim()
+    .toLowerCase();
+  if (!RESTAURANT_ID_PATTERN.test(normalizedId)) {
+    throw new OwnerAiOAuthError(
+      400,
+      "invalid_target",
+      "MealScout profile target is invalid",
+    );
+  }
+  return `${oauthBaseUrl()}/api/owner-ai/profiles/${encodeURIComponent(normalizedId)}/mcp`;
+};
+
+export function resolveOwnerAiMcpResource(value: unknown): {
+  resource: string;
+  restaurantId: string | null;
+} | null {
+  try {
+    const expectedBase = new URL(oauthBaseUrl());
+    const parsed = new URL(String(value || ""));
+    if (parsed.origin !== expectedBase.origin || parsed.search || parsed.hash)
+      return null;
+    const pathname = parsed.pathname.replace(/\/+$/, "") || "/";
+    if (pathname === "/api/owner-ai/mcp") {
+      return { resource: ownerAiMcpResourceUrl(), restaurantId: null };
+    }
+    const match = pathname.match(
+      /^\/api\/owner-ai\/profiles\/([0-9a-f-]+)\/mcp$/i,
+    );
+    if (!match || !RESTAURANT_ID_PATTERN.test(match[1])) return null;
+    const restaurantId = match[1].toLowerCase();
+    return {
+      resource: ownerAiProfileMcpResourceUrl(restaurantId),
+      restaurantId,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export const ownerAiProtectedResourceMetadata = (
+  resource = ownerAiMcpResourceUrl(),
+) => {
+  const resolved = resolveOwnerAiMcpResource(resource);
+  if (!resolved) {
+    throw new OwnerAiOAuthError(
+      400,
+      "invalid_target",
+      "MealScout protected resource target is invalid",
+    );
+  }
+  return {
+    resource: resolved.resource,
+    authorization_servers: [oauthBaseUrl()],
+    bearer_methods_supported: ["header"],
+    scopes_supported: [...OWNER_AI_CONNECTOR_SCOPES],
+    resource_name: "MealScout Owner AI",
+  };
+};
 
 export const ownerAiAuthorizationServerMetadata = () => ({
   issuer: oauthBaseUrl(),
@@ -145,16 +208,28 @@ const isLoopbackHostname = (hostname: string) =>
 function normalizeRedirectUri(value: unknown) {
   const raw = String(value || "").trim();
   if (!raw || raw.length > 2048) {
-    throw new OwnerAiOAuthError(400, "invalid_client_metadata", "Invalid redirect URI");
+    throw new OwnerAiOAuthError(
+      400,
+      "invalid_client_metadata",
+      "Invalid redirect URI",
+    );
   }
   let parsed: URL;
   try {
     parsed = new URL(raw);
   } catch {
-    throw new OwnerAiOAuthError(400, "invalid_client_metadata", "Invalid redirect URI");
+    throw new OwnerAiOAuthError(
+      400,
+      "invalid_client_metadata",
+      "Invalid redirect URI",
+    );
   }
   if (parsed.hash || parsed.username || parsed.password) {
-    throw new OwnerAiOAuthError(400, "invalid_client_metadata", "Invalid redirect URI");
+    throw new OwnerAiOAuthError(
+      400,
+      "invalid_client_metadata",
+      "Invalid redirect URI",
+    );
   }
   const allowed =
     parsed.protocol === "https:" ||
@@ -270,7 +345,11 @@ async function readClientMetadataDocument(clientId: string) {
 
   const records = await resolvePublicHostname(parsed.hostname).catch(() => []);
   if (!records.length) {
-    throw new OwnerAiOAuthError(400, "invalid_client", "OAuth client metadata is unreachable");
+    throw new OwnerAiOAuthError(
+      400,
+      "invalid_client",
+      "OAuth client metadata is unreachable",
+    );
   }
   let document: unknown = null;
   let lastError: unknown = null;
@@ -307,26 +386,40 @@ async function readClientMetadataDocument(clientId: string) {
     metadata.data.grant_types &&
     !metadata.data.grant_types.includes("authorization_code")
   ) {
-    throw new OwnerAiOAuthError(400, "unauthorized_client", "Client does not support authorization code login");
+    throw new OwnerAiOAuthError(
+      400,
+      "unauthorized_client",
+      "Client does not support authorization code login",
+    );
   }
   if (
     metadata.data.response_types &&
     !metadata.data.response_types.includes("code")
   ) {
-    throw new OwnerAiOAuthError(400, "unauthorized_client", "Client does not support code responses");
+    throw new OwnerAiOAuthError(
+      400,
+      "unauthorized_client",
+      "Client does not support code responses",
+    );
   }
   if (
     metadata.data.token_endpoint_auth_method &&
     metadata.data.token_endpoint_auth_method !== "none"
   ) {
-    throw new OwnerAiOAuthError(400, "unauthorized_client", "Only public PKCE clients are supported");
+    throw new OwnerAiOAuthError(
+      400,
+      "unauthorized_client",
+      "Only public PKCE clients are supported",
+    );
   }
   const value: OwnerAiOAuthClient = {
     clientId,
     clientName: metadata.data.client_name,
     clientUri: metadata.data.client_uri || null,
     logoUri: metadata.data.logo_uri || null,
-    redirectUris: [...new Set(metadata.data.redirect_uris.map(normalizeRedirectUri))],
+    redirectUris: [
+      ...new Set(metadata.data.redirect_uris.map(normalizeRedirectUri)),
+    ],
     applicationType: metadata.data.application_type || "web",
     registrationKind: "client_metadata_document",
   };
@@ -342,7 +435,9 @@ async function readClientMetadataDocument(clientId: string) {
 }
 
 function signDynamicClient(payload: Record<string, unknown>) {
-  const encoded = Buffer.from(JSON.stringify(payload), "utf8").toString("base64url");
+  const encoded = Buffer.from(JSON.stringify(payload), "utf8").toString(
+    "base64url",
+  );
   const signature = createHmac("sha256", oauthSigningSecret())
     .update(encoded)
     .digest("base64url");
@@ -372,12 +467,18 @@ function readDynamicClient(clientId: string): OwnerAiOAuthClient {
     !Array.isArray(payload.redirectUris) ||
     Number(payload.expiresAt || 0) <= Date.now()
   ) {
-    throw new OwnerAiOAuthError(400, "invalid_client", "OAuth client registration expired");
+    throw new OwnerAiOAuthError(
+      400,
+      "invalid_client",
+      "OAuth client registration expired",
+    );
   }
   return {
     clientId,
     clientName: String(payload.clientName || "AI client").slice(0, 200),
-    clientUri: payload.clientUri ? String(payload.clientUri).slice(0, 2048) : null,
+    clientUri: payload.clientUri
+      ? String(payload.clientUri).slice(0, 2048)
+      : null,
     logoUri: payload.logoUri ? String(payload.logoUri).slice(0, 2048) : null,
     redirectUris: payload.redirectUris.map(normalizeRedirectUri),
     applicationType: payload.applicationType === "native" ? "native" : "web",
@@ -390,7 +491,8 @@ export async function resolveOwnerAiOAuthClient(clientIdValue: unknown) {
   if (!clientId || clientId.length > 16_000) {
     throw new OwnerAiOAuthError(400, "invalid_client", "Unknown OAuth client");
   }
-  if (clientId.startsWith(DYNAMIC_CLIENT_PREFIX)) return readDynamicClient(clientId);
+  if (clientId.startsWith(DYNAMIC_CLIENT_PREFIX))
+    return readDynamicClient(clientId);
   return readClientMetadataDocument(clientId);
 }
 
@@ -410,25 +512,41 @@ const registrationSchema = z
 export function registerOwnerAiOAuthClient(input: unknown) {
   const parsed = registrationSchema.safeParse(input);
   if (!parsed.success) {
-    throw new OwnerAiOAuthError(400, "invalid_client_metadata", "Invalid OAuth client registration");
+    throw new OwnerAiOAuthError(
+      400,
+      "invalid_client_metadata",
+      "Invalid OAuth client registration",
+    );
   }
   if (
     parsed.data.grant_types &&
     !parsed.data.grant_types.includes("authorization_code")
   ) {
-    throw new OwnerAiOAuthError(400, "invalid_client_metadata", "authorization_code is required");
+    throw new OwnerAiOAuthError(
+      400,
+      "invalid_client_metadata",
+      "authorization_code is required",
+    );
   }
   if (
     parsed.data.response_types &&
     !parsed.data.response_types.includes("code")
   ) {
-    throw new OwnerAiOAuthError(400, "invalid_client_metadata", "code response type is required");
+    throw new OwnerAiOAuthError(
+      400,
+      "invalid_client_metadata",
+      "code response type is required",
+    );
   }
   if (
     parsed.data.token_endpoint_auth_method &&
     parsed.data.token_endpoint_auth_method !== "none"
   ) {
-    throw new OwnerAiOAuthError(400, "invalid_client_metadata", "Only public PKCE clients are supported");
+    throw new OwnerAiOAuthError(
+      400,
+      "invalid_client_metadata",
+      "Only public PKCE clients are supported",
+    );
   }
   const redirectUris = [
     ...new Set(parsed.data.redirect_uris.map(normalizeRedirectUri)),
@@ -478,20 +596,38 @@ const authorizationQuerySchema = z.object({
   resource: z.string().trim().min(1).max(2048),
 });
 
-export async function prepareOwnerAiAuthorization(input: unknown, userId: string) {
+export async function prepareOwnerAiAuthorization(
+  input: unknown,
+  userId: string,
+) {
   const parsed = authorizationQuerySchema.safeParse(input);
   if (!parsed.success) {
-    throw new OwnerAiOAuthError(400, "invalid_request", "Invalid OAuth authorization request");
+    throw new OwnerAiOAuthError(
+      400,
+      "invalid_request",
+      "Invalid OAuth authorization request",
+    );
   }
-  if (parsed.data.resource !== ownerAiMcpResourceUrl()) {
-    throw new OwnerAiOAuthError(400, "invalid_target", "Token must target the MealScout Owner AI resource");
+  const resolvedResource = resolveOwnerAiMcpResource(parsed.data.resource);
+  if (!resolvedResource) {
+    throw new OwnerAiOAuthError(
+      400,
+      "invalid_target",
+      "Token must target the MealScout Owner AI resource",
+    );
   }
   const client = await resolveOwnerAiOAuthClient(parsed.data.client_id);
   const redirectUri = normalizeRedirectUri(parsed.data.redirect_uri);
   if (!client.redirectUris.includes(redirectUri)) {
-    throw new OwnerAiOAuthError(400, "invalid_request", "Redirect URI is not registered for this AI client");
+    throw new OwnerAiOAuthError(
+      400,
+      "invalid_request",
+      "Redirect URI is not registered for this AI client",
+    );
   }
-  const requestedScopes = String(parsed.data.scope || OWNER_AI_CONNECTOR_SCOPES.join(" "))
+  const requestedScopes = String(
+    parsed.data.scope || OWNER_AI_CONNECTOR_SCOPES.join(" "),
+  )
     .split(/\s+/)
     .map((scope) => scope.trim())
     .filter(Boolean);
@@ -504,7 +640,11 @@ export async function prepareOwnerAiAuthorization(input: unknown, userId: string
         ),
     )
   ) {
-    throw new OwnerAiOAuthError(400, "invalid_scope", "Unsupported MealScout AI scope");
+    throw new OwnerAiOAuthError(
+      400,
+      "invalid_scope",
+      "Unsupported MealScout AI scope",
+    );
   }
   const scopes = [...new Set(requestedScopes)];
   const ownedBusinesses = await db
@@ -516,7 +656,12 @@ export async function prepareOwnerAiAuthorization(input: unknown, userId: string
     })
     .from(restaurants)
     .where(eq(restaurants.ownerId, userId));
-  const restaurantIds = ownedBusinesses.map((business: any) => business.id);
+  const targetBusinesses = resolvedResource.restaurantId
+    ? ownedBusinesses.filter(
+        (business: any) => business.id === resolvedResource.restaurantId,
+      )
+    : ownedBusinesses;
+  const restaurantIds = targetBusinesses.map((business: any) => business.id);
   const connectionRows = restaurantIds.length
     ? await db
         .select({
@@ -533,12 +678,14 @@ export async function prepareOwnerAiAuthorization(input: unknown, userId: string
     request: parsed.data,
     client,
     scopes,
-    businesses: ownedBusinesses.map((business: any) => ({
+    targetRestaurantId: resolvedResource.restaurantId,
+    businesses: targetBusinesses.map((business: any) => ({
       ...business,
       socialConnections: OWNER_AI_PLATFORMS.map((platform) => {
         const row = connectionRows.find(
           (candidate: any) =>
-            candidate.restaurantId === business.id && candidate.platform === platform,
+            candidate.restaurantId === business.id &&
+            candidate.platform === platform,
         );
         return {
           platform,
@@ -557,7 +704,11 @@ const codeMetadata = (row: any): StoredCodeMetadata => {
   } catch {
     // Fall through to the standard OAuth error below.
   }
-  throw new OwnerAiOAuthError(400, "invalid_grant", "Authorization code is invalid");
+  throw new OwnerAiOAuthError(
+    400,
+    "invalid_grant",
+    "Authorization code is invalid",
+  );
 };
 
 const refreshMetadata = (row: any): StoredRefreshMetadata => {
@@ -576,16 +727,26 @@ export async function authorizeOwnerAiClient(input: unknown, userId: string) {
   });
   const parsed = consentSchema.safeParse(input);
   if (!parsed.success) {
-    throw new OwnerAiOAuthError(400, "invalid_request", "Invalid OAuth consent request");
+    throw new OwnerAiOAuthError(
+      400,
+      "invalid_request",
+      "Invalid OAuth consent request",
+    );
   }
   const prepared = await prepareOwnerAiAuthorization(parsed.data, userId);
   const business = prepared.businesses.find(
     (candidate: any) => candidate.id === parsed.data.restaurant_id,
   );
   if (!business) {
-    throw new OwnerAiOAuthError(403, "access_denied", "Only the actual business owner can connect this AI");
+    throw new OwnerAiOAuthError(
+      403,
+      "access_denied",
+      "Only the actual business owner can connect this AI",
+    );
   }
-  if (!business.socialConnections.some((connection: any) => connection.connected)) {
+  if (
+    !business.socialConnections.some((connection: any) => connection.connected)
+  ) {
     throw new OwnerAiOAuthError(
       409,
       "access_denied",
@@ -678,19 +839,35 @@ async function exchangeAuthorizationCode(input: Record<string, unknown>) {
   });
   const parsed = schema.safeParse(input);
   if (!parsed.success) {
-    throw new OwnerAiOAuthError(400, "invalid_request", "Invalid authorization code exchange");
+    throw new OwnerAiOAuthError(
+      400,
+      "invalid_request",
+      "Invalid authorization code exchange",
+    );
   }
   const row = await findStoredToken(parsed.data.code, "owner_ai_oauth_code");
-  if (!row) throw new OwnerAiOAuthError(400, "invalid_grant", "Authorization code is invalid or expired");
+  if (!row)
+    throw new OwnerAiOAuthError(
+      400,
+      "invalid_grant",
+      "Authorization code is invalid or expired",
+    );
   const metadata = codeMetadata(row);
   if (
     metadata.clientId !== parsed.data.client_id ||
     metadata.redirectUri !== normalizeRedirectUri(parsed.data.redirect_uri) ||
     metadata.resource !== parsed.data.resource ||
-    parsed.data.resource !== ownerAiMcpResourceUrl() ||
-    !safeEqual(metadata.codeChallenge, sha256Base64Url(parsed.data.code_verifier))
+    !resolveOwnerAiMcpResource(parsed.data.resource) ||
+    !safeEqual(
+      metadata.codeChallenge,
+      sha256Base64Url(parsed.data.code_verifier),
+    )
   ) {
-    throw new OwnerAiOAuthError(400, "invalid_grant", "Authorization code binding failed");
+    throw new OwnerAiOAuthError(
+      400,
+      "invalid_grant",
+      "Authorization code binding failed",
+    );
   }
   await resolveOwnerAiOAuthClient(parsed.data.client_id);
 
@@ -710,7 +887,11 @@ async function exchangeAuthorizationCode(input: Record<string, unknown>) {
       .where(and(eq(apiKeys.id, row.id), eq(apiKeys.isActive, true)))
       .returning({ id: apiKeys.id });
     if (!consumed) {
-      throw new OwnerAiOAuthError(400, "invalid_grant", "Authorization code was already used");
+      throw new OwnerAiOAuthError(
+        400,
+        "invalid_grant",
+        "Authorization code was already used",
+      );
     }
     const [ownerBusiness] = await tx
       .select({ id: restaurants.id })
@@ -723,7 +904,11 @@ async function exchangeAuthorizationCode(input: Record<string, unknown>) {
       )
       .limit(1);
     if (!ownerBusiness) {
-      throw new OwnerAiOAuthError(403, "access_denied", "Business ownership changed before AI sign-in completed");
+      throw new OwnerAiOAuthError(
+        403,
+        "access_denied",
+        "Business ownership changed before AI sign-in completed",
+      );
     }
     const [access] = await tx
       .insert(apiKeys)
@@ -773,17 +958,33 @@ async function exchangeRefreshToken(input: Record<string, unknown>) {
   });
   const parsed = schema.safeParse(input);
   if (!parsed.success) {
-    throw new OwnerAiOAuthError(400, "invalid_request", "Invalid refresh token exchange");
+    throw new OwnerAiOAuthError(
+      400,
+      "invalid_request",
+      "Invalid refresh token exchange",
+    );
   }
-  const row = await findStoredToken(parsed.data.refresh_token, "owner_ai_oauth_refresh");
-  if (!row) throw new OwnerAiOAuthError(400, "invalid_grant", "Refresh token is invalid or expired");
+  const row = await findStoredToken(
+    parsed.data.refresh_token,
+    "owner_ai_oauth_refresh",
+  );
+  if (!row)
+    throw new OwnerAiOAuthError(
+      400,
+      "invalid_grant",
+      "Refresh token is invalid or expired",
+    );
   const metadata = refreshMetadata(row);
   if (
     metadata.clientId !== parsed.data.client_id ||
     metadata.resource !== parsed.data.resource ||
-    parsed.data.resource !== ownerAiMcpResourceUrl()
+    !resolveOwnerAiMcpResource(parsed.data.resource)
   ) {
-    throw new OwnerAiOAuthError(400, "invalid_grant", "Refresh token binding failed");
+    throw new OwnerAiOAuthError(
+      400,
+      "invalid_grant",
+      "Refresh token binding failed",
+    );
   }
   await resolveOwnerAiOAuthClient(parsed.data.client_id);
   const originalScopes = String(row.scope || "")
@@ -796,7 +997,11 @@ async function exchangeRefreshToken(input: Record<string, unknown>) {
     !requestedScopes.length ||
     requestedScopes.some((scope) => !originalScopes.includes(scope))
   ) {
-    throw new OwnerAiOAuthError(400, "invalid_scope", "Refresh cannot expand MealScout permissions");
+    throw new OwnerAiOAuthError(
+      400,
+      "invalid_scope",
+      "Refresh cannot expand MealScout permissions",
+    );
   }
   const scope = [...new Set(requestedScopes)].join(" ");
 
@@ -815,15 +1020,27 @@ async function exchangeRefreshToken(input: Record<string, unknown>) {
       .where(and(eq(apiKeys.id, row.id), eq(apiKeys.isActive, true)))
       .returning({ id: apiKeys.id });
     if (!rotated) {
-      throw new OwnerAiOAuthError(400, "invalid_grant", "Refresh token was already used");
+      throw new OwnerAiOAuthError(
+        400,
+        "invalid_grant",
+        "Refresh token was already used",
+      );
     }
     const [currentAccess] = await tx
-      .select({ id: apiKeys.id, isActive: apiKeys.isActive, revokedAt: apiKeys.revokedAt })
+      .select({
+        id: apiKeys.id,
+        isActive: apiKeys.isActive,
+        revokedAt: apiKeys.revokedAt,
+      })
       .from(apiKeys)
       .where(eq(apiKeys.id, metadata.accessKeyId))
       .limit(1);
     if (!currentAccess?.isActive || currentAccess.revokedAt) {
-      throw new OwnerAiOAuthError(400, "invalid_grant", "MealScout AI connection was revoked");
+      throw new OwnerAiOAuthError(
+        400,
+        "invalid_grant",
+        "MealScout AI connection was revoked",
+      );
     }
     const [ownerBusiness] = await tx
       .select({ id: restaurants.id })
@@ -836,7 +1053,11 @@ async function exchangeRefreshToken(input: Record<string, unknown>) {
       )
       .limit(1);
     if (!ownerBusiness) {
-      throw new OwnerAiOAuthError(403, "access_denied", "Business ownership changed");
+      throw new OwnerAiOAuthError(
+        403,
+        "access_denied",
+        "Business ownership changed",
+      );
     }
     await tx
       .update(apiKeys)
@@ -878,10 +1099,18 @@ async function exchangeRefreshToken(input: Record<string, unknown>) {
 }
 
 export async function exchangeOwnerAiOAuthToken(input: unknown) {
-  const body = input && typeof input === "object" ? (input as Record<string, unknown>) : {};
-  if (body.grant_type === "authorization_code") return exchangeAuthorizationCode(body);
+  const body =
+    input && typeof input === "object"
+      ? (input as Record<string, unknown>)
+      : {};
+  if (body.grant_type === "authorization_code")
+    return exchangeAuthorizationCode(body);
   if (body.grant_type === "refresh_token") return exchangeRefreshToken(body);
-  throw new OwnerAiOAuthError(400, "unsupported_grant_type", "Unsupported OAuth grant type");
+  throw new OwnerAiOAuthError(
+    400,
+    "unsupported_grant_type",
+    "Unsupported OAuth grant type",
+  );
 }
 
 export async function revokeOwnerAiOAuthToken(input: unknown) {
@@ -921,7 +1150,9 @@ export async function revokeOwnerAiOAuthToken(input: unknown) {
       );
     let access: any = null;
     for (const candidate of candidates) {
-      if (await bcrypt.compare(rawToken, candidate.keyHash).catch(() => false)) {
+      if (
+        await bcrypt.compare(rawToken, candidate.keyHash).catch(() => false)
+      ) {
         access = candidate;
         break;
       }
@@ -996,8 +1227,11 @@ export async function revokeRefreshTokensForAccessKey(
     .where(inArray(apiKeys.id, ids));
 }
 
-export function ownerAiOAuthChallengeHeader() {
-  return `Bearer resource_metadata="${oauthBaseUrl()}/.well-known/oauth-protected-resource/api/owner-ai/mcp", scope="${OWNER_AI_CONNECTOR_SCOPES.join(" ")}"`;
+export function ownerAiOAuthChallengeHeader(restaurantId?: string | null) {
+  const metadataPath = restaurantId
+    ? `/api/owner-ai/profiles/${encodeURIComponent(restaurantId)}/mcp`
+    : "/api/owner-ai/mcp";
+  return `Bearer resource_metadata="${oauthBaseUrl()}/.well-known/oauth-protected-resource${metadataPath}", scope="${OWNER_AI_CONNECTOR_SCOPES.join(" ")}"`;
 }
 
 export function toOwnerAiOAuthError(error: unknown) {
@@ -1005,5 +1239,9 @@ export function toOwnerAiOAuthError(error: unknown) {
   if (error instanceof OwnerAiActionError) {
     return new OwnerAiOAuthError(error.status, "access_denied", error.message);
   }
-  return new OwnerAiOAuthError(500, "server_error", "MealScout AI sign-in failed");
+  return new OwnerAiOAuthError(
+    500,
+    "server_error",
+    "MealScout AI sign-in failed",
+  );
 }
