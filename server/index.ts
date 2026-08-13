@@ -308,6 +308,8 @@ const ownerAiServerToServerPaths = new Set([
   "/api/owner-ai/oauth/revoke",
   "/api/owner-ai/mcp",
 ]);
+const ownerAiProfileMcpPathPattern =
+  /^\/api\/owner-ai\/profiles\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\/mcp$/i;
 
 // Basic CSRF guard: require same-origin for state-changing browser requests.
 const csrfSafeMethods = new Set(["GET", "HEAD", "OPTIONS"]);
@@ -323,7 +325,8 @@ app.use((req, res, next) => {
   if (
     pathValue.startsWith("/api/actions") ||
     pathValue.startsWith("/api/admin/lisa/price-scout-feed") ||
-    ownerAiServerToServerPaths.has(pathValue)
+    ownerAiServerToServerPaths.has(pathValue) ||
+    ownerAiProfileMcpPathPattern.test(pathValue)
   ) {
     return next();
   }

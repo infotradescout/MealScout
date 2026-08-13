@@ -41,6 +41,10 @@ type PrerenderPage = {
   schema: object | object[];
   links: PageLink[];
   body: string[];
+  selectiveIntelligence?: {
+    manifestUrl: string;
+    mcpUrl: string;
+  };
 };
 
 type PublicVideo = {
@@ -311,6 +315,14 @@ const buildHtml = (baseUrl: string, page: PrerenderPage) => {
   <meta name="description" content="${escapeHtml(page.description)}">
   <meta name="robots" content="${escapeHtml(page.robots || "index,follow,max-snippet:-1,max-image-preview:large,max-video-preview:-1")}">
   <link rel="canonical" href="${escapeHtml(canonicalUrl)}">
+  ${
+    page.selectiveIntelligence
+      ? `<meta name="selective-intelligence-trigger" content="profile-link">
+  <meta name="selective-intelligence-product" content="MealScout">
+  <link rel="alternate" type="application/vnd.selective-intelligence+json" title="Selective Intelligence" href="${escapeHtml(page.selectiveIntelligence.manifestUrl)}">
+  <link rel="alternate" type="application/mcp+json" title="MealScout owner actions" href="${escapeHtml(page.selectiveIntelligence.mcpUrl)}">`
+      : ""
+  }
   <meta property="og:title" content="${escapeHtml(page.title)}">
   <meta property="og:description" content="${escapeHtml(page.description)}">
   <meta property="og:type" content="website">
@@ -528,6 +540,16 @@ async function restaurantPage(baseUrl: string, restaurantId: string) {
         ? `${videos.length} public video${videos.length === 1 ? "" : "s"} available on this profile.`
         : "",
     ].filter(Boolean),
+    selectiveIntelligence: {
+      manifestUrl: absoluteUrl(
+        baseUrl,
+        `/api/owner-ai/profiles/${encodeURIComponent(row.id)}/selective-intelligence`,
+      ),
+      mcpUrl: absoluteUrl(
+        baseUrl,
+        `/api/owner-ai/profiles/${encodeURIComponent(row.id)}/mcp`,
+      ),
+    },
   } satisfies PrerenderPage;
 }
 
