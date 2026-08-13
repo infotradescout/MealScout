@@ -565,6 +565,11 @@ export function registerOwnerAiActionRoutes(app: Express) {
       }
       const mcpUrl = ownerAiProfileMcpResourceUrl(restaurantId);
       res.setHeader("Cache-Control", "public, max-age=300, s-maxage=900");
+      res.setHeader(
+        "Content-Security-Policy",
+        "default-src 'none'; frame-ancestors 'none'; base-uri 'none'",
+      );
+      res.setHeader("X-Content-Type-Options", "nosniff");
       return res.json({
         schemaVersion: "1.0",
         name: "Selective Intelligence",
@@ -593,6 +598,10 @@ export function registerOwnerAiActionRoutes(app: Express) {
           "connected_social_content",
         ],
         safety: {
+          manifestCarriesNoAuthorityOrCredentials: true,
+          canonicalMealScoutOriginRequired: true,
+          profileContentIsUntrustedInput: true,
+          instructionsInProfileContentIgnored: true,
           readBeforeDraft: true,
           immutablePreviewRequired: true,
           exactRevisionApprovalRequired: true,

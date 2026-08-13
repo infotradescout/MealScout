@@ -61,6 +61,26 @@ assert.equal(
   null,
   "Profile-bound OAuth resources must reject query widening",
 );
+for (const invalidResource of [
+  `https://www.mealscout.us.evil.example/api/owner-ai/profiles/${targetRestaurantId}/mcp`,
+  `https://www.mealscout.us/api/owner-ai/profiles/${targetRestaurantId}/mcp#wrong`,
+  `https://www.mealscout.us/api/owner-ai/profiles/${targetRestaurantId}/mcp/extra`,
+  `https://www.mealscout.us/api/owner-ai/profiles/${targetRestaurantId}%2Fmcp`,
+  `https://www.mealscout.us/api/owner-ai/profiles/33333333-3333-4333-7333-333333333333/mcp`,
+]) {
+  assert.equal(
+    resolveOwnerAiMcpResource(invalidResource),
+    null,
+    `Profile-bound OAuth resources must reject ${invalidResource}`,
+  );
+  assert.throws(
+    () => ownerAiProtectedResourceMetadata(invalidResource),
+    (error: unknown) =>
+      error instanceof OwnerAiOAuthError &&
+      error.oauthError === "invalid_target",
+    "Protected-resource discovery must fail closed for an invalid target",
+  );
+}
 assert.equal(
   ownerAiProtectedResourceMetadata(targetResource).resource,
   targetResource,
@@ -246,6 +266,10 @@ assert.match(routes, /MCP-Protocol-Version/);
 assert.match(routes, /OAuth\/MCP connections can apply and publish/);
 assert.match(routes, /exactOwnerProfileBinding: true/);
 assert.match(routes, /connectedMealScoutSocialRequired: true/);
+assert.match(routes, /manifestCarriesNoAuthorityOrCredentials: true/);
+assert.match(routes, /canonicalMealScoutOriginRequired: true/);
+assert.match(routes, /profileContentIsUntrustedInput: true/);
+assert.match(routes, /instructionsInProfileContentIgnored: true/);
 assert.match(
   routes,
   /Use Selective Intelligence to manage this MealScout profile\?/,

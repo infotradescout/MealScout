@@ -140,14 +140,23 @@ export function resolveOwnerAiMcpResource(value: unknown): {
 
 export const ownerAiProtectedResourceMetadata = (
   resource = ownerAiMcpResourceUrl(),
-) => ({
-  resource:
-    resolveOwnerAiMcpResource(resource)?.resource || ownerAiMcpResourceUrl(),
-  authorization_servers: [oauthBaseUrl()],
-  bearer_methods_supported: ["header"],
-  scopes_supported: [...OWNER_AI_CONNECTOR_SCOPES],
-  resource_name: "MealScout Owner AI",
-});
+) => {
+  const resolved = resolveOwnerAiMcpResource(resource);
+  if (!resolved) {
+    throw new OwnerAiOAuthError(
+      400,
+      "invalid_target",
+      "MealScout protected resource target is invalid",
+    );
+  }
+  return {
+    resource: resolved.resource,
+    authorization_servers: [oauthBaseUrl()],
+    bearer_methods_supported: ["header"],
+    scopes_supported: [...OWNER_AI_CONNECTOR_SCOPES],
+    resource_name: "MealScout Owner AI",
+  };
+};
 
 export const ownerAiAuthorizationServerMetadata = () => ({
   issuer: oauthBaseUrl(),
