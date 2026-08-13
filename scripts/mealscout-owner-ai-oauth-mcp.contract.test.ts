@@ -266,6 +266,15 @@ assert.match(routes, /MCP-Protocol-Version/);
 assert.match(routes, /OAuth\/MCP connections can apply and publish/);
 assert.match(routes, /exactOwnerProfileBinding: true/);
 assert.match(routes, /connectedMealScoutSocialRequired: true/);
+assert.match(routes, /OWNER_AI_REMOTE_CONNECTOR_ENABLED/);
+assert.match(routes, /requireOwnerAiRemoteConnector/);
+assert.match(routes, /remoteConnectorEnabled: ownerAiRemoteConnectorEnabled\(\)/);
+assert.match(routes, /operatorKillSwitchAvailable: true/);
+assert.match(
+  routes,
+  /"\/api\/owner-ai\/oauth\/revoke",\s*oauthTokenLimiter/,
+  "Emergency disablement must not block credential revocation",
+);
 assert.match(routes, /manifestCarriesNoAuthorityOrCredentials: true/);
 assert.match(routes, /canonicalMealScoutOriginRequired: true/);
 assert.match(routes, /profileContentIsUntrustedInput: true/);

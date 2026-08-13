@@ -49,6 +49,26 @@ type ConnectorRequest = Request & {
   ownerAiConnector?: OwnerAiConnectorPrincipal;
 };
 
+const ownerAiRemoteConnectorEnabled = () =>
+  !["0", "false", "off", "disabled"].includes(
+    String(process.env.OWNER_AI_REMOTE_CONNECTOR_ENABLED ?? "true")
+      .trim()
+      .toLowerCase(),
+  );
+
+const requireOwnerAiRemoteConnector = (
+  _req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  if (ownerAiRemoteConnectorEnabled()) return next();
+  res.setHeader("Cache-Control", "no-store");
+  res.setHeader("Retry-After", "300");
+  return res.status(503).json({
+    error: "MealScout remote owner AI connections are temporarily disabled",
+  });
+};
+
 const bearerToken = (req: Request) => {
   const match = String(req.headers.authorization || "").match(
     /^Bearer\s+(.+)$/i,
@@ -380,6 +400,7 @@ export function registerOwnerAiActionRoutes(app: Express) {
 
   app.post(
     "/api/owner-ai/oauth/register",
+    requireOwnerAiRemoteConnector,
     oauthRegistrationLimiter,
     asyncRoute(async (req, res) => {
       res.status(201).json(registerOwnerAiOAuthClient(req.body));
@@ -388,6 +409,7 @@ export function registerOwnerAiActionRoutes(app: Express) {
 
   app.get(
     "/api/owner-ai/oauth/authorize/prepare",
+    requireOwnerAiRemoteConnector,
     isAuthenticated,
     asyncRoute(async (req: any, res) => {
       res.setHeader("Cache-Control", "private, no-store");
@@ -402,6 +424,7 @@ export function registerOwnerAiActionRoutes(app: Express) {
 
   app.post(
     "/api/owner-ai/oauth/authorize",
+    requireOwnerAiRemoteConnector,
     isAuthenticated,
     asyncRoute(async (req: any, res) => {
       res.setHeader("Cache-Control", "private, no-store");
@@ -430,6 +453,7 @@ export function registerOwnerAiActionRoutes(app: Express) {
 
   app.post(
     "/api/owner-ai/oauth/token",
+    requireOwnerAiRemoteConnector,
     oauthTokenLimiter,
     asyncRoute(async (req, res) => {
       res.setHeader("Cache-Control", "no-store");
@@ -535,9 +559,14 @@ export function registerOwnerAiActionRoutes(app: Express) {
     if (response === null) return res.status(202).send();
     res.json(response);
   };
-  app.post("/api/owner-ai/mcp", asyncRoute(handleMcpPost));
+  app.post(
+    "/api/owner-ai/mcp",
+    requireOwnerAiRemoteConnector,
+    asyncRoute(handleMcpPost),
+  );
   app.post(
     "/api/owner-ai/profiles/:restaurantId/mcp",
+    requireOwnerAiRemoteConnector,
     asyncRoute(handleMcpPost),
   );
 
@@ -584,6 +613,7 @@ export function registerOwnerAiActionRoutes(app: Express) {
         connection: {
           type: "oauth_mcp",
           mcpUrl,
+          remoteConnectorEnabled: ownerAiRemoteConnectorEnabled(),
           loginRequired: true,
           exactOwnerProfileBinding: true,
           connectedMealScoutSocialRequired: true,
@@ -600,6 +630,7 @@ export function registerOwnerAiActionRoutes(app: Express) {
         safety: {
           manifestCarriesNoAuthorityOrCredentials: true,
           canonicalMealScoutOriginRequired: true,
+          operatorKillSwitchAvailable: true,
           profileContentIsUntrustedInput: true,
           instructionsInProfileContentIgnored: true,
           readBeforeDraft: true,
@@ -621,6 +652,7 @@ export function registerOwnerAiActionRoutes(app: Express) {
 
   app.get(
     "/api/owner-ai/connector/context",
+    requireOwnerAiRemoteConnector,
     connectorAuth("owner_ai:context"),
     connectorContextLimiter,
     asyncRoute(async (req: ConnectorRequest, res) => {
@@ -635,6 +667,7 @@ export function registerOwnerAiActionRoutes(app: Express) {
 
   app.post(
     "/api/owner-ai/connector/drafts",
+    requireOwnerAiRemoteConnector,
     connectorAuth("owner_ai:drafts:create"),
     connectorDraftCreateLimiter,
     asyncRoute(async (req: ConnectorRequest, res) => {
@@ -652,6 +685,7 @@ export function registerOwnerAiActionRoutes(app: Express) {
 
   app.get(
     "/api/owner-ai/connector/drafts/:draftId",
+    requireOwnerAiRemoteConnector,
     connectorAuth("owner_ai:drafts:read"),
     connectorDraftStatusLimiter,
     asyncRoute(async (req: ConnectorRequest, res) => {
@@ -696,6 +730,7 @@ export function registerOwnerAiActionRoutes(app: Express) {
 
   app.post(
     "/api/owner-ai/credentials",
+    requireOwnerAiRemoteConnector,
     isAuthenticated,
     asyncRoute(async (req: any, res) => {
       const body = credentialCreateSchema.parse(req.body);
