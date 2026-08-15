@@ -1,8 +1,9 @@
 import type { Express, Request, Response, NextFunction } from "express";
-import { and, desc, eq, gt, isNull, or, sql } from "drizzle-orm";
+import { and, desc, eq, gt, ilike, inArray, isNull, or, sql } from "drizzle-orm";
 
 import { db } from "../db";
 import {
+  cities,
   deals,
   events,
   hosts,
@@ -157,6 +158,128 @@ const labelize = (value: string | null | undefined) =>
 
 const indexableRobots = PUBLIC_RESTAURANT_INDEXABLE_ROBOTS;
 const noindexRobots = PUBLIC_RESTAURANT_NOINDEX_ROBOTS;
+
+const seoTruckBusinessTypeAliases = [
+  "food_truck",
+  "truck",
+  "food-truck",
+  "foodtruck",
+  "mobile_food_vendor",
+];
+
+const seoPublicProfilePath = (row: any) => {
+  const isTruck =
+    Boolean(row.isFoodTruck) ||
+    seoTruckBusinessTypeAliases.includes(String(row.businessType || "").toLowerCase());
+  const prefix = isTruck
+    ? "truck"
+    : isBarBusinessType(row.businessType)
+      ? "bar"
+      : "restaurant";
+  const slug = `${toSlug(row.name) || String(row.id)}--${String(row.id)}`;
+  return `/${prefix}/${encodeURIComponent(slug)}`;
+};
+
+const loadSeoListingLinks = async (input: {
+  path: string;
+  description: string;
+  fallbackLinks: PageLink[];
+}) => {
+  const segments = input.path.split("/").filter(Boolean);
+  const isTruckListing =
+    segments[0] === "food-trucks" || segments[0] === "food-trucks-today";
+  const isCityListing =
+    segments[0] === "city" && segments[2] === "food";
+  const isCuisineListing = segments[0] === "cuisine" && Boolean(segments[1]);
+
+  if (!isTruckListing && !isCityListing && !isCuisineListing) {
+    return {
+      links: input.fallbackLinks,
+      body: [input.description],
+    };
+  }
+
+  const citySlug = isCuisineListing
+    ? segments[2] || ""
+    : segments[1] || "";
+  const cuisineSlug = isCuisineListing ? segments[1] || "" : "";
+  const [city] = citySlug
+    ? await db
+        .select({ name: cities.name })
+        .from(cities)
+        .where(eq(cities.slug, citySlug))
+        .limit(1)
+    : [null];
+
+  const conditions: any[] = [eq(restaurants.isActive, true)];
+  if (city) {
+    const cityNeedle = `%${String(city.name || "").trim()}%`;
+    conditions.push(
+      or(
+        ilike(restaurants.city, cityNeedle),
+        ilike(restaurants.address, cityNeedle),
+      ),
+    );
+  }
+  if (isTruckListing) {
+    conditions.push(
+      or(
+        eq(restaurants.isFoodTruck, true),
+        inArray(restaurants.businessType, seoTruckBusinessTypeAliases),
+      ),
+    );
+  }
+  if (cuisineSlug) {
+    conditions.push(
+      ilike(restaurants.cuisineType, `%${cuisineSlug.replace(/-/g, " ")}%`),
+    );
+  }
+
+  const rows = await db
+    .select({
+      id: restaurants.id,
+      name: restaurants.name,
+      businessType: restaurants.businessType,
+      isFoodTruck: restaurants.isFoodTruck,
+      city: restaurants.city,
+      state: restaurants.state,
+      cuisineType: restaurants.cuisineType,
+      updatedAt: restaurants.updatedAt,
+    })
+    .from(restaurants)
+    .where(and(...conditions))
+    .orderBy(desc(restaurants.updatedAt))
+    .limit(60);
+
+  const listingLinks = rows
+    .filter((row: any) => String(row.id || "").trim() && String(row.name || "").trim())
+    .map((row: any) => ({
+      label: `${String(row.name).trim()}${row.cuisineType ? ` — ${String(row.cuisineType).trim()}` : ""}`,
+      href: seoPublicProfilePath(row),
+    }));
+
+  const links: PageLink[] = [];
+  const seen = new Set<string>();
+  for (const link of [...listingLinks, ...input.fallbackLinks]) {
+    if (!link.href || seen.has(link.href)) continue;
+    seen.add(link.href);
+    links.push(link);
+  }
+
+  const areaLabel = city?.name || (citySlug ? citySlug.replace(/-/g, " ") : "your area");
+  const body =
+    rows.length > 0
+      ? [
+          input.description,
+          `MealScout currently has ${rows.length} public local listing${rows.length === 1 ? "" : "s"} on this page for ${areaLabel}.`,
+        ]
+      : [
+          input.description,
+          `No matching public listings are available for ${areaLabel} yet. Check nearby food or come back soon.`,
+        ];
+
+  return { links, body };
+};
 
 const friendlyLocationTypeLabel = (value: string | null | undefined) => {
   const normalized = String(value || "")
@@ -909,6 +1032,19 @@ async function seoLandingPage(
     .split("/")
     .some((segment) => isSyntheticPublicEntityName(segment));
 
+  let listing = {
+    links: input.links,
+    body: [input.description],
+  };
+  try {
+    listing = await loadSeoListingLinks(input);
+  } catch (error) {
+    console.warn("[seo-prerender] listing links unavailable", {
+      path: input.path,
+      error,
+    });
+  }
+
   return {
     title: `${input.title} | MealScout`,
     description: input.description,
@@ -922,8 +1058,8 @@ async function seoLandingPage(
       description: input.description,
       url: absoluteUrl(baseUrl, input.path),
     },
-    links: input.links,
-    body: [input.description],
+    links: listing.links,
+    body: listing.body,
   } satisfies PrerenderPage;
 }
 
@@ -1027,6 +1163,27 @@ export function registerPublicProfilePrerenderRoutes(
       }
       return Promise.resolve(null);
     }),
+  );
+  app.get(
+    "/food-trucks/:city",
+    gate((req) =>
+      seoLandingPage(canonicalBaseUrl, {
+        path: `/food-trucks/${encodeURIComponent(String(req.params.city || ""))}`,
+        title: `Food trucks in ${String(req.params.city || "").replace(/-/g, " ")}`,
+        description:
+          "Find food trucks by city and open local MealScout profiles, menus, and location details.",
+        links: [
+          {
+            label: "Food trucks today",
+            href: `/food-trucks-today/${encodeURIComponent(String(req.params.city || ""))}`,
+          },
+          {
+            label: "Open Scout",
+            href: "/scout",
+          },
+        ],
+      }),
+    ),
   );
   app.get(
     "/food-trucks-today/:city",
