@@ -8,6 +8,7 @@ Entry routes:
 
 - `/` - guest welcome; authenticated users redirect toward `/scout`.
 - `/scout` - primary customer discovery surface. Routes to `ScoutPageV2` from `client/src/pages/explore-preview-v2.tsx`.
+- `/food-trucks` - public alias to the canonical Scout surface for food-truck-first discovery.
 - `/search` - customer search.
 - `/map` - legacy public entry. `client/src/App.tsx` routes this to `RedirectToScout`, which redirects to the canonical `/scout` surface.
 - `/trending` - legacy discovery entry. `client/src/App.tsx` routes this to `RedirectToScout`, which redirects to `/scout`.
@@ -25,7 +26,7 @@ Public route source inventory:
 
 | Route family | Current frontend source | Notes |
 | --- | --- | --- |
-| `/scout`, `/scout/:refTag`, `/directory`, `/directory/:refTag`, `/scout-v2` | `client/src/pages/explore-preview-v2.tsx` (`ScoutPageV2`) | Canonical public Scout discovery surface. |
+| `/scout`, `/scout/:refTag`, `/directory`, `/directory/:refTag`, `/scout-v2`, `/food-trucks` | `client/src/pages/explore-preview-v2.tsx` (`ScoutPageV2`) | Canonical public Scout discovery surface; `/food-trucks` is the food-truck-first alias. |
 | `/map` | `RedirectToScout` in `client/src/App.tsx`, then `client/src/pages/explore-preview-v2.tsx` | The obsolete standalone map page has been retired. |
 | `/trending` | `RedirectToScout` in `client/src/App.tsx`, then `client/src/pages/explore-preview-v2.tsx` | Legacy entry preserved as redirect. |
 | `/sitemap` | `client/src/pages/sitemap.tsx` | Public content/discovery index. |
