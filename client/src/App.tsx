@@ -313,6 +313,7 @@ const publicRoutePrefixes = [
 ];
 
 const isPublicPath = (path: string) =>
+  path === "/food-trucks" ||
   publicRoutePrefixes.some((prefix) =>
     prefix === "/" ? path === "/" : path.startsWith(prefix),
   ) || Boolean(parseCleanAffiliateBusinessRoute(path));
@@ -469,6 +470,7 @@ function SharedPublicRoutes() {
       <Route path="/event/:slug" component={EventDetailPage} />
       <Route path="/dashboard" component={DashboardRouter} />
       <Route path="/user-dashboard" component={UserDashboard} />
+      <Route path="/food-trucks" component={RedirectToScout} />
       <Route path="/food-trucks/:citySlug" component={CityLanding} />
       <Route
         path="/food-trucks/:citySlug/:cuisineSlug"
