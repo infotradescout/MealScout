@@ -286,6 +286,7 @@ const publicRoutePrefixes = [
   "/jobs",
   "/private-chefs",
   "/events",
+  "/city/",
   "/food-trucks/",
   "/food-trucks-today/",
   "/deals-today/",
@@ -419,9 +420,9 @@ function SharedPublicRoutes() {
       />
       <Route path="/location/:slug/:refTag" component={PublicProfilePage} />
       <Route path="/location/:slug" component={PublicProfilePage} />
+      <Route path="/city/:city/food" component={PublicSeoLandingPage} />
       <Route path="/city/:city" component={CityLanding} />
       <Route path="/city/:city/:mode" component={CityDiscoveryPage} />
-      <Route path="/city/:city/food" component={PublicSeoLandingPage} />
       <Route path="/food-trucks-today/:city" component={PublicSeoLandingPage} />
       <Route path="/deals-today/:city" component={PublicSeoLandingPage} />
       <Route path="/events-today/:city" component={PublicSeoLandingPage} />
@@ -471,7 +472,7 @@ function SharedPublicRoutes() {
       <Route path="/dashboard" component={DashboardRouter} />
       <Route path="/user-dashboard" component={UserDashboard} />
       <Route path="/food-trucks" component={RedirectToScout} />
-      <Route path="/food-trucks/:citySlug" component={CityLanding} />
+      <Route path="/food-trucks/:citySlug" component={PublicSeoLandingPage} />
       <Route
         path="/food-trucks/:citySlug/:cuisineSlug"
         component={CityLanding}

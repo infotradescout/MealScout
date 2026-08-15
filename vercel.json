@@ -5,7 +5,12 @@
   "redirects": [
     {
       "source": "/(.*)",
-      "has": [{ "type": "host", "value": "mealscout.us" }],
+      "has": [
+        {
+          "type": "host",
+          "value": "mealscout.us"
+        }
+      ],
       "destination": "https://www.mealscout.us/$1",
       "permanent": true
     }
@@ -50,6 +55,38 @@
     {
       "source": "/:indexNowKey([A-Za-z0-9_-]{8,128}).txt",
       "destination": "https://mealscout.onrender.com/:indexNowKey.txt"
+    },
+    {
+      "source": "/food-trucks/:city",
+      "destination": "https://mealscout.onrender.com/food-trucks/:city"
+    },
+    {
+      "source": "/food-trucks-today/:city",
+      "destination": "https://mealscout.onrender.com/food-trucks-today/:city"
+    },
+    {
+      "source": "/city/:city/food",
+      "destination": "https://mealscout.onrender.com/city/:city/food"
+    },
+    {
+      "source": "/deals-today/:city",
+      "destination": "https://mealscout.onrender.com/deals-today/:city"
+    },
+    {
+      "source": "/events-today/:city",
+      "destination": "https://mealscout.onrender.com/events-today/:city"
+    },
+    {
+      "source": "/locations-with-trucks/:city",
+      "destination": "https://mealscout.onrender.com/locations-with-trucks/:city"
+    },
+    {
+      "source": "/cuisine/:cuisine/:city",
+      "destination": "https://mealscout.onrender.com/cuisine/:cuisine/:city"
+    },
+    {
+      "source": "/cuisine/:cuisine",
+      "destination": "https://mealscout.onrender.com/cuisine/:cuisine"
     },
     {
       "source": "/api/(.*)",
@@ -148,6 +185,38 @@
       "continue": true
     },
     {
+      "src": "/food-trucks/([^/]+)",
+      "dest": "https://mealscout.onrender.com/food-trucks/$1"
+    },
+    {
+      "src": "/food-trucks-today/([^/]+)",
+      "dest": "https://mealscout.onrender.com/food-trucks-today/$1"
+    },
+    {
+      "src": "/city/([^/]+)/food",
+      "dest": "https://mealscout.onrender.com/city/$1/food"
+    },
+    {
+      "src": "/deals-today/([^/]+)",
+      "dest": "https://mealscout.onrender.com/deals-today/$1"
+    },
+    {
+      "src": "/events-today/([^/]+)",
+      "dest": "https://mealscout.onrender.com/events-today/$1"
+    },
+    {
+      "src": "/locations-with-trucks/([^/]+)",
+      "dest": "https://mealscout.onrender.com/locations-with-trucks/$1"
+    },
+    {
+      "src": "/cuisine/([^/]+)/([^/]+)",
+      "dest": "https://mealscout.onrender.com/cuisine/$1/$2"
+    },
+    {
+      "src": "/cuisine/([^/]+)",
+      "dest": "https://mealscout.onrender.com/cuisine/$1"
+    },
+    {
       "src": "/api/(.*)",
       "dest": "https://mealscout.onrender.com/api/$1"
     },
@@ -188,4 +257,3 @@
     }
   ]
 }
-

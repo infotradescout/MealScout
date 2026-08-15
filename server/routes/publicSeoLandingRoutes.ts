@@ -49,6 +49,39 @@ const truckBusinessTypeAliases = [
   "mobile_food_vendor",
 ];
 
+const publicTruckSelect = {
+  id: restaurants.id,
+  name: restaurants.name,
+  businessType: restaurants.businessType,
+  isFoodTruck: restaurants.isFoodTruck,
+  city: restaurants.city,
+  state: restaurants.state,
+  cuisineType: restaurants.cuisineType,
+  coverImageUrl: restaurants.coverImageUrl,
+  logoUrl: restaurants.logoUrl,
+  updatedAt: restaurants.updatedAt,
+};
+
+const loadPublicTruckRows = async (cityName: string) =>
+  db
+    .select(publicTruckSelect)
+    .from(restaurants)
+    .where(
+      and(
+        eq(restaurants.isActive, true),
+        or(
+          eq(restaurants.isFoodTruck, true),
+          inArray(restaurants.businessType, truckBusinessTypeAliases),
+        ),
+        or(
+          ilike(restaurants.city, cityLike(cityName)),
+          ilike(restaurants.address, cityLike(cityName)),
+        ),
+      ),
+    )
+    .orderBy(desc(restaurants.updatedAt))
+    .limit(60);
+
 const buildPublicProfilePath = (input: {
   profileType: "restaurant" | "truck" | "location";
   id: string;
@@ -97,10 +130,30 @@ const buildSeoPayload = (input: {
   items: any[];
   emptyMessage: string;
 }) => {
-  const canonicalPathParts = [input.routeKey];
-  if (input.citySlug) canonicalPathParts.push(input.citySlug);
-  if (input.cuisineSlug) canonicalPathParts.push(input.cuisineSlug);
-  const canonicalPath = `/${canonicalPathParts.map((part) => encodeURIComponent(part)).join("/")}`;
+  const encodedCity = input.citySlug
+    ? encodeURIComponent(input.citySlug)
+    : "";
+  const encodedCuisine = input.cuisineSlug
+    ? encodeURIComponent(input.cuisineSlug)
+    : "";
+  const canonicalPath = (() => {
+    switch (input.routeKey) {
+      case "city":
+        return `/city/${encodedCity}/food`;
+      case "food-trucks":
+        return `/food-trucks/${encodedCity}`;
+      case "cuisine":
+        return encodedCity
+          ? `/cuisine/${encodedCuisine}/${encodedCity}`
+          : `/cuisine/${encodedCuisine}`;
+      default: {
+        const parts = [input.routeKey, input.citySlug, input.cuisineSlug]
+          .filter(Boolean)
+          .map((part) => encodeURIComponent(String(part)));
+        return `/${parts.join("/")}`;
+      }
+    }
+  })();
   return safe({
     page: {
       routeKey: input.routeKey,
@@ -120,38 +173,37 @@ const buildSeoPayload = (input: {
 };
 
 export function registerPublicSeoLandingRoutes(app: Express) {
+  app.get("/api/public/seo/food-trucks/:city", async (req, res) => {
+    try {
+      const citySlug = String(req.params.city || "").trim().toLowerCase();
+      const city = await resolveCityBySlug(citySlug);
+      if (!city) return res.status(404).json({ message: "City not found" });
+      const rows = await loadPublicTruckRows(city.name);
+
+      return res.json(
+        buildSeoPayload({
+          routeKey: "food-trucks",
+          citySlug,
+          cityName: city.name,
+          title: `Food trucks in ${city.name}`,
+          description: `Find food trucks in ${city.name}. Browse profiles, menus, locations, and current local activity.`,
+          items: rows.map(buildCard),
+          emptyMessage: "No food trucks are listed here yet. Check nearby food or come back soon.",
+        }),
+      );
+    } catch (error) {
+      console.error("food-trucks seo failed", error);
+      return res.status(500).json({ message: "Failed to load page data" });
+    }
+  });
+
   app.get("/api/public/seo/food-trucks-today/:city", async (req, res) => {
     try {
       const citySlug = String(req.params.city || "").trim().toLowerCase();
       const city = await resolveCityBySlug(citySlug);
       if (!city) return res.status(404).json({ message: "City not found" });
 
-      const rows = await db
-        .select({
-          id: restaurants.id,
-          name: restaurants.name,
-          businessType: restaurants.businessType,
-          isFoodTruck: restaurants.isFoodTruck,
-          city: restaurants.city,
-          state: restaurants.state,
-          cuisineType: restaurants.cuisineType,
-          coverImageUrl: restaurants.coverImageUrl,
-          logoUrl: restaurants.logoUrl,
-          updatedAt: restaurants.updatedAt,
-        })
-        .from(restaurants)
-        .where(
-          and(
-            eq(restaurants.isActive, true),
-            or(
-              eq(restaurants.isFoodTruck, true),
-              inArray(restaurants.businessType, truckBusinessTypeAliases),
-            ),
-            or(ilike(restaurants.city, cityLike(city.name)), ilike(restaurants.address, cityLike(city.name))),
-          ),
-        )
-        .orderBy(desc(restaurants.updatedAt))
-        .limit(60);
+      const rows = await loadPublicTruckRows(city.name);
 
       return res.json(
         buildSeoPayload({
