@@ -39,6 +39,9 @@ type Payload = {
 
 const mapRouteToEndpoint = (pathname: string) => {
   const parts = pathname.split("/").filter(Boolean);
+  if (parts[0] === "food-trucks" && parts[1] && !parts[2]) {
+    return `/api/public/seo/food-trucks/${encodeURIComponent(parts[1])}`;
+  }
   if (parts[0] === "food-trucks-today" && parts[1]) {
     return `/api/public/seo/food-trucks-today/${encodeURIComponent(parts[1])}`;
   }
