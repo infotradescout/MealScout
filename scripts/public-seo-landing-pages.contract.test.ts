@@ -6,9 +6,11 @@ const publicSeoRoutes = readFileSync("server/routes/publicSeoLandingRoutes.ts", 
 const routerRegistry = readFileSync("server/routes.ts", "utf8");
 const seoRoutes = readFileSync("server/routes/seoRoutes.ts", "utf8");
 const prerender = readFileSync("server/seo/publicProfilePrerender.ts", "utf8");
+const vercelConfig = readFileSync("vercel.json", "utf8");
 const publicProfile = readFileSync("client/src/pages/public-profile.tsx", "utf8");
 
 const requiredClientRoutes = [
+  '"/food-trucks/:citySlug"',
   '"/food-trucks-today/:city"',
   '"/deals-today/:city"',
   '"/events-today/:city"',
@@ -28,6 +30,7 @@ if (!routerRegistry.includes("registerPublicSeoLandingRoutes(app);")) {
 }
 
 const requiredApiRoutes = [
+  "/api/public/seo/food-trucks/:city",
   "/api/public/seo/food-trucks-today/:city",
   "/api/public/seo/deals-today/:city",
   "/api/public/seo/events-today/:city",
@@ -59,7 +62,35 @@ for (const snippet of requiredSitemapSnippets) {
   }
 }
 
+const cityFoodRouteIndex = appRoutes.indexOf('path="/city/:city/food"');
+const genericCityModeIndex = appRoutes.indexOf('path="/city/:city/:mode"');
+if (cityFoodRouteIndex < 0 || genericCityModeIndex < 0 || cityFoodRouteIndex > genericCityModeIndex) {
+  throw new Error("City SEO route must run before the generic city mode route");
+}
+
+for (const snippet of [
+  '"/food-trucks/:city"',
+  '"/food-trucks-today/:city"',
+  '"/city/:city/food"',
+  '"/deals-today/:city"',
+  '"/events-today/:city"',
+  '"/locations-with-trucks/:city"',
+  '"/cuisine/:cuisine/:city"',
+]) {
+  if (!vercelConfig.includes(snippet)) {
+    throw new Error(`Vercel SEO rewrite missing: ${snippet}`);
+  }
+}
+
+if (!publicSeoRoutes.includes('case "city"') || !publicSeoRoutes.includes("encodedCity")) {
+  throw new Error("SEO API canonical mapping for city pages is missing");
+}
+if (!publicSeoRoutes.includes('case "cuisine"') || !publicSeoRoutes.includes("encodedCuisine")) {
+  throw new Error("SEO API canonical mapping for cuisine pages is missing");
+}
+
 const requiredPrerenderRoutes = [
+  "/food-trucks/:city",
   "/food-trucks-today/:city",
   "/deals-today/:city",
   "/events-today/:city",
