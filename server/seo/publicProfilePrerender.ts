@@ -1037,7 +1037,11 @@ async function seoLandingPage(
     body: [input.description],
   };
   try {
-    listing = await loadSeoListingLinks(input);
+    listing = await loadSeoListingLinks({
+      path: input.path,
+      description: input.description,
+      fallbackLinks: input.links,
+    });
   } catch (error) {
     console.warn("[seo-prerender] listing links unavailable", {
       path: input.path,
