@@ -472,7 +472,7 @@ export const aboutFaqs = [
   {
     question: "What does a MealScout Profile cost?",
     answer:
-      "The complete self-managed MealScout Profile and its tools are included under the non-expiring free trial. Optional human setup work is separate: simple setup service is $100, while complex menus, multiple locations, heavy content, advanced branding, or ongoing support may require a custom quote. Paying for help never unlocks or restricts profile tools.",
+      "The standard self-managed MealScout Profile is free, and its complete profile tools are included under the non-expiring free trial. Optional human setup work is separate. Most simple setups are $100; complex menus, multiple locations, heavy content, advanced branding, or ongoing support may require a custom quote. Separate paid orders, deliveries, bookings, and other transactions can have charges shown before payment. Paying for help never unlocks or restricts profile tools.",
   },
   {
     question: "Does MealScout use star reviews?",
