@@ -271,6 +271,9 @@ export function registerUserAdminRoutes(
         res.status(
           error instanceof BusinessPromotionError ? error.statusCode : 500,
         ).json({
+          ...(error instanceof BusinessPromotionError && error.code
+            ? { code: error.code }
+            : {}),
           message: error?.message || "Failed to create and attach business profile",
         });
       }

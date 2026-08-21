@@ -110,7 +110,8 @@ requireMatch(
   'path="/restaurant-owner-dashboard"',
   '<Route path="/host/dashboard" component={HostDashboard} />',
   'path="/supplier/dashboard"',
-  '<Route path="/admin/dashboard" component={AdminDashboard} />',
+  '<Route path="/admin" component={AdminDashboard} />',
+  '<Route path="/admin/dashboard" component={RedirectToAdmin} />',
   '<Route path="/staff" component={StaffDashboard} />',
   '<Route path="/parking-pass-manage" component={ParkingPassManage} />',
 ].forEach((snippet) => requireIncludes(app, snippet, `App route snippet ${snippet}`));

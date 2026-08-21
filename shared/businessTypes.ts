@@ -30,13 +30,14 @@ const BAR_ALIASES = new Set([
   // New host/event venues use the separate canonical "host_venue" value.
   "venue",
 ]);
-const TRUCK_ALIASES = new Set([
+export const FOOD_TRUCK_BUSINESS_TYPE_ALIASES = [
   "food_truck",
   "truck",
   "food-truck",
   "foodtruck",
   "mobile_food_vendor",
-]);
+] as const;
+const TRUCK_ALIASES = new Set<string>(FOOD_TRUCK_BUSINESS_TYPE_ALIASES);
 const RESTAURANT_ALIASES = new Set(["restaurant"]);
 
 const CAPABILITIES: Record<FoodBusinessType, BusinessCapabilities> = {

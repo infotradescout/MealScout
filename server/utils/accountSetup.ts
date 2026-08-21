@@ -3,13 +3,14 @@ import crypto from "crypto";
 import type { User } from "@shared/schema";
 import { storage } from "../storage";
 import { emailService } from "../emailService";
-import { sendEmailVerificationIfNeeded } from "./emailVerification";
+import { buildSafeAccountSetupPath } from "@shared/safeInternalPath";
 
 type InviteOptions = {
   user: User;
   createdBy?: User | null;
   req: Request;
   setupPath?: string;
+  continuationPath?: string | null;
 };
 
 export type AccountSetupInviteResult = {
@@ -17,20 +18,43 @@ export type AccountSetupInviteResult = {
   setupUrl: string;
 };
 
+export type AccountSetupInviteDependencies = {
+  createAccountSetupToken: typeof storage.createAccountSetupToken;
+  deleteAccountSetupToken: typeof storage.deleteAccountSetupToken;
+  sendAccountSetupEmail: typeof emailService.sendAccountSetupEmail;
+};
+
+const defaultDependencies: AccountSetupInviteDependencies = {
+  createAccountSetupToken: (token) => storage.createAccountSetupToken(token),
+  deleteAccountSetupToken: (tokenId) =>
+    storage.deleteAccountSetupToken(tokenId),
+  sendAccountSetupEmail: (user, setupUrl, createdByName) =>
+    emailService.sendAccountSetupEmail(user, setupUrl, createdByName),
+};
+
+export function buildAccountSetupInviteUrl(input: {
+  baseUrl: string;
+  setupToken: string;
+  setupPath?: string | null;
+  continuationPath?: string | null;
+}) {
+  const setupPath = buildSafeAccountSetupPath(input);
+  return `${input.baseUrl.replace(/\/+$/, "")}${setupPath}`;
+}
+
 export async function sendAccountSetupInvite({
   user,
   createdBy,
   req,
   setupPath,
-}: InviteOptions): Promise<AccountSetupInviteResult> {
+  continuationPath,
+}: InviteOptions,
+dependencies: AccountSetupInviteDependencies = defaultDependencies): Promise<AccountSetupInviteResult> {
   const setupToken = crypto.randomBytes(32).toString("hex");
   const tokenHash = crypto.createHash("sha256").update(setupToken).digest("hex");
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
-  // Invalidate prior setup links before issuing a fresh invite.
-  await storage.deleteUserSetupTokens(user.id);
-
-  await storage.createAccountSetupToken({
+  const createdToken = await dependencies.createAccountSetupToken({
     userId: user.id,
     tokenHash,
     expiresAt,
@@ -41,32 +65,32 @@ export async function sendAccountSetupInvite({
 
   const baseUrl =
     process.env.PUBLIC_BASE_URL || `${req.protocol}://${req.get("host")}`;
-  const normalizedSetupPath = String(setupPath || "/account-setup")
-    .trim()
-    .replace(/\s+/g, "");
-  const safeSetupPath = normalizedSetupPath.startsWith("/")
-    ? normalizedSetupPath
-    : `/${normalizedSetupPath}`;
-  const setupUrl = `${baseUrl.replace(
-    /\/+$/,
-    "",
-  )}${safeSetupPath}?token=${encodeURIComponent(setupToken)}`;
+  const setupUrl = buildAccountSetupInviteUrl({
+    baseUrl,
+    setupToken,
+    setupPath,
+    continuationPath,
+  });
 
   const createdByName = createdBy?.firstName
     ? `${createdBy.firstName} ${createdBy.lastName || ""}`.trim()
     : undefined;
 
-  const ok = await emailService.sendAccountSetupEmail(
-    user,
-    setupUrl,
-    createdByName,
-  );
+  let ok = false;
+  try {
+    ok = await dependencies.sendAccountSetupEmail(
+      user,
+      setupUrl,
+      createdByName,
+    );
+  } catch (error) {
+    await dependencies.deleteAccountSetupToken(createdToken.id);
+    throw error;
+  }
 
-  // Always try to deliver an email verification link for invited accounts too.
-  // This is best-effort and should never block onboarding.
-  sendEmailVerificationIfNeeded(user, req).catch((error) =>
-    console.error("[email] Failed to send verification for invite:", error),
-  );
+  if (!ok) {
+    await dependencies.deleteAccountSetupToken(createdToken.id);
+  }
 
   return {
     emailSent: ok,

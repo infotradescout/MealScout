@@ -173,6 +173,10 @@ export function createAuthTokensRepository() {
       return token;
     },
 
+    async deleteAccountSetupToken(id: string): Promise<void> {
+      await db.delete(accountSetupTokens).where(eq(accountSetupTokens.id, id));
+    },
+
     async deleteUserSetupTokens(userId: string): Promise<void> {
       await db
         .delete(accountSetupTokens)

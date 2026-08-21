@@ -153,6 +153,7 @@ const ScoutPageV2 = lazy(() => import("@/pages/explore-preview-v2"));
 const FoodTruckRush = lazy(() => import("@/pages/food-truck-rush"));
 const HiringPage = lazy(() => import("@/pages/hiring"));
 const ForRestaurants = lazy(() => import("@/pages/for-restaurants"));
+const ForFoodTrucks = lazy(() => import("@/pages/for-food-trucks"));
 const ForBars = lazy(() => import("@/pages/for-bars"));
 const ForHosts = lazy(() => import("@/pages/for-hosts"));
 const ForEvents = lazy(() => import("@/pages/for-events"));
@@ -278,6 +279,7 @@ const publicRoutePrefixes = [
   "/host-signup",
   "/profile-setup",
   "/for-restaurants",
+  "/for-food-trucks",
   "/for-bars",
   "/for-hosts",
   "/for-events",
@@ -459,6 +461,7 @@ function SharedPublicRoutes() {
       <Route path="/host-signup" component={HostSignup} />
       <Route path="/profile-setup" component={ProfileSetupPage} />
       <Route path="/for-restaurants" component={ForRestaurants} />
+      <Route path="/for-food-trucks" component={ForFoodTrucks} />
       <Route path="/for-bars" component={ForBars} />
       <Route path="/for-hosts" component={ForHosts} />
       <Route path="/for-events" component={ForEvents} />

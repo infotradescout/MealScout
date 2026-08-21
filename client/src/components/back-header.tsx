@@ -38,6 +38,7 @@ export function BackHeader({
             variant="ghost" 
             size="sm"
             onClick={handleBackClick}
+            aria-label={`Back to ${title}`}
             data-testid="button-back"
             className="h-10 w-10 p-0"
           >

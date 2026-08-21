@@ -12,6 +12,10 @@ import { isUniqueViolation } from "../utils/isUniqueViolation";
 import { validateDocuments, checkRateLimit } from "../documentValidation";
 import { vacEvaluateRestaurantSignup } from "../vacLite";
 import { ensurePremiumTrialForUser } from "../services/premiumTrial";
+import {
+  BusinessPromotionError,
+  promoteBusinessSetupToProfile,
+} from "../services/businessOnboardingPromotion";
 import { isPublicBusinessVisible } from "../utils/publicBusinessVisibility";
 import { parseQuickReviewScore } from "../quickReview/parseQuickReviewScore";
 import {
@@ -60,6 +64,7 @@ import {
   computeHomeRankingScore,
   getHomeRankingReasons,
 } from "@shared/rankingPolicy";
+import { resolveStoredFoodBusinessType } from "@shared/businessTypes";
 
 const ensureTrialForUser = ensurePremiumTrialForUser;
 
@@ -205,7 +210,38 @@ export function registerRestaurantCoreRoutes(
         ownerId: userId,
       });
 
-      const restaurant = await storage.createRestaurant(restaurantData);
+      let restaurant: any;
+      if (resolveStoredFoodBusinessType(restaurantData) === "food_truck") {
+        if (req.body?.acceptTerms !== true) {
+          return res.status(400).json({
+            message: "You must accept the terms",
+          });
+        }
+        const promoted = await promoteBusinessSetupToProfile(userId, {
+          onboardingAttemptId:
+            String(req.body?.onboardingAttemptId || "").trim() ||
+            crypto.randomUUID(),
+          businessName: restaurantData.name,
+          businessType: "food_truck",
+          address: restaurantData.address,
+          city: restaurantData.city,
+          state: restaurantData.state,
+          phone: restaurantData.phone,
+          cuisineType: restaurantData.cuisineType,
+          description: restaurantData.description,
+          websiteUrl: restaurantData.websiteUrl,
+          instagramUrl: restaurantData.instagramUrl,
+          facebookPageUrl: restaurantData.facebookPageUrl,
+          logoUrl: restaurantData.logoUrl,
+          coverImageUrl: restaurantData.coverImageUrl,
+          menuItems:
+            req.body?.menuItems || req.body?.menu || req.body?.menuDraft || [],
+          placeEvidence: req.body?.placeEvidence || null,
+        });
+        restaurant = promoted.restaurant;
+      } else {
+        restaurant = await storage.createRestaurant(restaurantData);
+      }
 
       try {
         const enabled =
@@ -264,6 +300,12 @@ export function registerRestaurantCoreRoutes(
       res.json(restaurant);
     } catch (error: any) {
       console.error("Error creating restaurant:", error);
+      if (error instanceof BusinessPromotionError) {
+        return res.status(error.statusCode).json({
+          ...(error.code ? { code: error.code } : {}),
+          message: error.message,
+        });
+      }
       res.status(400).json({ message: error.message });
     }
   });

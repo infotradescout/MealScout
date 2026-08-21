@@ -12,23 +12,17 @@ import { CANONICAL_DASHBOARD_ENTRY_PATH } from "@/lib/dashboard-route";
 import { SEOHead } from "@/components/seo-head";
 import {
   FUNNEL_EVENTS,
+  toSafeFunnelDestinationPath,
   trackFunnelEvent,
   trackFunnelEventOncePerSession,
 } from "@/utils/funnelTelemetry";
 import { getStoredAffiliateRef, setAffiliateRef } from "@/lib/share";
+import { normalizeSafeInternalPath } from "@shared/safeInternalPath";
 
 const getSafeRedirectPath = (): string | null => {
   try {
     const params = new URLSearchParams(window.location.search);
-    const redirect = (params.get("redirect") || "").trim();
-    if (!redirect) return null;
-
-    // Only allow same-origin absolute paths (no protocol, no scheme-relative).
-    if (!redirect.startsWith("/")) return null;
-    if (redirect.startsWith("//")) return null;
-    if (redirect.includes("://")) return null;
-
-    return redirect;
+    return normalizeSafeInternalPath(params.get("redirect"));
   } catch {
     return null;
   }
@@ -92,7 +86,7 @@ export default function Login() {
     trackFunnelEvent(FUNNEL_EVENTS.primaryCtaClick, {
       page: "login",
       cta: "google_login",
-      destination: googleLoginUrl,
+      destination: toSafeFunnelDestinationPath(googleLoginUrl),
     });
     window.location.href = googleLoginUrl;
   };
@@ -104,7 +98,7 @@ export default function Login() {
     trackFunnelEvent(FUNNEL_EVENTS.primaryCtaClick, {
       page: "login",
       cta: "facebook_login",
-      destination: facebookLoginUrl,
+      destination: toSafeFunnelDestinationPath(facebookLoginUrl),
     });
     window.location.href = facebookLoginUrl;
   };
@@ -142,7 +136,7 @@ export default function Login() {
             typeof payload?.authUrl === "string" && payload.authUrl.startsWith("/")
               ? payload.authUrl
               : "/api/auth/google/customer";
-          window.location.href = authUrl(nextAuthPath);
+          window.location.href = authUrl(buildAuthPath(nextAuthPath));
           return;
         }
         if (payload?.code === "email_not_verified") {
@@ -163,15 +157,12 @@ export default function Login() {
       // Small delay to ensure cookie/session propagation
       await new Promise((r) => setTimeout(r, 200));
       // Redirect after login (many flows pass `?redirect=` to /login)
-      trackFunnelEvent(FUNNEL_EVENTS.signupCompleted, {
-        page: "login",
-        stage: "login_success",
-        redirectPath: redirectPath || CANONICAL_DASHBOARD_ENTRY_PATH,
-      });
       trackFunnelEvent(FUNNEL_EVENTS.activationStarted, {
         page: "login",
         stage: "post_login_redirect",
-        redirectPath: redirectPath || CANONICAL_DASHBOARD_ENTRY_PATH,
+        redirectPath: toSafeFunnelDestinationPath(
+          redirectPath || CANONICAL_DASHBOARD_ENTRY_PATH,
+        ),
       });
       try {
         window.sessionStorage.removeItem("mealscout:post-verification-redirect");

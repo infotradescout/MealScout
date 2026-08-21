@@ -19,8 +19,17 @@ import {
   fetchWebsiteProfilePreview,
   WebsiteImportError,
 } from "../utils/websiteProfileImport";
-import { users, telemetryEvents, insertRestaurantSchema, type User } from "@shared/schema";
+import {
+  users,
+  telemetryEvents,
+  insertRestaurantSchema,
+  type User,
+} from "@shared/schema";
 import { isStaffOrAdminUserType } from "@shared/profileAccessPolicy";
+import {
+  buildRestaurantSignupPath,
+  resolveBusinessAuthProvisioningUserType,
+} from "@shared/businessSignupIntent";
 
 type RestaurantSignupRouteDependencies = {
   ensureTrialForUser: (user: User) => Promise<User | null | undefined>;
@@ -159,9 +168,10 @@ export function registerRestaurantSignupRoutes(
         }
 
         if (user.userType === "customer") {
-          console.log("Converting customer account to restaurant owner:", user.id);
-          await storage.updateUserType(user.id, "restaurant_owner");
-          user = (await storage.getUserById(user.id)) || user;
+          console.log(
+            "Deferring customer account role update until profile promotion succeeds:",
+            user.id,
+          );
         }
       } else {
         const userParseResult = restaurantSignupUserSchema.safeParse(
@@ -188,10 +198,17 @@ export function registerRestaurantSignupRoutes(
         const passwordHash = await bcrypt.hash(validatedUserData.password, 10);
         const normalizedPhone = validatedUserData.phone.replace(/\D/g, "");
         const { phoneContactConsent, ...emailUserData } = validatedUserData;
+        const isFoodTruckRegistration =
+          String(restaurantData?.businessType || "") === "food_truck";
+        const provisioningUserType = resolveBusinessAuthProvisioningUserType({
+          requestedUserType: isFoodTruckRegistration
+            ? "food_truck"
+            : "restaurant_owner",
+        }) as User["userType"];
         user = await storage.upsertUserByAuth(
           "email",
           { ...emailUserData, phone: normalizedPhone, passwordHash },
-          "restaurant_owner",
+          provisioningUserType,
         );
 
         // The consent checkbox on the signup form ("MealScout may call or
@@ -225,7 +242,13 @@ export function registerRestaurantSignupRoutes(
         ).replace(/\/+$/, "");
         const verifyParams = new URLSearchParams({
           token,
-          redirect: "/restaurant-signup",
+          redirect: isFoodTruckRegistration
+            ? buildRestaurantSignupPath({
+                businessType: "food_truck",
+                intent: "create",
+                source: "email",
+              })
+            : "/restaurant-signup",
         });
         const verifyUrl = `${apiBaseUrl}/api/auth/verify-email?${verifyParams.toString()}`;
         await emailService.sendEmailVerificationEmail(user, verifyUrl);
@@ -315,20 +338,16 @@ export function registerRestaurantSignupRoutes(
       const restaurant = promoted.restaurant as any;
 
       if (String((restaurant as any)?.businessType || "") === "food_truck") {
-        const currentType = String((user as any)?.userType || "");
-        const allowedToPromote = ["customer", "restaurant_owner"].includes(
-          currentType,
-        );
-        if (allowedToPromote && currentType !== "food_truck") {
-          try {
-            await storage.updateUserType(user.id, "food_truck");
-            user = (await storage.getUserById(user.id)) || user;
-          } catch (error) {
-            console.warn(
-              "Unable to synchronize the account role after truck onboarding",
-              error,
-            );
-          }
+        user = (await storage.getUserById(user.id)) || user;
+      } else if (user.userType === "customer") {
+        try {
+          await storage.updateUserType(user.id, "restaurant_owner");
+          user = (await storage.getUserById(user.id)) || user;
+        } catch (error) {
+          console.warn(
+            "Unable to synchronize the account role after business onboarding",
+            error,
+          );
         }
       }
 
@@ -501,6 +520,8 @@ export function registerRestaurantSignupRoutes(
       res.json({
         user,
         restaurant,
+        created: promoted.created,
+        completionKind: "create",
         menuInsertedCount: promoted.menuInsertedCount,
         message: "Restaurant owner account created successfully",
       });
@@ -512,7 +533,10 @@ export function registerRestaurantSignupRoutes(
         });
       }
       if (error instanceof BusinessPromotionError) {
-        return res.status(error.statusCode).json({ message: error.message });
+        return res.status(error.statusCode).json({
+          ...(error.code ? { code: error.code } : {}),
+          message: error.message,
+        });
       }
       // An unexpected failure here (DB error, a downstream service throwing,
       // etc.) is not the same as "you filled out the form wrong" — reporting

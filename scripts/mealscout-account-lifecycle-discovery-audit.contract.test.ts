@@ -188,12 +188,12 @@ requireIncludes(
   ': "customer";',
   "getReferralId",
   "referralId: getReferralId()",
-  // buildRestaurantSignupHref now assembles the redirect via
-  // URLSearchParams instead of a hardcoded "businessType=food_truck"
-  // string; check for the dynamic mechanism and its food_truck-specific
-  // claim=1 behavior instead of the old literal query string.
+  // The shared builder owns bounded query serialization; the caller supplies
+  // claim intent only when the inbound food-truck continuation requested it.
   "businessType: businessSubType",
-  'params.set("claim", "1")',
+  "buildRestaurantSignupPath({",
+  'intent: BusinessSignupIntent = "create"',
+  "businessSubType === \"food_truck\" && inboundBusinessIntent.isClaim",
   '"/event-coordinator/dashboard?setup=onboarding"',
   '"/supplier/dashboard"',
 ].forEach((snippet) =>
@@ -311,10 +311,12 @@ if (
   "async function applyAffiliateReferral",
   "if (isAdminUserType(user.userType)) return;",
   'app.get("/api/auth/validate-setup-token"',
-  'app.post("/api/auth/complete-setup"',
 ].forEach((snippet) =>
   requireIncludes(unifiedAuth, snippet, `unified auth snippet ${snippet}`),
 );
+if (!/app\.post\(\s*["']\/api\/auth\/complete-setup["']\s*,/.test(unifiedAuth)) {
+  throw new Error("Missing unified auth complete-setup POST route");
+}
 
 [
   'app.get("/api/auth/user"',
@@ -329,10 +331,10 @@ if (
 );
 
 [
-  'app.get("/api/truck-claims/public-search"',
-  'app.post("/api/truck-claims/request"',
+  '"/api/truck-claims/public-search"',
+  '"/api/truck-claims/request"',
   'app.post("/api/truck-claims", isAuthenticated',
-  'await storage.updateUserType(req.user.id, "food_truck")',
+  '.set({ userType: "food_truck", updatedAt: new Date() })',
 ].forEach((snippet) =>
   requireIncludes(truckClaimRoutes, snippet, `truck claim snippet ${snippet}`),
 );

@@ -16,6 +16,49 @@ export const HOST_ONBOARDING_COPY = {
     canonicalUrl: "https://www.mealscout.us/restaurant-signup",
   },
 
+  routePresentation: {
+    restaurant: {
+      metaTitle: "Restaurant Sign Up | MealScout",
+      metaDescription:
+        "Create your MealScout restaurant owner account, then publish your profile, menu, hours, and specials.",
+      headerTitle: "MealScout for Restaurants",
+      hero: {
+        badge: "Restaurant owner account",
+        title: "Set Up Your Restaurant",
+        subtitle:
+          "Create your owner login, then add the restaurant details local diners need to find and choose you.",
+      },
+      benefits: ["Local discovery", "Menus and specials", "Profile tools"],
+      signupButton: "Create Restaurant Account",
+      signupPending: "Creating Account...",
+      loginButton: "Sign In to Restaurant Account",
+      loginPending: "Signing In...",
+    },
+    foodTruck: {
+      metaTitle: "Food Truck Sign Up | MealScout",
+      metaDescription:
+        "Create a MealScout food truck owner account, then publish or claim your truck profile, menu, schedule, and location.",
+      headerTitle: "MealScout for Food Trucks",
+      createHero: {
+        badge: "Food truck owner account",
+        title: "Create Your Food Truck Profile",
+        subtitle:
+          "Create your owner login, then add your truck, menu, schedule, and service details from one workspace.",
+      },
+      claimHero: {
+        badge: "Food truck claim",
+        title: "Create Your Account to Claim Your Truck",
+        subtitle:
+          "Your selected claim and truck details will stay with you through email verification or sign-in.",
+      },
+      benefits: ["Public truck profile", "Menu and schedule", "Live location tools"],
+      signupButton: "Create Food Truck Account",
+      signupPending: "Creating Account...",
+      loginButton: "Sign In to Continue",
+      loginPending: "Signing In...",
+    },
+  },
+
   unauth: {
     headerTitle: "MealScout for Businesses",
     hero: {
@@ -159,6 +202,8 @@ export const HOST_ONBOARDING_COPY = {
         "Profiles stay active with discovery, menus, schedules, deals, and profile tools.",
       trialLine: "The free trial has no expiration date.",
       paidLine: "It never converts into a paid plan or monthly bill.",
+      transactionDisclosure:
+        "Separate paid orders, deliveries, bookings, or add-ons can have charges shown before payment.",
       originalPrice: "",
       monthlyPrice: "No monthly bill",
       monthlySuffix: "",
@@ -269,6 +314,15 @@ export const HOST_ONBOARDING_COPY = {
       errorTitle: "Error",
       errorDescription: "Failed to register restaurant",
     },
+    foodTruck: {
+      successTitle: "Food Truck Profile Ready!",
+      successDescription:
+        "Your truck profile is linked to your owner account. Next, submit verification to build trust with customers.",
+      unauthorizedTitle: "Sign In Required",
+      unauthorizedDescription: "You are logged out. Sign in again to continue.",
+      errorTitle: "Unable to Save Food Truck",
+      errorDescription: "We couldn't save your food truck profile",
+    },
     verification: {
       successTitle: "Verification Submitted!",
       successDescription:
@@ -296,7 +350,7 @@ export const HOST_ONBOARDING_COPY = {
       lastNameLabel: "Last Name",
       lastNamePlaceholder: "Doe",
       emailLabel: "Email",
-      emailPlaceholder: "john@restaurant.com",
+      emailPlaceholder: "owner@example.com",
       phoneLabel: "Phone Number",
       phonePlaceholder: "(555) 123-4567",
       passwordLabel: "Password",
@@ -306,7 +360,7 @@ export const HOST_ONBOARDING_COPY = {
     },
     login: {
       emailLabel: "Email",
-      emailPlaceholder: "john@restaurant.com",
+      emailPlaceholder: "owner@example.com",
       passwordLabel: "Password",
       passwordPlaceholder: "Your password",
     },
@@ -338,7 +392,26 @@ export const HOST_ONBOARDING_COPY = {
       claimSelectButton: "Use This Truck",
       claimSelectedLabel: "Selected listing",
       claimClearButton: "Clear Selection",
-      claimNoResults: "No matches found. You can continue with manual entry.",
+      claimNoResults:
+        "No matching registry listing was found. Use the missing-truck option or switch to creating a new profile.",
+      claimSelectionRequiredTitle: "Select your truck first",
+      claimSelectionRequiredDescription:
+        "Choose the matching registry listing before submitting this claim.",
+      claimCreateInstead:
+        "This is a brand-new truck? Switch to the create-profile path.",
+      claimMissingTitle: "Truck not in the registry",
+      claimMissingDescription:
+        "Review the details we prefilled, then submit to create the owner-linked profile for this missing listing.",
+      claimRegistryCheckTitle: "Check the registry first",
+      claimRegistryCheckDescription:
+        "Wait for the registry search to finish before submitting this missing-truck profile.",
+      claimRegistryMatchTitle: "Use the matching registry listing",
+      claimRegistryMatchDescription:
+        "A matching registry listing exists. Claim that listing instead of creating a duplicate profile.",
+      claimMissingNoResults:
+        "No registry match was found. You can continue with the prefilled missing-truck profile.",
+      claimUnavailable:
+        "That selected listing is no longer available to claim. Search again or contact MealScout support.",
       claimDisclaimer:
         "Claiming requires verification documents that match your license or insurance.",
       cuisineLabel: "Cuisine Type",

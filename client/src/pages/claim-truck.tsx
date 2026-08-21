@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest } from "@/lib/queryClient";
@@ -7,15 +7,18 @@ import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
-  CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { Truck } from "lucide-react";
 import { PlaceAutocompleteInput } from "@/components/maps/place-autocomplete-input";
+import { SEOHead } from "@/components/seo-head";
+import {
+  buildRestaurantSignupPath,
+  parseBusinessSignupRouteIntent,
+} from "@shared/businessSignupIntent";
 
 type ClaimRow = {
   id: string;
@@ -23,11 +26,7 @@ type ClaimRow = {
   address?: string | null;
   city?: string | null;
   state?: string | null;
-  phone?: string | null;
-  externalId?: string | null;
-  confidenceScore?: number | null;
   invited?: boolean;
-  hasEmail?: boolean;
   canClaim?: boolean;
   canRequest?: boolean;
   requestCooldownMinutes?: number;
@@ -51,11 +50,17 @@ type PlaceDetailsResult = {
 };
 
 export default function ClaimTruckPage() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
-  const [query, setQuery] = useState("");
+  const inboundIntent = useMemo(
+    () => parseBusinessSignupRouteIntent(window.location.search),
+    [],
+  );
+  const initialQuery = inboundIntent.passthrough.q || "";
+  const [query, setQuery] = useState(initialQuery);
+  const didAutoSearch = useRef(false);
   const [loading, setLoading] = useState(false);
   const [requestingId, setRequestingId] = useState<string | null>(null);
   const [missingBusinessQuery, setMissingBusinessQuery] = useState("");
@@ -78,7 +83,11 @@ export default function ClaimTruckPage() {
     try {
       const res = await apiRequest(
         "GET",
-        `/api/truck-claims/public-search?q=${encodeURIComponent(q)}`,
+        `${
+          isAuthenticated
+            ? "/api/truck-claims/search"
+            : "/api/truck-claims/public-search"
+        }?q=${encodeURIComponent(q)}`,
       );
       const data = await res.json().catch(() => []);
       const next = Array.isArray(data) ? data : [];
@@ -88,12 +97,20 @@ export default function ClaimTruckPage() {
           "No matching trucks found. Try a shorter name or the license/external ID.",
         );
       }
-    } catch (err: any) {
-      setError(err?.message || "Search failed. Try again.");
+    } catch {
+      setError("Search is temporarily unavailable. Please try again.");
     } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (isAuthLoading || !initialQuery || didAutoSearch.current) return;
+    didAutoSearch.current = true;
+    void handleSearch();
+    // Search the inbound q exactly once; subsequent searches are owner-driven.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialQuery, isAuthLoading]);
 
   const handleRequest = async (listingId: string) => {
     setRequestingId(listingId);
@@ -117,23 +134,11 @@ export default function ClaimTruckPage() {
         throw new Error(message);
       }
 
-      if (data?.hadEmail === false) {
-        toast({
-          title: "No email on file",
-          description: "Ask an admin to add an email, or claim it manually.",
-          variant: "destructive",
-        });
-        return;
-      }
-
       toast({
-        title: data?.emailSent
-          ? "Email sent to owner"
-          : "Email could not be sent",
-        description: data?.emailSent
-          ? "We sent them a link to finish setting up their account."
-          : "An admin should check Email Delivery in the dashboard.",
-        variant: data?.emailSent ? "default" : "destructive",
+        title: "Setup request received",
+        description:
+          data?.message ||
+          "If setup can be sent for this listing, the owner will receive it.",
       });
 
       // Refresh cooldown/status display.
@@ -146,8 +151,17 @@ export default function ClaimTruckPage() {
   };
 
   const goToClaimFlow = (row: ClaimRow) => {
-    const q = String(row.externalId || row.name || "").trim();
-    const next = `/restaurant-signup?businessType=food_truck&claim=1${q ? `&q=${encodeURIComponent(q)}` : ""}`;
+    const q = String(row.name || "").trim();
+    const next = buildRestaurantSignupPath({
+      businessType: "food_truck",
+      intent: "claim",
+      source: inboundIntent.source || "claim-business",
+      passthrough: {
+        ...inboundIntent.passthrough,
+        q,
+        claimListingId: row.id,
+      },
+    });
     setLocation(next);
   };
 
@@ -155,9 +169,8 @@ export default function ClaimTruckPage() {
     suggestion: PlaceSuggestion,
     place: PlaceDetailsResult,
   ) => {
-    const params = new URLSearchParams({
-      businessType: "food_truck",
-      claim: "1",
+    const passthrough: Record<string, string> = {
+      ...inboundIntent.passthrough,
       claimMode: "missing",
       q: suggestion.mainText || suggestion.text,
       prefillName: suggestion.mainText || suggestion.text,
@@ -165,16 +178,23 @@ export default function ClaimTruckPage() {
       prefillCity: place.city || "",
       prefillState: place.state || "",
       prefillPlaceId: place.placeId || suggestion.placeId,
-    });
+    };
 
     if (typeof place.latitude === "number") {
-      params.set("prefillLat", String(place.latitude));
+      passthrough.prefillLat = String(place.latitude);
     }
     if (typeof place.longitude === "number") {
-      params.set("prefillLng", String(place.longitude));
+      passthrough.prefillLng = String(place.longitude);
     }
 
-    setLocation(`/restaurant-signup?${params.toString()}`);
+    setLocation(
+      buildRestaurantSignupPath({
+        businessType: "food_truck",
+        intent: "create",
+        source: inboundIntent.source || "claim-business",
+        passthrough,
+      }),
+    );
   };
 
   const handleMissingBusinessSelect = async (suggestion: PlaceSuggestion) => {
@@ -213,26 +233,37 @@ export default function ClaimTruckPage() {
 
   return (
     <div className="min-h-screen bg-[var(--bg-layered)]">
+      <SEOHead
+        title="Claim Your Food Truck | MealScout"
+        description="Find an existing MealScout food truck listing and start the owner claim process."
+        canonicalUrl="https://www.mealscout.us/claim-business"
+      />
       <BackHeader
-        title="Claim a Business"
+        title="Claim Your Food Truck"
         fallbackHref="/"
         icon={Truck}
-        className="bg-[hsl(var(--background))/0.94] border-b border-[color:var(--border-subtle)] shadow-clean"
+        className="bg-[hsl(var(--background))/0.94] border-b border-[color:var(--border-subtle)] shadow-clean lg:top-16"
       />
 
       <div className="mx-auto max-w-4xl px-4 py-6 sm:px-6 space-y-6">
         <Card className="border-[color:var(--border-subtle)] bg-[var(--bg-card)] shadow-clean-lg">
           <CardHeader>
-            <CardTitle>Find your business</CardTitle>
-            <CardDescription>
-              Search by name, license/external ID, city, or state. If your
-              profile is unclaimed, you can claim it or request a setup
+            <h2 className="text-2xl font-semibold leading-none tracking-tight">
+              Find your food truck
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              Search by truck name, license/external ID, city, or state. If
+              your truck profile is unclaimed, you can claim it or request a setup
               reminder.
-            </CardDescription>
+            </p>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="flex flex-col gap-2 sm:flex-row">
+              <label htmlFor="claim-truck-search" className="sr-only">
+                Search by food truck name, license ID, city, or state
+              </label>
               <Input
+                id="claim-truck-search"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="e.g. Tacos, DBPR-12345, Austin"
@@ -250,7 +281,13 @@ export default function ClaimTruckPage() {
             </div>
 
             {error ? (
-              <div className="text-sm text-destructive">{error}</div>
+              <div
+                className="text-sm text-destructive"
+                role="alert"
+                aria-live="polite"
+              >
+                {error}
+              </div>
             ) : null}
 
             {rows.length > 0 ? (
@@ -258,7 +295,9 @@ export default function ClaimTruckPage() {
                 {rows.slice(0, 15).map((row) => {
                   const cooldown = Number(row.requestCooldownMinutes || 0);
                   const canRequest = Boolean(row.canRequest && cooldown === 0);
-                  const canClaim = Boolean(row.canClaim);
+                  const canClaim = isAuthenticated
+                    ? Boolean(row.canClaim)
+                    : true;
                   return (
                     <div
                       key={row.id}
@@ -270,14 +309,12 @@ export default function ClaimTruckPage() {
                             <div className="font-semibold truncate">
                               {row.name || "Unnamed truck"}
                             </div>
-                            {row.invited ? (
+                            {isAuthenticated && row.invited ? (
                               <Badge variant="secondary">Invited</Badge>
                             ) : null}
-                            {row.hasEmail ? (
-                              <Badge variant="outline">Email on file</Badge>
-                            ) : (
-                              <Badge variant="destructive">No email</Badge>
-                            )}
+                            {isAuthenticated && !row.canClaim ? (
+                              <Badge variant="outline">Setup pending</Badge>
+                            ) : null}
                           </div>
                           <div className="text-xs text-muted-foreground truncate">
                             {row.address || ""}
@@ -299,19 +336,21 @@ export default function ClaimTruckPage() {
                           >
                             {isAuthenticated ? "Claim" : "Sign in to claim"}
                           </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleRequest(row.id)}
-                            disabled={!canRequest || requestingId === row.id}
-                          >
-                            {requestingId === row.id
-                              ? "Requesting..."
-                              : "Request setup"}
-                          </Button>
+                          {isAuthenticated && row.canRequest ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleRequest(row.id)}
+                              disabled={!canRequest || requestingId === row.id}
+                            >
+                              {requestingId === row.id
+                                ? "Requesting..."
+                                : "Request setup"}
+                            </Button>
+                          ) : null}
                         </div>
                       </div>
-                      {!canClaim && row.invited ? (
+                      {isAuthenticated && !canClaim && row.invited ? (
                         <div className="text-xs text-muted-foreground">
                           This truck already has an invited owner. Use “Request
                           setup” to remind them.
@@ -326,7 +365,8 @@ export default function ClaimTruckPage() {
             <div className="rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-3 space-y-2">
               <div className="text-sm font-semibold">Can&apos;t find it?</div>
               <p className="text-xs text-muted-foreground">
-                Use Google autofill to claim a missing business profile.
+                Use Google autofill to start a new food truck profile. We check
+                the registry again before it can be submitted.
               </p>
               <PlaceAutocompleteInput
                 id="claim-missing-business"
