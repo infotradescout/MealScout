@@ -33,6 +33,26 @@ export function canExposeAnonymousEventDetail(input: {
   return !NON_PUBLIC_EVENT_STATUSES.has(status);
 }
 
+export function canExposeAuthorizedPaidEventDetail(input: {
+  eventType: unknown;
+  requiresPayment: unknown;
+  status: unknown;
+  slotIsBookable: boolean;
+}): boolean {
+  const eventType = String(input.eventType || "")
+    .trim()
+    .toLowerCase();
+  const status = String(input.status || "open")
+    .trim()
+    .toLowerCase();
+  return (
+    eventType === "parking_pass" &&
+    Boolean(input.requiresPayment) &&
+    status === "open" &&
+    input.slotIsBookable
+  );
+}
+
 export function canExposeAnonymousEventListItem(input: {
   eventType: unknown;
   requiresPayment: unknown;

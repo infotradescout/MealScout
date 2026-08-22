@@ -5,10 +5,11 @@ import { SEOHead } from "@/components/seo-head";
 import { apiUrl } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { extractUuidFromSlug } from "@/lib/seo-slug";
+import { extractIdFromSlug } from "@/lib/seo-slug";
 import { generateEventSchema } from "@/lib/schema-helpers";
 import { useAuth } from "@/hooks/useAuth";
 import { EventBookingModal } from "@/components/event-booking-modal";
+import { resolveStoredFoodBusinessType } from "@shared/businessTypes";
 
 type PublicEvent = {
   id: string;
@@ -43,41 +44,83 @@ type PublicEvent = {
 export default function EventDetailPage() {
   const params = useParams() as Record<string, string | undefined>;
   const eventParam = params.slug || params.id || "";
-  const eventId = extractUuidFromSlug(eventParam) || eventParam;
-  const { user, isAuthenticated } = useAuth();
+  const eventId = extractIdFromSlug(eventParam);
+  const { user, isAuthenticated, authState } = useAuth();
+  const currentUserId = isAuthenticated ? String(user?.id || "") : "";
   const queryClient = useQueryClient();
   const [bookingOpen, setBookingOpen] = useState(false);
-  const [truckId, setTruckId] = useState<string | null>(null);
+  const [truckContext, setTruckContext] = useState<{
+    userId: string;
+    truckId: string | null;
+    complete: boolean;
+  }>({ userId: "", truckId: null, complete: false });
 
-  // Load the truck for the logged-in food truck user
+  // Resolve an exact account-scoped food truck with Parking Pass authority.
   useEffect(() => {
-    if (!isAuthenticated) {
-      setTruckId(null);
+    let cancelled = false;
+    setTruckContext({ userId: currentUserId, truckId: null, complete: false });
+    if (!isAuthenticated || !currentUserId) {
+      setTruckContext({ userId: currentUserId, truckId: null, complete: true });
       return;
     }
-    if (
-      user?.userType !== "food_truck" &&
-      user?.userType !== "restaurant_owner"
-    ) {
-      return;
-    }
-    fetch("/api/restaurants/my-restaurants")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((trucks) => {
-        if (Array.isArray(trucks) && trucks.length > 0) {
-          const ft = trucks.find((t: any) => t.isFoodTruck) || trucks[0];
-          setTruckId(ft.id);
-        }
+    fetch("/api/business-access/me", { credentials: "include" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((access) => {
+        if (cancelled) return;
+        const restaurants = Array.isArray(access?.restaurants)
+          ? access.restaurants
+          : [];
+        const truck = restaurants.find(
+          (restaurant: any) =>
+            (restaurant?.isOwner === true ||
+              restaurant?.permissions?.manageParkingPass === true) &&
+            resolveStoredFoodBusinessType(restaurant) === "food_truck",
+        );
+        setTruckContext({
+          userId: currentUserId,
+          truckId: truck?.id ? String(truck.id) : null,
+          complete: true,
+        });
       })
-      .catch(() => {});
-  }, [isAuthenticated, user?.userType]);
+      .catch(() => {
+        if (!cancelled) {
+          setTruckContext({
+            userId: currentUserId,
+            truckId: null,
+            complete: true,
+          });
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUserId, isAuthenticated]);
+
+  const waitingForOwnerContext =
+    authState === "loading" ||
+    (isAuthenticated &&
+      (truckContext.userId !== currentUserId || !truckContext.complete));
+  const truckId =
+    isAuthenticated && truckContext.userId === currentUserId
+      ? truckContext.truckId
+      : null;
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ["public-event", eventId],
-    enabled: Boolean(eventId),
+    queryKey: [
+      "public-event",
+      eventId,
+      currentUserId || "guest",
+      truckId || "anonymous",
+    ],
+    enabled: Boolean(eventId) && !waitingForOwnerContext,
     queryFn: async () => {
+      const truckQuery = truckId
+        ? `?truckId=${encodeURIComponent(truckId)}`
+        : "";
       const res = await fetch(
-        apiUrl(`/api/public/events/${encodeURIComponent(String(eventId))}`),
+        apiUrl(
+          `/api/public/events/${encodeURIComponent(String(eventId))}${truckQuery}`,
+        ),
         {
           credentials: "include",
         },
@@ -105,6 +148,7 @@ export default function EventDetailPage() {
     data?.requiresPayment === true &&
     data?.status === "open" &&
     !data?.ended;
+  const eventLoading = waitingForOwnerContext || isLoading;
 
   return (
     <div className="min-h-screen bg-background">
@@ -162,7 +206,7 @@ export default function EventDetailPage() {
 
       <div className="max-w-3xl mx-auto px-4 py-10">
         <h1 className="text-3xl font-bold">
-          {isLoading ? "Loading..." : data?.title || "Event"}
+          {eventLoading ? "Loading..." : data?.title || "Event"}
         </h1>
         {error ? (
           <div className="text-sm text-destructive mt-3">

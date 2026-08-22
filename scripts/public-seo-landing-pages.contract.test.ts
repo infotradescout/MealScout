@@ -722,13 +722,31 @@ const publicEventDetailSource = eventRoutes.slice(
   eventRoutes.indexOf("// Pensacola Report lead magnet"),
 );
 if (
-  publicEventDetailSource.includes("!isAuthed") ||
   !publicEventDetailSource.includes("canExposeAnonymousEventDetail") ||
+  !publicEventDetailSource.includes("canExposeAuthorizedPaidEventDetail") ||
+  !publicEventDetailSource.includes("verifyRestaurantOwnership") ||
+  !publicEventDetailSource.includes('"manageParkingPass"') ||
   !publicEventDetailSource.includes("hostPriceCents: row.hostPriceCents")
 ) {
   throw new Error(
-    "Public event detail eligibility must apply to every viewer while retaining the eligible public booking price",
+    "Event detail must preserve anonymous privacy and require exact owned-truck authorization for a paid booking price",
   );
+}
+const eventPrerenderRouteSource = prerender.slice(
+  prerender.indexOf("const eventDetailGate"),
+  prerender.indexOf('app.get(\n    "/deals/:city"'),
+);
+for (const snippet of [
+  "req.isAuthenticated?.()",
+  'res.setHeader("Cache-Control", "private, no-store")',
+  'res.setHeader("X-Robots-Tag", "noindex,nofollow,noarchive")',
+  "return next()",
+]) {
+  if (!eventPrerenderRouteSource.includes(snippet)) {
+    throw new Error(
+      `Authenticated paid event HTML must reach a private SPA shell: ${snippet}`,
+    );
+  }
 }
 for (const priceKey of [
   "hostPriceCents",

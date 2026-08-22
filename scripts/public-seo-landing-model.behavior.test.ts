@@ -19,7 +19,10 @@ import {
   type PublicSeoLandingRepository,
 } from "../server/services/publicSeoLandingModel";
 import { buildJsonLdScript } from "../server/seo/jsonLdScript";
-import { canExposeAnonymousEventDetail } from "../server/publicProfiles/publicEventDetailAccess";
+import {
+  canExposeAnonymousEventDetail,
+  canExposeAuthorizedPaidEventDetail,
+} from "../server/publicProfiles/publicEventDetailAccess";
 import {
   MEALSCOUT_PUBLIC_CANONICAL_ORIGIN,
   normalizePublicCanonicalOrigin,
@@ -142,6 +145,40 @@ test("anonymous event membership rejects private events", () => {
       slotIsPublic: true,
     }),
     true,
+  );
+});
+
+test("paid Parking Pass detail needs the separate authorized-owner lane", () => {
+  const anonymousPaidParkingPass = {
+    eventType: "parking_pass",
+    requiresPayment: true,
+    status: "open",
+    slotIsPublic: true,
+  };
+  const authorizedPaidParkingPass = {
+    eventType: "parking_pass",
+    requiresPayment: true,
+    status: "open",
+    slotIsBookable: true,
+  };
+  assert.equal(canExposeAnonymousEventDetail(anonymousPaidParkingPass), false);
+  assert.equal(
+    canExposeAuthorizedPaidEventDetail(authorizedPaidParkingPass),
+    true,
+  );
+  assert.equal(
+    canExposeAuthorizedPaidEventDetail({
+      ...authorizedPaidParkingPass,
+      eventType: "private_event",
+    }),
+    false,
+  );
+  assert.equal(
+    canExposeAuthorizedPaidEventDetail({
+      ...authorizedPaidParkingPass,
+      status: "draft",
+    }),
+    false,
   );
 });
 

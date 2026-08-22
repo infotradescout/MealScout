@@ -1273,7 +1273,20 @@ export function registerPublicProfilePrerenderRoutes(
   const eventDetailGate = gate((req) =>
     eventPage(canonicalBaseUrl, extractId(req.params.slug)),
   );
-  app.get("/event/:slug", eventDetailGate);
+  app.get(
+    "/event/:slug",
+    (req: Request, res: Response, next: NextFunction) => {
+      // Paid event facts stay unavailable to anonymous HTML requests. An
+      // authenticated navigation may continue to the SPA shell; the private
+      // event API still requires exact manageParkingPass authorization.
+      if (req.isAuthenticated?.()) {
+        res.setHeader("Cache-Control", "private, no-store");
+        res.setHeader("X-Robots-Tag", "noindex,nofollow,noarchive");
+        return next();
+      }
+      return eventDetailGate(req, res);
+    },
+  );
   app.get(
     "/events/:slug",
     (req: Request, res: Response, next: NextFunction) => {

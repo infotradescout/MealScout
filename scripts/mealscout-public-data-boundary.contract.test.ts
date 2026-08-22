@@ -16,6 +16,7 @@ import {
   canExposeAnonymousEventDetail,
   canExposeAnonymousEventFeedItem,
   canExposeAnonymousEventListItem,
+  canExposeAuthorizedPaidEventDetail,
 } from "../server/publicProfiles/publicEventDetailAccess";
 import {
   toPublicLocationProfile,
@@ -26,8 +27,92 @@ import {
   buildPublicCta,
   normalizePublicUrl,
 } from "../server/publicProfiles/publicProfileUtils";
+import { extractIdFromSlug } from "../client/src/lib/seo-slug";
+import { assessParkingPassTruckEligibility } from "../server/services/parkingPassTruckEligibility";
 
 // --- Runtime: forbidden fields must never survive the DTO ---------------
+
+const virtualParkingPassId =
+  "pp:1a125115-d1a9-4d5d-9ef1-a8250e2d91d3:2026-08-22";
+assert.equal(
+  extractIdFromSlug(`paid-team-lunch--${virtualParkingPassId}`),
+  virtualParkingPassId,
+  "event route parsing must preserve the complete virtual Parking Pass id",
+);
+assert.equal(
+  extractIdFromSlug(
+    "paid-team-lunch--1a125115-d1a9-4d5d-9ef1-a8250e2d91d3",
+  ),
+  "1a125115-d1a9-4d5d-9ef1-a8250e2d91d3",
+);
+
+const eligibilityNow = new Date("2026-08-22T17:00:00.000Z");
+const validTruckEligibility = assessParkingPassTruckEligibility({
+  user: { userType: "food_truck", emailVerified: true },
+  truck: {
+    businessType: "restaurant",
+    isFoodTruck: true,
+    insuranceVerified: true,
+    insuranceExpiresAt: "2026-08-23T17:00:00.000Z",
+  },
+  now: eligibilityNow,
+});
+assert.equal(validTruckEligibility.isTruckProfile, true);
+assert.equal(validTruckEligibility.storedInsuranceValid, true);
+assert.equal(validTruckEligibility.roleAllowed, true);
+assert.equal(
+  assessParkingPassTruckEligibility({
+    user: { userType: "customer", emailVerified: true },
+    truck: {
+      businessType: "food_truck",
+      isFoodTruck: true,
+      insuranceVerified: true,
+    },
+    now: eligibilityNow,
+  }).roleAllowed,
+  true,
+  "an authenticated collaborator is governed by exact manageParkingPass permission rather than a stale global role",
+);
+assert.equal(
+  assessParkingPassTruckEligibility({
+    user: { userType: "restaurant_owner", emailVerified: true },
+    truck: {
+      businessType: "restaurant",
+      isFoodTruck: false,
+      insuranceVerified: true,
+    },
+    now: eligibilityNow,
+  }).isTruckProfile,
+  false,
+  "a fixed restaurant must not qualify for Parking Pass booking",
+);
+assert.equal(
+  assessParkingPassTruckEligibility({
+    user: { userType: "food_truck", emailVerified: true },
+    truck: {
+      businessType: "food_truck",
+      isFoodTruck: true,
+      insuranceVerified: true,
+      insuranceExpiresAt: "2026-08-21T17:00:00.000Z",
+    },
+    now: eligibilityNow,
+  }).storedInsuranceValid,
+  false,
+  "expired insurance must not qualify for Parking Pass booking",
+);
+assert.equal(
+  assessParkingPassTruckEligibility({
+    user: { userType: "food_truck", emailVerified: false },
+    truck: {
+      businessType: "food_truck",
+      isFoodTruck: true,
+      insuranceVerified: true,
+    },
+    now: eligibilityNow,
+  }).emailVerified,
+  false,
+  "unverified email must remain visible to the booking gate",
+);
 
 const unsafePublicUrls = [
   "javascript:alert(1)",
@@ -430,6 +515,55 @@ for (const blockedDetail of [
   );
 }
 
+assert.equal(
+  canExposeAuthorizedPaidEventDetail({
+    eventType: "parking_pass",
+    requiresPayment: true,
+    status: "open",
+    slotIsBookable: true,
+  }),
+  true,
+  "an unbooked future Parking Pass may be shown after separate ownership authorization",
+);
+for (const blockedAuthorizedDetail of [
+  {
+    eventType: "private_event",
+    requiresPayment: true,
+    status: "open",
+    slotIsBookable: true,
+  },
+  {
+    eventType: "event",
+    requiresPayment: true,
+    status: "open",
+    slotIsBookable: true,
+  },
+  {
+    eventType: "parking_pass",
+    requiresPayment: false,
+    status: "open",
+    slotIsBookable: true,
+  },
+  {
+    eventType: "parking_pass",
+    requiresPayment: true,
+    status: "draft",
+    slotIsBookable: true,
+  },
+  {
+    eventType: "parking_pass",
+    requiresPayment: true,
+    status: "open",
+    slotIsBookable: false,
+  },
+]) {
+  assert.equal(
+    canExposeAuthorizedPaidEventDetail(blockedAuthorizedDetail),
+    false,
+    "authorization must not expose private, non-Parking-Pass, free, closed, or ended event details",
+  );
+}
+
 const validAnonymousListEvent = {
   eventType: "event",
   requiresPayment: false,
@@ -807,6 +941,49 @@ for (const snippet of [
     `anonymous event feed parity missing: ${snippet}`,
   );
 }
+const defaultPublicEventDetailLoader = sliceAfter(
+  eventRoutesSource,
+  "const loadPublicEventDetail",
+  4200,
+);
+assert.match(
+  defaultPublicEventDetailLoader,
+  /parseParkingPassVirtualId\(eventId\)[\s\S]*loadParkingPassOccurrenceById\(eventId\)[\s\S]*occurrence\.host\.businessName[\s\S]*return row \|\| null/,
+  "public detail must resolve a genuine series-only Parking Pass occurrence without requiring an events row",
+);
+assert.doesNotMatch(
+  defaultPublicEventDetailLoader,
+  /ensureParkingPassEventRow|insert\(events\)/,
+  "public detail lookup must remain read-only for a series-only occurrence",
+);
+const parkingPassVirtualSource = readSource(
+  "server/services/parkingPassVirtual.ts",
+);
+assert.match(
+  parkingPassVirtualSource,
+  /parseParkingPassVirtualId\(String\(row\.id \|\| ""\)\)\?\.dateKey \|\|[\s\S]*dateKeyFromUnknown\(row\.date, "UTC"\)/,
+  "materialized virtual rows must override their exact series date instead of shifting at timezone boundaries",
+);
+const virtualOccurrenceByIdLoader = sliceAfter(
+  parkingPassVirtualSource,
+  "export async function loadParkingPassOccurrenceById",
+  1100,
+);
+assert.match(
+  virtualOccurrenceByIdLoader,
+  /parseParkingPassVirtualId\(passId\)[\s\S]*seriesIds: \[parsed\.seriesId\][\s\S]*includeDraft: false[\s\S]*occurrence\.id === passId/,
+  "series-only lookup must be exact-id, exact-series, and published-only",
+);
+const virtualOccurrenceMaterializer = sliceAfter(
+  parkingPassVirtualSource,
+  "export async function ensureParkingPassEventRow",
+  9000,
+);
+assert.match(
+  virtualOccurrenceMaterializer,
+  /loadParkingPassOccurrenceById\(args\.passId\)[\s\S]*buildSlotDateTimes\([\s\S]*interval\.startUtc\.getTime\(\)[\s\S]*statusCode: 400[\s\S]*db\.insert\(events\)/,
+  "same-day-past virtual occurrences must be rejected before any event row is materialized",
+);
 const publicDiscoveryRoutesSource = readSource(
   "server/routes/publicDiscoveryRoutes.ts",
 );
@@ -857,8 +1034,8 @@ assert.match(
 );
 assert.doesNotMatch(
   publicEventDetailRoute,
-  /isAuthed/,
-  "authenticated identity must not bypass public event detail eligibility",
+  /authorizedPaidDetail\s*=\s*Boolean\(req\.isAuthenticated/,
+  "authenticated identity alone must not authorize a paid event detail",
 );
 assert.match(
   publicEventDetailRoute,
@@ -867,8 +1044,102 @@ assert.match(
 );
 assert.match(
   publicEventDetailRoute,
+  /requestedTruckId[\s\S]*req\.isAuthenticated[\s\S]*canExposeAuthorizedPaidEventDetail[\s\S]*verifyRestaurantOwnership\([\s\S]*"manageParkingPass"/,
+  "paid event detail must require authentication and exact Parking Pass ownership authorization",
+);
+assert.match(
+  publicEventDetailRoute,
+  /hasParkingPassAccess[\s\S]*storage\.getRestaurant\(requestedTruckId\)[\s\S]*assessParkingPassTruckEligibility\([\s\S]*\.isTruckProfile/,
+  "paid event detail must reject an owned fixed restaurant while retaining legacy truck classification",
+);
+assert.match(
+  publicEventDetailRoute,
+  /authorizedPaidDetail \? "private, no-store" : "public, max-age=60"/,
+  "authorized paid event detail must never enter a public cache",
+);
+assert.match(
+  publicEventDetailRoute,
+  /noIndex: authorizedPaidDetail \|\| ended \|\| !gateOk/,
+  "authorized paid event detail must remain noindex",
+);
+assert.match(
+  publicEventDetailRoute,
   /hostPriceCents: row\.hostPriceCents \?\? null/,
   "eligible event detail must retain the consumer booking price",
+);
+const paidEventBookingRoute = sliceAfter(
+  eventRoutesSource,
+  '"/api/events/:eventId/book"',
+  9000,
+);
+assert.match(
+  paidEventBookingRoute,
+  /,\s*isAuthenticated,/,
+  "paid event booking must accept authenticated food-truck accounts",
+);
+assert.match(
+  paidEventBookingRoute,
+  /verifyRestaurantOwnership\([\s\S]*"manageParkingPass"[\s\S]*res\.status\(403\)/,
+  "paid event booking must still require exact truck ownership",
+);
+assert.match(
+  paidEventBookingRoute,
+  /assessParkingPassTruckEligibility\([\s\S]*!truckEligibility\.isTruckProfile[\s\S]*truck_verification_required[\s\S]*!truckEligibility\.roleAllowed/,
+  "the legacy event checkout must enforce the canonical Parking Pass truck, verification, and role gates",
+);
+assert.match(
+  paidEventBookingRoute,
+  /ensureParkingPassEventRow\(\{[\s\S]*passId: eventId[\s\S]*requireFuture: true[\s\S]*now: bookingRequestNow/,
+  "eligible booking must materialize a genuine series-only Parking Pass occurrence",
+);
+assert.match(
+  paidEventBookingRoute,
+  /from \$\{events\} where \$\{events\.id\} = \$\{eventId\} for update[\s\S]*hardCapEnabled: events\.hardCapEnabled[\s\S]*lockedEvent\.hardCapEnabled && reservedCount >= maxSpots/,
+  "legacy and canonical Parking Pass checkout must share the event-row lock and hard-cap policy",
+);
+assert.doesNotMatch(
+  paidEventBookingRoute,
+  /pg_advisory_xact_lock/,
+  "legacy checkout must not use a private advisory lock that canonical checkout cannot observe",
+);
+assert.match(
+  paidEventBookingRoute,
+  /buildSlotDateTimes\([\s\S]*bookingInterval\.startUtc\.getTime\(\) < bookingRequestNow\.getTime\(\)/,
+  "the legacy event checkout must evaluate the zoned slot start rather than rejecting all same-day slots",
+);
+const eventDetailClientSource = readSource("client/src/pages/event-detail.tsx");
+assert.match(
+  eventDetailClientSource,
+  /truckContext\.userId !== currentUserId[\s\S]*enabled: Boolean\(eventId\) && !waitingForOwnerContext/,
+  "the event page must wait for exact account-scoped truck context before loading protected detail",
+);
+assert.match(
+  eventDetailClientSource,
+  /fetch\("\/api\/business-access\/me"[\s\S]*permissions\?\.manageParkingPass[\s\S]*resolveStoredFoodBusinessType/,
+  "the event page must choose a canonical or legacy-flagged food truck with exact Parking Pass authority",
+);
+assert.match(
+  eventDetailClientSource,
+  /extractIdFromSlug\(eventParam\)/,
+  "the event page must retain complete virtual Parking Pass ids",
+);
+const businessTeamAccessSource = readSource(
+  "server/services/businessTeamAccess.ts",
+);
+assert.match(
+  businessTeamAccessSource,
+  /businessType: restaurants\.businessType,[\s\S]*isFoodTruck: restaurants\.isFoodTruck/,
+  "account-scoped business access must retain the legacy food-truck flag",
+);
+assert.match(
+  eventDetailClientSource,
+  /queryKey: \[[\s\S]*currentUserId \|\| "guest"[\s\S]*truckId \|\| "anonymous"/,
+  "authorized event cache keys must be scoped to the authenticated account and truck",
+);
+assert.match(
+  eventDetailClientSource,
+  /\?truckId=\$\{encodeURIComponent\(truckId\)\}[\s\S]*credentials: "include"/,
+  "the event page must send the exact owned truck with authenticated detail requests",
 );
 assert.match(
   eventRoutesSource,
