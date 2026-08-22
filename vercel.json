@@ -57,6 +57,14 @@
       "destination": "https://mealscout.onrender.com/:indexNowKey.txt"
     },
     {
+      "source": "/for-food-trucks",
+      "destination": "https://mealscout.onrender.com/for-food-trucks"
+    },
+    {
+      "source": "/for-restaurants",
+      "destination": "https://mealscout.onrender.com/for-restaurants"
+    },
+    {
       "source": "/food-trucks/:city",
       "destination": "https://mealscout.onrender.com/food-trucks/:city"
     },
@@ -169,6 +177,14 @@
     {
       "src": "/([A-Za-z0-9_-]{8,128})\\.txt",
       "dest": "https://mealscout.onrender.com/$1.txt"
+    },
+    {
+      "src": "/for-food-trucks",
+      "dest": "https://mealscout.onrender.com/for-food-trucks"
+    },
+    {
+      "src": "/for-restaurants",
+      "dest": "https://mealscout.onrender.com/for-restaurants"
     },
     {
       "src": "/assets/(.*\\.(?:js|css))",

@@ -24,7 +24,42 @@ import {
 } from "../server/services/foodTruckIdentity";
 import { buildSignInContinuationUrl } from "../server/utils/signInContinuation";
 
-const read = (path: string) => readFileSync(path, "utf8");
+const read = (path: string) => readFileSync(path, "utf8").replace(/\r\n/g, "\n");
+
+const vercelConfig = JSON.parse(read("vercel.json")) as {
+  rewrites: Array<{ source?: string; destination?: string }>;
+  routes: Array<{ src?: string; dest?: string }>;
+};
+const acquisitionPaths = ["/for-food-trucks", "/for-restaurants"] as const;
+const rewriteFallbackIndex = vercelConfig.rewrites.findIndex(
+  (route) => route.destination === "/index.html",
+);
+const routeFallbackIndex = vercelConfig.routes.findIndex(
+  (route) => route.src === "/(.*)" && route.dest === "/index.html",
+);
+
+assert(rewriteFallbackIndex >= 0, "Vercel rewrites must retain the SPA fallback.");
+assert(routeFallbackIndex >= 0, "Vercel routes must retain the SPA fallback.");
+for (const acquisitionPath of acquisitionPaths) {
+  const renderDestination = `https://mealscout.onrender.com${acquisitionPath}`;
+  const rewriteIndex = vercelConfig.rewrites.findIndex(
+    (route) =>
+      route.source === acquisitionPath &&
+      route.destination === renderDestination,
+  );
+  const routeIndex = vercelConfig.routes.findIndex(
+    (route) => route.src === acquisitionPath && route.dest === renderDestination,
+  );
+
+  assert(
+    rewriteIndex >= 0 && rewriteIndex < rewriteFallbackIndex,
+    `${acquisitionPath} must proxy to Render before the rewrite SPA fallback.`,
+  );
+  assert(
+    routeIndex >= 0 && routeIndex < routeFallbackIndex,
+    `${acquisitionPath} must proxy to Render before the route SPA fallback.`,
+  );
+}
 
 const generic = parseBusinessSignupRouteIntent("");
 assert.equal(generic.businessType, "restaurant");
