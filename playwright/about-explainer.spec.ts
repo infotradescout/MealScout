@@ -92,10 +92,42 @@ test.describe("complete MealScout About guide", () => {
     const jumpbarPosition = await jumpbar.evaluate((element) => getComputedStyle(element).position);
     expect(jumpbarPosition).toBe("sticky");
 
-    const hasHorizontalOverflow = await page.evaluate(
-      () => document.documentElement.scrollWidth > window.innerWidth + 1,
-    );
-    expect(hasHorizontalOverflow).toBe(false);
+    const configuredViewportWidth = page.viewportSize()?.width;
+    expect(configuredViewportWidth).toBeTruthy();
+    const overflowReport = await page.evaluate((layoutViewportWidth) => {
+      const offenders = Array.from(document.querySelectorAll<HTMLElement>("*"))
+        .map((element) => {
+          const rect = element.getBoundingClientRect();
+          return {
+            tag: element.tagName.toLowerCase(),
+            id: element.id,
+            className: String(element.className || "").slice(0, 160),
+            left: Math.round(rect.left),
+            right: Math.round(rect.right),
+            width: Math.round(rect.width),
+            scrollWidth: element.scrollWidth,
+            clientWidth: element.clientWidth,
+          };
+        })
+        .filter(
+          (element) =>
+            element.right > layoutViewportWidth + 1 || element.left < -1,
+        )
+        .slice(0, 20);
+      return {
+        hasHorizontalOverflow:
+          document.documentElement.scrollWidth > layoutViewportWidth + 1,
+        innerWidth: window.innerWidth,
+        layoutViewportWidth,
+        clientWidth: document.documentElement.clientWidth,
+        scrollWidth: document.documentElement.scrollWidth,
+        offenders,
+      };
+    }, configuredViewportWidth as number);
+    expect(
+      overflowReport.hasHorizontalOverflow,
+      JSON.stringify(overflowReport, null, 2),
+    ).toBe(false);
 
     const images = page.locator("main.ms-about img");
     const visibleImages = page.locator("main.ms-about img:visible");
