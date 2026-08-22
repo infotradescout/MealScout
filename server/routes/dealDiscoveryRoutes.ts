@@ -1,23 +1,15 @@
 import type { Express } from "express";
-import { and, desc, eq, gte, ilike, isNull, lte, or, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "../db";
 import { storage } from "../storage";
 import { isAuthenticated } from "../unifiedAuth";
 import {
-  cities,
-  deals,
   insertReviewSchema,
-  restaurants,
   users,
 } from "@shared/schema";
 import { toPublicRestaurantReviewArray } from "../publicProfiles/toPublicRestaurantReview";
-import {
-  isBarBusinessType,
-  isTruckBusinessType,
-} from "@shared/businessTypes";
-import { buildPublicProfilePath } from "../publicProfiles/publicProfileUtils";
 
 type DealDiscoveryRouteDependencies = {
   filterDealsByBusinessAccess: <T extends { restaurantId?: string | null }>(
@@ -25,21 +17,6 @@ type DealDiscoveryRouteDependencies = {
   ) => Promise<T[]>;
   hasCompleteProfileAccess: (userId: string) => Promise<boolean>;
 };
-
-const toSlug = (value: string | null | undefined) =>
-  String(value || "")
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)+/g, "")
-    .slice(0, 80);
-
-const resolvePublicBaseUrl = () =>
-  String(
-    process.env.PUBLIC_BASE_URL ||
-      process.env.SERVICE_URL ||
-      "https://www.mealscout.us",
-  ).replace(/\/+$/, "");
 
 export function registerDealDiscoveryRoutes(
   app: Express,
@@ -110,100 +87,22 @@ export function registerDealDiscoveryRoutes(
   });
 
   app.get("/api/public/deals/city/:citySlug", async (req, res) => {
-    try {
-      const citySlug = String(req.params.citySlug || "").trim().toLowerCase();
-      if (!citySlug) {
-        return res.status(400).json({ message: "City slug required" });
-      }
-
-      const [city] = await db
-        .select()
-        .from(cities)
-        .where(eq(cities.slug, citySlug))
-        .limit(1);
-      if (!city) {
-        return res.status(404).json({ message: "City not found" });
-      }
-
-      const now = new Date();
-      const cityLike = `%${String(city.name || "").trim()}%`;
-
-      const rows = await db
-        .select({
-          id: deals.id,
-          title: deals.title,
-          description: deals.description,
-          imageUrl: deals.imageUrl,
-          startDate: deals.startDate,
-          endDate: deals.endDate,
-          discountValue: deals.discountValue,
-          dealType: deals.dealType,
-          restaurantId: restaurants.id,
-          restaurantName: restaurants.name,
-          cuisineType: restaurants.cuisineType,
-          restaurantCity: restaurants.city,
-          restaurantState: restaurants.state,
-          businessType: restaurants.businessType,
-          updatedAt: deals.updatedAt,
-        })
-        .from(deals)
-        .innerJoin(restaurants, eq(deals.restaurantId, restaurants.id))
-        .where(
-          and(
-            eq(deals.isActive, true),
-            lte(deals.startDate, now),
-            or(isNull(deals.endDate), gte(deals.endDate, now)),
-            or(
-              ilike(restaurants.city, cityLike),
-              ilike(restaurants.address, cityLike),
-            ),
-          ),
-        )
-        .orderBy(desc(deals.updatedAt))
-        .limit(500);
-
-      const baseUrl = resolvePublicBaseUrl();
-      const payload = rows.map((row: any) => ({
-        id: row.id,
-        title: row.title,
-        description: row.description,
-        imageUrl: row.imageUrl,
-        startDate: row.startDate ? new Date(row.startDate).toISOString() : null,
-        endDate: row.endDate ? new Date(row.endDate).toISOString() : null,
-        dealType: row.dealType,
-        discountValue: row.discountValue,
-        dealPath: `/deal/${encodeURIComponent(`${toSlug(row.title) || row.id}--${row.id}`)}`,
-        restaurant: {
-          id: row.restaurantId,
-          name: row.restaurantName,
-          cuisineType: row.cuisineType || null,
-          city: row.restaurantCity || null,
-          state: row.restaurantState || null,
-          entityPath: buildPublicProfilePath({
-            entityType: isBarBusinessType(row.businessType)
-              ? "bar"
-              : isTruckBusinessType(row.businessType)
-                ? "truck"
-                : "restaurant",
-            id: row.restaurantId,
-            name: row.restaurantName,
-          }),
-        },
-        updatedAt: row.updatedAt ? new Date(row.updatedAt).toISOString() : null,
-      }));
-
-      res.setHeader("Cache-Control", "public, max-age=120");
-      res.json({
-        city: { name: city.name, slug: city.slug, state: city.state || null },
-        generatedAt: new Date().toISOString(),
-        totalDeals: payload.length,
-        canonicalUrl: `${baseUrl}/deals/${encodeURIComponent(city.slug)}`,
-        deals: payload,
-      });
-    } catch (error) {
-      console.error("[deals-city] error:", error);
-      res.status(500).json({ message: "Unable to load city deals" });
-    }
+    const citySlug = String(req.params.citySlug || "")
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9-]+/g, "-")
+      .replace(/(^-|-$)+/g, "")
+      .slice(0, 80);
+    const replacementPath = citySlug
+      ? `/deals-today/${encodeURIComponent(citySlug)}`
+      : "/deals-today";
+    res.setHeader("Cache-Control", "no-store");
+    return res.status(410).json({
+      message: "This city deals API has been retired.",
+      replacementPath,
+      totalDeals: 0,
+      deals: [],
+    });
   });
 
   app.get("/api/deals/restaurant/:restaurantId", async (req, res) => {

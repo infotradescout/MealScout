@@ -82,6 +82,8 @@ const confirmedBooking = {
   });
   assert.equal(plan.status, "here_now");
   assert.equal(plan.currentStop?.stopId, "booking-1");
+  assert.equal(plan.currentStop?.city, "Pensacola");
+  assert.equal(plan.currentStop?.state, "FL");
   assert.equal(plan.upcomingStops.length, 0);
   assert.match(plan.currentStop?.directionsUrl || "", /30\.42,-87\.21/);
 
@@ -425,6 +427,17 @@ const publicSeoLandingSource = fs.readFileSync(
   path.join(root, "server", "routes", "publicSeoLandingRoutes.ts"),
   "utf8",
 );
+const publicSeoLandingImplementation = [
+  publicSeoLandingSource,
+  fs.readFileSync(
+    path.join(root, "server", "services", "publicSeoLandingModel.ts"),
+    "utf8",
+  ),
+  fs.readFileSync(
+    path.join(root, "server", "services", "publicSeoLandingData.ts"),
+    "utf8",
+  ),
+].join("\n");
 const seoRouteSource = fs.readFileSync(
   path.join(root, "server", "routes", "seoRoutes.ts"),
   "utf8",
@@ -441,7 +454,7 @@ assert.match(routeSource, /buildPublicTruckOperatingPlan\(String\(row\.id\)\)/);
 assert.doesNotMatch(routeSource, /buildPublicTruckSchedulePayload/);
 assert.match(
   routeSource,
-  /isTruckProfile[\s\S]*buildPublicTruckOperatingPlan[\s\S]*\.\.\.profileActivityPayload/,
+  /if \(entity === "truck"\)[\s\S]*buildPublicTruckOperatingPlan\(String\(row\.id\)\)[\s\S]*\.\.\.operatingPlanPayload/,
 );
 assert.ok(
   (bookingRouteSource.match(/isTruckOperatingPlanRowPublic/g) || []).length >= 4,
@@ -588,7 +601,7 @@ assert.ok(
 for (const [label, source] of [
   ["public profile and evidence", routeSource],
   ["event prerender", prerenderSource],
-  ["public SEO landings", publicSeoLandingSource],
+  ["public SEO landings", publicSeoLandingImplementation],
   ["sitemaps", seoRouteSource],
   ["Scout recommendations", recommendationSource],
 ] as const) {
@@ -639,7 +652,7 @@ assert.match(
   "Public event evidence must use the same guest privacy gate as event detail",
 );
 assert.match(
-  publicSeoLandingSource,
+  publicSeoLandingImplementation,
   /dateKeyInZone\(interval\.startUtc, timeZone\)[\s\S]*isSlotPublic/,
   "Events-today SEO must use host-local day and confirmed-slot eligibility",
 );
@@ -655,8 +668,13 @@ assert.match(
 );
 assert.match(
   seoRouteSource,
-  /hasEligibleManualTruckStopInCity[\s\S]*assembleTruckOperatingPlan/,
-  "Time-page sitemaps must reuse active manual-stop truth policy",
+  /sitemap-time-pages\.xml[\s\S]*res\.status\(410\)[\s\S]*Cache-Control[\s\S]*no-store/,
+  "Unsupported time-page sitemap requests must terminate without an indexable fallback",
+);
+assert.doesNotMatch(
+  seoRouteSource,
+  /food-trucks-(?:now|breakfast|lunch|dinner|tonight|this-weekend)/,
+  "Unsupported JS-only time modes must not be emitted by sitemap or AI discovery surfaces",
 );
 
 console.log("truck-availability-truth.behavior: PASS");

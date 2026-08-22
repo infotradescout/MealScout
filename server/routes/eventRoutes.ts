@@ -51,10 +51,18 @@ import {
 import { isSlotPublic, type PublicSlot } from "../services/publicSlotGate";
 import { toPublicEventListingArray } from "../publicProfiles/toPublicEventListing";
 import { toPublicParkingPassListingArray } from "../publicProfiles/toPublicParkingPassListing";
-import { canExposeAnonymousEventDetail } from "../publicProfiles/publicEventDetailAccess";
+import {
+  canExposeAnonymousEventDetail,
+  canExposeAnonymousEventFeedItem,
+} from "../publicProfiles/publicEventDetailAccess";
 import { distributedRateLimit } from "../middleware/distributedRateLimit";
 import { dateKeyFromUnknown, dateKeyInZone } from "../services/dateKeys";
-import { loadConfirmedEventTrucks } from "../services/confirmedEventTrucks";
+import {
+  filterPublicConfirmedEventTrucks,
+  loadConfirmedEventTrucks,
+} from "../services/confirmedEventTrucks";
+import { isPublicDiscoveryEligibleEntity } from "@shared/publicDiscoveryIntegrity";
+import { resolvePublicProfileVisibility } from "../publicProfiles/publicProfileUtils";
 
 const normalizeParkingStatus = (value: unknown) =>
   String(value ?? "")
@@ -80,8 +88,9 @@ const attachConfirmedPublicEventTrucks = async (rows: any[]) => {
     rows.map((row) => String(row?.id || "")),
   );
   return rows.map((row) => {
-    const trucks = (confirmedByEvent.get(String(row?.id || "")) || []).map(
-      (truck) => ({
+    const trucks = filterPublicConfirmedEventTrucks(
+      confirmedByEvent.get(String(row?.id || "")) || [],
+    ).map((truck) => ({
         id: truck.truckId,
         name: truck.name,
         cuisineType: truck.cuisineType,
@@ -89,8 +98,8 @@ const attachConfirmedPublicEventTrucks = async (rows: any[]) => {
         state: truck.state,
         logoUrl: truck.logoUrl,
         coverImageUrl: truck.coverImageUrl,
-      }),
-    );
+        bookingConfirmedAt: truck.bookingConfirmedAt,
+      }));
     return {
       ...row,
       bookedRestaurantId: trucks[0]?.id || null,
@@ -98,6 +107,104 @@ const attachConfirmedPublicEventTrucks = async (rows: any[]) => {
     };
   });
 };
+
+export const buildAnonymousPublicEventFeed = async (rows: unknown, now: Date) => {
+  const attached = await attachConfirmedPublicEventTrucks(
+    Array.isArray(rows) ? rows : [],
+  );
+  const hostOwnerIds = Array.from(
+    new Set(
+      attached
+        .map((event: any) => String(event?.host?.userId || "").trim())
+        .filter(Boolean),
+    ),
+  );
+  const hostVisibilityByOwnerId = new Map(
+    await Promise.all(
+      hostOwnerIds.map(async (ownerId) => {
+        const owner = await storage.getUser(ownerId);
+        return [
+          ownerId,
+          resolvePublicProfileVisibility(owner?.publicProfileSettings),
+        ] as const;
+      }),
+    ),
+  );
+  const evaluated = await Promise.all(
+    attached.map(async (event: any) => {
+      const primaryTruck = event?.trucks?.[0] || null;
+      const timeZone = await resolveCityTimeZone({
+        city: event?.host?.city,
+        state: event?.host?.state,
+      });
+      const interval = buildSlotDateTimes({
+        timeZone,
+        date: event?.date,
+        startTime: String(event?.startTime || ""),
+        endTime: String(event?.endTime || ""),
+      });
+      const lastConfirmedAtUtc = new Date(
+        primaryTruck?.bookingConfirmedAt ||
+          event?.lastConfirmedAt ||
+          event?.updatedAt ||
+          event?.date ||
+          Number.NaN,
+      );
+      const slotIsPublic = Boolean(
+        primaryTruck &&
+          interval &&
+          Number.isFinite(lastConfirmedAtUtc.getTime()) &&
+          isSlotPublic({
+            slot: {
+              source: "parking_pass_booking",
+              status: "confirmed",
+              startsAtUtc: interval.startUtc,
+              endsAtUtc: interval.endUtc,
+              lastConfirmedAtUtc,
+            },
+            now,
+            ttlHours: 24 * 365 * 100,
+          }),
+      );
+      if (!canExposeAnonymousEventFeedItem({
+        eventType: event?.eventType,
+        requiresPayment: event?.requiresPayment,
+        status: event?.status,
+        eventName: event?.name,
+        hostName: event?.host?.businessName,
+        slotIsPublic,
+        hasPublicConfirmedTruck: Boolean(primaryTruck),
+        ended: Boolean(interval && interval.endUtc.getTime() <= now.getTime()),
+      })) {
+        return null;
+      }
+      const hostOwnerId = String(event?.host?.userId || "").trim();
+      const showHostAddress =
+        hostVisibilityByOwnerId.get(hostOwnerId)?.showAddress !== false;
+      return {
+        ...event,
+        host:
+          event?.host && typeof event.host === "object"
+            ? {
+                ...event.host,
+                address: showHostAddress ? event.host.address : null,
+                latitude: showHostAddress ? event.host.latitude : null,
+                longitude: showHostAddress ? event.host.longitude : null,
+              }
+            : event?.host,
+      };
+    }),
+  );
+  return evaluated.filter((event): event is any => Boolean(event));
+};
+
+const sendPublicEventFeedUnavailable = (res: any) =>
+  res
+    .status(503)
+    .setHeader("Retry-After", "60")
+    .setHeader("Cache-Control", "no-store")
+    .setHeader("X-Robots-Tag", "noindex,follow")
+    .json({ message: "Events are temporarily unavailable" });
 
 export const isParkingPassFeedCandidate = (event: any) => {
   const eventStatus = normalizeParkingStatus(event?.status || "open");
@@ -156,6 +263,9 @@ export const sanitizeParkingPassPublicFeedRows = (events: any[]) =>
 type EventRouteDependencies = {
   hasCompleteProfileAccess: (userId: string) => Promise<boolean>;
   parkingPassFeedBuilder?: () => Promise<any[]>;
+  publicEventFeedLoader?: () => Promise<any[]>;
+  publicEventDetailLoader?: (eventId: string) => Promise<any | null>;
+  publicEventNow?: () => Date;
 };
 
 export function registerEventRoutes(
@@ -163,6 +273,42 @@ export function registerEventRoutes(
   dependencies: EventRouteDependencies,
 ) {
   const { hasCompleteProfileAccess } = dependencies;
+  const loadPublicEventFeed =
+    dependencies.publicEventFeedLoader || (() => storage.getAllUpcomingEvents());
+  const loadPublicEventDetail =
+    dependencies.publicEventDetailLoader ||
+    (async (eventId: string) => {
+      const [row] = await db
+        .select({
+          id: events.id,
+          hostId: events.hostId,
+          name: events.name,
+          description: events.description,
+          eventType: events.eventType,
+          date: events.date,
+          startTime: events.startTime,
+          endTime: events.endTime,
+          status: events.status,
+          lastConfirmedAt: events.lastConfirmedAt,
+          updatedAt: events.updatedAt,
+          maxTrucks: events.maxTrucks,
+          requiresPayment: events.requiresPayment,
+          hostPriceCents: events.hostPriceCents,
+          hostUserId: hosts.userId,
+          hostName: hosts.businessName,
+          hostAddress: hosts.address,
+          hostCity: hosts.city,
+          hostState: hosts.state,
+          hostLatitude: hosts.latitude,
+          hostLongitude: hosts.longitude,
+        })
+        .from(events)
+        .innerJoin(hosts, eq(events.hostId, hosts.id))
+        .where(eq(events.id, eventId))
+        .limit(1);
+      return row || null;
+    });
+  const publicEventNow = dependencies.publicEventNow || (() => new Date());
   const parkingPassFeedLimiter = distributedRateLimit({
     scope: "parking-pass-feed",
     limit: 120,
@@ -752,36 +898,33 @@ export function registerEventRoutes(
   // Public alias used by the Scout page (/scout)
   app.get("/api/events/public", async (req: any, res) => {
     try {
-      const upcomingEvents = await storage.getAllUpcomingEvents();
-      const publicEvents = await attachConfirmedPublicEventTrucks(
-        (Array.isArray(upcomingEvents) ? upcomingEvents : []).filter(
-          (event: any) => !Boolean(event?.requiresPayment),
-        ),
+      const upcomingEvents = await loadPublicEventFeed();
+      const publicEvents = await buildAnonymousPublicEventFeed(
+        upcomingEvents,
+        publicEventNow(),
       );
       res.json(
         toPublicEventListingArray(publicEvents),
       );
     } catch (error: any) {
       console.error("Error fetching public events:", error);
-      res.json([]);
+      return sendPublicEventFeedUnavailable(res);
     }
   });
 
   app.get("/api/events/upcoming", async (req: any, res) => {
     try {
-      const upcomingEvents = await storage.getAllUpcomingEvents();
-      const publicEvents = await attachConfirmedPublicEventTrucks(
-        (Array.isArray(upcomingEvents) ? upcomingEvents : []).filter(
-          (event: any) => !Boolean(event?.requiresPayment),
-        ),
+      const upcomingEvents = await loadPublicEventFeed();
+      const publicEvents = await buildAnonymousPublicEventFeed(
+        upcomingEvents,
+        publicEventNow(),
       );
       res.json(
         toPublicEventListingArray(publicEvents),
       );
     } catch (error: any) {
       console.error("Error fetching upcoming events:", error);
-      // Public feed should degrade gracefully instead of surfacing a 500.
-      res.json([]);
+      return sendPublicEventFeedUnavailable(res);
     }
   });
 
@@ -1050,37 +1193,12 @@ export function registerEventRoutes(
       if (!eventId)
         return res.status(400).json({ message: "eventId required" });
 
-      const [row] = await db
-        .select({
-          id: events.id,
-          hostId: events.hostId,
-          name: events.name,
-          description: events.description,
-          eventType: events.eventType,
-          date: events.date,
-          startTime: events.startTime,
-          endTime: events.endTime,
-          status: events.status,
-          lastConfirmedAt: events.lastConfirmedAt,
-          updatedAt: events.updatedAt,
-          maxTrucks: events.maxTrucks,
-          requiresPayment: events.requiresPayment,
-          hostPriceCents: events.hostPriceCents,
-          hostName: hosts.businessName,
-          hostAddress: hosts.address,
-          hostCity: hosts.city,
-          hostState: hosts.state,
-          hostLatitude: hosts.latitude,
-          hostLongitude: hosts.longitude,
-        })
-        .from(events)
-        .innerJoin(hosts, eq(events.hostId, hosts.id))
-        .where(eq(events.id, eventId))
-        .limit(1);
+      const row = await loadPublicEventDetail(eventId);
 
       if (!row) return res.status(404).json({ message: "Event not found" });
-      const confirmedTrucks =
-        (await loadConfirmedEventTrucks([eventId])).get(eventId) || [];
+      const confirmedTrucks = filterPublicConfirmedEventTrucks(
+        (await loadConfirmedEventTrucks([eventId])).get(eventId) || [],
+      );
       const primaryTruck = confirmedTrucks[0] || null;
 
       const toSlug = (value: string | null | undefined) =>
@@ -1112,7 +1230,7 @@ export function registerEventRoutes(
         endTime: String(row.endTime || ""),
       });
 
-      const now = new Date();
+      const now = publicEventNow();
       const lastConfirmedAtUtc = new Date(
         primaryTruck?.bookingConfirmedAt ||
           row.lastConfirmedAt ||
@@ -1137,14 +1255,18 @@ export function registerEventRoutes(
           })
         : false;
       const ended = dt ? dt.endUtc.getTime() < now.getTime() : false;
-      const isAuthed = Boolean(req.isAuthenticated?.() && req.user?.id);
       if (
-        !isAuthed &&
-        !canExposeAnonymousEventDetail({
-          requiresPayment: row.requiresPayment,
-          status: row.status,
-          slotIsPublic: gateOk,
-        })
+        !isPublicDiscoveryEligibleEntity({ name: row.name, isActive: true }) ||
+          !isPublicDiscoveryEligibleEntity({
+            name: row.hostName,
+            isActive: true,
+          }) ||
+          !canExposeAnonymousEventDetail({
+            eventType: row.eventType,
+            requiresPayment: row.requiresPayment,
+            status: row.status,
+            slotIsPublic: gateOk,
+          })
       ) {
         res.setHeader("Cache-Control", "private, no-store");
         return res.status(404).json({ message: "Event not found" });
@@ -1152,6 +1274,10 @@ export function registerEventRoutes(
 
       const hostSlug = `${toSlug(row.hostName) || row.hostId}--${row.hostId}`;
       const hostPath = `/location/${encodeURIComponent(hostSlug)}`;
+      const hostOwner = await storage.getUser(row.hostUserId);
+      const { showAddress: showHostAddress } = resolvePublicProfileVisibility(
+        hostOwner?.publicProfileSettings,
+      );
 
       const publicTrucks = confirmedTrucks.map((truck) => ({
         id: truck.truckId,
@@ -1164,10 +1290,7 @@ export function registerEventRoutes(
         )}`,
       }));
 
-      res.setHeader(
-        "Cache-Control",
-        isAuthed ? "private, no-store" : "public, max-age=60",
-      );
+      res.setHeader("Cache-Control", "public, max-age=60");
       res.json({
         id: row.id,
         title,
@@ -1189,11 +1312,11 @@ export function registerEventRoutes(
         host: {
           id: row.hostId,
           name: row.hostName,
-          address: row.hostAddress,
+          address: showHostAddress ? row.hostAddress : null,
           city: row.hostCity,
           state: row.hostState,
-          latitude: row.hostLatitude,
-          longitude: row.hostLongitude,
+          latitude: showHostAddress ? row.hostLatitude : null,
+          longitude: showHostAddress ? row.hostLongitude : null,
           path: hostPath,
         },
         truck: publicTrucks[0] || null,
@@ -1202,7 +1325,7 @@ export function registerEventRoutes(
       });
     } catch (error: any) {
       console.error("[public-event] error:", error);
-      res.status(500).json({ message: "Unable to load event" });
+      return sendPublicEventFeedUnavailable(res);
     }
   });
 

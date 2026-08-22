@@ -75,13 +75,55 @@ function assertSharedIndexabilityWiring() {
   );
 
   const vercel = JSON.parse(read("vercel.json"));
-  const profileProxyRules = [
+  const allProxyRules = [
     ...(vercel.rewrites || []),
     ...(vercel.routes || []),
-  ].filter((rule: { source?: string; src?: string; destination?: string; dest?: string }) => {
+  ];
+  const acquisitionPaths = new Set(["/for-food-trucks", "/for-restaurants"]);
+  for (const acquisitionPath of acquisitionPaths) {
+    const acquisitionRules = allProxyRules.filter(
+      (rule: { source?: string; src?: string }) =>
+        String(rule.source || rule.src || "") === acquisitionPath,
+    );
+    assert.equal(
+      acquisitionRules.length,
+      2,
+      `${acquisitionPath} must retain one rewrite and one route rule`,
+    );
+    for (const rule of acquisitionRules) {
+      assert.equal(rule.has?.[0]?.type, "header");
+      assert.equal(String(rule.has?.[0]?.key || "").toLowerCase(), "user-agent");
+      const matcher = new RegExp(String(rule.has?.[0]?.value || ""));
+      assert.equal(
+        matcher.test("Mozilla/5.0 (compatible; Googlebot/2.1)"),
+        true,
+        `${acquisitionPath} must match Googlebot`,
+      );
+      assert.equal(
+        matcher.test("Mozilla/5.0 ChatGPT-User/1.0"),
+        true,
+        `${acquisitionPath} must match ChatGPT-User`,
+      );
+      assert.equal(
+        matcher.test(
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140.0 Safari/537.36",
+        ),
+        false,
+        `${acquisitionPath} must not match an ordinary Chrome browser`,
+      );
+    }
+  }
+
+  const profileProxyRules = allProxyRules.filter((rule: {
+    source?: string;
+    src?: string;
+    destination?: string;
+    dest?: string;
+  }) => {
     const src = String(rule.source || rule.src || "");
     const dest = String(rule.destination || rule.dest || "");
     return (
+      !acquisitionPaths.has(src) &&
       /truck/.test(src) &&
       dest.includes("mealscout.onrender.com") &&
       !dest.includes("sitemap")

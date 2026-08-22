@@ -6,12 +6,17 @@ import { SEOHead } from "@/components/seo-head";
 import { apiUrl } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import {
+  mapPublicSeoLandingPathToEndpoint,
+  mapPublicSeoLandingSourcePageType,
+} from "@/lib/publicSeoLandingRoute";
 
 type Payload = {
   page: {
     routeKey: string;
     citySlug: string | null;
     cityName: string | null;
+    cityState: string | null;
     cuisineSlug: string | null;
     cuisineName: string | null;
     canonicalPath: string;
@@ -37,58 +42,13 @@ type Payload = {
   total: number;
 };
 
-const mapRouteToEndpoint = (pathname: string) => {
-  const parts = pathname.split("/").filter(Boolean);
-  if (parts[0] === "food-trucks" && parts[1] && !parts[2]) {
-    return `/api/public/seo/food-trucks/${encodeURIComponent(parts[1])}`;
-  }
-  if (parts[0] === "food-trucks-today" && parts[1]) {
-    return `/api/public/seo/food-trucks-today/${encodeURIComponent(parts[1])}`;
-  }
-  if (parts[0] === "deals-today" && parts[1]) {
-    return `/api/public/seo/deals-today/${encodeURIComponent(parts[1])}`;
-  }
-  if (parts[0] === "events-today" && parts[1]) {
-    return `/api/public/seo/events-today/${encodeURIComponent(parts[1])}`;
-  }
-  if (parts[0] === "city" && parts[1] && parts[2] === "food") {
-    return `/api/public/seo/city/${encodeURIComponent(parts[1])}/food`;
-  }
-  if (parts[0] === "cuisine" && parts[1] && parts[2]) {
-    return `/api/public/seo/cuisine/${encodeURIComponent(parts[1])}/${encodeURIComponent(parts[2])}`;
-  }
-  if (parts[0] === "cuisine" && parts[1]) {
-    return `/api/public/seo/cuisine/${encodeURIComponent(parts[1])}`;
-  }
-  if (parts[0] === "locations-with-trucks" && parts[1]) {
-    return `/api/public/seo/locations-with-trucks/${encodeURIComponent(parts[1])}`;
-  }
-  return null;
-};
-
-const mapSourcePageType = (routeKey?: string | null) => {
-  switch (String(routeKey || "")) {
-    case "food-trucks-today":
-      return "food_trucks_today";
-    case "deals-today":
-      return "deals_today";
-    case "events-today":
-      return "events_today";
-    case "city":
-      return "city_food";
-    case "cuisine":
-      return "cuisine";
-    case "locations-with-trucks":
-      return "locations_with_trucks";
-    default:
-      return "city_food";
-  }
-};
-
 export default function PublicSeoLandingPage() {
   const params = useParams() as Record<string, string | undefined>;
   const rawPath = window.location.pathname;
-  const endpoint = useMemo(() => mapRouteToEndpoint(rawPath), [rawPath, params]);
+  const endpoint = useMemo(
+    () => mapPublicSeoLandingPathToEndpoint(rawPath),
+    [rawPath, params],
+  );
   const pageViewSentRef = useRef<string>("");
   const [analyticsWindow] = useState(() => {
     if (typeof window === "undefined") return null;
@@ -121,7 +81,14 @@ export default function PublicSeoLandingPage() {
     : undefined;
   const citySlug = data?.page?.citySlug;
   const cuisineSlug = data?.page?.cuisineSlug;
-  const sourcePageType = mapSourcePageType(data?.page?.routeKey);
+  const sourcePageType = mapPublicSeoLandingSourcePageType(
+    data?.page?.routeKey,
+  );
+  const isFoodTruckLanding = [
+    "food-trucks",
+    "food-trucks-cuisine",
+    "food-trucks-today",
+  ].includes(String(data?.page?.routeKey || ""));
 
   const trackDiscoveryEvent = useCallback(
     (payload: {
@@ -168,6 +135,7 @@ export default function PublicSeoLandingPage() {
         description={description}
         canonicalUrl={canonicalUrl}
         ogImage={data?.page?.ogImage || undefined}
+        noIndex={Boolean(error) || data?.total === 0}
       />
       <div className="mx-auto max-w-6xl px-4 py-10">
         <header className="mb-6">
@@ -218,6 +186,9 @@ export default function PublicSeoLandingPage() {
                       <p className="text-xs text-muted-foreground">
                         {[item.city, item.state].filter(Boolean).join(", ") || "Local area"}
                       </p>
+                      {item.statusLabel ? (
+                        <p className="text-xs font-medium text-foreground">{item.statusLabel}</p>
+                      ) : null}
                       {item.summary ? (
                         <p className="text-xs text-muted-foreground">{item.summary}</p>
                       ) : null}
@@ -255,6 +226,20 @@ export default function PublicSeoLandingPage() {
         <section className="mt-6 rounded-lg border border-[var(--border-subtle)] p-4">
           <h2 className="text-sm font-semibold">Related discovery</h2>
           <div className="mt-3 flex flex-wrap gap-2">
+            {isFoodTruckLanding ? (
+              <Link
+                href="/for-food-trucks"
+                className="text-sm font-semibold underline"
+                onClick={() =>
+                  trackDiscoveryEvent({
+                    eventType: "discovery_cta_click",
+                    targetPath: "/for-food-trucks",
+                  })
+                }
+              >
+                List or claim your food truck
+              </Link>
+            ) : null}
             {citySlug ? (
               <>
                 <Link href={`/city/${encodeURIComponent(citySlug)}/food`} className="text-sm underline">

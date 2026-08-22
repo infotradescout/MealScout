@@ -13,6 +13,11 @@
       ],
       "destination": "https://www.mealscout.us/$1",
       "permanent": true
+    },
+    {
+      "source": "/deals/:city((?!featured$)[^/]+)",
+      "destination": "/deals-today/:city",
+      "permanent": true
     }
   ],
   "rewrites": [
@@ -77,6 +82,10 @@
           "value": ".*([Bb][Oo][Tt]|[Cc][Rr][Aa][Ww][Ll][Ee][Rr]|[Ss][Pp][Ii][Dd][Ee][Rr]|[Ss][Ll][Uu][Rr][Pp]|[Cc][Hh][Aa][Tt][Gg][Pp][Tt]-[Uu][Ss][Ee][Rr]|[Aa][Nn][Tt][Hh][Rr][Oo][Pp][Ii][Cc]-[Aa][Ii]|[Cc][Oo][Hh][Ee][Rr][Ee]-[Aa][Ii]).*"
         }
       ]
+    },
+    {
+      "source": "/food-trucks/:city/:cuisine",
+      "destination": "https://mealscout.onrender.com/food-trucks/:city/:cuisine"
     },
     {
       "source": "/food-trucks/:city",
@@ -227,6 +236,10 @@
         "cache-control": "public, max-age=31536000, immutable"
       },
       "continue": true
+    },
+    {
+      "src": "/food-trucks/([^/]+)/([^/]+)",
+      "dest": "https://mealscout.onrender.com/food-trucks/$1/$2"
     },
     {
       "src": "/food-trucks/([^/]+)",

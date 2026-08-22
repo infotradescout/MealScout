@@ -16,6 +16,7 @@ import {
   buildPublicProfilePath,
   imageAsset,
   joinedAddressLabel,
+  normalizePublicUrl,
   toSlug,
 } from "./publicProfileUtils";
 import { shouldExposeStaticTruckProfileLocation } from "../utils/truckLocationSemantics";
@@ -30,6 +31,26 @@ const OPERATING_HOUR_DAYS = [
   ["sat", "Sat"],
   ["sun", "Sun"],
 ] as const;
+
+export function projectPublicRestaurantMedia(rowValue: unknown) {
+  const row =
+    rowValue && typeof rowValue === "object"
+      ? (rowValue as Record<string, any>)
+      : {};
+  const { hideMedia, isAccepted } =
+    deriveProfileEvidenceQuarantineVisibility(row);
+  const coverImageUrl = normalizePublicUrl(row.coverImageUrl, {
+    allowInternalPath: true,
+  });
+  const logoUrl = normalizePublicUrl(row.logoUrl, {
+    allowInternalPath: true,
+  });
+  return {
+    coverImageUrl:
+      hideMedia && !isAccepted("media_cover") ? null : coverImageUrl,
+    logoUrl: hideMedia && !isAccepted("media_logo") ? null : logoUrl,
+  };
+}
 
 const formatOperatingHourTime = (value: unknown) => {
   const match = String(value || "")
@@ -130,7 +151,9 @@ export function toPublicRestaurantProfile(input: {
   const capabilities = getBusinessCapabilities(canonicalBusinessType || profileType);
   const id = String(row.id || "");
   const claimedProfile = Boolean(row.claimedProfile ?? row.isVerified);
-  const orderingPath = String(row?.ordering?.path || "").trim() || null;
+  const orderingPath = normalizePublicUrl(row?.ordering?.path, {
+    allowInternalPath: true,
+  });
   const displayName = String(row.name || "MealScout business");
   const slug = toSlug(displayName) || id;
   const canonicalPath = buildPublicProfilePath({
@@ -138,11 +161,7 @@ export function toPublicRestaurantProfile(input: {
     name: displayName,
     id,
   });
-  const coverImageUrlRaw = String(row.coverImageUrl || "").trim() || null;
-  const logoUrlRaw = String(row.logoUrl || "").trim() || null;
-  const coverImageUrl =
-    hideMedia && !isAccepted("media_cover") ? null : coverImageUrlRaw;
-  const logoUrl = hideMedia && !isAccepted("media_logo") ? null : logoUrlRaw;
+  const { coverImageUrl, logoUrl } = projectPublicRestaurantMedia(row);
   const isPrivateChef = profileType === "private_chef";
   const addressPublicLabel =
     input.showAddress === false ||
@@ -152,8 +171,7 @@ export function toPublicRestaurantProfile(input: {
     !shouldExposeStaticTruckProfileLocation(row)
       ? null
       : joinedAddressLabel(row.address, row.city, row.state);
-  const exposeProfileCoordinates =
-    !isPrivateChef && shouldExposeStaticTruckProfileLocation(row);
+  const exposeProfileCoordinates = Boolean(addressPublicLabel);
   const publicLatitude =
     exposeProfileCoordinates && Number.isFinite(Number(row.latitude))
       ? Number(row.latitude)
@@ -193,16 +211,21 @@ export function toPublicRestaurantProfile(input: {
     (hidePublicTrustFields && !isAccepted("contact_phone"))
       ? null
       : String(row.phone || "").trim() || null;
-  const menuUrl = String(row.menuUrl || "").trim() || null;
-  const menuImageUrl = String(row.menuImageUrl || "").trim() || null;
-  const menuPdfUrl = String(row.menuPdfUrl || "").trim() || null;
+  const menuUrl = normalizePublicUrl(row.menuUrl, { allowInternalPath: true });
+  const menuImageUrl = normalizePublicUrl(row.menuImageUrl, {
+    allowInternalPath: true,
+  });
+  const menuPdfUrl = normalizePublicUrl(row.menuPdfUrl, {
+    allowInternalPath: true,
+  });
   const websiteUrl =
+    input.showContact === false ||
     isRejected("website_link") ||
     (hidePublicTrustFields && !isAccepted("website_link"))
       ? null
-      : String(row.websiteUrl || "").trim() || null;
+      : normalizePublicUrl(row.websiteUrl);
   const onlineOrderingUrl =
-    String(
+    normalizePublicUrl(
       (claimedProfile && orderingPath ? orderingPath : null) ||
         row.onlineOrderingUrl ||
         publicActionLinks.onlineOrderingUrl ||
@@ -210,12 +233,13 @@ export function toPublicRestaurantProfile(input: {
         row.orderUrl ||
         row.onlineOrderUrl ||
         "",
-    ).trim() || null;
+      { allowInternalPath: true },
+    );
   const deliveryUrl = claimedProfile && orderingPath
     ? row?.fulfillment?.delivery?.enabled
       ? orderingPath
       : null
-    : String(
+    : normalizePublicUrl(
         row.deliveryUrl ||
           publicActionLinks.deliveryUrl ||
           row.doordashUrl ||
@@ -231,41 +255,47 @@ export function toPublicRestaurantProfile(input: {
           row.grubhubUrl ||
           publicActionLinks.grubhubUrl ||
           "",
-      ).trim() || null;
+        { allowInternalPath: true },
+      );
   const cateringUrl =
-    String(
+    normalizePublicUrl(
       publicActionLinks.cateringInquiryUrl ||
         row.cateringInquiryUrl ||
         row.cateringUrl ||
         row.cateringRequestUrl ||
         "",
-    ).trim() || null;
+      { allowInternalPath: true },
+    );
   const truckBookingUrl =
-    String(
+    normalizePublicUrl(
       publicActionLinks.truckBookingInquiryUrl ||
         row.truckBookingInquiryUrl ||
         row.truckBookingUrl ||
         row.bookingInquiryUrl ||
         "",
-    ).trim() || null;
+      { allowInternalPath: true },
+    );
   const instagramUrl =
+    input.showContact === false ||
     isRejectedWithLegacyFallback("social_instagram", "social_links") ||
     (hidePublicTrustFields &&
       !isAcceptedWithLegacyFallback("social_instagram", "social_links"))
       ? null
-      : String(row.instagramUrl || "").trim() || null;
+      : normalizePublicUrl(row.instagramUrl);
   const facebookPageUrl =
+    input.showContact === false ||
     isRejectedWithLegacyFallback("social_facebook", "social_links") ||
     (hidePublicTrustFields &&
       !isAcceptedWithLegacyFallback("social_facebook", "social_links"))
       ? null
-      : String(row.facebookPageUrl || "").trim() || null;
+      : normalizePublicUrl(row.facebookPageUrl);
   const xUrl =
+    input.showContact === false ||
     isRejectedWithLegacyFallback("social_x", "social_links") ||
     (hidePublicTrustFields &&
       !isAcceptedWithLegacyFallback("social_x", "social_links"))
       ? null
-      : String(row.xUrl || "").trim() || null;
+      : normalizePublicUrl(row.xUrl);
   const hasCanonicalOperatingHours =
     row.operatingHours !== undefined && row.operatingHours !== null;
   const hoursValue = hasCanonicalOperatingHours
@@ -385,7 +415,9 @@ export function toPublicRestaurantProfile(input: {
               hasPrice && Number.isFinite(priceValue) ? priceValue : null,
             priceLabel,
             description: String(item?.description || "").trim() || null,
-            imageUrl: String(item?.imageUrl || "").trim() || null,
+            imageUrl: normalizePublicUrl(item?.imageUrl, {
+              allowInternalPath: true,
+            }),
             featured: Boolean(item?.featured),
             isAvailable: item?.isAvailable !== false,
             orderable:
@@ -442,7 +474,9 @@ export function toPublicRestaurantProfile(input: {
                     : null,
                 priceLabel,
                 description: String(item?.description || "").trim() || null,
-                imageUrl: String(item?.imageUrl || "").trim() || null,
+                imageUrl: normalizePublicUrl(item?.imageUrl, {
+                  allowInternalPath: true,
+                }),
                 featured: Boolean(item?.featured),
                 isAvailable: item?.isAvailable !== false,
                 orderable: item?.orderable === true,
@@ -470,7 +504,9 @@ export function toPublicRestaurantProfile(input: {
         menuLastUpdatedAt: variant?.menuLastUpdatedAt
           ? new Date(variant.menuLastUpdatedAt).toISOString()
           : null,
-        menuUrl: String(variant?.menuUrl || "").trim() || null,
+        menuUrl: normalizePublicUrl(variant?.menuUrl, {
+          allowInternalPath: true,
+        }),
       };
     })
     .filter(Boolean) as PublicRestaurantProfile["menuVariants"];
@@ -663,8 +699,8 @@ export function toPublicRestaurantProfile(input: {
     .map((item: any) => {
       const id = String(item?.id || "").trim();
       const title = String(item?.title || "").trim();
-      const actionHref = String(item?.actionHref || "").trim();
-      if (!id || !title || !actionHref) return null;
+      const rawActionHref = String(item?.actionHref || "").trim();
+      if (!id || !title || !rawActionHref) return null;
       const dealTypeRaw = String(item?.dealType || "other")
         .trim()
         .toLowerCase()
@@ -711,6 +747,21 @@ export function toPublicRestaurantProfile(input: {
             | "menu"
             | "internal")
         : "show_this_deal";
+      const actionHref = buildPublicCta({
+        label: "Deal",
+        href: rawActionHref,
+        type:
+          normalizedActionType === "call"
+            ? "phone"
+            : normalizedActionType === "website"
+              ? "external"
+              : normalizedActionType === "menu"
+                ? "menu"
+                : normalizedActionType === "order"
+                  ? "order"
+                  : "internal",
+      })?.href;
+      if (!actionHref) return null;
       return {
         id,
         title,
@@ -719,7 +770,9 @@ export function toPublicRestaurantProfile(input: {
         startAt: String(item?.startAt || "").trim() || null,
         endAt: String(item?.endAt || "").trim() || null,
         timeWindowLabel: String(item?.timeWindowLabel || "").trim() || null,
-        imageUrl: String(item?.imageUrl || "").trim() || null,
+        imageUrl: normalizePublicUrl(item?.imageUrl, {
+          allowInternalPath: true,
+        }),
         actionLabel: String(item?.actionLabel || "").trim() || "View deal",
         actionHref,
         actionType: normalizedActionType,
@@ -732,8 +785,8 @@ export function toPublicRestaurantProfile(input: {
     .map((item: any) => {
       const id = String(item?.id || "").trim();
       const title = String(item?.title || "").trim();
-      const actionHref = String(item?.actionHref || "").trim();
-      if (!id || !title || !actionHref) return null;
+      const rawActionHref = String(item?.actionHref || "").trim();
+      if (!id || !title || !rawActionHref) return null;
       const eventTypeRaw = String(item?.eventType || "other")
         .trim()
         .toLowerCase()
@@ -770,6 +823,19 @@ export function toPublicRestaurantProfile(input: {
         ? (actionTypeRaw as
             "rsvp" | "share" | "website" | "directions" | "internal")
         : "internal";
+      const actionHref = buildPublicCta({
+        label: "Event",
+        href: rawActionHref,
+        type:
+          normalizedActionType === "website"
+            ? "external"
+            : normalizedActionType === "directions"
+              ? "map"
+              : normalizedActionType === "share"
+                ? "share"
+                : "internal",
+      })?.href;
+      if (!actionHref) return null;
       return {
         id,
         title,
@@ -782,7 +848,9 @@ export function toPublicRestaurantProfile(input: {
         locationName: String(item?.locationName || "").trim() || null,
         addressPublicLabel:
           String(item?.addressPublicLabel || "").trim() || null,
-        imageUrl: String(item?.imageUrl || "").trim() || null,
+        imageUrl: normalizePublicUrl(item?.imageUrl, {
+          allowInternalPath: true,
+        }),
         actionLabel: String(item?.actionLabel || "").trim() || "View event",
         actionHref,
         actionType: normalizedActionType,

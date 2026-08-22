@@ -39,16 +39,45 @@ export const buildPublicProfilePath = (input: {
   return `/restaurant/${routeSlug}`;
 };
 
-const normalizeUrl = (value: unknown) => {
-  const raw = String(value || "").trim();
-  if (!raw) return null;
-  if (/^https?:\/\//i.test(raw)) return raw;
-  if (raw.startsWith("/")) return raw;
-  return `https://${raw.replace(/^\/+/, "")}`;
-};
-
 const isSafeInternalPath = (value: string) =>
   /^\/(?!\/)[a-z0-9\-/_?=&%.]*$/i.test(value);
+
+/**
+ * Canonical public URL projection. Public profile fields are rendered directly
+ * into anchors as well as CTAs, so unsafe values must be removed before they
+ * leave the server rather than relying on a particular client component.
+ */
+export const normalizePublicUrl = (
+  value: unknown,
+  options: { allowInternalPath?: boolean } = {},
+) => {
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+  if (/[\u0000-\u001f\u007f\\]/.test(raw) || raw.startsWith("//")) {
+    return null;
+  }
+  if (raw.startsWith("/")) {
+    return options.allowInternalPath && isSafeInternalPath(raw) ? raw : null;
+  }
+  if (/^[a-z][a-z0-9+.-]*:/i.test(raw) && !/^https?:\/\//i.test(raw)) {
+    return null;
+  }
+  const candidate = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+  try {
+    const parsed = new URL(candidate);
+    if (
+      !["http:", "https:"].includes(parsed.protocol) ||
+      parsed.username ||
+      parsed.password ||
+      !parsed.hostname
+    ) {
+      return null;
+    }
+    return /^https?:\/\//i.test(raw) ? raw : candidate;
+  } catch {
+    return null;
+  }
+};
 
 const isSafeExternal = (value: string) => /^https?:\/\//i.test(value);
 
@@ -60,10 +89,24 @@ export const buildPublicCta = (input: {
   type: PublicCtaType;
   priority?: number;
 }): PublicCta | null => {
-  const href = normalizeUrl(input.href);
+  const rawHref = String(input.href || "").trim();
+  const allowInternalPath = [
+    "internal",
+    "menu",
+    "order",
+    "catering",
+    "booking",
+    "share",
+  ].includes(input.type);
+  const href =
+    input.type === "phone"
+      ? isSafePhone(rawHref)
+        ? rawHref
+        : null
+      : normalizePublicUrl(rawHref, { allowInternalPath });
   if (!href) return null;
   const safe =
-    (input.type === "internal" && isSafeInternalPath(href)) ||
+    (allowInternalPath && isSafeInternalPath(href)) ||
     ((input.type === "external" ||
       input.type === "map" ||
       input.type === "menu" ||
@@ -125,3 +168,14 @@ export const joinedAddressLabel = (
   [String(address || "").trim(), String(city || "").trim(), String(state || "").trim()]
     .filter(Boolean)
     .join(", ") || null;
+
+export const resolvePublicProfileVisibility = (settings: unknown) => {
+  const value =
+    settings && typeof settings === "object"
+      ? (settings as { showAddress?: unknown; showContact?: unknown })
+      : {};
+  return {
+    showAddress: value.showAddress !== false,
+    showContact: value.showContact !== false,
+  };
+};

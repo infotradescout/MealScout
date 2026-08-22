@@ -10,8 +10,9 @@ type SitemapCity = {
   name: string;
   slug: string;
   state?: string | null;
-  updatedAt: string;
+  hasFoodTrucks: boolean;
   cuisines: Array<{ slug: string; count: number }>;
+  foodCuisines: Array<{ slug: string; count: number }>;
 };
 
 const titleCase = (value: string) =>
@@ -49,6 +50,22 @@ export default function Sitemap() {
     }
   }
   const cityCuisinePages = Array.from(cityCuisinePagesByHref.values());
+  const globalCuisinePagesByHref = new Map<
+    string,
+    { href: string; title: string; description: string }
+  >();
+  for (const city of cities) {
+    for (const cuisine of city.foodCuisines || []) {
+      const href = `/cuisine/${cuisine.slug}`;
+      if (globalCuisinePagesByHref.has(href)) continue;
+      globalCuisinePagesByHref.set(href, {
+        href,
+        title: `${titleCase(cuisine.slug)} across MealScout cities`,
+        description: `Eligible local ${titleCase(cuisine.slug).toLowerCase()} profiles.`,
+      });
+    }
+  }
+  const globalCuisinePages = Array.from(globalCuisinePagesByHref.values());
 
   const schemaData = {
     "@context": "https://schema.org",
@@ -90,7 +107,6 @@ export default function Sitemap() {
         { title: "For Food Trucks", href: "/for-food-trucks", description: "Create or claim a food truck profile" },
         { title: "For Hosts", href: "/for-hosts", description: "Host truck-friendly locations and events" },
         { title: "Host Partnership", href: "/host-location-partner", description: "Non-food businesses with parking can qualify as hosts" },
-        { title: "Public Events", href: "/events/public", description: "Upcoming public food events and activity" },
       ],
     },
     {
@@ -196,16 +212,26 @@ export default function Sitemap() {
               <>
                 <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-3">
                   {cities.map((city) => (
-                    <Link key={city.id} href={`/food-trucks/${city.slug}`}>
-                      <div className="p-3 rounded-lg bg-[var(--bg-surface)] border border-transparent hover:border-[color:var(--accent-text)]/30 hover:bg-[color:var(--accent-text)]/10 transition-colors">
+                    <div
+                      key={city.id}
+                      className="p-3 rounded-lg bg-[var(--bg-surface)] border border-transparent hover:border-[color:var(--accent-text)]/30 hover:bg-[color:var(--accent-text)]/10 transition-colors"
+                    >
+                      <Link href={`/city/${encodeURIComponent(city.slug)}/food`}>
                         <div className="text-sm font-semibold text-[color:var(--text-primary)]">
                           {city.name}{city.state ? `, ${city.state}` : ""}
                         </div>
-                        <div className="text-xs text-[color:var(--text-secondary)] mt-1">
-                          {city.cuisines.length} cuisine pages
-                        </div>
+                      </Link>
+                      <div className="text-xs text-[color:var(--text-secondary)] mt-1">
+                        {city.foodCuisines.length} cuisine pages
                       </div>
-                    </Link>
+                      {city.hasFoodTrucks && (
+                        <Link href={`/food-trucks/${encodeURIComponent(city.slug)}`}>
+                          <span className="mt-2 inline-block text-xs font-medium text-[color:var(--accent-text)]">
+                            Food trucks
+                          </span>
+                        </Link>
+                      )}
+                    </div>
                   ))}
                 </div>
 
@@ -216,6 +242,28 @@ export default function Sitemap() {
                     </h2>
                     <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3">
                       {cityCuisinePages.slice(0, 36).map((page) => (
+                        <Link key={page.href} href={page.href}>
+                          <div className="p-3 rounded-lg bg-[var(--bg-surface)] border border-transparent hover:border-[color:var(--accent-text)]/30 hover:bg-[color:var(--accent-text)]/10 transition-colors">
+                            <div className="text-sm font-semibold text-[color:var(--text-primary)]">
+                              {page.title}
+                            </div>
+                            <div className="text-xs text-[color:var(--text-secondary)] mt-1">
+                              {page.description}
+                            </div>
+                          </div>
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {globalCuisinePages.length > 0 && (
+                  <div className="mt-6">
+                    <h2 className="text-lg font-semibold text-[color:var(--text-primary)] mb-3">
+                      Cuisine Pages
+                    </h2>
+                    <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {globalCuisinePages.slice(0, 36).map((page) => (
                         <Link key={page.href} href={page.href}>
                           <div className="p-3 rounded-lg bg-[var(--bg-surface)] border border-transparent hover:border-[color:var(--accent-text)]/30 hover:bg-[color:var(--accent-text)]/10 transition-colors">
                             <div className="text-sm font-semibold text-[color:var(--text-primary)]">

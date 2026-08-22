@@ -1,11 +1,12 @@
 import { DateTime } from "luxon";
-import { and, eq, gte, inArray, lte, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import {
   eventBookings,
   events,
   eventSeries,
   hosts,
   truckManualSchedules,
+  users,
 } from "@shared/schema";
 import type {
   PublicEventItem,
@@ -14,12 +15,16 @@ import type {
 } from "@shared/publicProfiles";
 import { db } from "../db";
 import { resolveCityTimeZoneSync } from "./cityTimeZone";
-import { buildPublicProfilePath } from "../publicProfiles/publicProfileUtils";
+import {
+  buildPublicProfilePath,
+  resolvePublicProfileVisibility,
+} from "../publicProfiles/publicProfileUtils";
 import { buildSlotDateTimes } from "./timeIntent";
 import {
   getPublicSlotGateConfigFromEnv,
   isSlotPublic,
 } from "./publicSlotGate";
+import { isPublicDiscoveryEligibleEntity } from "@shared/publicDiscoveryIntegrity";
 
 export type TruckOperatingPlanRow = {
   restaurantId?: unknown;
@@ -29,6 +34,7 @@ export type TruckOperatingPlanRow = {
   eventTitle?: unknown;
   eventDescription?: unknown;
   eventType?: unknown;
+  eventRequiresPayment?: unknown;
   date?: unknown;
   startTime?: unknown;
   endTime?: unknown;
@@ -53,6 +59,7 @@ export type TruckOperatingPlanRow = {
   notice?: unknown;
   mapEligible?: unknown;
   liveFeedEligible?: unknown;
+  addressVisible?: unknown;
 };
 
 const HIDDEN_STATUSES = new Set([
@@ -302,7 +309,12 @@ export function assembleTruckOperatingPlan(input: {
         now,
         sourceStatus,
       });
-      const addressPublicLabel = [row.address, row.city, row.state]
+      const addressVisible = row.addressVisible !== false;
+      const addressPublicLabel = [
+        ...(addressVisible ? [row.address] : []),
+        row.city,
+        row.state,
+      ]
         .map((value) => String(value || "").trim())
         .filter(Boolean)
         .join(", ") || null;
@@ -325,12 +337,12 @@ export function assembleTruckOperatingPlan(input: {
         addressPublicLabel,
         city: String(row.city || "").trim() || null,
         state: String(row.state || "").trim() || null,
-        latitude: actionable ? latitude : null,
-        longitude: actionable ? longitude : null,
+        latitude: actionable && addressVisible ? latitude : null,
+        longitude: actionable && addressVisible ? longitude : null,
         hostProfilePath: actionable
           ? buildHostProfilePath(row.hostId, row.hostName)
           : null,
-        directionsUrl: actionable
+        directionsUrl: actionable && addressVisible
           ? buildDirectionsUrl({ latitude, longitude, addressPublicLabel })
           : null,
         notice: String(row.notice || "").trim() || null,
@@ -585,7 +597,7 @@ export async function loadTruckOperatingPlanRowsByRestaurantIds(
     .endOf("day")
     .toJSDate();
 
-  const bookingRows = await db
+  const bookingRows = (await db
     .select({
       restaurantId: eventBookings.truckId,
       sourceKind: sql<"booking">`'booking'`,
@@ -594,6 +606,7 @@ export async function loadTruckOperatingPlanRowsByRestaurantIds(
       eventTitle: events.name,
       eventDescription: events.description,
       eventType: events.eventType,
+      eventRequiresPayment: events.requiresPayment,
       date: events.date,
       startTime: events.startTime,
       endTime: events.endTime,
@@ -608,6 +621,7 @@ export async function loadTruckOperatingPlanRowsByRestaurantIds(
       longitude: hosts.longitude,
       hostId: hosts.id,
       hostName: hosts.businessName,
+      hostPublicProfileSettings: users.publicProfileSettings,
       timezone: eventSeries.timezone,
       updatedAt: eventBookings.updatedAt,
       lastConfirmedAt: eventBookings.bookingConfirmedAt,
@@ -622,15 +636,36 @@ export async function loadTruckOperatingPlanRowsByRestaurantIds(
     .from(eventBookings)
     .innerJoin(events, eq(eventBookings.eventId, events.id))
     .innerJoin(hosts, eq(events.hostId, hosts.id))
+    .innerJoin(users, eq(hosts.userId, users.id))
     .leftJoin(eventSeries, eq(events.seriesId, eventSeries.id))
     .where(
       and(
         bookingRestaurantScope,
         eq(eventBookings.status, "confirmed"),
         inArray(events.status, ["open", "booked", "filled"]),
+        or(isNull(events.requiresPayment), eq(events.requiresPayment, false)),
         gte(events.date, queryStart),
         lte(events.date, queryEnd),
       ),
+    ))
+    .map((row: TruckOperatingPlanRow & { hostPublicProfileSettings?: unknown }) => {
+      const { showAddress } = resolvePublicProfileVisibility(
+        row.hostPublicProfileSettings,
+      );
+      return {
+        ...row,
+        address: showAddress ? row.address : null,
+        latitude: showAddress ? row.latitude : null,
+        longitude: showAddress ? row.longitude : null,
+        addressVisible: showAddress,
+      };
+    })
+    .filter(
+      (row: TruckOperatingPlanRow) =>
+        String(row.eventType || "").trim().toLowerCase() !== "private_event" &&
+        !Boolean(row.eventRequiresPayment) &&
+        isPublicDiscoveryEligibleEntity({ name: row.eventTitle, isActive: true }) &&
+        isPublicDiscoveryEligibleEntity({ name: row.hostName, isActive: true }),
     );
 
   const manualRows = await db
@@ -642,6 +677,7 @@ export async function loadTruckOperatingPlanRowsByRestaurantIds(
       eventTitle: sql<string | null>`null`,
       eventDescription: sql<string | null>`null`,
       eventType: sql<string | null>`null`,
+      eventRequiresPayment: sql<boolean | null>`null`,
       date: truckManualSchedules.date,
       startTime: truckManualSchedules.startTime,
       endTime: truckManualSchedules.endTime,

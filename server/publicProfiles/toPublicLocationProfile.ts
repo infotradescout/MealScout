@@ -5,6 +5,7 @@ import {
   buildPublicProfilePath,
   imageAsset,
   joinedAddressLabel,
+  normalizePublicUrl,
   toSlug,
 } from "./publicProfileUtils";
 
@@ -23,19 +24,44 @@ export function toPublicLocationProfile(input: {
     name: displayName,
     id,
   });
-  const spotImageUrl = String(row.spotImageUrl || "").trim() || null;
-  const coverImageUrl = String(row.coverImageUrl || "").trim() || null;
-  const logoUrl = String(row.logoUrl || "").trim() || null;
+  const spotImageUrl = normalizePublicUrl(row.spotImageUrl, {
+    allowInternalPath: true,
+  });
+  const coverImageUrl = normalizePublicUrl(row.coverImageUrl, {
+    allowInternalPath: true,
+  });
+  const logoUrl = normalizePublicUrl(row.logoUrl, {
+    allowInternalPath: true,
+  });
   const addressPublicLabel =
     input.showAddress === false
       ? null
       : joinedAddressLabel(row.address, row.city, row.state);
+  const publicLatitude =
+    input.showAddress !== false && Number.isFinite(Number(row.latitude))
+      ? Number(row.latitude)
+      : null;
+  const publicLongitude =
+    input.showAddress !== false && Number.isFinite(Number(row.longitude))
+      ? Number(row.longitude)
+      : null;
   const contactPhone =
     input.showContact === false ? null : String(row.contactPhone || "").trim() || null;
-  const websiteUrl = String(row.websiteUrl || "").trim() || null;
-  const instagramUrl = String(row.instagramUrl || "").trim() || null;
-  const facebookPageUrl = String(row.facebookPageUrl || "").trim() || null;
-  const xUrl = String(row.xUrl || "").trim() || null;
+  const websiteUrl =
+    input.showContact === false ? null : normalizePublicUrl(row.websiteUrl);
+  const instagramUrl =
+    input.showContact === false ? null : normalizePublicUrl(row.instagramUrl);
+  const facebookPageUrl =
+    input.showContact === false
+      ? null
+      : normalizePublicUrl(row.facebookPageUrl);
+  const xUrl =
+    input.showContact === false ? null : normalizePublicUrl(row.xUrl);
+  const cityState = [row.city, row.state]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean)
+    .join(", ");
+  const publicDescription = `${displayName}${cityState ? ` in ${cityState}` : ""} is a MealScout host location for food truck parking and events.`;
 
   const ctas = [
     buildPublicCta({ label: "View location", href: canonicalPath, type: "internal" }),
@@ -43,8 +69,8 @@ export function toPublicLocationProfile(input: {
     buildPublicCta({
       label: "Get directions",
       href:
-        row.latitude != null && row.longitude != null
-          ? `https://maps.google.com/?q=${row.latitude},${row.longitude}`
+        publicLatitude != null && publicLongitude != null
+          ? `https://maps.google.com/?q=${publicLatitude},${publicLongitude}`
           : null,
       type: "map",
       priority: 100,
@@ -67,12 +93,12 @@ export function toPublicLocationProfile(input: {
     profileType: "location",
     displayName,
     slug,
-    description: String(row.notes || row.description || "").trim() || null,
+    description: publicDescription,
     addressPublicLabel,
     city: String(row.city || "").trim() || null,
     state: String(row.state || "").trim() || null,
-    latitude: Number.isFinite(Number(row.latitude)) ? Number(row.latitude) : null,
-    longitude: Number.isFinite(Number(row.longitude)) ? Number(row.longitude) : null,
+    latitude: publicLatitude,
+    longitude: publicLongitude,
     spotImageUrl,
     coverImageUrl,
     logoUrl,
@@ -113,7 +139,7 @@ export function toPublicLocationProfile(input: {
       slug,
       canonicalPath,
       title: displayName,
-      description: String(row.notes || row.description || "").trim() || null,
+      description: publicDescription,
       ogImageUrl: spotImageUrl || coverImageUrl || logoUrl,
     }),
   };

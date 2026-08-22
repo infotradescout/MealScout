@@ -10,6 +10,7 @@ import {
   PROTECTED_HTML_PATH_PREFIXES,
   assertNotMarketingHomepageShell,
   buildProtectedRouteInterstitialHtml,
+  guardUnauthenticatedProtectedHtml,
   isProtectedHtmlPath,
   normalizeRequestPath,
 } from "../server/seo/protectedHtmlRoutes.ts";
@@ -29,6 +30,8 @@ assert.ok(isProtectedHtmlPath("/dashboard"));
 assert.ok(isProtectedHtmlPath("/vendor-dashboard"));
 assert.ok(isProtectedHtmlPath("/supplier-portal"));
 assert.ok(isProtectedHtmlPath("/host/dashboard"));
+assert.ok(isProtectedHtmlPath("/restaurant/dashboard"));
+assert.ok(isProtectedHtmlPath("/supplier/dashboard"));
 assert.equal(isProtectedHtmlPath("/supplier/some-public-slug"), false);
 assert.equal(isProtectedHtmlPath("/truck/demo"), false);
 assert.equal(isProtectedHtmlPath("/"), false);
@@ -48,6 +51,42 @@ assert.match(interstitial, /noindex/i);
 assert.match(interstitial, /Sign in required/i);
 assert.match(interstitial, /\/login\?redirect=/);
 assertNotMarketingHomepageShell(interstitial);
+
+const exerciseGuard = (authenticated: boolean) => {
+  let status = 200;
+  let body = "";
+  let nextCalls = 0;
+  const req = {
+    method: "GET",
+    path: "/restaurant/dashboard",
+    get: () => "text/html",
+    isAuthenticated: () => authenticated,
+    user: authenticated ? { id: "owner-1" } : undefined,
+  } as any;
+  const res = {
+    status(value: number) {
+      status = value;
+      return this;
+    },
+    setHeader() {},
+    send(value: string) {
+      body = value;
+      return this;
+    },
+  } as any;
+  guardUnauthenticatedProtectedHtml(req, res, () => {
+    nextCalls += 1;
+  });
+  return { status, body, nextCalls };
+};
+const anonymousDashboard = exerciseGuard(false);
+assert.equal(anonymousDashboard.status, 401);
+assert.equal(anonymousDashboard.nextCalls, 0);
+assert.match(anonymousDashboard.body, /noindex/i);
+assert.match(anonymousDashboard.body, /Sign in required/i);
+const authenticatedDashboard = exerciseGuard(true);
+assert.equal(authenticatedDashboard.nextCalls, 1);
+assert.equal(authenticatedDashboard.body, "");
 
 const indexTs = read("server/index.ts");
 assert.match(indexTs, /guardUnauthenticatedProtectedHtml/);

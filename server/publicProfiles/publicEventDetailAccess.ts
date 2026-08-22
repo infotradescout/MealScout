@@ -1,3 +1,5 @@
+import { isPublicDiscoveryEligibleEntity } from "@shared/publicDiscoveryIntegrity";
+
 const NON_PUBLIC_EVENT_STATUSES = new Set([
   "archived",
   "cancelled",
@@ -13,13 +15,65 @@ const NON_PUBLIC_EVENT_STATUSES = new Set([
 ]);
 
 export function canExposeAnonymousEventDetail(input: {
+  eventType: unknown;
   requiresPayment: unknown;
   status: unknown;
   slotIsPublic: boolean;
 }): boolean {
-  if (Boolean(input.requiresPayment) || !input.slotIsPublic) return false;
+  if (
+    String(input.eventType || "").trim().toLowerCase() === "private_event" ||
+    Boolean(input.requiresPayment) ||
+    !input.slotIsPublic
+  ) {
+    return false;
+  }
   const status = String(input.status || "open")
     .trim()
     .toLowerCase();
   return !NON_PUBLIC_EVENT_STATUSES.has(status);
+}
+
+export function canExposeAnonymousEventListItem(input: {
+  eventType: unknown;
+  requiresPayment: unknown;
+  status: unknown;
+  eventName: unknown;
+  hostName: unknown;
+}): boolean {
+  const eventName = String(input.eventName || "").trim();
+  const hostName = String(input.hostName || "").trim();
+  if (!eventName || !hostName) return false;
+
+  return (
+    canExposeAnonymousEventDetail({
+      eventType: input.eventType,
+      requiresPayment: input.requiresPayment,
+      status: input.status,
+      slotIsPublic: true,
+    }) &&
+    isPublicDiscoveryEligibleEntity({ name: eventName, isActive: true }) &&
+    isPublicDiscoveryEligibleEntity({ name: hostName, isActive: true })
+  );
+}
+
+export function canExposeAnonymousEventFeedItem(input: {
+  eventType: unknown;
+  requiresPayment: unknown;
+  status: unknown;
+  eventName: unknown;
+  hostName: unknown;
+  slotIsPublic: boolean;
+  hasPublicConfirmedTruck: boolean;
+  ended: boolean;
+}): boolean {
+  if (!input.hasPublicConfirmedTruck || input.ended) return false;
+  return (
+    canExposeAnonymousEventListItem(input) &&
+    canExposeAnonymousEventDetail({
+      eventType: input.eventType,
+      requiresPayment: input.requiresPayment,
+      status: input.status,
+      slotIsPublic: input.slotIsPublic,
+    })
+  );
 }

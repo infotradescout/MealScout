@@ -67,6 +67,9 @@ jobs:
       - name: Public Data Boundary Contract
         run: npm run test:public-data-boundary
 
+      - name: Public SEO Landing Boundary
+        run: npm run test:public-seo-landing
+
       - name: Frozen Cleanup Safety Contract
         run: npm run test:frozen-cleanup-safety
 
