@@ -8,6 +8,23 @@ export function extractUuidFromSlug(value: unknown): string | null {
   return match ? match[0] : null;
 }
 
+export function extractIdFromSlug(value: unknown): string {
+  const supplied = String(value || "").trim();
+  if (!supplied) return "";
+  let raw = supplied;
+  try {
+    raw = decodeURIComponent(supplied);
+  } catch {
+    // Keep malformed percent-encoding fail-closed as the literal route value.
+  }
+  const marker = raw.lastIndexOf("--");
+  if (marker >= 0) {
+    const suffix = raw.slice(marker + 2).trim();
+    if (suffix) return suffix;
+  }
+  return extractUuidFromSlug(raw) || raw;
+}
+
 export function toSeoSlug(value: unknown): string {
   return String(value || "")
     .toLowerCase()

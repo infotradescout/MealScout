@@ -26,6 +26,11 @@ const publicProjectionSource = readFileSync(
 const evidenceLogo = readFileSync(evidenceLogoPath);
 const publicLogo = readFileSync(publicLogoPath);
 
+const sha256CanonicalTextFile = (path: string) =>
+  createHash("sha256")
+    .update(readFileSync(path, "utf8").replace(/\r\n/g, "\n"), "utf8")
+    .digest("hex");
+
 const jpegDimensions = (image: Buffer) => {
   assert.equal(image[0], 0xff);
   assert.equal(image[1], 0xd8);
@@ -130,7 +135,7 @@ test("the approved evidence contains 74 priced menu rows in 12 categories", () =
   ]);
 });
 
-test("the official website logo is exact, public, and reproducible", () => {
+test("the approved logo and menu evidence are exact, public, and reproducible", () => {
   const expectedHash =
     "f1791c958039b2b7437b86824295baf59f0bb123241a0c83cd388bcdc4fd9692";
   assert.equal(
@@ -159,7 +164,7 @@ test("the official website logo is exact, public, and reproducible", () => {
   );
   assert.equal(
     verification.approvedSources.menuEvidenceSha256,
-    createHash("sha256").update(readFileSync(menuEvidencePath)).digest("hex"),
+    sha256CanonicalTextFile(menuEvidencePath),
   );
   assert.equal(
     verification.approvedSources.menuCanonicalSha256,
@@ -170,6 +175,14 @@ test("the official website logo is exact, public, and reproducible", () => {
 });
 
 test("the apply path is target-locked, guarded, and revision-bound", () => {
+  assert.equal(
+    (
+      applySource.match(
+        /sha256CanonicalTextFile\(MENU_EVIDENCE_ARTIFACT\)/g,
+      ) || []
+    ).length,
+    3,
+  );
   assert.match(
     applySource,
     /const TARGET_ID = "95c4e656-f3cc-46ab-ae18-53f549cecfd1"/,

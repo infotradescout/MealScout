@@ -90,6 +90,7 @@ export async function getBusinessAccessContext(userId: string) {
       id: restaurants.id,
       name: restaurants.name,
       businessType: restaurants.businessType,
+      isFoodTruck: restaurants.isFoodTruck,
       ownerId: restaurants.ownerId,
     })
     .from(restaurants)
@@ -116,6 +117,7 @@ export async function getBusinessAccessContext(userId: string) {
           id: restaurants.id,
           name: restaurants.name,
           businessType: restaurants.businessType,
+          isFoodTruck: restaurants.isFoodTruck,
           ownerId: restaurants.ownerId,
         })
         .from(restaurants)
@@ -135,6 +137,7 @@ export async function getBusinessAccessContext(userId: string) {
       id: string;
       name: string;
       businessType: string | null;
+      isFoodTruck: boolean;
       ownerId: string;
       permissions: BusinessPermissionSet;
       isOwner: boolean;
@@ -146,6 +149,7 @@ export async function getBusinessAccessContext(userId: string) {
       id: row.id,
       name: row.name,
       businessType: row.businessType || null,
+      isFoodTruck: row.isFoodTruck === true,
       ownerId: row.ownerId,
       permissions: {
         manageDeals: true,
@@ -170,6 +174,7 @@ export async function getBusinessAccessContext(userId: string) {
       id: row.id,
       name: row.name,
       businessType: row.businessType || null,
+      isFoodTruck: row.isFoodTruck === true,
       ownerId: row.ownerId,
       permissions,
       isOwner: false,

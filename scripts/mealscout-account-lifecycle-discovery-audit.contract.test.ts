@@ -23,6 +23,7 @@ const requiredFiles = [
   "server/routes/bookingRoutes.ts",
   "server/services/loginContinuation.ts",
   "server/services/businessTeamAccess.ts",
+  "server/services/parkingPassTruckEligibility.ts",
   "vercel.json",
   "render.yaml",
 ];
@@ -57,6 +58,9 @@ const hostRoutes = read("server/routes/hostRoutes.ts");
 const bookingRoutes = read("server/routes/bookingRoutes.ts");
 const loginContinuation = read("server/services/loginContinuation.ts");
 const businessTeamAccess = read("server/services/businessTeamAccess.ts");
+const parkingPassTruckEligibility = read(
+  "server/services/parkingPassTruckEligibility.ts",
+);
 const vercel = read("vercel.json");
 const render = read("render.yaml");
 
@@ -341,10 +345,20 @@ if (!/app\.post\(\s*["']\/api\/auth\/complete-setup["']\s*,/.test(unifiedAuth)) 
 
 [
   "Parking Pass bookings are only available for food trucks.",
-  "truck.insuranceVerified === true",
   "Verify your email and submit business insurance to book Parking Pass spots.",
 ].forEach((snippet) =>
   requireIncludes(hostRoutes, snippet, `host route snippet ${snippet}`),
+);
+[
+  "resolveStoredFoodBusinessType",
+  "input.truck.insuranceVerified === true",
+  "isStaffOrAdminUserType",
+].forEach((snippet) =>
+  requireIncludes(
+    parkingPassTruckEligibility,
+    snippet,
+    `Parking Pass truck eligibility snippet ${snippet}`,
+  ),
 );
 
 [

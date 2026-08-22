@@ -107,6 +107,7 @@ async function run() {
     "GOOGLE_CLIENT_SECRET",
     "OPENAI_API_KEY",
     "ANTHROPIC_API_KEY",
+    "STRIPE_SECRET_KEY",
   ]) {
     delete process.env[key];
   }
@@ -130,6 +131,8 @@ async function run() {
   let server: import("node:http").Server | null = null;
   let failureServer: import("node:http").Server | null = null;
 
+  const paymentSeriesId = randomUUID();
+  const pastPaymentSeriesId = randomUUID();
   const ids = {
     owner: randomUUID(),
     importOwner: randomUUID(),
@@ -139,6 +142,7 @@ async function run() {
     hiddenSupplierOwner: randomUUID(),
     visibleSupplierOwner: randomUUID(),
     maliciousTruck: randomUUID(),
+    legacyAccessTruck: randomUUID(),
     restaurantOnly: randomUUID(),
     otherStateTruck: randomUUID(),
     substringTruck: randomUUID(),
@@ -183,7 +187,10 @@ async function run() {
     privateEvent: randomUUID(),
     syntheticEvent: randomUUID(),
     syntheticHostEvent: randomUUID(),
-    paymentEvent: randomUUID(),
+    paymentSeries: paymentSeriesId,
+    paymentEvent: `pp:${paymentSeriesId}:2026-08-22`,
+    pastPaymentSeries: pastPaymentSeriesId,
+    pastPaymentEvent: `pp:${pastPaymentSeriesId}:2026-08-22`,
     ineligibleOnlyEvent: randomUUID(),
     legacyAliasEvent: randomUUID(),
     tomorrowEvent: randomUUID(),
@@ -351,6 +358,37 @@ async function run() {
       cuisine: "Pizza / Sammys & Desserts",
       isTruck: true,
     });
+    await nativePool.query(
+      `update restaurants
+          set insurance_verified = true,
+              insurance_expires_at = $2
+        where id = $1`,
+      [
+        ids.maliciousTruck,
+        new Date(FIXTURE_NOW.getTime() + 24 * 60 * 60 * 1000),
+      ],
+    );
+    await insertRestaurant({
+      id: ids.legacyAccessTruck,
+      name: "Legacy Flagged Owner Truck",
+      address: "101 Harbor Way",
+      city: "Pensacola",
+      state: "FL",
+      cuisine: "Legacy",
+      isTruck: true,
+      businessType: "restaurant",
+    });
+    await nativePool.query(
+      `update restaurants
+          set is_active = false,
+              insurance_verified = true,
+              insurance_expires_at = $2
+        where id = $1`,
+      [
+        ids.legacyAccessTruck,
+        new Date(FIXTURE_NOW.getTime() - 24 * 60 * 60 * 1000),
+      ],
+    );
     await insertRestaurant({
       id: ids.restaurantOnly,
       name: "Harbor Table",
@@ -1021,23 +1059,31 @@ async function run() {
       );
     }
     await nativePool.query(
+      `insert into event_series
+        (id, host_id, name, description, timezone, start_date, end_date,
+         default_start_time, default_end_time, default_max_trucks,
+         default_hard_cap_enabled, series_type, parking_pass_days_of_week,
+         default_daily_price_cents, default_host_price_cents, status,
+         published_at, updated_at)
+       values
+        ($1, $2, 'Paid Team Lunch', 'Series-only paid occurrence',
+         'America/Chicago', $3, $3, '13:00', '14:00', 5, true,
+         'parking_pass', '[]'::jsonb, 2500, 2500, 'published', $3, $3),
+        ($4, $2, 'Past Team Lunch', 'Past series-only paid occurrence',
+         'America/Chicago', $3, $3, '11:00', '12:00', 5, true,
+         'parking_pass', '[]'::jsonb, 2500, 2500, 'published', $3, $3)`,
+      [ids.paymentSeries, ids.host, FIXTURE_NOW, ids.pastPaymentSeries],
+    );
+    await nativePool.query(
       `insert into events
         (id, host_id, name, event_type, date, start_time, end_time,
          max_trucks, status, requires_payment, last_confirmed_at)
        values
-        ($1, $2, 'Paid Team Lunch', 'event', $3, '00:01', '23:59', 5, 'open', true, $3),
-        ($4, $2, 'Ineligible Truck Only Lunch', 'event', $3, '00:01', '23:59', 5, 'open', false, $3),
-        ($5, $2, 'Legacy Alias Lunch', 'event', $3, '00:01', '23:59', 5, 'open', false, $3)`,
-      [
-        ids.paymentEvent,
-        ids.host,
-        FIXTURE_NOW,
-        ids.ineligibleOnlyEvent,
-        ids.legacyAliasEvent,
-      ],
+        ($1, $3, 'Ineligible Truck Only Lunch', 'event', $4, '00:01', '23:59', 5, 'open', false, $4),
+        ($2, $3, 'Legacy Alias Lunch', 'event', $4, '00:01', '23:59', 5, 'open', false, $4)`,
+      [ids.ineligibleOnlyEvent, ids.legacyAliasEvent, ids.host, FIXTURE_NOW],
     );
     for (const [eventId, truckId] of [
-      [ids.paymentEvent, ids.maliciousTruck],
       [ids.ineligibleOnlyEvent, ids.syntheticTruck],
       [ids.legacyAliasEvent, ids.legacyAliasTruck],
     ] as const) {
@@ -1066,7 +1112,6 @@ async function run() {
     for (const [eventId, hostId] of [
       [ids.publicEvent, ids.host],
       [ids.privateEvent, ids.host],
-      [ids.paymentEvent, ids.host],
       [ids.syntheticEvent, ids.host],
       [ids.syntheticHostEvent, ids.syntheticHost],
     ] as const) {
@@ -1293,6 +1338,9 @@ async function run() {
     const { registerPublicDiscoveryRoutes } = await import(
       "../server/routes/publicDiscoveryRoutes"
     );
+    const { getBusinessAccessContext } = await import(
+      "../server/services/businessTeamAccess"
+    );
     const {
       toPublicLocationProfile,
       toPublicRestaurantProfile,
@@ -1300,6 +1348,16 @@ async function run() {
     } = await import("../server/publicProfiles");
     const { buildPublicCta, normalizePublicUrl } = await import(
       "../server/publicProfiles/publicProfileUtils"
+    );
+    const ownerBusinessAccess = await getBusinessAccessContext(ids.owner);
+    const legacyAccessTruck = ownerBusinessAccess.restaurants.find(
+      (restaurant) => restaurant.id === ids.legacyAccessTruck,
+    );
+    assert.equal(legacyAccessTruck?.businessType, "restaurant");
+    assert.equal(
+      legacyAccessTruck?.isFoodTruck,
+      true,
+      "account-scoped business access must preserve legacy is_food_truck classification",
     );
     assert.equal(
       buildPublicCta({
@@ -1418,9 +1476,26 @@ async function run() {
       loadPublicSeoLandingData(request, FIXTURE_NOW);
 
     const app = express();
+    app.use(express.json());
     app.use((req: any, _res, next) => {
       if (req.get("X-Test-Unrelated-Customer") === "1") {
         req.user = { id: ids.incompleteOwner, userType: "customer" };
+        req.isAuthenticated = () => true;
+      }
+      if (req.get("X-Test-Unverified-Food-Truck-Owner") === "1") {
+        req.user = {
+          id: ids.owner,
+          userType: "food_truck",
+          emailVerified: false,
+        };
+        req.isAuthenticated = () => true;
+      }
+      if (req.get("X-Test-Food-Truck-Owner") === "1") {
+        req.user = {
+          id: ids.owner,
+          userType: "food_truck",
+          emailVerified: true,
+        };
         req.isAuthenticated = () => true;
       }
       next();
@@ -1443,6 +1518,12 @@ async function run() {
       res.status(204).end(),
     );
     app.get("/supplier/dashboard", (_req, res) => res.status(204).end());
+    app.get("/event/:slug", (_req, res) =>
+      res
+        .status(200)
+        .type("html")
+        .send('<!DOCTYPE html><html><body data-test="spa-shell"></body></html>'),
+    );
     server = await listen(app);
     const port = (server.address() as AddressInfo).port;
     const baseUrl = `http://127.0.0.1:${port}`;
@@ -2857,6 +2938,318 @@ async function run() {
       unrelatedAuthenticatedPrivateEvent.status,
       404,
       "an unrelated logged-in customer must not bypass the public event detail gate",
+    );
+    const paidEventRowsBeforeDetail = await nativePool.query(
+      "select count(*)::int as count from events where id = $1",
+      [ids.paymentEvent],
+    );
+    assert.equal(
+      paidEventRowsBeforeDetail.rows[0]?.count,
+      0,
+      "the paid occurrence must begin as series-only truth without a stored event override",
+    );
+    const unrelatedAuthenticatedPaidEvent = await fetch(
+      `${baseUrl}/api/public/events/${ids.paymentEvent}?truckId=${encodeURIComponent(ids.maliciousTruck)}`,
+      {
+        headers: {
+          "user-agent": "MealScout integration test",
+          "x-test-unrelated-customer": "1",
+        },
+      },
+    );
+    assert.equal(
+      unrelatedAuthenticatedPaidEvent.status,
+      404,
+      "an unrelated authenticated user must not borrow a truck id to expose paid event detail",
+    );
+    const fixedRestaurantPaidEvent = await fetch(
+      `${baseUrl}/api/public/events/${ids.paymentEvent}?truckId=${encodeURIComponent(ids.restaurantOnly)}`,
+      {
+        headers: {
+          "user-agent": "MealScout integration test",
+          "x-test-food-truck-owner": "1",
+        },
+      },
+    );
+    assert.equal(
+      fixedRestaurantPaidEvent.status,
+      404,
+      "an owned fixed restaurant must not expose food-truck-only paid detail",
+    );
+    const legacyTruckPaidEvent = await fetch(
+      `${baseUrl}/api/public/events/${ids.paymentEvent}?truckId=${encodeURIComponent(ids.legacyAccessTruck)}`,
+      {
+        headers: {
+          "user-agent": "MealScout integration test",
+          "x-test-food-truck-owner": "1",
+        },
+      },
+    );
+    assert.equal(
+      legacyTruckPaidEvent.status,
+      200,
+      "a legacy is_food_truck row must retain authorized paid detail access",
+    );
+    const anonymousPaidEventHtml = await get(
+      `/event/paid-team-lunch--${ids.paymentEvent}`,
+    );
+    assert.equal(anonymousPaidEventHtml.response.status, 404);
+    assert.equal(anonymousPaidEventHtml.text.includes("spa-shell"), false);
+    const ownerPaidEventHtml = await fetch(
+      `${baseUrl}/event/paid-team-lunch--${ids.paymentEvent}`,
+      {
+        headers: {
+          accept: "text/html",
+          "user-agent": "MealScout integration test",
+          "x-test-food-truck-owner": "1",
+        },
+      },
+    );
+    const ownerPaidEventHtmlText = await ownerPaidEventHtml.text();
+    assert.equal(ownerPaidEventHtml.status, 200);
+    assert.equal(
+      ownerPaidEventHtml.headers.get("cache-control"),
+      "private, no-store",
+    );
+    assert.equal(
+      ownerPaidEventHtml.headers.get("x-robots-tag"),
+      "noindex,nofollow,noarchive",
+    );
+    assert.equal(ownerPaidEventHtmlText.includes("spa-shell"), true);
+    assert.equal(ownerPaidEventHtmlText.includes("Paid Team Lunch"), false);
+    const ownedTruckPaidEventResponse = await fetch(
+      `${baseUrl}/api/public/events/${ids.paymentEvent}?truckId=${encodeURIComponent(ids.maliciousTruck)}`,
+      {
+        headers: {
+          "user-agent": "MealScout integration test",
+          "x-test-food-truck-owner": "1",
+        },
+      },
+    );
+    const ownedTruckPaidEvent = await ownedTruckPaidEventResponse.json();
+    const paidEventRowsAfterDetail = await nativePool.query(
+      "select count(*)::int as count from events where id = $1",
+      [ids.paymentEvent],
+    );
+    assert.equal(
+      paidEventRowsAfterDetail.rows[0]?.count,
+      0,
+      "authorized detail must resolve a series-only occurrence without materializing it",
+    );
+    const unbookedPaidEventCount = await nativePool.query(
+      "select count(*)::int as count from event_bookings where event_id = $1",
+      [ids.paymentEvent],
+    );
+    assert.equal(
+      unbookedPaidEventCount.rows[0]?.count,
+      0,
+      "the owner detail proof must use a genuinely unbooked paid event",
+    );
+    assert.equal(ownedTruckPaidEventResponse.status, 200);
+    assert.equal(
+      ownedTruckPaidEventResponse.headers.get("cache-control"),
+      "private, no-store",
+    );
+    assert.equal(ownedTruckPaidEvent.hostPriceCents, 2500);
+    assert.equal(ownedTruckPaidEvent.requiresPayment, true);
+    assert.equal(ownedTruckPaidEvent.isPublic, false);
+    assert.equal(ownedTruckPaidEvent.noIndex, true);
+    const foodTruckBookingEntry = await fetch(
+      `${baseUrl}/api/events/${ids.paymentEvent}/book`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "user-agent": "MealScout integration test",
+          "x-test-food-truck-owner": "1",
+        },
+        body: "{}",
+      },
+    );
+    assert.equal(
+      foodTruckBookingEntry.status,
+      400,
+      "a food_truck account must reach the booking handler instead of failing the old role gate",
+    );
+    assert.deepEqual(await foodTruckBookingEntry.json(), {
+      message: "truckId is required",
+    });
+    const fixedRestaurantBooking = await fetch(
+      `${baseUrl}/api/events/${ids.paymentEvent}/book`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "user-agent": "MealScout integration test",
+          "x-test-food-truck-owner": "1",
+        },
+        body: JSON.stringify({ truckId: ids.restaurantOnly }),
+      },
+    );
+    assert.equal(fixedRestaurantBooking.status, 403);
+    assert.deepEqual(await fixedRestaurantBooking.json(), {
+      message: "Parking Pass bookings are only available for food trucks.",
+    });
+    const unverifiedEmailBooking = await fetch(
+      `${baseUrl}/api/events/${ids.paymentEvent}/book`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "user-agent": "MealScout integration test",
+          "x-test-unverified-food-truck-owner": "1",
+        },
+        body: JSON.stringify({ truckId: ids.maliciousTruck }),
+      },
+    );
+    assert.equal(unverifiedEmailBooking.status, 409);
+    assert.deepEqual(await unverifiedEmailBooking.json(), {
+      code: "truck_verification_required",
+      message:
+        "Verify your email and submit business insurance to book Parking Pass spots.",
+      onboardingPath:
+        "/restaurant-signup?businessType=food_truck&source=parking-pass&step=verification",
+      requirements: {
+        emailVerified: false,
+        businessInsuranceSubmitted: true,
+      },
+    });
+    const expiredInsuranceBooking = await fetch(
+      `${baseUrl}/api/events/${ids.paymentEvent}/book`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "user-agent": "MealScout integration test",
+          "x-test-food-truck-owner": "1",
+        },
+        body: JSON.stringify({ truckId: ids.legacyAccessTruck }),
+      },
+    );
+    assert.equal(expiredInsuranceBooking.status, 409);
+    const expiredInsurancePayload = await expiredInsuranceBooking.json();
+    assert.deepEqual(expiredInsurancePayload.requirements, {
+      emailVerified: true,
+      businessInsuranceSubmitted: false,
+    });
+    const pastSameDayBooking = await fetch(
+      `${baseUrl}/api/events/${ids.pastPaymentEvent}/book`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "user-agent": "MealScout integration test",
+          "x-test-food-truck-owner": "1",
+        },
+        body: JSON.stringify({ truckId: ids.maliciousTruck }),
+      },
+    );
+    assert.equal(
+      pastSameDayBooking.status,
+      400,
+      "a same-day slot whose zoned start has passed must be rejected before materialization",
+    );
+    assert.deepEqual(await pastSameDayBooking.json(), {
+      message: "Event has already passed",
+    });
+    const pastPaidEventRows = await nativePool.query(
+      "select count(*)::int as count from events where id = $1",
+      [ids.pastPaymentEvent],
+    );
+    assert.equal(
+      pastPaidEventRows.rows[0]?.count,
+      0,
+      "a rejected same-day-past occurrence must remain virtual",
+    );
+    const paidEventRowsBeforeEligibleBooking = await nativePool.query(
+      "select count(*)::int as count from events where id = $1",
+      [ids.paymentEvent],
+    );
+    assert.equal(
+      paidEventRowsBeforeEligibleBooking.rows[0]?.count,
+      0,
+      "missing or ineligible truck requests must not materialize a virtual occurrence",
+    );
+    const eligibleSameDayBooking = await fetch(
+      `${baseUrl}/api/events/${ids.paymentEvent}/book`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "user-agent": "MealScout integration test",
+          "x-test-food-truck-owner": "1",
+        },
+        body: JSON.stringify({ truckId: ids.maliciousTruck }),
+      },
+    );
+    assert.equal(
+      eligibleSameDayBooking.status,
+      503,
+      "a verified truck must pass same-day slot eligibility and reach the intentionally disabled payment boundary",
+    );
+    assert.deepEqual(await eligibleSameDayBooking.json(), {
+      message: "Payments not configured on server",
+    });
+    const materializedPaidEvent = await nativePool.query(
+      `select id, series_id as "seriesId", event_type as "eventType",
+              requires_payment as "requiresPayment", host_price_cents as "hostPriceCents",
+              to_char(date, 'YYYY-MM-DD') as "dateKey",
+              start_time as "startTime", end_time as "endTime"
+         from events where id = $1`,
+      [ids.paymentEvent],
+    );
+    assert.deepEqual(materializedPaidEvent.rows, [
+      {
+        id: ids.paymentEvent,
+        seriesId: ids.paymentSeries,
+        eventType: "parking_pass",
+        requiresPayment: true,
+        hostPriceCents: 2500,
+        dateKey: "2026-08-22",
+        startTime: "13:00",
+        endTime: "14:00",
+      },
+    ]);
+    const materializedPaidDetail = await fetch(
+      `${baseUrl}/api/public/events/${ids.paymentEvent}?truckId=${encodeURIComponent(ids.maliciousTruck)}`,
+      {
+        headers: {
+          "user-agent": "MealScout integration test",
+          "x-test-food-truck-owner": "1",
+        },
+      },
+    );
+    assert.equal(
+      materializedPaidDetail.status,
+      200,
+      "a materialized virtual override must retain authorized detail access",
+    );
+    await nativePool.query(
+      "update events set status = 'cancelled' where id = $1",
+      [ids.paymentEvent],
+    );
+    const cancelledPaidDetail = await fetch(
+      `${baseUrl}/api/public/events/${ids.paymentEvent}?truckId=${encodeURIComponent(ids.maliciousTruck)}`,
+      {
+        headers: {
+          "user-agent": "MealScout integration test",
+          "x-test-food-truck-owner": "1",
+        },
+      },
+    );
+    assert.equal(
+      cancelledPaidDetail.status,
+      404,
+      "a cancelled materialized override must not reappear as an open virtual occurrence",
+    );
+    const paidEventBookingsAfterRejections = await nativePool.query(
+      "select count(*)::int as count from event_bookings where event_id = $1",
+      [ids.paymentEvent],
+    );
+    assert.equal(
+      paidEventBookingsAfterRejections.rows[0]?.count,
+      0,
+      "eligibility and payment-boundary proofs must not create a booking",
     );
     assert.equal(
       (await get(`/api/public/events/${ids.legacyAliasEvent}`)).response.status,

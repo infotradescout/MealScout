@@ -79,6 +79,7 @@ import { distributedRateLimit } from "../middleware/distributedRateLimit";
 import { registerHostProfileRoutes } from "./hosts/profileRoutes";
 import { registerHostParkingPassRoutes } from "./hosts/eventsRoutes";
 import { isStaffOrAdminUserType } from "@shared/profileAccessPolicy";
+import { assessParkingPassTruckEligibility } from "../services/parkingPassTruckEligibility";
 
 const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY)
@@ -1301,18 +1302,17 @@ export function registerHostRoutes(app: Express) {
 
           return res.status(403).json({ message: "Not authorized" });
         }
-        const truckBusinessType = String(
-          (truck as any)?.businessType || "",
-        ).toLowerCase();
-        const isTruckProfile =
-          truck.isFoodTruck === true || truckBusinessType === "food_truck";
-        if (!isTruckProfile) {
+        const truckEligibility = assessParkingPassTruckEligibility({
+          user: req.user,
+          truck,
+        });
+        if (!truckEligibility.isTruckProfile) {
           console.warn("[parking-pass] rejected booking attempt", {
             userId,
             userType: req.user?.userType || null,
             truckId,
             truckIsFoodTruck: truck.isFoodTruck,
-            truckBusinessType: truckBusinessType || null,
+            truckBusinessType: truck.businessType || null,
             hasManageParkingPass,
             reason: "not_food_truck",
           });
@@ -1321,14 +1321,11 @@ export function registerHostRoutes(app: Express) {
               "Parking Pass bookings are only available for food trucks.",
           });
         }
-        const shouldBypassVerificationGate = isStaffOrAdminUser(req.user);
-        if (!shouldBypassVerificationGate) {
-          const emailVerified = req.user?.emailVerified === true;
-          const storedInsuranceValid =
-            truck.insuranceVerified === true &&
-            (!truck.insuranceExpiresAt ||
-              new Date(String(truck.insuranceExpiresAt)).getTime() > Date.now());
-          if (!emailVerified || !storedInsuranceValid) {
+        if (!truckEligibility.shouldBypassVerificationGate) {
+          if (
+            !truckEligibility.emailVerified ||
+            !truckEligibility.storedInsuranceValid
+          ) {
             return res.status(409).json({
               code: "truck_verification_required",
               message:
@@ -1336,23 +1333,14 @@ export function registerHostRoutes(app: Express) {
               onboardingPath:
                 "/restaurant-signup?businessType=food_truck&source=parking-pass&step=verification",
               requirements: {
-                emailVerified,
-                businessInsuranceSubmitted: storedInsuranceValid,
+                emailVerified: truckEligibility.emailVerified,
+                businessInsuranceSubmitted:
+                  truckEligibility.storedInsuranceValid,
               },
             });
           }
         }
-        if (
-          req.user?.userType &&
-          ![
-            "food_truck",
-            "restaurant_owner",
-            "admin",
-            "duper_admin",
-            "super_admin",
-            "staff",
-          ].includes(req.user.userType)
-        ) {
+        if (!truckEligibility.roleAllowed) {
           return res.status(403).json({
             message: "Only food truck accounts can book Parking Pass slots.",
           });

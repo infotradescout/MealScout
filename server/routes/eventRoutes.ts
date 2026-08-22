@@ -28,7 +28,12 @@ const stripe = process.env.STRIPE_SECRET_KEY
   : null;
 import { forwardGeocode, reverseGeocode } from "../utils/geocoding";
 import { notifyNearbyTrucksOfEventRequest } from "../truckEventMatchService";
-import { listParkingPassOccurrences } from "../services/parkingPassVirtual";
+import {
+  ensureParkingPassEventRow,
+  listParkingPassOccurrences,
+  loadParkingPassOccurrenceById,
+  parseParkingPassVirtualId,
+} from "../services/parkingPassVirtual";
 import { PARKING_PASS_MEAL_WINDOWS } from "@shared/parkingPassSlots";
 import {
   computeHostProfileQualityFlags,
@@ -54,6 +59,7 @@ import { toPublicParkingPassListingArray } from "../publicProfiles/toPublicParki
 import {
   canExposeAnonymousEventDetail,
   canExposeAnonymousEventFeedItem,
+  canExposeAuthorizedPaidEventDetail,
 } from "../publicProfiles/publicEventDetailAccess";
 import { distributedRateLimit } from "../middleware/distributedRateLimit";
 import { dateKeyFromUnknown, dateKeyInZone } from "../services/dateKeys";
@@ -64,6 +70,7 @@ import {
 import { isPublicDiscoveryEligibleEntity } from "@shared/publicDiscoveryIntegrity";
 import { resolvePublicProfileVisibility } from "../publicProfiles/publicProfileUtils";
 import { resolvePublicCanonicalOrigin } from "../seo/publicCanonicalOrigin";
+import { assessParkingPassTruckEligibility } from "../services/parkingPassTruckEligibility";
 
 const normalizeParkingStatus = (value: unknown) =>
   String(value ?? "")
@@ -279,6 +286,34 @@ export function registerEventRoutes(
   const loadPublicEventDetail =
     dependencies.publicEventDetailLoader ||
     (async (eventId: string) => {
+      if (parseParkingPassVirtualId(eventId)) {
+        const occurrence = await loadParkingPassOccurrenceById(eventId);
+        if (!occurrence) return null;
+        return {
+          id: occurrence.id,
+          hostId: occurrence.hostId,
+          name: occurrence.name,
+          description: occurrence.description,
+          eventType: occurrence.eventType,
+          date: occurrence.date,
+          startTime: occurrence.startTime,
+          endTime: occurrence.endTime,
+          status: occurrence.status,
+          lastConfirmedAt: occurrence.lastConfirmedAt,
+          updatedAt: occurrence.updatedAt,
+          maxTrucks: occurrence.maxTrucks,
+          requiresPayment: occurrence.requiresPayment,
+          hostPriceCents: occurrence.hostPriceCents,
+          hostUserId: occurrence.host.userId,
+          hostName: occurrence.host.businessName,
+          hostAddress: occurrence.host.address,
+          hostCity: occurrence.host.city,
+          hostState: occurrence.host.state,
+          hostLatitude: occurrence.host.latitude,
+          hostLongitude: occurrence.host.longitude,
+        };
+      }
+
       const [row] = await db
         .select({
           id: events.id,
@@ -1257,19 +1292,59 @@ export function registerEventRoutes(
           })
         : false;
       const ended = dt ? dt.endUtc.getTime() < now.getTime() : false;
+      const paidSlotIsBookable = Boolean(
+        dt &&
+          Number.isFinite(dt.startUtc.getTime()) &&
+          Number.isFinite(dt.endUtc.getTime()) &&
+          dt.startUtc.getTime() >= now.getTime(),
+      );
+      const hasPublicIdentity =
+        isPublicDiscoveryEligibleEntity({ name: row.name, isActive: true }) &&
+        isPublicDiscoveryEligibleEntity({
+          name: row.hostName,
+          isActive: true,
+        });
+      const anonymousDetailAllowed =
+        hasPublicIdentity &&
+        canExposeAnonymousEventDetail({
+          eventType: row.eventType,
+          requiresPayment: row.requiresPayment,
+          status: row.status,
+          slotIsPublic: gateOk,
+        });
+      const requestedTruckId = String(req.query?.truckId || "").trim();
+      let authorizedPaidDetail = false;
       if (
-        !isPublicDiscoveryEligibleEntity({ name: row.name, isActive: true }) ||
-          !isPublicDiscoveryEligibleEntity({
-            name: row.hostName,
-            isActive: true,
-          }) ||
-          !canExposeAnonymousEventDetail({
-            eventType: row.eventType,
-            requiresPayment: row.requiresPayment,
-            status: row.status,
-            slotIsPublic: gateOk,
-          })
+        !anonymousDetailAllowed &&
+        hasPublicIdentity &&
+        requestedTruckId &&
+        req.isAuthenticated?.() &&
+        req.user?.id &&
+        canExposeAuthorizedPaidEventDetail({
+          eventType: row.eventType,
+          requiresPayment: row.requiresPayment,
+          status: row.status,
+          slotIsBookable: paidSlotIsBookable,
+        })
       ) {
+        const hasParkingPassAccess = await storage.verifyRestaurantOwnership(
+          requestedTruckId,
+          String(req.user.id),
+          "manageParkingPass",
+        );
+        if (hasParkingPassAccess) {
+          const requestedTruck = await storage.getRestaurant(requestedTruckId);
+          authorizedPaidDetail = Boolean(
+            requestedTruck &&
+              assessParkingPassTruckEligibility({
+                user: req.user,
+                truck: requestedTruck,
+                now,
+              }).isTruckProfile,
+          );
+        }
+      }
+      if (!anonymousDetailAllowed && !authorizedPaidDetail) {
         res.setHeader("Cache-Control", "private, no-store");
         return res.status(404).json({ message: "Event not found" });
       }
@@ -1292,7 +1367,10 @@ export function registerEventRoutes(
         )}`,
       }));
 
-      res.setHeader("Cache-Control", "public, max-age=60");
+      res.setHeader(
+        "Cache-Control",
+        authorizedPaidDetail ? "private, no-store" : "public, max-age=60",
+      );
       res.json({
         id: row.id,
         title,
@@ -1304,9 +1382,9 @@ export function registerEventRoutes(
         startsAtUtc: dt ? dt.startUtc.toISOString() : null,
         endsAtUtc: dt ? dt.endUtc.toISOString() : null,
         lastConfirmedAtUtc: lastConfirmedAtUtc.toISOString(),
-        isPublic: gateOk,
+        isPublic: anonymousDetailAllowed,
         ended,
-        noIndex: ended || !gateOk,
+        noIndex: authorizedPaidDetail || ended || !gateOk,
         status: row.status,
         maxTrucks: row.maxTrucks,
         requiresPayment: row.requiresPayment ?? false,
@@ -2427,7 +2505,7 @@ export function registerEventRoutes(
    */
   app.post(
     "/api/events/:eventId/book",
-    isRestaurantOwner,
+    isAuthenticated,
     async (req: any, res) => {
       try {
         const { eventId } = req.params;
@@ -2453,6 +2531,7 @@ export function registerEventRoutes(
           logBookingFailure("missing_truck_id");
           return res.status(400).json({ message: "truckId is required" });
         }
+        const bookingRequestNow = publicEventNow();
 
         const ownsT = await storage.verifyRestaurantOwnership(
           truckId,
@@ -2464,11 +2543,58 @@ export function registerEventRoutes(
           return res.status(403).json({ message: "You do not own that truck" });
         }
 
-        const [event] = await db
-          .select()
-          .from(events)
-          .where(eq(events.id, eventId))
-          .limit(1);
+        const truck = await storage.getRestaurant(truckId);
+        if (!truck) {
+          logBookingFailure("truck_not_found");
+          return res.status(403).json({ message: "You do not own that truck" });
+        }
+        const truckEligibility = assessParkingPassTruckEligibility({
+          user: req.user,
+          truck,
+          now: bookingRequestNow,
+        });
+        if (!truckEligibility.isTruckProfile) {
+          logBookingFailure("not_food_truck");
+          return res.status(403).json({
+            message:
+              "Parking Pass bookings are only available for food trucks.",
+          });
+        }
+        if (
+          !truckEligibility.shouldBypassVerificationGate &&
+          (!truckEligibility.emailVerified ||
+            !truckEligibility.storedInsuranceValid)
+        ) {
+          logBookingFailure("truck_verification_required", {
+            emailVerified: truckEligibility.emailVerified,
+            businessInsuranceSubmitted:
+              truckEligibility.storedInsuranceValid,
+          });
+          return res.status(409).json({
+            code: "truck_verification_required",
+            message:
+              "Verify your email and submit business insurance to book Parking Pass spots.",
+            onboardingPath:
+              "/restaurant-signup?businessType=food_truck&source=parking-pass&step=verification",
+            requirements: {
+              emailVerified: truckEligibility.emailVerified,
+              businessInsuranceSubmitted:
+                truckEligibility.storedInsuranceValid,
+            },
+          });
+        }
+        if (!truckEligibility.roleAllowed) {
+          logBookingFailure("user_type_not_bookable");
+          return res.status(403).json({
+            message: "Only food truck accounts can book Parking Pass slots.",
+          });
+        }
+
+        const event = await ensureParkingPassEventRow({
+          passId: eventId,
+          requireFuture: true,
+          now: bookingRequestNow,
+        });
         if (!event) {
           logBookingFailure("event_not_found");
           return res.status(404).json({ message: "Event not found" });
@@ -2495,11 +2621,6 @@ export function registerEventRoutes(
             .status(409)
             .json({ message: "Event is not available for booking" });
         }
-        if (new Date(event.date) < new Date()) {
-          logBookingFailure("event_in_past", { eventDate: event.date });
-          return res.status(400).json({ message: "Event has already passed" });
-        }
-
         const hostPriceCents = event.hostPriceCents ?? 0;
         const PLATFORM_FEE = 1000; // always $10
         const totalCents = hostPriceCents + PLATFORM_FEE;
@@ -2512,6 +2633,26 @@ export function registerEventRoutes(
         if (!host) {
           logBookingFailure("host_not_found", { hostId: event.hostId });
           return res.status(500).json({ message: "Host not found" });
+        }
+        const bookingTimeZone = await resolveCityTimeZone({
+          city: host.city,
+          state: host.state,
+        });
+        const bookingInterval = buildSlotDateTimes({
+          timeZone: bookingTimeZone,
+          date: event.date,
+          startTime: String(event.startTime || ""),
+          endTime: String(event.endTime || ""),
+        });
+        if (
+          !bookingInterval ||
+          bookingInterval.startUtc.getTime() < bookingRequestNow.getTime()
+        ) {
+          logBookingFailure("event_in_past", {
+            eventDate: event.date,
+            eventStart: bookingInterval?.startUtc || null,
+          });
+          return res.status(400).json({ message: "Event has already passed" });
         }
         if (!stripe) {
           logBookingFailure("stripe_not_configured", { hostId: event.hostId });
@@ -2529,14 +2670,19 @@ export function registerEventRoutes(
           ? host.stripeConnectAccountId
           : null;
 
-        // Serialize booking creation per event so capacity and insert checks are atomic.
+        // Use the same row lock as the canonical Parking Pass checkout so both
+        // endpoints serialize capacity checks against one lock domain.
         const booking = await db.transaction(async (tx: any) => {
           await tx.execute(
-            sql`SELECT pg_advisory_xact_lock(hashtext(${`parking_pass_event:${eventId}`}))`,
+            sql`select ${events.id} from ${events} where ${events.id} = ${eventId} for update`,
           );
 
           const [lockedEvent] = await tx
-            .select({ maxTrucks: events.maxTrucks, status: events.status })
+            .select({
+              maxTrucks: events.maxTrucks,
+              hardCapEnabled: events.hardCapEnabled,
+              status: events.status,
+            })
             .from(events)
             .where(eq(events.id, eventId))
             .limit(1);
@@ -2599,10 +2745,14 @@ export function registerEventRoutes(
             );
 
           const reservedCount = Number(countRow?.count ?? 0);
-          if (reservedCount >= lockedEvent.maxTrucks) {
+          const maxSpots = Math.max(
+            1,
+            Number(lockedEvent.maxTrucks ?? 1) || 1,
+          );
+          if (lockedEvent.hardCapEnabled && reservedCount >= maxSpots) {
             logBookingFailure("event_full", {
               reservedCount,
-              maxTrucks: lockedEvent.maxTrucks,
+              maxTrucks: maxSpots,
             });
             throw Object.assign(new Error("Event is fully booked"), {
               statusCode: 409,
