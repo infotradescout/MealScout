@@ -1,11 +1,10 @@
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Elements,
   PaymentElement,
   useStripe,
   useElements,
 } from "@stripe/react-stripe-js";
-import { loadStripe } from "@stripe/stripe-js";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -18,9 +17,10 @@ import { Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import PaymentBrowserGate from "@/components/payment-browser-gate";
 import { isPaymentHostileBrowser } from "@/lib/inAppBrowser";
+import { apiUrl } from "@/lib/api";
+import { getStripePromise } from "@/lib/stripeClient";
 
-const stripePublicKey = import.meta.env.VITE_STRIPE_PUBLIC_KEY || "";
-const stripePromise = stripePublicKey ? loadStripe(stripePublicKey) : null;
+const buildTimeStripePublicKey = import.meta.env.VITE_STRIPE_PUBLIC_KEY || "";
 
 interface EventBookingModalProps {
   open: boolean;
@@ -183,13 +183,92 @@ export function EventBookingModal({
   const [isLoading, setIsLoading] = useState(false);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [bookingId, setBookingId] = useState<string | null>(null);
+  const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null);
   const [bookingData, setBookingData] = useState<{
     totalCents: number;
     breakdown: { hostPrice: number; platformFee: number };
   } | null>(null);
+  const [stripePublishableKey, setStripePublishableKey] = useState(
+    buildTimeStripePublicKey,
+  );
+  const [isStripeConfigLoading, setIsStripeConfigLoading] = useState(false);
+  const paymentIntentIdRef = useRef<string | null>(null);
+  const activeInitiationRef = useRef<{ cancelRequested: boolean } | null>(null);
   const hostileBrowser = isPaymentHostileBrowser();
 
   const stage: "review" | "pay" = clientSecret ? "pay" : "review";
+  const stripePromise = getStripePromise(stripePublishableKey);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (open && !stripePublishableKey) {
+      setIsStripeConfigLoading(true);
+      fetch(apiUrl("/api/payments/stripe-config"), {
+        credentials: "include",
+      })
+        .then(async (res) => {
+          if (!res.ok) return null;
+          return res.json();
+        })
+        .then((data) => {
+          if (cancelled) return;
+          const runtimeKey = String(data?.publishableKey || "").trim();
+          if (runtimeKey) {
+            setStripePublishableKey(runtimeKey);
+            return;
+          }
+          toast({
+            title: "Payments Unavailable",
+            description: "Stripe is not configured for this environment.",
+            variant: "destructive",
+          });
+          onOpenChange(false);
+        })
+        .catch(() => {
+          if (cancelled) return;
+          toast({
+            title: "Payments Unavailable",
+            description: "Stripe configuration could not be loaded.",
+            variant: "destructive",
+          });
+          onOpenChange(false);
+        })
+        .finally(() => {
+          if (!cancelled) setIsStripeConfigLoading(false);
+        });
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [open, stripePublishableKey, toast, onOpenChange]);
+
+  const cancelCheckout = useCallback(
+    async (intentId: string) => {
+      try {
+        await fetch(
+          apiUrl(
+            `/api/bookings/payment-intent/${encodeURIComponent(
+              intentId,
+            )}/cancel?truckId=${encodeURIComponent(truckId)}`,
+          ),
+          { method: "POST", credentials: "include" },
+        );
+      } catch {
+        // Best effort; the server also expires abandoned pending holds.
+      }
+    },
+    [truckId],
+  );
+
+  useEffect(
+    () => () => {
+      const activeInitiation = activeInitiationRef.current;
+      if (activeInitiation) activeInitiation.cancelRequested = true;
+      const intentId = paymentIntentIdRef.current;
+      if (intentId) void cancelCheckout(intentId);
+    },
+    [cancelCheckout],
+  );
 
   const initiateBooking = async () => {
     if (hostileBrowser) {
@@ -208,12 +287,15 @@ export function EventBookingModal({
       });
       return;
     }
+    const initiation = { cancelRequested: false };
+    activeInitiationRef.current = initiation;
     setIsLoading(true);
     try {
       const res = await fetch(
-        `/api/events/${encodeURIComponent(eventId)}/book`,
+        apiUrl(`/api/events/${encodeURIComponent(eventId)}/book`),
         {
           method: "POST",
+          credentials: "include",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ truckId }),
         },
@@ -223,6 +305,13 @@ export function EventBookingModal({
         throw new Error(data?.message || "Failed to initiate booking");
       }
       const data = await res.json();
+      const nextPaymentIntentId = String(data.paymentIntentId || "").trim();
+      if (initiation.cancelRequested) {
+        if (nextPaymentIntentId) {
+          await cancelCheckout(nextPaymentIntentId);
+        }
+        return;
+      }
       if (data?.paymentPending) {
         toast({
           title: "Request received",
@@ -235,16 +324,26 @@ export function EventBookingModal({
       }
       const nextClientSecret = String(data.clientSecret || "").trim();
       const nextBookingId = String(data.bookingId || "").trim();
-      if (!nextClientSecret || !nextBookingId) {
+      if (!nextClientSecret || !nextBookingId || !nextPaymentIntentId) {
+        if (nextPaymentIntentId) {
+          await cancelCheckout(nextPaymentIntentId);
+        }
         throw new Error("Payment setup did not return checkout details.");
       }
+      if (!stripePromise) {
+        await cancelCheckout(nextPaymentIntentId);
+        throw new Error("Stripe is not configured for this environment.");
+      }
+      paymentIntentIdRef.current = nextPaymentIntentId;
       setClientSecret(nextClientSecret);
       setBookingId(nextBookingId);
+      setPaymentIntentId(nextPaymentIntentId);
       setBookingData({
         totalCents: data.totalCents,
         breakdown: data.breakdown,
       });
     } catch (err: any) {
+      if (initiation.cancelRequested) return;
       toast({
         title: "Booking Failed",
         description:
@@ -253,19 +352,28 @@ export function EventBookingModal({
       });
       onOpenChange(false);
     } finally {
-      setIsLoading(false);
+      if (activeInitiationRef.current === initiation) {
+        activeInitiationRef.current = null;
+        setIsLoading(false);
+      }
     }
   };
 
   const resetState = () => {
+    paymentIntentIdRef.current = null;
     setClientSecret(null);
     setBookingId(null);
+    setPaymentIntentId(null);
     setBookingData(null);
   };
 
   const handleCancel = () => {
+    const activeInitiation = activeInitiationRef.current;
+    if (activeInitiation) activeInitiation.cancelRequested = true;
+    const intentId = paymentIntentIdRef.current;
     resetState();
     onOpenChange(false);
+    if (intentId) void cancelCheckout(intentId);
   };
 
   const handleSuccess = () => {
@@ -326,7 +434,7 @@ export function EventBookingModal({
           </DialogDescription>
         </DialogHeader>
 
-        {!clientSecret && !isLoading && (
+        {!clientSecret && !isLoading && !isStripeConfigLoading && (
           <div className="space-y-3 pt-2">
             {hostileBrowser ? (
               <PaymentBrowserGate
@@ -356,16 +464,18 @@ export function EventBookingModal({
           </div>
         )}
 
-        {isLoading && (
+        {(isLoading || isStripeConfigLoading) && (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="h-8 w-8 animate-spin text-orange-600" />
             <span className="ml-3 text-[color:var(--text-muted)]">
-              Preparing payment...
+              {isStripeConfigLoading
+                ? "Loading payment settings..."
+                : "Preparing payment..."}
             </span>
           </div>
         )}
 
-        {clientSecret && bookingId && bookingData && (
+        {clientSecret && bookingId && paymentIntentId && bookingData && (
           <>
             <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
               Pricing locked. Complete payment to confirm your spot.

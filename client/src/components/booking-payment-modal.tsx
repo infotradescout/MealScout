@@ -5,7 +5,6 @@ import {
   useStripe,
   useElements,
 } from "@stripe/react-stripe-js";
-import { loadStripe } from "@stripe/stripe-js";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -19,19 +18,9 @@ import { useToast } from "@/hooks/use-toast";
 import PaymentBrowserGate from "@/components/payment-browser-gate";
 import { isPaymentHostileBrowser } from "@/lib/inAppBrowser";
 import { apiUrl } from "@/lib/api";
+import { getStripePromise } from "@/lib/stripeClient";
 
 const buildTimeStripePublicKey = import.meta.env.VITE_STRIPE_PUBLIC_KEY || "";
-const stripePromiseCache = new Map<string, ReturnType<typeof loadStripe>>();
-
-function getStripePromise(publicKey: string) {
-  const normalizedKey = publicKey.trim();
-  if (!normalizedKey) return null;
-  const cached = stripePromiseCache.get(normalizedKey);
-  if (cached) return cached;
-  const promise = loadStripe(normalizedKey);
-  stripePromiseCache.set(normalizedKey, promise);
-  return promise;
-}
 
 function recordRouteBookingConfirmed(passId: string) {
   try {
