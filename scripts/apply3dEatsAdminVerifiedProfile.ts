@@ -90,6 +90,11 @@ const normalizedText = (value: unknown) => String(value || "").trim();
 const sha256File = (path: string) =>
   createHash("sha256").update(readFileSync(path)).digest("hex");
 
+const sha256CanonicalTextFile = (path: string) =>
+  createHash("sha256")
+    .update(readFileSync(path, "utf8").replace(/\r\n/g, "\n"), "utf8")
+    .digest("hex");
+
 const sha256Json = (value: unknown) =>
   createHash("sha256")
     .update(JSON.stringify(normalizeForComparison(value)))
@@ -269,7 +274,7 @@ const assertEvidenceIntegrity = () => {
     );
   }
   if (
-    sha256File(MENU_EVIDENCE_ARTIFACT) !==
+    sha256CanonicalTextFile(MENU_EVIDENCE_ARTIFACT) !==
       normalizedText(approvedSources.menuEvidenceSha256) ||
     createHash("sha256")
       .update(JSON.stringify(menuEvidence.menu))
@@ -547,7 +552,7 @@ const buildAdminApproval = (
     sourceRevision: menuRevision,
     sourceRevisionAlgorithm: MENU_REVISION_ALGORITHM,
     evidenceArtifact: MENU_EVIDENCE_ARTIFACT,
-    evidenceSha256: sha256File(MENU_EVIDENCE_ARTIFACT),
+    evidenceSha256: sha256CanonicalTextFile(MENU_EVIDENCE_ARTIFACT),
     sourcedItemCount: approvedMenuRows.length,
     preservedNonMealScoutItemCount,
     ownerAuthored: false,
@@ -1022,7 +1027,7 @@ async function applyVerifiedProfile() {
         targetName: TARGET_NAME,
         verificationArtifact: VERIFICATION_ARTIFACT,
         menuEvidenceArtifact: MENU_EVIDENCE_ARTIFACT,
-        menuEvidenceSha256: sha256File(MENU_EVIDENCE_ARTIFACT),
+        menuEvidenceSha256: sha256CanonicalTextFile(MENU_EVIDENCE_ARTIFACT),
         menuRevisionAlgorithm: MENU_REVISION_ALGORITHM,
         menuId: activeMenuId,
         previousMenuRevision: beforeRevision,
