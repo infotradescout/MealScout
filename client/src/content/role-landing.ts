@@ -40,79 +40,80 @@ export type RoleLandingContent = {
   steps: { icon: LucideIcon; title: string; copy: string }[];
   reasons: { title: string; items: string[] };
   starter: { kicker: string; title: string; copy: string; bullets: string[] };
+  disclosure?: string;
   finalCta: { title: string; copy: string; primary: Cta; secondary?: Cta };
 };
 
 export const roleLandingContent = {
   truck: {
     seo: {
-      title: "List Your Food Truck | Get Booked at Local Spots | MealScout",
+      title: "List or Claim Your Food Truck | MealScout",
       description:
-        "List your food truck on MealScout to get discovered, book host locations, and grow your schedule. Free to join — built for food truck owners.",
+        "Create or claim your MealScout food truck profile, publish your menu and schedule, and help nearby diners find where you are serving.",
       keywords: "list food truck, food truck booking platform, food truck host locations, book food truck spots, food truck scheduling, local food truck discovery",
-      canonicalPath: "/for-restaurants",
+      canonicalPath: "/for-food-trucks",
     },
     badge: "MealScout for Trucks",
-    headline: "Stop chasing.\nStart getting booked.",
+    headline: "Put your food truck where locals can find it.",
     subhead:
-      "MealScout puts your truck on the map hosts actually use. Your profile, schedule, and booking flow are built for how you really move.",
+      "Create a new profile or claim an existing listing, then publish your menu, schedule, live location, and booking availability from one owner workspace.",
     primaryCta: {
-      label: "List my food truck",
-      href: "/customer-signup?role=business&businessType=food_truck",
+      label: "Create a new truck profile",
+      href: "/restaurant-signup?businessType=food_truck&intent=create&source=for-food-trucks",
     },
     secondaryCta: {
-      label: "Claim my business",
-      href: "/customer-signup?role=business&businessType=food_truck",
+      label: "Claim an existing truck",
+      href: "/claim-business?businessType=food_truck&claim=1&intent=claim&source=for-food-trucks",
     },
-    bullets: ["Complete profile", "No monthly bill", "Built for bookings"],
+    bullets: ["Complete profile", "No card required", "No monthly bill"],
     map: {
-      kicker: "Concept map",
-      title: "Host hotspots + time slots",
-      badge: "Mock view",
-      hint: "Booking-ready locations",
+      kicker: "Owner workspace",
+      title: "Menu + schedule + location",
+      badge: "Profile tools",
+      hint: "Keep details current",
     },
     stats: [
-      { label: "Bookings", value: "--" },
-      { label: "Next opening", value: "--" },
+      { label: "Menu", value: "Publish" },
+      { label: "Schedule", value: "Share" },
     ],
     valueProps: [
       {
         icon: MapPin,
-        text: "Built for mobile-first booking, not social feeds",
+        text: "Share where your truck is serving",
       },
       {
         icon: Bolt,
-        text: "One profile, all your locations + availability",
+        text: "Keep your menu, schedule, and profile together",
       },
       {
         icon: Sparkles,
-        text: "The complete profile is included in the free trial",
+        text: "Complete profile tools with no monthly bill",
       },
     ],
     steps: [
       {
         icon: Truck,
         title: "Create your truck profile",
-        copy: "Photos, menu, availability, and your booking-ready presence.",
+        copy: "Add your business details, menu, photos, and service area.",
       },
       {
         icon: Radar,
         title: "Get discovered",
-        copy: "Hosts and coordinators search by city, day, and slot.",
+        copy: "Publish your schedule and location so nearby diners can find you.",
       },
       {
         icon: Calendar,
-        title: "Get booked",
-        copy: "Accept what works. Your schedule updates instantly.",
+        title: "Manage opportunities",
+        copy: "Review available host, event, ordering, and delivery tools from your workspace.",
       },
     ],
     reasons: {
-      title: "Why serious trucks pick MealScout",
+      title: "A profile built for a moving business",
       items: [
-        "Stop chasing DMs and last-minute changes.",
-        "Your schedule and booking status live in one place.",
-        "Hosts see availability before they ever reach out.",
-        "You control where you go and when you move.",
+        "Create a new truck profile or claim a listing already in MealScout.",
+        "Update menus, schedules, and live location from the owner workspace.",
+        "Keep your public details current as your route changes.",
+        "Use booking, ordering, and delivery tools when they fit your operation.",
       ],
     },
     starter: {
@@ -125,14 +126,19 @@ export const roleLandingContent = {
         "No monthly subscription",
       ],
     },
+    disclosure:
+      "Separate paid orders, deliveries, bookings, and other transactions may carry charges. The exact charge is shown before payment.",
     finalCta: {
-      title: "Ready to get booked?",
-      copy: "Build your profile, set your schedule, and start getting real booking requests.",
+      title: "Ready to put your truck on MealScout?",
+      copy: "Start a new profile, or claim the truck listing that is already yours.",
       primary: {
-        label: "List my food truck",
-        href: "/customer-signup?role=business&businessType=food_truck",
+        label: "Create a new truck profile",
+        href: "/restaurant-signup?businessType=food_truck&intent=create&source=for-food-trucks",
       },
-      secondary: { label: "Already have an account?", href: "/login" },
+      secondary: {
+        label: "Claim an existing truck",
+        href: "/claim-business?businessType=food_truck&claim=1&intent=claim&source=for-food-trucks",
+      },
     },
   },
   restaurants: {

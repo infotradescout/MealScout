@@ -173,29 +173,21 @@ test.describe("welcome and Scout routing law", () => {
     await expect(page.getByTestId("scout-map-container")).toBeVisible();
   });
 
-  // "/explore" and "/explore-preview" redirect aliases were deliberately
-  // retired in commit 650582c1 ("Clean up legacy page routes"). Neither path
-  // is a registered route anymore, so they fall through to the public-profile
-  // catch-all, which renders "Profile not found" with a link back to Scout.
-  test("/explore is a retired route that offers a way back to Scout", async ({ page }) => {
+  // Commit 159766bf restored these legacy aliases as explicit redirects so old
+  // discovery links recover at the canonical Scout route instead of becoming
+  // business-profile lookups.
+  test("/explore redirects to Scout", async ({ page }) => {
     await mockCustomer(page);
     await mockScoutFeeds(page);
 
     await page.goto(`${FRONTEND}/explore`, { waitUntil: "domcontentloaded" });
 
-    await expect(page).toHaveURL(/\/explore$/);
-    // Assert the intentional not-found outcome via its stable testid
-    // (public-profile.tsx), not the catch-all's incidental copy — and
-    // confirm it did not silently render as Scout.
-    await expect(page.getByTestId("public-profile-not-found")).toBeVisible();
-    await expect(page.getByTestId("scout-map-container")).toHaveCount(0);
-    await expect(page.getByRole("link", { name: "Scout" })).toHaveAttribute(
-      "href",
-      "/scout",
-    );
+    await expect(page).toHaveURL(/\/scout(?:[?#].*)?$/);
+    await expect(page.getByTestId("scout-map-container")).toBeVisible();
+    await expect(page.getByTestId("public-profile-not-found")).toHaveCount(0);
   });
 
-  test("/explore-preview is a retired route that offers a way back to Scout", async ({ page }) => {
+  test("/explore-preview redirects to Scout", async ({ page }) => {
     await mockCustomer(page);
     await mockScoutFeeds(page);
 
@@ -203,13 +195,9 @@ test.describe("welcome and Scout routing law", () => {
       waitUntil: "domcontentloaded",
     });
 
-    await expect(page).toHaveURL(/\/explore-preview$/);
-    await expect(page.getByTestId("public-profile-not-found")).toBeVisible();
-    await expect(page.getByTestId("scout-map-container")).toHaveCount(0);
-    await expect(page.getByRole("link", { name: "Scout" })).toHaveAttribute(
-      "href",
-      "/scout",
-    );
+    await expect(page).toHaveURL(/\/scout(?:[?#].*)?$/);
+    await expect(page.getByTestId("scout-map-container")).toBeVisible();
+    await expect(page.getByTestId("public-profile-not-found")).toHaveCount(0);
   });
 
   test("Scout map stays embedded in Scout", async ({ page }) => {

@@ -13,6 +13,29 @@ type FunnelEventName = (typeof FUNNEL_EVENTS)[keyof typeof FUNNEL_EVENTS];
 
 const hasWindow = () => typeof window !== "undefined";
 
+export const toSafeFunnelDestinationPath = (value: unknown) => {
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+  try {
+    const baseUrl = hasWindow()
+      ? window.location.origin
+      : "https://www.mealscout.us";
+    return new URL(raw, baseUrl).pathname || null;
+  } catch {
+    return null;
+  }
+};
+
+const getSafeReferrer = () => {
+  if (typeof document === "undefined" || !document.referrer) return null;
+  try {
+    const referrer = new URL(document.referrer);
+    return `${referrer.origin}${referrer.pathname}`;
+  } catch {
+    return null;
+  }
+};
+
 const getAttribution = () => {
   if (!hasWindow()) return {};
 
@@ -21,8 +44,9 @@ const getAttribution = () => {
 
   return {
     path: window.location.pathname,
-    referrer:
-      typeof document !== "undefined" ? document.referrer || null : null,
+    // Referrer query strings can contain claim searches or prefill details.
+    // Keep the source page while excluding those values from telemetry.
+    referrer: getSafeReferrer(),
     utmSource: get("utm_source") || null,
     utmMedium: get("utm_medium") || null,
     utmCampaign: get("utm_campaign") || null,

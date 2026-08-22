@@ -13,16 +13,14 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { SEOHead } from "@/components/seo-head";
 import { CANONICAL_DASHBOARD_ENTRY_PATH } from "@/lib/dashboard-route";
+import { normalizeSafeInternalPath } from "@shared/safeInternalPath";
 
 const REDIRECT_STORAGE_KEY = "mealscout:post-verification-redirect";
 const EMAIL_STORAGE_KEY = "mealscout:lastSignupEmail";
 
 function getSafePath(value: string | null): string | null {
-  const path = (value || "").trim();
+  const path = normalizeSafeInternalPath(value);
   if (!path) return null;
-  if (!path.startsWith("/")) return null;
-  if (path.startsWith("//")) return null;
-  if (path.includes("://")) return null;
   if (path === "/account-setup" || path.startsWith("/account-setup?")) {
     const params = new URLSearchParams(path.split("?")[1] || "");
     if (!params.get("token")) return null;

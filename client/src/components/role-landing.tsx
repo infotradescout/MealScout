@@ -4,6 +4,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import { SEOHead } from "@/components/seo-head";
 import { CheckCircle } from "lucide-react";
 import type { RoleLandingContent } from "@/content/role-landing";
+import { useEffect } from "react";
+import {
+  FUNNEL_EVENTS,
+  trackFunnelEvent,
+  trackFunnelEventOncePerSession,
+} from "@/utils/funnelTelemetry";
 
 type RoleLandingPageProps = {
   content: RoleLandingContent;
@@ -22,6 +28,34 @@ export default function RoleLandingPage({
     typeof window !== "undefined"
       ? `${window.location.origin}${content.seo.canonicalPath}`
       : undefined;
+  const isFoodTruckLanding = content.seo.canonicalPath === "/for-food-trucks";
+
+  useEffect(() => {
+    if (!isFoodTruckLanding) return;
+    trackFunnelEventOncePerSession(
+      FUNNEL_EVENTS.landingView,
+      "for-food-trucks",
+      {
+        page: "for-food-trucks",
+        businessType: "food_truck",
+        intent: "acquisition",
+        source: "for-food-trucks",
+      },
+    );
+  }, [isFoodTruckLanding]);
+
+  const trackCta = (href: string, placement: string) => {
+    if (!isFoodTruckLanding) return;
+    const target = new URL(href, "https://www.mealscout.us");
+    trackFunnelEvent(FUNNEL_EVENTS.primaryCtaClick, {
+      page: "for-food-trucks",
+      businessType: "food_truck",
+      intent: target.searchParams.get("intent") === "claim" ? "claim" : "create",
+      source: "for-food-trucks",
+      placement,
+      destination: target.pathname,
+    });
+  };
 
   const themeStyles =
     theme === "ember"
@@ -48,6 +82,8 @@ export default function RoleLandingPage({
           "--cta-muted-text": "#EDE6DC",
           "--panel-dark-bg": "#2A241F",
           "--panel-dark-border": "#3A3026",
+          "--panel-ink": "#EDE6DC",
+          "--panel-muted": "#C9BFB2",
           "--map-bg":
             "linear-gradient(140deg, rgba(63,50,40,0.2), rgba(80,60,42,0.35) 50%, rgba(42,36,30,0.25))",
         } as React.CSSProperties)
@@ -74,13 +110,15 @@ export default function RoleLandingPage({
           "--cta-muted-text": "#ffffff",
           "--panel-dark-bg": "#121314",
           "--panel-dark-border": "#0f172a",
+          "--panel-ink": "#FFF7ED",
+          "--panel-muted": "#CBD5E1",
           "--map-bg":
             "linear-gradient(140deg, #f6efe1, #fff4e6 50%, #e6eeff)",
         } as React.CSSProperties);
 
   return (
     <div
-      className="min-h-screen px-4 py-12"
+      className="min-h-screen overflow-x-hidden px-4 py-12"
       style={
         {
           background:
@@ -116,7 +154,10 @@ export default function RoleLandingPage({
                 asChild
                 className="px-6 py-6 text-base text-[var(--cta-text)] bg-[linear-gradient(135deg,var(--accent),var(--accent-strong))] hover:opacity-90 active:translate-y-[1px]"
               >
-                <Link href={content.primaryCta.href}>
+                <Link
+                  href={content.primaryCta.href}
+                  onClick={() => trackCta(content.primaryCta.href, "hero_primary")}
+                >
                   {content.primaryCta.label}
                 </Link>
               </Button>
@@ -126,7 +167,10 @@ export default function RoleLandingPage({
                   variant="outline"
                   className="px-6 py-6 text-base border-[var(--border-soft)] text-[var(--ink)] hover:bg-transparent active:translate-y-[1px]"
                 >
-                  <Link href={content.secondaryCta.href}>
+                  <Link
+                    href={content.secondaryCta.href}
+                    onClick={() => trackCta(content.secondaryCta!.href, "hero_secondary")}
+                  >
                     {content.secondaryCta.label}
                   </Link>
                 </Button>
@@ -242,16 +286,16 @@ export default function RoleLandingPage({
 
           <Card className="border shadow-clean-lg" style={{ backgroundColor: "var(--panel-dark-bg)", borderColor: "var(--panel-dark-border)" }}>
             <CardContent className="p-6 space-y-3">
-              <p className="text-xs uppercase tracking-[0.2em] text-[var(--ink-soft)]">
+              <p className="text-xs uppercase tracking-[0.2em] text-[var(--panel-muted)]">
                 {content.starter.kicker}
               </p>
-              <h3 className="text-2xl font-semibold text-[var(--ink)]">
+              <h3 className="text-2xl font-semibold text-[var(--panel-ink)]">
                 {content.starter.title}
               </h3>
-              <p className="text-sm text-[var(--ink-muted)]">
+              <p className="text-sm text-[var(--panel-muted)]">
                 {content.starter.copy}
               </p>
-              <ul className="text-sm text-[var(--ink)] space-y-2">
+              <ul className="text-sm text-[var(--panel-ink)] space-y-2">
                 {content.starter.bullets.map((bullet) => (
                   <li key={bullet} className="flex items-center gap-2">
                     <CheckCircle className="h-4 w-4 text-[var(--accent)]" />
@@ -259,6 +303,11 @@ export default function RoleLandingPage({
                   </li>
                 ))}
               </ul>
+              {content.disclosure && (
+                <p className="text-xs leading-relaxed text-[var(--panel-muted)]">
+                  {content.disclosure}
+                </p>
+              )}
             </CardContent>
           </Card>
         </section>
@@ -266,10 +315,10 @@ export default function RoleLandingPage({
         {discoverySlot && <section>{discoverySlot}</section>}
 
         <section className="rounded-3xl px-6 py-10 text-center shadow-clean-lg" style={{ backgroundColor: "var(--panel-dark-bg)" }}>
-          <h2 className="text-3xl font-semibold text-[var(--ink)]">
+          <h2 className="text-3xl font-semibold text-[var(--panel-ink)]">
             {content.finalCta.title}
           </h2>
-          <p className="mt-3 text-sm text-[var(--ink-muted)]">
+          <p className="mt-3 text-sm text-[var(--panel-muted)]">
             {content.finalCta.copy}
           </p>
           <div className="mt-6 flex flex-col sm:flex-row justify-center gap-3">
@@ -277,7 +326,10 @@ export default function RoleLandingPage({
               asChild
               className="px-6 py-6 text-base text-[var(--cta-text)] bg-[linear-gradient(135deg,var(--accent),var(--accent-strong))] hover:opacity-90 active:translate-y-[1px]"
             >
-              <Link href={content.finalCta.primary.href}>
+              <Link
+                href={content.finalCta.primary.href}
+                onClick={() => trackCta(content.finalCta.primary.href, "final_primary")}
+              >
                 {content.finalCta.primary.label}
               </Link>
             </Button>
@@ -287,7 +339,10 @@ export default function RoleLandingPage({
                 variant="outline"
                 className="px-6 py-6 text-base text-[var(--cta-muted-text)] border-[var(--border-soft)] hover:text-[var(--cta-muted-text)] active:translate-y-[1px]"
               >
-                <Link href={content.finalCta.secondary.href}>
+                <Link
+                  href={content.finalCta.secondary.href}
+                  onClick={() => trackCta(content.finalCta.secondary!.href, "final_secondary")}
+                >
                   {content.finalCta.secondary.label}
                 </Link>
               </Button>

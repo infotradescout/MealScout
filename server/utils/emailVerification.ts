@@ -3,6 +3,7 @@ import crypto from "crypto";
 import type { User } from "@shared/schema";
 import { storage } from "../storage";
 import { emailService, isEmailConfigured } from "../emailService";
+import { normalizeSafeInternalPath } from "@shared/safeInternalPath";
 
 type SendVerificationResult =
   | { sent: true }
@@ -18,6 +19,7 @@ type SendVerificationResult =
 export async function sendEmailVerificationIfNeeded(
   user: User,
   req: Request,
+  intendedNextPath?: string | null,
 ): Promise<SendVerificationResult> {
   if (!user.email) {
     return { sent: false, skippedReason: "missing_email" };
@@ -49,9 +51,10 @@ export async function sendEmailVerificationIfNeeded(
     "http://localhost:5000"
   ).replace(/\/+$/, "");
 
-  const verifyUrl = `${apiBaseUrl}/api/auth/verify-email?token=${encodeURIComponent(
-    token,
-  )}`;
+  const verifyParams = new URLSearchParams({ token });
+  const safeRedirect = normalizeSafeInternalPath(intendedNextPath);
+  if (safeRedirect) verifyParams.set("redirect", safeRedirect);
+  const verifyUrl = `${apiBaseUrl}/api/auth/verify-email?${verifyParams.toString()}`;
 
   const ok = await emailService.sendEmailVerificationEmail(user, verifyUrl);
   return ok ? { sent: true } : { sent: false, skippedReason: "send_failed" };

@@ -721,6 +721,7 @@ export interface IStorage {
     tokenHash: string,
   ): Promise<AccountSetupToken | undefined>;
   markAccountSetupTokenUsed(id: string): Promise<AccountSetupToken>;
+  deleteAccountSetupToken(id: string): Promise<void>;
   deleteUserSetupTokens(userId: string): Promise<void>;
   deleteExpiredSetupTokens(): Promise<number>;
   ensureDraftParkingPassesForHosts(): Promise<number>;
@@ -5297,6 +5298,10 @@ export class DatabaseStorage implements IStorage {
 
   async markAccountSetupTokenUsed(id: string): Promise<AccountSetupToken> {
     return this.authTokensRepository.markAccountSetupTokenUsed(id);
+  }
+
+  async deleteAccountSetupToken(id: string): Promise<void> {
+    return this.authTokensRepository.deleteAccountSetupToken(id);
   }
 
   async deleteUserSetupTokens(userId: string): Promise<void> {

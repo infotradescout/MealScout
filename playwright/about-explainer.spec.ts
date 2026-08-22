@@ -60,9 +60,9 @@ test.describe("complete MealScout About guide", () => {
     await expect(page.getByRole("heading", { name: "Hosts and property operators" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Suppliers and food-business partners" })).toBeVisible();
 
-    await expect(page.getByText("Standard profile", { exact: true })).toBeVisible();
+    await expect(page.getByText("Complete profile", { exact: true })).toBeVisible();
     await expect(page.getByText("Free", { exact: true })).toBeVisible();
-    await expect(page.getByText("Most are $100", { exact: true })).toBeVisible();
+    await expect(page.getByText("Simple setup: $100", { exact: true })).toBeVisible();
     await expect(page.getByText("Custom quote", { exact: true })).toBeVisible();
 
     await expect(page.locator("header[data-nav-root='global']")).toHaveCount(1);

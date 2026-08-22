@@ -39,6 +39,26 @@ import {
   shouldAssignAffiliateTagForUserType,
 } from "./roleAccess";
 import { authLog } from "./utils/authLog";
+import { normalizeSafeInternalPath } from "@shared/safeInternalPath";
+import { resolveBusinessAuthProvisioningUserType } from "@shared/businessSignupIntent";
+import {
+  ACCOUNT_SETUP_ALREADY_COMPLETED_CODE,
+  completeAccountSetupTransaction,
+} from "./services/accountSetupCompletion";
+import { distributedRateLimit } from "./middleware/distributedRateLimit";
+
+type UnifiedAuthDependencies = {
+  hashAccountSetupPassword?: (password: string) => Promise<string>;
+};
+
+const completeAccountSetupLimiter = distributedRateLimit({
+  scope: "auth:complete-account-setup",
+  limit: 5,
+  windowMs: 15 * 60 * 1000,
+  // Setup links are unauthenticated and must be limited by caller IP, never by
+  // a user-controlled token or a session that happens to be present.
+  key: (req) => String(req.ip || "unknown"),
+});
 
 // Extend session to include app context for multi-app OAuth
 declare module "express-session" {
@@ -149,7 +169,13 @@ function establishAuthenticatedSession(req: any, user: User) {
   });
 }
 
-export async function setupUnifiedAuth(app: Express) {
+export async function setupUnifiedAuth(
+  app: Express,
+  dependencies: UnifiedAuthDependencies = {},
+) {
+  const hashAccountSetupPassword =
+    dependencies.hashAccountSetupPassword ||
+    ((password: string) => bcrypt.hash(password, 12));
   const normalizeBaseUrl = (raw: string): string | null => {
     const trimmed = raw.trim().replace(/^["']|["']$/g, "");
     if (!trimmed) return null;
@@ -234,11 +260,8 @@ export async function setupUnifiedAuth(app: Express) {
   };
 
   const getSafeRedirectPath = (value: unknown): string | null => {
-    const path = typeof value === "string" ? value.trim() : "";
+    const path = normalizeSafeInternalPath(value);
     if (!path) return null;
-    if (!path.startsWith("/")) return null;
-    if (path.startsWith("//")) return null;
-    if (path.includes("://")) return null;
     if (isAccountSetupPathWithoutToken(path)) return null;
     return path;
   };
@@ -267,6 +290,31 @@ export async function setupUnifiedAuth(app: Express) {
     return `${redirectBase}${safePath}${separator}auth=success&t=${Date.now()}`;
   };
 
+  const buildOAuthErrorRedirect = (
+    redirectPath: unknown,
+    errorCode: string,
+    fallbackPath: string,
+  ): string => {
+    const safePath = getSafeRedirectPath(redirectPath) || fallbackPath;
+    const parsed = new URL(safePath, "https://www.mealscout.us");
+    parsed.searchParams.set("error", errorCode);
+    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+  };
+
+  const consumeOAuthErrorRedirect = (
+    req: any,
+    errorCode: string,
+    fallbackPath: string,
+  ): string => {
+    const redirect = buildOAuthErrorRedirect(
+      req.session?.oauthRedirectPath,
+      errorCode,
+      fallbackPath,
+    );
+    req.session.oauthRedirectPath = undefined;
+    return redirect;
+  };
+
   const getDefaultPostVerificationRedirect = (
     user: Pick<User, "userType">,
   ): string => {
@@ -278,7 +326,7 @@ export async function setupUnifiedAuth(app: Express) {
       case "restaurant_owner":
         return "/restaurant-signup?businessType=restaurant&source=post-verification";
       case "food_truck":
-        return "/restaurant-signup?businessType=food_truck&source=post-verification&claim=1";
+        return "/restaurant-signup?businessType=food_truck&intent=create&source=post-verification";
       case "caterer":
         return "/restaurant-signup?businessType=caterer&source=post-verification";
       case "private_chef":
@@ -345,6 +393,7 @@ export async function setupUnifiedAuth(app: Express) {
       const supportsWelcome =
         user.userType === "customer" ||
         user.userType === "restaurant_owner" ||
+        user.userType === "food_truck" ||
         user.userType === "duper_admin" ||
         user.userType === "super_admin" ||
         user.userType === "admin";
@@ -832,10 +881,14 @@ export async function setupUnifiedAuth(app: Express) {
               userData.googleId,
               userData.email,
             );
+            const provisioningUserType = resolveBusinessAuthProvisioningUserType({
+              requestedUserType: userType,
+              existingUserType: existingOAuthUser?.userType,
+            }) as User["userType"];
             const user = await storage.upsertUserByAuth(
               "google",
               userData,
-              userType === "customer" ? "restaurant_owner" : userType,
+              provisioningUserType,
             );
             kickAffiliateTag(user);
             await applyAffiliateReferral(req, user);
@@ -855,7 +908,7 @@ export async function setupUnifiedAuth(app: Express) {
                 claimValue: {
                   provider: "google",
                   email: userData.email,
-                  userType: "restaurant_owner",
+                  userType: user.userType,
                 },
                 source: "oauth",
               })
@@ -863,7 +916,10 @@ export async function setupUnifiedAuth(app: Express) {
 
             if (!existingOAuthUser && hasRequiredPhone(user)) {
               void sendAccountCreationEmails(user, req, {
-                welcomeLabel: "restaurant owner",
+                welcomeLabel:
+                  userType === "food_truck"
+                    ? "food truck owner"
+                    : "restaurant owner",
                 signupMethod: "google",
                 notifyAdmin: false,
               });
@@ -914,18 +970,26 @@ export async function setupUnifiedAuth(app: Express) {
               code: err?.code,
               message: err?.message,
             });
-            return res.redirect("/?error=auth_invalid_grant");
+            return res.redirect(
+              consumeOAuthErrorRedirect(req, "auth_invalid_grant", "/"),
+            );
           }
           console.error("❌ Google customer callback error:", err);
-          return res.redirect("/?error=auth_failed");
+          return res.redirect(
+            consumeOAuthErrorRedirect(req, "auth_failed", "/"),
+          );
         }
         if (!user) {
-          return res.redirect("/?error=auth_failed");
+          return res.redirect(
+            consumeOAuthErrorRedirect(req, "auth_failed", "/"),
+          );
         }
         req.logIn(user, async (loginErr: unknown) => {
           if (loginErr) {
             console.error("❌ Google customer login error:", loginErr);
-            return res.redirect("/?error=session_error");
+            return res.redirect(
+              consumeOAuthErrorRedirect(req, "session_error", "/"),
+            );
           }
           const appContext = req.session.googleAppContext || "mealscout";
           const redirectBase =
@@ -940,20 +1004,24 @@ export async function setupUnifiedAuth(app: Express) {
             return req.session.save((saveErr: unknown) => {
               if (saveErr) {
                 console.error("❌ Session save error:", saveErr);
-                return res.redirect("/?error=session_error");
+                return res.redirect(
+                  buildOAuthErrorRedirect(redirectPath, "session_error", "/"),
+                );
               }
               return res.redirect(buildPhoneRequiredSetupPath(redirectPath));
             });
           }
+          req.session.oauthRedirectPath = undefined;
           req.session.save((saveErr: unknown) => {
             if (saveErr) {
               console.error("❌ Session save error:", saveErr);
-              return res.redirect("/?error=session_error");
+              return res.redirect(
+                buildOAuthErrorRedirect(redirectPath, "session_error", "/"),
+              );
             }
             console.log(
               "✅ Google customer OAuth success, session saved, redirecting...",
             );
-            req.session.oauthRedirectPath = undefined;
             return res.redirect(
               buildOAuthSuccessRedirect(redirectBase, redirectPath),
             );
@@ -975,7 +1043,10 @@ export async function setupUnifiedAuth(app: Express) {
         ? (desiredType as User["userType"])
         : "restaurant_owner";
       req.session.oauthRedirectPath =
-        getSafeRedirectPath(req.query.redirect) || undefined;
+        getSafeRedirectPath(req.query.redirect) ||
+        (req.session.oauthUserType === "food_truck"
+          ? "/restaurant-signup?businessType=food_truck&intent=create&source=google"
+          : undefined);
       passport.authenticate("google-restaurant", {
         scope: ["profile", "email"],
       })(req, res, next);
@@ -1000,18 +1071,34 @@ export async function setupUnifiedAuth(app: Express) {
               code: err?.code,
               message: err?.message,
             });
-            return res.redirect("/restaurant-signup?error=auth_invalid_grant");
+            return res.redirect(
+              consumeOAuthErrorRedirect(
+                req,
+                "auth_invalid_grant",
+                "/restaurant-signup",
+              ),
+            );
           }
           console.error("❌ Google restaurant callback error:", err);
-          return res.redirect("/restaurant-signup?error=auth_failed");
+          return res.redirect(
+            consumeOAuthErrorRedirect(req, "auth_failed", "/restaurant-signup"),
+          );
         }
         if (!user) {
-          return res.redirect("/restaurant-signup?error=auth_failed");
+          return res.redirect(
+            consumeOAuthErrorRedirect(req, "auth_failed", "/restaurant-signup"),
+          );
         }
         req.logIn(user, async (loginErr: unknown) => {
           if (loginErr) {
             console.error("❌ Google restaurant login error:", loginErr);
-            return res.redirect("/restaurant-signup?error=session_error");
+            return res.redirect(
+              consumeOAuthErrorRedirect(
+                req,
+                "session_error",
+                "/restaurant-signup",
+              ),
+            );
           }
           const appContext = req.session.googleAppContext || "mealscout";
           const redirectBase =
@@ -1026,20 +1113,32 @@ export async function setupUnifiedAuth(app: Express) {
             return req.session.save((saveErr: unknown) => {
               if (saveErr) {
                 console.error("❌ Session save error:", saveErr);
-                return res.redirect("/restaurant-signup?error=session_error");
+                return res.redirect(
+                  buildOAuthErrorRedirect(
+                    redirectPath,
+                    "session_error",
+                    "/restaurant-signup",
+                  ),
+                );
               }
               return res.redirect(buildPhoneRequiredSetupPath(redirectPath));
             });
           }
+          req.session.oauthRedirectPath = undefined;
           req.session.save((saveErr: unknown) => {
             if (saveErr) {
               console.error("❌ Session save error:", saveErr);
-              return res.redirect("/restaurant-signup?error=session_error");
+              return res.redirect(
+                buildOAuthErrorRedirect(
+                  redirectPath,
+                  "session_error",
+                  "/restaurant-signup",
+                ),
+              );
             }
             console.log(
               "✅ Google restaurant OAuth success, session saved, redirecting...",
             );
-            req.session.oauthRedirectPath = undefined;
             return res.redirect(
               buildOAuthSuccessRedirect(redirectBase, redirectPath),
             );
@@ -1068,11 +1167,23 @@ export async function setupUnifiedAuth(app: Express) {
     });
 
     app.get("/api/auth/google/customer/callback", (req, res) => {
-      res.redirect("/?error=google_not_configured");
+      res.redirect(
+        buildOAuthErrorRedirect(
+          req.query.redirect,
+          "google_not_configured",
+          "/",
+        ),
+      );
     });
 
     app.get("/api/auth/google/restaurant/callback", (req, res) => {
-      res.redirect("/restaurant-signup?error=google_not_configured");
+      res.redirect(
+        buildOAuthErrorRedirect(
+          req.query.redirect,
+          "google_not_configured",
+          "/restaurant-signup",
+        ),
+      );
     });
   }
 
@@ -1514,7 +1625,7 @@ export async function setupUnifiedAuth(app: Express) {
       const { email, firstName, lastName, phone, password, otpCode, acceptTerms } =
         req.body;
       const businessType = String(req.body?.businessType || "").trim();
-      const registrationUserType =
+      const requestedRegistrationUserType =
         businessType === "food_truck"
           ? "food_truck"
           : businessType === "caterer"
@@ -1522,6 +1633,9 @@ export async function setupUnifiedAuth(app: Express) {
             : businessType === "private_chef"
               ? "private_chef"
               : "restaurant_owner";
+      const registrationUserType = resolveBusinessAuthProvisioningUserType({
+        requestedUserType: requestedRegistrationUserType,
+      }) as User["userType"];
 
       if (!email || !firstName || !lastName || !phone || !password) {
         return res.status(400).json({ error: "All fields are required" });
@@ -1594,7 +1708,10 @@ export async function setupUnifiedAuth(app: Express) {
       await applyAffiliateReferral(req, user);
 
       const intendedNextPath =
-        getSafeRedirectPath(req.body?.intendedNextPath) || "/restaurant-signup";
+        getSafeRedirectPath(req.body?.intendedNextPath) ||
+        (businessType === "food_truck"
+          ? "/restaurant-signup?businessType=food_truck&intent=create&source=email"
+          : "/restaurant-signup");
 
       const verificationAccountLabel =
         businessType === "food_truck"
@@ -1730,7 +1847,11 @@ export async function setupUnifiedAuth(app: Express) {
       }
 
       const user = await storage.getUserByEmail(email);
-      if (!user || user.userType !== "restaurant_owner") {
+      if (
+        !user ||
+        (user.userType !== "customer" &&
+          !isBusinessCapableForContinuation(user.userType))
+      ) {
         return res.status(401).json({ error: "Invalid email or password" });
       }
 
@@ -1739,7 +1860,11 @@ export async function setupUnifiedAuth(app: Express) {
           error: "This account uses Google sign-in. Continue with Google.",
           code: "google_auth_required",
           provider: "google",
-          authUrl: "/api/auth/google/restaurant",
+          authUrl: `/api/auth/google/restaurant?userType=${encodeURIComponent(
+            user.userType === "food_truck"
+              ? "food_truck"
+              : "restaurant_owner",
+          )}`,
         });
       }
 
@@ -1782,11 +1907,21 @@ export async function setupUnifiedAuth(app: Express) {
       }
 
       if (!user.passwordHash && user.googleId) {
+        const businessGoogleUser = isBusinessCapableForContinuation(
+          user.userType,
+        );
+        const authUrl = businessGoogleUser
+          ? `/api/auth/google/restaurant?userType=${encodeURIComponent(
+              user.userType === "food_truck"
+                ? "food_truck"
+                : "restaurant_owner",
+            )}`
+          : "/api/auth/google/customer";
         return res.status(409).json({
           error: "This account uses Google sign-in. Continue with Google.",
           code: "google_auth_required",
           provider: "google",
-          authUrl: "/api/auth/google/customer",
+          authUrl,
         });
       }
 
@@ -2268,89 +2403,88 @@ export async function setupUnifiedAuth(app: Express) {
   });
 
   // Complete account setup with token
-  app.post("/api/auth/complete-setup", async (req, res) => {
-    try {
-      const { token, password, firstName, lastName, phone } = req.body;
+  app.post(
+    "/api/auth/complete-setup",
+    completeAccountSetupLimiter,
+    async (req, res) => {
+      try {
+        const { token, password, firstName, lastName, phone } = req.body;
 
-      if (!token || !password || !phone || !firstName || !lastName) {
-        return res
-          .status(400)
-          .json({ error: "Profile details and password are required" });
+        if (!token || !password || !phone || !firstName || !lastName) {
+          return res
+            .status(400)
+            .json({ error: "Profile details and password are required" });
+        }
+
+        const normalizedSetupPhone = normalizePhone(String(phone));
+        if (normalizedSetupPhone.length < 10) {
+          return res
+            .status(400)
+            .json({ error: "Valid phone number is required" });
+        }
+
+        if (!isPasswordStrong(password)) {
+          return res.status(400).json({ error: PASSWORD_REQUIREMENTS });
+        }
+
+        // Hash the token to compare with stored hash
+        const tokenHash = crypto
+          .createHash("sha256")
+          .update(token)
+          .digest("hex");
+
+        // Avoid the deliberately expensive password hash for invalid,
+        // expired, or already-used links. The transaction below still
+        // revalidates the token and wins the per-user compare-and-set race.
+        const activeSetupToken =
+          await storage.getAccountSetupTokenByTokenHash(tokenHash);
+        if (!activeSetupToken) {
+          return res.status(409).json({
+            error: "Account setup has already been completed or the link is no longer available.",
+            code: ACCOUNT_SETUP_ALREADY_COMPLETED_CODE,
+          });
+        }
+
+        // Hash before taking the per-user row lock so password work never
+        // extends the shared database critical section.
+        const passwordHash = await hashAccountSetupPassword(password);
+
+        const updatedUser = await completeAccountSetupTransaction({
+          tokenHash,
+          passwordHash,
+          firstName,
+          lastName,
+          phone: normalizedSetupPhone,
+        });
+
+        const continuationPath =
+          getSafeRedirectPath(req.body?.redirect) ||
+          getDefaultPostVerificationRedirect(updatedUser);
+
+        // Send welcome email with the validated continuation used by setup.
+        void sendWelcomeOrVerification(
+          updatedUser,
+          req,
+          "account setup",
+          continuationPath,
+        );
+
+        res.json({
+          message: "Account setup completed successfully",
+          redirect: continuationPath,
+        });
+      } catch (error: any) {
+        console.error("Account setup error:", error);
+        if (error?.code === ACCOUNT_SETUP_ALREADY_COMPLETED_CODE) {
+          return res.status(409).json({
+            error: "Account setup has already been completed or the link is no longer available.",
+            code: ACCOUNT_SETUP_ALREADY_COMPLETED_CODE,
+          });
+        }
+        res.status(500).json({ error: "Unable to complete account setup" });
       }
-
-      const normalizedSetupPhone = normalizePhone(String(phone));
-      if (normalizedSetupPhone.length < 10) {
-        return res
-          .status(400)
-          .json({ error: "Valid phone number is required" });
-      }
-
-      if (!isPasswordStrong(password)) {
-        return res.status(400).json({ error: PASSWORD_REQUIREMENTS });
-      }
-
-      // Hash the token to compare with stored hash
-      const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
-
-      // Find and validate token
-      const setupToken =
-        await storage.getAccountSetupTokenByTokenHash(tokenHash);
-
-      if (!setupToken) {
-        return res
-          .status(400)
-          .json({ error: "Invalid or expired setup token" });
-      }
-
-      // Check if token has expired
-      if (new Date() > setupToken.expiresAt) {
-        return res.status(400).json({ error: "Setup token has expired" });
-      }
-
-      // Get user
-      const user = await storage.getUser(setupToken.userId);
-      if (!user) {
-        return res.status(400).json({ error: "User not found" });
-      }
-
-      // Check if user already has a password
-      if (user.passwordHash) {
-        return res
-          .status(400)
-          .json({ error: "Account has already been set up" });
-      }
-
-      // Hash new password
-      const passwordHash = await bcrypt.hash(password, 12);
-
-      // Update user with password and optional name fields
-      const updateData: any = {
-        passwordHash,
-        firstName,
-        lastName,
-        phone: normalizedSetupPhone,
-        emailVerified: true,
-      };
-
-      const updatedUser = await storage.updateUser(user.id, updateData);
-
-      // Mark token as used
-      await storage.markAccountSetupTokenUsed(setupToken.id);
-
-      // Send welcome email with verification link after profile completion
-      void sendWelcomeOrVerification(
-        updatedUser || { ...user, ...updateData },
-        req,
-        "account setup",
-        "/dashboard",
-      );
-
-      res.json({ message: "Account setup completed successfully" });
-    } catch (error) {
-      console.error("Account setup error:", error);
-      res.status(500).json({ error: "Unable to complete account setup" });
-    }
-  });
+    },
+  );
 
   app.post("/api/auth/complete-phone-setup", async (req: any, res) => {
     try {

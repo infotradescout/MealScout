@@ -32,6 +32,7 @@ import {
   PASSWORD_REGEX,
   PASSWORD_REQUIREMENTS,
 } from "@/utils/passwordPolicy";
+import { normalizeSafeInternalPath } from "@shared/safeInternalPath";
 
 const accountSetupSchema = z
   .object({
@@ -86,10 +87,7 @@ export default function AccountSetup() {
   });
   const [phoneRedirectPath, setPhoneRedirectPath] = useState(() => {
     const urlParams = new URLSearchParams(window.location.search);
-    const redirect = urlParams.get("redirect") || "";
-    return redirect.startsWith("/") && !redirect.startsWith("//")
-      ? redirect
-      : "";
+    return normalizeSafeInternalPath(urlParams.get("redirect")) || "";
   });
   const [setupComplete, setSetupComplete] = useState(false);
 
@@ -99,9 +97,8 @@ export default function AccountSetup() {
     const tokenParam = urlParams.get("token");
     setToken(tokenParam);
     setPhoneRequired(urlParams.get("phoneRequired") === "1");
-    const redirect = urlParams.get("redirect") || "";
     setPhoneRedirectPath(
-      redirect.startsWith("/") && !redirect.startsWith("//") ? redirect : "",
+      normalizeSafeInternalPath(urlParams.get("redirect")) || "",
     );
   }, []);
 
@@ -182,21 +179,26 @@ export default function AccountSetup() {
 
   const setupMutation = useMutation({
     mutationFn: async (data: AccountSetupFormData) => {
-      return await apiRequest("POST", "/api/auth/complete-setup", {
+      const response = await apiRequest("POST", "/api/auth/complete-setup", {
         token,
         password: data.password,
         firstName: data.firstName,
         lastName: data.lastName,
         phone: data.phone,
+        redirect: phoneRedirectPath || undefined,
       });
+      return await response.json();
     },
-    onSuccess: () => {
+    onSuccess: (payload: any) => {
       setSetupComplete(true);
       toast({
         title: "Account Setup Complete!",
         description: "Your profile is ready. Check your email to verify and continue.",
       });
-      const redirectPath = "/dashboard";
+      const redirectPath =
+        normalizeSafeInternalPath(payload?.redirect) ||
+        phoneRedirectPath ||
+        "/dashboard";
       try {
         if (tokenValidation?.userEmail) {
           window.sessionStorage.setItem(

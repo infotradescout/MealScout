@@ -1,7 +1,13 @@
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "../db";
 import { storage } from "../storage";
-import { menus, menuItems, restaurants } from "@shared/schema";
+import {
+  menus,
+  menuItems,
+  restaurants,
+  truckImportListings,
+  users,
+} from "@shared/schema";
 import {
   resolveStoredFoodBusinessType,
   toCanonicalFoodBusinessType,
@@ -10,6 +16,13 @@ import {
 import { getBusinessAccessContext } from "./businessTeamAccess";
 import { buildTruckProfileLocationEvidence } from "../utils/truckLocationSemantics";
 import { applyRestaurantCreationPolicy } from "./restaurantCreationPolicy";
+import {
+  acquireFoodTruckIdentityLock,
+  buildFoodTruckIdentity,
+  normalizeFoodTruckIdentityText,
+  normalizedFoodTruckImportIdentityPredicate,
+  normalizedFoodTruckRestaurantIdentityPredicate,
+} from "./foodTruckIdentity";
 
 export type PromotionPlaceEvidence = {
   placeId?: string | null;
@@ -56,6 +69,7 @@ export class BusinessPromotionError extends Error {
   constructor(
     message: string,
     readonly statusCode: 400 | 404 | 409,
+    readonly code?: string,
   ) {
     super(message);
     this.name = "BusinessPromotionError";
@@ -210,14 +224,6 @@ const coalesce = (...values: Array<unknown>) => {
   return null;
 };
 
-const normalizeIdentityText = (value: unknown) =>
-  String(value || "")
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-
 const targetMatchesSetupIdentity = (
   restaurant: any,
   setup: PromotionInput,
@@ -229,7 +235,8 @@ const targetMatchesSetupIdentity = (
     [restaurant?.state, setup.state],
   ].every(
     ([current, proposed]) =>
-      normalizeIdentityText(current) === normalizeIdentityText(proposed),
+      normalizeFoodTruckIdentityText(current) ===
+      normalizeFoodTruckIdentityText(proposed),
   );
 
 const ensureRestaurantMenuItems = async (
@@ -320,12 +327,78 @@ const defaultDependencies: BusinessPromotionDependencies = {
   createRestaurantWithMenu: async (restaurant, rawMenuItems) => {
     const result = await db.transaction(async (tx: any) => {
       const requestedId = String(restaurant.id || "").trim() || null;
+      const ownerId = String(restaurant.ownerId || "").trim();
+      const isFoodTruck =
+        String(restaurant.businessType || "").trim().toLowerCase() ===
+        "food_truck";
+
+      if (isFoodTruck) {
+        const identity = buildFoodTruckIdentity({
+          name: restaurant.name,
+          address: restaurant.address,
+        });
+        if (!identity) {
+          throw new BusinessPromotionError(
+            "Food truck name and address must include searchable characters",
+            400,
+          );
+        }
+        await acquireFoodTruckIdentityLock(tx, identity);
+
+        const [registryDuplicate] = await tx
+          .select({ id: truckImportListings.id })
+          .from(truckImportListings)
+          .where(
+            and(
+              inArray(truckImportListings.status, [
+                "unclaimed",
+                "claim_processing",
+                "claim_requested",
+                "claimed",
+              ] as any),
+              normalizedFoodTruckImportIdentityPredicate(identity, {
+                name: truckImportListings.name,
+                address: truckImportListings.address,
+              }),
+            ),
+          )
+          .limit(1);
+        if (registryDuplicate) {
+          throw new BusinessPromotionError(
+            "This food truck already has a registry listing. Find and claim it instead of creating a duplicate profile.",
+            409,
+            "food_truck_identity_exists",
+          );
+        }
+
+        const [nativeDuplicate] = await tx
+          .select({ id: restaurants.id, ownerId: restaurants.ownerId })
+          .from(restaurants)
+          .where(
+            normalizedFoodTruckRestaurantIdentityPredicate(identity),
+          )
+          .limit(1);
+        const isSameIdempotentAttempt =
+          nativeDuplicate &&
+          requestedId &&
+          String(nativeDuplicate.id) === requestedId &&
+          String(nativeDuplicate.ownerId) === ownerId;
+        if (nativeDuplicate && !isSameIdempotentAttempt) {
+          throw new BusinessPromotionError(
+            "A food truck profile already exists for this name and address.",
+            409,
+            "food_truck_identity_exists",
+          );
+        }
+      }
+
       const insert = tx
         .insert(restaurants)
         .values(applyRestaurantCreationPolicy(restaurant));
       const [createdRestaurant] = requestedId
         ? await insert.onConflictDoNothing({ target: restaurants.id }).returning()
         : await insert.returning();
+      let resolvedRestaurant = createdRestaurant;
       if (!createdRestaurant && requestedId) {
         const [existingRestaurant] = await tx
           .select()
@@ -337,31 +410,51 @@ const defaultDependencies: BusinessPromotionDependencies = {
         }
         if (
           String(existingRestaurant.ownerId || "") !==
-          String(restaurant.ownerId || "")
+          ownerId
         ) {
           throw new BusinessPromotionError(
             "Onboarding attempt belongs to a different owner",
             409,
           );
         }
-        return {
-          restaurant: existingRestaurant,
-          insertedCount: 0,
-          created: false,
-        };
+        resolvedRestaurant = existingRestaurant;
       }
-      if (!createdRestaurant) {
+      if (!resolvedRestaurant) {
         throw new Error("Unable to create the business profile");
       }
-      const menu = await ensureRestaurantMenuItems(
-        String(createdRestaurant.id),
-        rawMenuItems,
-        tx,
-      );
+      const menu = createdRestaurant
+        ? await ensureRestaurantMenuItems(
+            String(resolvedRestaurant.id),
+            rawMenuItems,
+            tx,
+          )
+        : { insertedCount: 0 };
+
+      if (isFoodTruck) {
+        const [owner] = await tx
+          .select({ userType: users.userType })
+          .from(users)
+          .where(eq(users.id, ownerId))
+          .limit(1);
+        if (!owner) {
+          throw new BusinessPromotionError("User not found", 404);
+        }
+        if (["customer", "restaurant_owner"].includes(String(owner.userType))) {
+          const [promotedOwner] = await tx
+            .update(users)
+            .set({ userType: "food_truck", updatedAt: new Date() })
+            .where(eq(users.id, ownerId))
+            .returning({ id: users.id });
+          if (!promotedOwner) {
+            throw new Error("Unable to promote the food truck owner role");
+          }
+        }
+      }
+
       return {
-        restaurant: createdRestaurant,
+        restaurant: resolvedRestaurant,
         insertedCount: menu.insertedCount,
-        created: true,
+        created: Boolean(createdRestaurant),
       };
     });
     try {

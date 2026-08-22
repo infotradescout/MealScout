@@ -42,7 +42,9 @@ const buildPageHtml = (
     areaServed: "United States",
     serviceType:
       page.path === "/for-restaurants"
-        ? "Restaurant and food truck demand generation"
+        ? "Restaurant local discovery"
+        : page.path === "/for-food-trucks"
+          ? "Food truck profiles, schedules, and discovery"
         : "Host location marketplace for food trucks",
   };
 
@@ -97,19 +99,38 @@ export function registerAcquisitionPrerenderRoutes(
   const pages: AcquisitionPageConfig[] = [
     {
       path: "/for-restaurants",
-      title: "MealScout for Restaurants and Food Trucks",
+      title: "MealScout for Restaurants",
       description:
-        "MealScout helps restaurants and food trucks get recurring local demand, monthly visibility, and direct booking opportunities.",
-      h1: "Get recurring demand from local customers and booking-ready hosts",
+        "MealScout helps restaurants publish complete local profiles, menus, specials, and current business information.",
+      h1: "Help local diners find your restaurant",
       body: [
-        "MealScout is built for restaurant owners and food truck operators who need steady monthly growth.",
-        "We help businesses surface in local discovery, convert nearby demand, and capture booking opportunities from host locations.",
-        "Start with your profile, then activate offers and booking visibility to keep demand compounding over time.",
+        "MealScout gives restaurant owners a public profile for menus, photos, hours, and specials.",
+        "Keep your information current so local diners can understand what you serve before they visit.",
+        "The complete profile tools require no card and do not become a monthly bill. Separate paid transactions show their charges before payment.",
       ],
       ctaLinks: [
-        { label: "Owner Signup", href: "/customer-signup?role=business" },
-        { label: "Claim Food Truck", href: "/claim-business" },
+        { label: "List a Restaurant", href: "/restaurant-signup?businessType=restaurant&intent=create&source=for-restaurants" },
+        { label: "For Food Trucks", href: "/for-food-trucks" },
         { label: "Scout Local Dashboard", href: "/scout" },
+        { label: "Sitemap", href: "/sitemap" },
+      ],
+      schemaType: "ProfessionalService",
+    },
+    {
+      path: "/for-food-trucks",
+      title: "List or Claim Your Food Truck | MealScout",
+      description:
+        "Create or claim your MealScout food truck profile, publish your menu and schedule, and help nearby diners find where you are serving.",
+      h1: "Put your food truck where locals can find it",
+      body: [
+        "Create a new food truck profile or claim an existing listing that belongs to your business.",
+        "Use your owner workspace to publish menus, schedules, live location, and current profile details.",
+        "The complete profile tools require no card and do not become a monthly bill. Separate paid orders, deliveries, bookings, and other transactions may carry charges shown before payment.",
+      ],
+      ctaLinks: [
+        { label: "Create a New Truck Profile", href: "/restaurant-signup?businessType=food_truck&intent=create&source=for-food-trucks" },
+        { label: "Claim an Existing Truck", href: "/claim-business?businessType=food_truck&claim=1&intent=claim&source=for-food-trucks" },
+        { label: "Find Food Trucks", href: "/scout" },
         { label: "Sitemap", href: "/sitemap" },
       ],
       schemaType: "ProfessionalService",

@@ -35,6 +35,7 @@ import {
   ArrowRight,
   Sparkles,
   Store,
+  Truck,
 } from "lucide-react";
 import DocumentUpload from "@/components/document-upload";
 import { BackHeader } from "@/components/back-header";
@@ -48,6 +49,12 @@ import { HOST_ONBOARDING_COPY as COPY } from "@/copy/hostOnboarding.copy";
 import { PASSWORD_REGEX, PASSWORD_REQUIREMENTS } from "@/utils/passwordPolicy";
 import { authUrl } from "@/lib/api";
 import { buildOwnerAiHref } from "@shared/ownerAiNavigation";
+import {
+  buildRestaurantSignupPath,
+  buildRestaurantSignupContinuationPath,
+  parseBusinessSignupRouteIntent,
+  shouldRestoreBusinessSignupDraft,
+} from "@shared/businessSignupIntent";
 
 /**
  * Host Onboarding v1  COPY LOCK
@@ -167,6 +174,36 @@ type SignupFormData = z.infer<typeof signupSchema>;
 type LoginFormData = z.infer<typeof loginSchema>;
 type RestaurantSubmissionData = Omit<RestaurantFormData, "confirmNotFoodTruck">;
 
+const normalizeListingIdentity = (value: unknown) =>
+  String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+
+const isLikelySameTruckListing = (
+  listing: any,
+  submitted: RestaurantSubmissionData,
+) => {
+  const listingName = normalizeListingIdentity(listing?.name);
+  const submittedName = normalizeListingIdentity(submitted.name);
+  if (!listingName || listingName !== submittedName) return false;
+
+  const listingAddress = normalizeListingIdentity(listing?.address);
+  const submittedAddress = normalizeListingIdentity(submitted.address);
+  if (listingAddress && listingAddress === submittedAddress) return true;
+
+  const listingStreetNumber = listingAddress.match(/^\d+/)?.[0] || "";
+  const submittedStreetNumber = submittedAddress.match(/^\d+/)?.[0] || "";
+  return Boolean(
+    listingStreetNumber &&
+      listingStreetNumber === submittedStreetNumber &&
+      normalizeListingIdentity(listing?.city) ===
+        normalizeListingIdentity(submitted.city) &&
+      normalizeListingIdentity(listing?.state) ===
+        normalizeListingIdentity(submitted.state),
+  );
+};
+
 type HostOnboardingStep = "restaurant" | "verification";
 
 interface HostOnboardingState {
@@ -228,7 +265,7 @@ const BLANK_RESTAURANT_FORM_VALUES: RestaurantFormData = {
   city: "",
   state: "",
   phone: "",
-  businessType: "food_truck",
+  businessType: "restaurant",
   confirmNotFoodTruck: false,
   cuisineType: "",
   description: "",
@@ -318,6 +355,32 @@ export default function RestaurantSignup() {
   const { user, isAuthenticated, isLoading } = useAuth();
   const queryClient = useQueryClient();
   const [authMode, setAuthMode] = useState<"signup" | "login">("signup");
+  const signupRouteIntent = useMemo(
+    () => parseBusinessSignupRouteIntent(window.location.search),
+    [],
+  );
+  const continuationPath = useMemo(
+    () => buildRestaurantSignupContinuationPath(signupRouteIntent),
+    [signupRouteIntent],
+  );
+  const isFoodTruckRoute = signupRouteIntent.businessType === "food_truck";
+  const isMissingListingFlow =
+    isFoodTruckRoute &&
+    signupRouteIntent.intent === "create" &&
+    signupRouteIntent.passthrough.claimMode === "missing";
+  const createTruckProfilePath = buildRestaurantSignupPath({
+    businessType: "food_truck",
+    intent: "create",
+    source: signupRouteIntent.source || "restaurant-signup",
+  });
+  const routePresentation = isFoodTruckRoute
+    ? COPY.routePresentation.foodTruck
+    : COPY.routePresentation.restaurant;
+  const unauthHero = isFoodTruckRoute
+    ? signupRouteIntent.isClaim
+      ? COPY.routePresentation.foodTruck.claimHero
+      : COPY.routePresentation.foodTruck.createHero
+    : COPY.routePresentation.restaurant.hero;
 
   // Redirect admin/staff away from this flow to their dashboard
   useEffect(() => {
@@ -352,6 +415,12 @@ export default function RestaurantSignup() {
     null,
   );
   const [claimAutoSearch, setClaimAutoSearch] = useState(false);
+  const [claimSearchCompleted, setClaimSearchCompleted] = useState(false);
+  const [pendingClaimListingId, setPendingClaimListingId] = useState(() =>
+    signupRouteIntent.isClaim
+      ? signupRouteIntent.passthrough.claimListingId || ""
+      : "",
+  );
   const [licenseNumber, setLicenseNumber] = useState("");
   const [websiteImportLoading, setWebsiteImportLoading] = useState(false);
   const [importedFields, setImportedFields] = useState<string[]>([]);
@@ -392,12 +461,27 @@ export default function RestaurantSignup() {
     try {
       const stored = window.localStorage.getItem(RESTAURANT_DRAFT_KEY);
       if (!stored) return "";
-      const parsed = JSON.parse(stored) as { menuSourceUrl?: string };
+      const parsed = JSON.parse(stored) as {
+        menuSourceUrl?: string;
+        businessType?: string;
+      };
+      if (
+        !shouldRestoreBusinessSignupDraft(
+          signupRouteIntent,
+          parsed.businessType,
+        )
+      ) {
+        return "";
+      }
       return String(parsed.menuSourceUrl || "").trim();
     } catch {
       return "";
     }
-  }, []);
+  }, [
+    signupRouteIntent.businessType,
+    signupRouteIntent.hasExplicitBusinessType,
+    signupRouteIntent.isClaim,
+  ]);
 
   const persistMenuImportDraft = (restaurantId?: string | null) => {
     if (typeof window === "undefined") return;
@@ -417,7 +501,10 @@ export default function RestaurantSignup() {
   };
 
   const restaurantDefaultValues = useMemo<RestaurantFormData>(() => {
-    const base: RestaurantFormData = BLANK_RESTAURANT_FORM_VALUES;
+    const base: RestaurantFormData = {
+      ...BLANK_RESTAURANT_FORM_VALUES,
+      businessType: signupRouteIntent.businessType,
+    };
 
     if (typeof window === "undefined") return base;
 
@@ -438,11 +525,31 @@ export default function RestaurantSignup() {
         return base;
       }
       const { __savedAt, ...draftFields } = parsed;
-      return { ...base, ...draftFields };
+      if (
+        !shouldRestoreBusinessSignupDraft(
+          signupRouteIntent,
+          draftFields.businessType,
+        )
+      ) {
+        return base;
+      }
+      return {
+        ...base,
+        ...draftFields,
+        // Explicit route intent wins before telemetry/first paint; a generic
+        // resume keeps the owner's valid in-progress business type.
+        businessType: signupRouteIntent.hasExplicitBusinessType
+          ? signupRouteIntent.businessType
+          : draftFields.businessType || "restaurant",
+      };
     } catch {
       return base;
     }
-  }, []);
+  }, [
+    signupRouteIntent.businessType,
+    signupRouteIntent.hasExplicitBusinessType,
+    signupRouteIntent.isClaim,
+  ]);
 
   // Let the owner know their in-progress details were restored, rather than
   // silently prefilling a form they may not remember filling out before.
@@ -510,27 +617,22 @@ export default function RestaurantSignup() {
     selectedBusinessType === "food_truck"
       ? COPY.main.hero.foodTruck
       : COPY.main.hero.restaurant;
+  const profileNotification =
+    selectedBusinessType === "food_truck"
+      ? COPY.notifications.foodTruck
+      : COPY.notifications.restaurant;
 
   useEffect(() => {
     // Allow deep links like `/restaurant-signup?businessType=food_truck&claim=1`
     // so a user can go straight into the claim flow after creating an account.
     try {
       const params = new URLSearchParams(window.location.search);
-      const businessType = params.get("businessType");
-      if (
-        businessType === "food_truck" ||
-        businessType === "restaurant" ||
-        businessType === "bar" ||
-        businessType === "caterer" ||
-        businessType === "private_chef"
-      ) {
-        form.setValue("businessType", businessType as any);
-      }
-
-      if (businessType === "food_truck" && params.get("claim") === "1") {
+      if (signupRouteIntent.isClaim || isMissingListingFlow) {
         const q = String(params.get("q") || "").trim();
         if (q) {
           setClaimQuery(q);
+        }
+        if (q || signupRouteIntent.passthrough.claimListingId) {
           setClaimAutoSearch(true);
         }
 
@@ -591,20 +693,32 @@ export default function RestaurantSignup() {
     } catch {
       // ignore
     }
-  }, [form]);
+  }, [
+    form,
+    isMissingListingFlow,
+    signupRouteIntent.isClaim,
+    signupRouteIntent.passthrough.claimListingId,
+  ]);
 
   useEffect(() => {
     trackFunnelEventOncePerSession(
       FUNNEL_EVENTS.activationStarted,
-      "restaurant_signup_view",
+      `restaurant_signup_view:${selectedBusinessType}:${signupRouteIntent.intent}`,
       {
         page: "restaurant-signup",
         stage: "business_onboarding_view",
         businessType: selectedBusinessType,
         authMode,
+        intent: signupRouteIntent.intent,
+        source: signupRouteIntent.source,
       },
     );
-  }, [selectedBusinessType, authMode]);
+  }, [
+    selectedBusinessType,
+    authMode,
+    signupRouteIntent.intent,
+    signupRouteIntent.source,
+  ]);
 
   useEffect(() => {
     if (selectedBusinessType !== "food_truck" && claimSelection) {
@@ -659,7 +773,11 @@ export default function RestaurantSignup() {
       const res = await apiRequest(
         "POST",
         "/api/auth/restaurant/register",
-        signupData,
+        {
+          ...signupData,
+          businessType: signupRouteIntent.businessType,
+          intendedNextPath: continuationPath,
+        },
       );
       return await res.json();
     },
@@ -677,7 +795,7 @@ export default function RestaurantSignup() {
         );
       } catch {}
       window.location.href = `/login?redirect=${encodeURIComponent(
-        "/restaurant-signup",
+        continuationPath,
       )}&signup=1`;
     },
     onError: (error) => {
@@ -694,6 +812,8 @@ export default function RestaurantSignup() {
 
   const loginMutation = useMutation({
     mutationFn: async (data: LoginFormData) => {
+      // Existing diners can legitimately create or claim a truck; profile
+      // success, not login, is where their business role is synchronized.
       return await apiRequest("POST", "/api/auth/restaurant/login", data);
     },
     onSuccess: () => {
@@ -702,8 +822,8 @@ export default function RestaurantSignup() {
         title: COPY.notifications.login.successTitle,
         description: COPY.notifications.login.successDescription,
       });
-      // Reload to update auth state
-      window.location.reload();
+      // Continue with the exact safe create/claim route after auth refresh.
+      window.location.href = continuationPath;
     },
     onError: (error) => {
       toast({
@@ -722,7 +842,11 @@ export default function RestaurantSignup() {
           restaurantData: data,
         });
         const payload = await res.json();
-        return payload?.restaurant || payload;
+        return {
+          restaurant: payload?.restaurant || payload,
+          created: payload?.created === true,
+          completionKind: "claim" as const,
+        };
       }
       // The restaurant payload is identical either way; only userData
       // differs between an already-authenticated owner and a brand new
@@ -779,9 +903,15 @@ export default function RestaurantSignup() {
         requestData,
       );
       const payload = await res.json();
-      return payload?.restaurant || payload;
+      return {
+        restaurant: payload?.restaurant || payload,
+        created: payload?.created === true,
+        completionKind: "create" as const,
+      };
     },
-    onSuccess: (restaurant: any) => {
+    onSuccess: (result: any) => {
+      const restaurant = result?.restaurant;
+      const created = result?.created === true;
       if (restaurant?.requiresEmailVerification) {
         toast({
           title: "Verify your email",
@@ -796,16 +926,35 @@ export default function RestaurantSignup() {
           );
         } catch {}
         window.location.href = `/login?redirect=${encodeURIComponent(
-          "/restaurant-signup",
+          continuationPath,
         )}&signup=1`;
         return;
       }
 
       trackFunnelEvent(FUNNEL_EVENTS.activationStarted, {
         page: "restaurant-signup",
-        stage: "restaurant_profile_created",
+        stage: "restaurant_profile_ready",
         businessType: selectedBusinessType,
+        created,
+        completionKind: result?.completionKind || null,
       });
+
+      if (
+        created &&
+        selectedBusinessType === "food_truck" &&
+        restaurant?.id &&
+        restaurant?.ownerId &&
+        restaurant.ownerId === user?.id
+      ) {
+        trackFunnelEvent(FUNNEL_EVENTS.signupCompleted, {
+          page: "restaurant-signup",
+          stage: "owner_linked_truck_profile_completed",
+          businessType: "food_truck",
+          intent: signupRouteIntent.intent,
+          source: signupRouteIntent.source,
+          completionKind: result?.completionKind || null,
+        });
+      }
 
       setStoredSignupTermsAccepted(false);
       try {
@@ -818,8 +967,8 @@ export default function RestaurantSignup() {
       setCreatedRestaurant(restaurant);
       dispatchOnboarding({ type: "GO_TO_VERIFICATION" });
       toast({
-        title: COPY.notifications.restaurant.successTitle,
-        description: COPY.notifications.restaurant.successDescription,
+        title: profileNotification.successTitle,
+        description: profileNotification.successDescription,
       });
     },
     onError: (error) => {
@@ -832,22 +981,28 @@ export default function RestaurantSignup() {
       }
       if (isUnauthorizedError(error)) {
         toast({
-          title: COPY.notifications.restaurant.unauthorizedTitle,
+          title: profileNotification.unauthorizedTitle,
           description:
             error.message ||
-            COPY.notifications.restaurant.unauthorizedDescription,
+            profileNotification.unauthorizedDescription,
           variant: "destructive",
         });
         setTimeout(() => {
-          window.location.href = authUrl("/api/auth/google/restaurant");
+          const oauthParams = new URLSearchParams({
+            userType: isFoodTruckRoute ? "food_truck" : "restaurant_owner",
+            redirect: continuationPath,
+          });
+          window.location.href = authUrl(
+            `/api/auth/google/restaurant?${oauthParams.toString()}`,
+          );
         }, 500);
         return;
       }
       toast({
-        title: COPY.notifications.restaurant.errorTitle,
+        title: profileNotification.errorTitle,
         description: getSafeFreeProfileErrorMessage(
           error.message,
-          COPY.notifications.restaurant.errorDescription,
+          profileNotification.errorDescription,
         ),
         variant: "destructive",
       });
@@ -878,6 +1033,7 @@ export default function RestaurantSignup() {
         stage: "verification_submitted",
         businessType: selectedBusinessType,
       });
+
       persistMenuImportDraft(createdRestaurant?.id || null);
       toast({
         title: COPY.notifications.verification.successTitle,
@@ -898,22 +1054,66 @@ export default function RestaurantSignup() {
   const onSubmit = async (data: RestaurantFormData) => {
     const { confirmNotFoodTruck, ...restaurantData } = data;
 
+    if (signupRouteIntent.isClaim && !claimSelection) {
+      setClaimError(COPY.forms.restaurant.claimSelectionRequiredDescription);
+      toast({
+        title: COPY.forms.restaurant.claimSelectionRequiredTitle,
+        description:
+          COPY.forms.restaurant.claimSelectionRequiredDescription,
+        variant: "destructive",
+      });
+      window.setTimeout(() => {
+        document
+          .querySelector<HTMLInputElement>(
+            '[data-testid="input-claim-search"]',
+          )
+          ?.focus();
+      }, 0);
+      return;
+    }
+
+    if (isMissingListingFlow) {
+      const matchingListingExists = claimResults.some((listing) =>
+        isLikelySameTruckListing(listing, restaurantData),
+      );
+      if (!claimSearchCompleted || claimLoading || matchingListingExists) {
+        setClaimError(
+          matchingListingExists
+            ? COPY.forms.restaurant.claimRegistryMatchDescription
+            : COPY.forms.restaurant.claimRegistryCheckDescription,
+        );
+        toast({
+          title: matchingListingExists
+            ? COPY.forms.restaurant.claimRegistryMatchTitle
+            : COPY.forms.restaurant.claimRegistryCheckTitle,
+          description: matchingListingExists
+            ? COPY.forms.restaurant.claimRegistryMatchDescription
+            : COPY.forms.restaurant.claimRegistryCheckDescription,
+          variant: "destructive",
+        });
+        window.setTimeout(() => {
+          document
+            .querySelector<HTMLInputElement>(
+              '[data-testid="input-claim-search"]',
+            )
+            ?.focus();
+        }, 0);
+        return;
+      }
+    }
+
     trackFunnelEvent(FUNNEL_EVENTS.signupSubmitted, {
       page: "restaurant-signup",
       stage: "restaurant_onboarding_submit",
       businessType: selectedBusinessType,
       authMode,
       isAuthenticated,
+      intent: signupRouteIntent.intent,
+      source: signupRouteIntent.source,
     });
 
     try {
-      // Create restaurant first
-      const restaurant =
-        await createRestaurantMutation.mutateAsync(restaurantData);
-
-      // Normal flow continues to verification step
-      setCreatedRestaurant(restaurant);
-      dispatchOnboarding({ type: "GO_TO_VERIFICATION" });
+      await createRestaurantMutation.mutateAsync(restaurantData);
     } catch (error: any) {
       console.error("Error in restaurant signup:", error);
       // Error handling is already done in the mutation
@@ -980,22 +1180,11 @@ export default function RestaurantSignup() {
       if (!res.ok) {
         throw new Error(data.message || "Failed to send reminder");
       }
-      if (data?.hadEmail === false) {
-        toast({
-          title: "No email on file",
-          description: "Ask an admin to add an email, or claim it manually.",
-          variant: "destructive",
-        });
-        return;
-      }
       toast({
-        title: data?.emailSent
-          ? "Email sent to owner"
-          : "Email could not be sent",
-        description: data?.emailSent
-          ? "We sent them a link to finish setting up their account."
-          : "An admin should check Email Delivery in the dashboard.",
-        variant: data?.emailSent ? "default" : "destructive",
+        title: "Setup request received",
+        description:
+          data?.message ||
+          "If setup can be sent for this listing, the owner will receive it.",
       });
     } catch (error: any) {
       setClaimError(error.message || COPY.forms.restaurant.claimNoResults);
@@ -1047,25 +1236,64 @@ export default function RestaurantSignup() {
 
   const handleClaimSearch = async () => {
     const query = claimQuery.trim();
-    if (!query) {
+    const claimListingId = signupRouteIntent.isClaim
+      ? pendingClaimListingId
+      : "";
+    if (!query && !claimListingId) {
       setClaimResults([]);
       setClaimError("");
+      setClaimSearchCompleted(false);
       return;
     }
 
     setClaimLoading(true);
     setClaimError("");
+    setClaimSearchCompleted(false);
     try {
+      const params = new URLSearchParams();
+      if (query) params.set("q", query);
+      if (claimListingId) params.set("listingId", claimListingId);
       const res = await apiRequest(
         "GET",
-        `/api/truck-claims/search?q=${encodeURIComponent(query)}`,
+        `/api/truck-claims/search?${params.toString()}`,
       );
       const data = await res.json();
-      setClaimResults(Array.isArray(data) ? data : []);
-      if (!data || data.length === 0) {
-        setClaimError(COPY.forms.restaurant.claimNoResults);
+      const rows = Array.isArray(data) ? data : [];
+      setClaimResults(rows);
+      setClaimSearchCompleted(true);
+
+      if (claimListingId) {
+        // The route-carried exact ID is a one-time authenticated handoff.
+        // Manual recovery searches must use the owner's current query.
+        setPendingClaimListingId("");
+        const exactListing = rows.find(
+          (listing: any) => String(listing?.id || "") === claimListingId,
+        );
+        if (!exactListing || exactListing.canClaim === false) {
+          setClaimSelection(null);
+          setClaimError(COPY.forms.restaurant.claimUnavailable);
+          return;
+        }
+        setClaimSelection(exactListing);
+        setClaimResults([]);
+        setClaimQuery(exactListing.externalId || exactListing.name || query);
+        form.setValue("name", exactListing.name || "");
+        form.setValue("address", exactListing.address || "");
+        form.setValue("city", exactListing.city || "");
+        form.setValue("state", exactListing.state || "");
+        form.setValue("phone", exactListing.phone || "");
+        return;
+      }
+
+      if (rows.length === 0) {
+        setClaimError(
+          isMissingListingFlow
+            ? COPY.forms.restaurant.claimMissingNoResults
+            : COPY.forms.restaurant.claimNoResults,
+        );
       }
     } catch (error: any) {
+      setClaimSearchCompleted(false);
       setClaimError(error.message || COPY.forms.restaurant.claimNoResults);
     } finally {
       setClaimLoading(false);
@@ -1076,10 +1304,21 @@ export default function RestaurantSignup() {
     if (!claimAutoSearch) return;
     if (!isAuthenticated) return;
     if (selectedBusinessType !== "food_truck") return;
-    if (!claimQuery.trim()) return;
+    if (
+      !claimQuery.trim() &&
+      !pendingClaimListingId
+    ) {
+      return;
+    }
     setClaimAutoSearch(false);
     void handleClaimSearch();
-  }, [claimAutoSearch, isAuthenticated, selectedBusinessType, claimQuery]);
+  }, [
+    claimAutoSearch,
+    isAuthenticated,
+    selectedBusinessType,
+    claimQuery,
+    pendingClaimListingId,
+  ]);
 
   const applyClaimSelection = (listing: any) => {
     if (listing?.canClaim === false) {
@@ -1163,6 +1402,13 @@ export default function RestaurantSignup() {
   };
 
   const onSignup = (data: SignupFormData) => {
+    trackFunnelEvent(FUNNEL_EVENTS.signupSubmitted, {
+      page: "restaurant-signup",
+      stage: "owner_account_submit",
+      businessType: signupRouteIntent.businessType,
+      intent: signupRouteIntent.intent,
+      source: signupRouteIntent.source,
+    });
     signupMutation.mutate(data);
   };
 
@@ -1193,7 +1439,26 @@ export default function RestaurantSignup() {
       return;
     }
 
-    window.location.href = authUrl("/api/auth/google/restaurant");
+    trackFunnelEvent(FUNNEL_EVENTS.signupSubmitted, {
+      page: "restaurant-signup",
+      stage:
+        authMode === "signup"
+          ? "owner_account_google_submit"
+          : "owner_account_google_login",
+      authMode,
+      provider: "google",
+      businessType: signupRouteIntent.businessType,
+      intent: signupRouteIntent.intent,
+      source: signupRouteIntent.source,
+    });
+
+    const oauthParams = new URLSearchParams({
+      userType: isFoodTruckRoute ? "food_truck" : "restaurant_owner",
+      redirect: continuationPath,
+    });
+    window.location.href = authUrl(
+      `/api/auth/google/restaurant?${oauthParams.toString()}`,
+    );
   };
 
   if (isLoading) {
@@ -1207,35 +1472,40 @@ export default function RestaurantSignup() {
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-[var(--bg-layered)]">
+        <SEOHead
+          title={routePresentation.metaTitle}
+          description={routePresentation.metaDescription}
+          canonicalUrl={COPY.meta.canonicalUrl}
+        />
         <BackHeader
-          title={COPY.unauth.headerTitle}
+          title={routePresentation.headerTitle}
           fallbackHref="/"
-          icon={Store}
-          className="bg-[hsl(var(--background))/0.94] border-b border-[color:var(--border-subtle)] shadow-clean"
+          icon={isFoodTruckRoute ? Truck : Store}
+          className="bg-[hsl(var(--background))/0.94] border-b border-[color:var(--border-subtle)] shadow-clean lg:top-16"
         />
 
         <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
-          <div className="grid gap-6 lg:grid-cols-[1.1fr_1fr]">
+          <div className="grid items-start gap-6 lg:grid-cols-[1.1fr_1fr]">
             <Card className="border-[color:var(--border-subtle)] bg-[var(--bg-card)] shadow-clean-lg">
               <CardContent className="p-6 sm:p-8">
                 <div className="inline-flex items-center rounded-full border border-[color:var(--border-subtle)] bg-[var(--bg-surface-muted)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-[color:var(--text-secondary)]">
-                  {COPY.unauth.hero.badge}
+                  {unauthHero.badge}
                 </div>
                 <h1 className="mt-4 text-3xl font-black leading-tight text-[color:var(--text-primary)] sm:text-4xl">
-                  {COPY.unauth.hero.title}
+                  {unauthHero.title}
                 </h1>
                 <p className="mt-3 max-w-xl text-sm leading-relaxed text-[color:var(--text-secondary)] sm:text-base">
-                  {COPY.unauth.hero.subtitle}
+                  {unauthHero.subtitle}
                 </p>
                 <div className="mt-8 grid gap-3 sm:grid-cols-3">
                   <div className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-3 text-xs text-[color:var(--text-secondary)]">
-                    {COPY.benefits.compact.local.title}
+                    {routePresentation.benefits[0]}
                   </div>
                   <div className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-3 text-xs text-[color:var(--text-secondary)]">
-                    {COPY.benefits.compact.allDay.title}
+                    {routePresentation.benefits[1]}
                   </div>
                   <div className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-3 text-xs text-[color:var(--text-secondary)]">
-                    {COPY.benefits.compact.track.title}
+                    {routePresentation.benefits[2]}
                   </div>
                 </div>
               </CardContent>
@@ -1348,6 +1618,7 @@ export default function RestaurantSignup() {
                   <div className="mb-4 rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-4">
                     <div className="flex items-start gap-3">
                       <Checkbox
+                        id="restaurant-signup-terms"
                         checked={signupAcceptedTerms}
                         onCheckedChange={(checked) => {
                           signupForm.setValue("acceptTerms", checked === true, {
@@ -1360,6 +1631,7 @@ export default function RestaurantSignup() {
                         }}
                         className="mt-1"
                         data-testid="checkbox-signup-terms"
+                        aria-label="Agree to the Terms of Service and Privacy Policy"
                       />
                       <div className="space-y-1">
                         <p
@@ -1547,6 +1819,11 @@ export default function RestaurantSignup() {
                                 />
                                 <button
                                   type="button"
+                                  aria-label={
+                                    showPassword
+                                      ? "Hide password"
+                                      : "Show password"
+                                  }
                                   className="absolute right-3 top-1/2 -translate-y-1/2 text-[color:var(--text-secondary)]"
                                   onClick={() => setShowPassword(!showPassword)}
                                 >
@@ -1587,6 +1864,11 @@ export default function RestaurantSignup() {
                                 />
                                 <button
                                   type="button"
+                                  aria-label={
+                                    showConfirmPassword
+                                      ? "Hide confirmation password"
+                                      : "Show confirmation password"
+                                  }
                                   className="absolute right-3 top-1/2 -translate-y-1/2 text-[color:var(--text-secondary)]"
                                   onClick={() =>
                                     setShowConfirmPassword(!showConfirmPassword)
@@ -1612,8 +1894,8 @@ export default function RestaurantSignup() {
                         data-testid="button-signup-submit"
                       >
                         {signupMutation.isPending
-                          ? COPY.unauth.signupCta.buttonPending
-                          : COPY.unauth.signupCta.buttonIdle}
+                          ? routePresentation.signupPending
+                          : routePresentation.signupButton}
                       </Button>
                     </form>
                   </Form>
@@ -1671,6 +1953,11 @@ export default function RestaurantSignup() {
                                 />
                                 <button
                                   type="button"
+                                  aria-label={
+                                    showLoginPassword
+                                      ? "Hide password"
+                                      : "Show password"
+                                  }
                                   className="absolute right-3 top-1/2 -translate-y-1/2 text-[color:var(--text-secondary)]"
                                   onClick={() =>
                                     setShowLoginPassword(!showLoginPassword)
@@ -1696,8 +1983,8 @@ export default function RestaurantSignup() {
                         data-testid="button-login-submit"
                       >
                         {loginMutation.isPending
-                          ? COPY.unauth.loginCta.buttonPending
-                          : COPY.unauth.loginCta.buttonIdle}
+                          ? routePresentation.loginPending
+                          : routePresentation.loginButton}
                       </Button>
                     </form>
                   </Form>
@@ -1713,16 +2000,16 @@ export default function RestaurantSignup() {
   return (
     <div className="min-h-screen bg-[var(--bg-layered)]">
       <SEOHead
-        title={COPY.meta.title}
-        description={COPY.meta.description}
+        title={routePresentation.metaTitle}
+        description={routePresentation.metaDescription}
         keywords={COPY.meta.keywords}
         canonicalUrl={COPY.meta.canonicalUrl}
       />
       <BackHeader
-        title={COPY.main.backHeaderTitle}
+        title={isFoodTruckRoute ? routePresentation.headerTitle : COPY.main.backHeaderTitle}
         fallbackHref="/"
-        icon={Store}
-        className="bg-[hsl(var(--background))/0.94] border-b border-[color:var(--border-subtle)] shadow-clean"
+        icon={isFoodTruckRoute ? Truck : Store}
+        className="bg-[hsl(var(--background))/0.94] border-b border-[color:var(--border-subtle)] shadow-clean lg:top-16"
       />
 
       <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6">
@@ -1814,7 +2101,10 @@ export default function RestaurantSignup() {
                             // ignore
                           }
                           rotateOnboardingAttemptId();
-                          form.reset(BLANK_RESTAURANT_FORM_VALUES);
+                          form.reset({
+                            ...BLANK_RESTAURANT_FORM_VALUES,
+                            businessType: signupRouteIntent.businessType,
+                          });
                           setRestoredDraftAt(null);
                         }}
                         data-testid="button-clear-restored-draft"
@@ -1856,6 +2146,7 @@ export default function RestaurantSignup() {
                           <Select
                             onValueChange={field.onChange}
                             defaultValue={field.value}
+                            disabled={isFoodTruckRoute}
                           >
                             <FormControl>
                               <SelectTrigger data-testid="select-business-type">
@@ -1918,18 +2209,40 @@ export default function RestaurantSignup() {
                     />
                   )}
 
-                  {selectedBusinessType === "food_truck" && (
+                  {selectedBusinessType === "food_truck" &&
+                    isMissingListingFlow && (
+                      <div className="space-y-1 rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface-muted)] p-4">
+                        <h3 className="text-sm font-semibold text-[color:var(--text-primary)]">
+                          {COPY.forms.restaurant.claimMissingTitle}
+                        </h3>
+                        <p className="text-xs text-[color:var(--text-secondary)]">
+                          {COPY.forms.restaurant.claimMissingDescription}
+                        </p>
+                      </div>
+                    )}
+
+                  {selectedBusinessType === "food_truck" &&
+                    (signupRouteIntent.isClaim || isMissingListingFlow) && (
                     <div className="space-y-3 rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface-muted)] p-4">
                       <h3 className="text-sm font-semibold text-[color:var(--text-primary)]">
-                        {COPY.forms.restaurant.claimTitle}
+                        {isMissingListingFlow
+                          ? COPY.forms.restaurant.claimRegistryCheckTitle
+                          : COPY.forms.restaurant.claimTitle}
                       </h3>
                       <p className="text-xs text-[color:var(--text-secondary)]">
-                        {COPY.forms.restaurant.claimDescription}
+                        {isMissingListingFlow
+                          ? COPY.forms.restaurant.claimRegistryCheckDescription
+                          : COPY.forms.restaurant.claimDescription}
                       </p>
                       <div className="flex flex-col gap-2 sm:flex-row">
                         <Input
                           value={claimQuery}
-                          onChange={(e) => setClaimQuery(e.target.value)}
+                          onChange={(e) => {
+                            setClaimQuery(e.target.value);
+                            setClaimSelection(null);
+                            setClaimSearchCompleted(false);
+                            setPendingClaimListingId("");
+                          }}
                           placeholder={
                             COPY.forms.restaurant.claimSearchPlaceholder
                           }
@@ -1957,7 +2270,10 @@ export default function RestaurantSignup() {
                             type="button"
                             variant="ghost"
                             size="sm"
-                            onClick={() => setClaimSelection(null)}
+                            onClick={() => {
+                              setClaimSelection(null);
+                              setPendingClaimListingId("");
+                            }}
                             data-testid="button-claim-clear"
                           >
                             {COPY.forms.restaurant.claimClearButton}
@@ -1981,7 +2297,24 @@ export default function RestaurantSignup() {
                                   </p>
                                 )}
                               </div>
-                              {listing.canClaim !== false ? (
+                              {isMissingListingFlow ? (
+                                <a
+                                  href={buildRestaurantSignupPath({
+                                    businessType: "food_truck",
+                                    intent: "claim",
+                                    source:
+                                      signupRouteIntent.source ||
+                                      "restaurant-signup",
+                                    passthrough: {
+                                      q: listing.externalId || listing.name,
+                                      claimListingId: listing.id,
+                                    },
+                                  })}
+                                  className="inline-flex h-9 items-center justify-center rounded-md bg-[color:var(--action-primary)] px-3 text-xs font-semibold text-white"
+                                >
+                                  Claim this listing
+                                </a>
+                              ) : listing.canClaim !== false ? (
                                 <Button
                                   type="button"
                                   size="sm"
@@ -2030,9 +2363,21 @@ export default function RestaurantSignup() {
                         </div>
                       )}
                       {claimError && (
-                        <p className="text-xs text-[color:var(--text-secondary)]">
+                        <p
+                          className="text-xs text-[color:var(--text-secondary)]"
+                          role="alert"
+                          aria-live="polite"
+                        >
                           {claimError}
                         </p>
+                      )}
+                      {signupRouteIntent.isClaim && (
+                        <a
+                          href={createTruckProfilePath}
+                          className="inline-flex text-xs font-semibold text-[color:var(--action-primary)] underline"
+                        >
+                          {COPY.forms.restaurant.claimCreateInstead}
+                        </a>
                       )}
                     </div>
                   )}
@@ -2192,7 +2537,11 @@ export default function RestaurantSignup() {
                           </FormLabel>
                           <FormControl>
                             <textarea
-                              placeholder="Tell customers what makes your restaurant unique..."
+                              placeholder={
+                                selectedBusinessType === "food_truck"
+                                  ? "Tell customers what makes your food truck unique..."
+                                  : "Tell customers what makes your restaurant unique..."
+                              }
                               rows={4}
                               maxLength={500}
                               className="w-full rounded-md border border-[color:var(--border-strong)] bg-[color:var(--field-bg)] px-3 py-2 text-sm text-[color:var(--text-primary)]"
@@ -2342,6 +2691,9 @@ export default function RestaurantSignup() {
                     </p>
                     <p className="mt-1 text-xs font-semibold text-[color:var(--text-primary)]">
                       {COPY.pricing.formCard.paidLine}
+                    </p>
+                    <p className="mt-2 text-xs text-[color:var(--text-secondary)]">
+                      {COPY.pricing.formCard.transactionDisclosure}
                     </p>
                   </div>
 

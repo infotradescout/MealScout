@@ -90,6 +90,8 @@
     "test:merchant-delivery": "node --import tsx scripts/merchant-delivery-lifecycle.contract.test.ts",
     "test:merchant-delivery-safety": "node --import tsx scripts/mealscout-merchant-delivery-safety.integration.test.ts",
     "test:preview-sitemap-isolation": "node --import tsx scripts/mealscout-preview-sitemap-isolation.contract.test.ts",
+    "test:food-truck-signup-funnel": "node --import tsx scripts/food-truck-signup-funnel.contract.test.ts",
+    "test:food-truck-signup-funnel:db": "node --import tsx scripts/food-truck-signup-funnel.integration.test.ts",
     "test:profile-ownership": "node --import tsx scripts/mealscout-profile-ownership.contract.test.ts",
     "test:profile-ownership-safety": "node --import tsx scripts/mealscout-profile-ownership.integration.test.ts",
     "ordering:session-cookie": "node -e \"(async()=>{const base=(process.env.SMOKE_BASE_URL||'http://127.0.0.1:5000').replace(/\\/$/,'');const email=process.env.ORDERING_OWNER_EMAIL;const password=process.env.ORDERING_OWNER_PASSWORD;if(!email||!password){console.log('Set ORDERING_OWNER_EMAIL and ORDERING_OWNER_PASSWORD');process.exit(0);}const res=await fetch(base+'/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({email,password})});const body=await res.json().catch(()=>({}));if(!res.ok){console.error('Login failed',res.status,body);process.exit(1);}const cookies=(typeof res.headers.getSetCookie==='function'?res.headers.getSetCookie():(res.headers.get('set-cookie')?[res.headers.get('set-cookie')]:[])).map(v=>String(v||'').split(';')[0]).filter(Boolean).join('; ');console.log(cookies||'No cookie returned');})().catch(e=>{console.error(e);process.exit(1);})\"",
@@ -280,6 +282,7 @@
     "@types/node": "20.19.0",
     "@types/node-cron": "^3.0.11",
     "@types/passport": "^1.0.16",
+    "@types/pg": "8.11.6",
     "@types/react": "^18.3.11",
     "@types/react-dom": "^18.3.1",
     "@types/ws": "^8.5.13",
@@ -288,6 +291,7 @@
     "drizzle-kit": "^0.31.10",
     "eslint": "^8.57.1",
     "eslint-plugin-react-hooks": "^4.6.2",
+    "pg": "8.13.1",
     "tailwindcss": "^3.4.17"
   },
   "optionalDependencies": {

@@ -52,6 +52,9 @@ jobs:
       - name: Business Signup Attachment Contract
         run: npm run test:business-signup-attachment
 
+      - name: Food Truck Signup Funnel Contract
+        run: npm run test:food-truck-signup-funnel
+
       - name: Truck Availability Truth Contract
         run: npm run test:truck-availability-truth
 

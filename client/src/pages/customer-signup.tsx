@@ -43,10 +43,16 @@ import {
 } from "@/components/ui/input-otp";
 import {
   FUNNEL_EVENTS,
+  toSafeFunnelDestinationPath,
   trackFunnelEvent,
   trackFunnelEventOncePerSession,
 } from "@/utils/funnelTelemetry";
 import { getStoredAffiliateRef, setAffiliateRef } from "@/lib/share";
+import {
+  buildRestaurantSignupPath,
+  parseBusinessSignupRouteIntent,
+  type BusinessSignupIntent,
+} from "@shared/businessSignupIntent";
 
 const signupSchema = z
   .object({
@@ -111,15 +117,15 @@ const getBusinessProfileActionLabel = (businessSubType: BusinessSubType) =>
 const buildRestaurantSignupHref = (
   businessSubType: BusinessSubType,
   source = "customer-signup",
+  intent: BusinessSignupIntent = "create",
+  passthrough?: Record<string, string>,
 ) => {
-  const params = new URLSearchParams({
+  return buildRestaurantSignupPath({
     businessType: businessSubType,
     source,
+    intent,
+    passthrough,
   });
-  if (businessSubType === "food_truck") {
-    params.set("claim", "1");
-  }
-  return `/restaurant-signup?${params.toString()}`;
 };
 
 type SignupFlowOption = {
@@ -180,7 +186,7 @@ const signupFlowOptions: SignupFlowOption[] = [
     accountType: "business",
     businessSubType: "food_truck",
     label: "Food Truck",
-    description: "Claim your truck and get discovered around town.",
+    description: "Create your truck profile and get discovered around town.",
     href: buildRestaurantSignupHref("food_truck"),
     icon: Truck,
   },
@@ -248,7 +254,14 @@ export default function CustomerSignup() {
   const [otpSent, setOtpSent] = useState(false);
   const requirePhoneVerification = false;
 
-  const searchParams = new URLSearchParams(window.location.search);
+  const searchParams = useMemo(
+    () => new URLSearchParams(window.location.search),
+    [],
+  );
+  const inboundBusinessIntent = useMemo(
+    () => parseBusinessSignupRouteIntent(searchParams),
+    [searchParams],
+  );
   const normalizedRole = normalizeSignupRole(searchParams.get("role"));
   const urlReferralTag = String(
     searchParams.get("ref") || extractCustomerSignupPathRef() || "",
@@ -294,7 +307,16 @@ export default function CustomerSignup() {
           : "/scout";
 
   const getBusinessRedirectPath = () => {
-    return buildRestaurantSignupHref(businessSubType, "post-verification");
+    const intent: BusinessSignupIntent =
+      businessSubType === "food_truck" && inboundBusinessIntent.isClaim
+        ? "claim"
+        : "create";
+    return buildRestaurantSignupHref(
+      businessSubType,
+      inboundBusinessIntent.source || "post-verification",
+      intent,
+      inboundBusinessIntent.passthrough,
+    );
   };
 
   const getRegistrationUserType = () =>
@@ -328,10 +350,25 @@ export default function CustomerSignup() {
     if (accountType !== "business") return;
     setLocation(
       preserveReferralHref(
-        buildRestaurantSignupHref(businessSubType, "customer-signup-redirect"),
+        buildRestaurantSignupHref(
+          businessSubType,
+          inboundBusinessIntent.source || "customer-signup-redirect",
+          businessSubType === "food_truck" && inboundBusinessIntent.isClaim
+            ? "claim"
+            : "create",
+          inboundBusinessIntent.passthrough,
+        ),
       ),
     );
-  }, [accountType, businessSubType, setLocation, urlReferralTag]);
+  }, [
+    accountType,
+    businessSubType,
+    inboundBusinessIntent.isClaim,
+    inboundBusinessIntent.passthrough,
+    inboundBusinessIntent.source,
+    setLocation,
+    urlReferralTag,
+  ]);
 
   const goToVerificationHandoff = (redirectPath: string) => {
     try {
@@ -556,7 +593,7 @@ export default function CustomerSignup() {
       trackFunnelEvent(FUNNEL_EVENTS.activationStarted, {
         page: "customer-signup",
         stage: "redirect_to_email_handoff",
-        redirectPath: redirectAfterLogin,
+        redirectPath: toSafeFunnelDestinationPath(redirectAfterLogin),
       });
       goToVerificationHandoff(redirectAfterLogin);
     },
@@ -591,19 +628,23 @@ export default function CustomerSignup() {
           payload?.message ||
           "We sent a verification link to your email. Verify it, then log in to continue.",
       });
-      trackFunnelEvent(FUNNEL_EVENTS.signupCompleted, {
-        page: "customer-signup",
-        accountType: "business",
-        businessSubType,
-        stage: "signup_success",
-      });
+      if (businessSubType !== "food_truck") {
+        trackFunnelEvent(FUNNEL_EVENTS.signupCompleted, {
+          page: "customer-signup",
+          accountType: "business",
+          businessSubType,
+          stage: "signup_success",
+        });
+      }
       const businessRedirect = getBusinessRedirectPath();
       trackFunnelEvent(FUNNEL_EVENTS.activationStarted, {
         page: "customer-signup",
         stage: "redirect_to_email_handoff",
-        redirectPath: businessRedirect,
+        redirectPath: toSafeFunnelDestinationPath(businessRedirect),
         accountType: "business",
         businessSubType,
+        intent: inboundBusinessIntent.intent,
+        source: inboundBusinessIntent.source,
       });
       goToVerificationHandoff(businessRedirect);
     },
@@ -644,7 +685,7 @@ export default function CustomerSignup() {
       trackFunnelEvent(FUNNEL_EVENTS.activationStarted, {
         page: "customer-signup",
         stage: "redirect_to_email_handoff",
-        redirectPath: "/supplier/dashboard",
+        redirectPath: toSafeFunnelDestinationPath("/supplier/dashboard"),
         accountType: "supplier",
       });
       goToVerificationHandoff("/supplier/dashboard");
@@ -1237,7 +1278,7 @@ export default function CustomerSignup() {
                     }`}
                     data-testid="button-business-type-food-truck"
                   >
-                    Food Truck (Claim)
+                    Food Truck
                   </button>
                   <button
                     type="button"
@@ -1278,9 +1319,9 @@ export default function CustomerSignup() {
                 </div>
                 {businessSubType === "food_truck" && (
                   <div className="mt-2 text-xs text-[color:var(--text-secondary)]">
-                    Create your account, then claim your truck from the registry
-                    list. We’ll keep it inactive and unverified until you submit
-                    verification.
+                    Create your account, then finish your truck profile. If you
+                    followed a claim link, we’ll keep that claim intent through
+                    email verification and sign-in.
                   </div>
                 )}
               </div>
