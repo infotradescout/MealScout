@@ -13,6 +13,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 export const DEPLOY_MIGRATION_FLOOR = 119;
+export const EMPTY_DATABASE_BOOTSTRAP_FLOOR = 0;
+export const EMPTY_DATABASE_BOOTSTRAP_KEY = "historical-0-through-118";
 export const DEPLOY_MIGRATION_LOCK_KEY = 2026081101;
 export const DEPLOY_MIGRATION_LOCK_TIMEOUT_MS = 120_000;
 
@@ -30,6 +32,20 @@ export type AppliedDeployMigration = {
   filename: string;
   migrationNumber: number;
   sha256: string;
+};
+
+export type DeployMigrationHooks = {
+  beforeBootstrapMigration?: (
+    migration: DeployMigration,
+    completedCount: number,
+  ) => void | Promise<void>;
+};
+
+type MigrationClient = {
+  query: (
+    queryText: string,
+    values?: any[],
+  ) => Promise<{ rows: any[]; rowCount?: number | null }>;
 };
 
 const sha256 = (value: string) =>
@@ -82,6 +98,56 @@ export function discoverDeployMigrations(
         ? left.filename.localeCompare(right.filename)
         : left.number - right.number,
     );
+}
+
+export function discoverBootstrapMigrations(
+  migrationsDirectory = path.resolve(__dirname, "../migrations"),
+): DeployMigration[] {
+  return discoverDeployMigrations(
+    migrationsDirectory,
+    EMPTY_DATABASE_BOOTSTRAP_FLOOR,
+  ).filter((migration) => migration.number < DEPLOY_MIGRATION_FLOOR);
+}
+
+export function resolveBootstrapAction(
+  userTableCount: number,
+  markerExists: boolean,
+): "initialize" | "resume" | "skip" {
+  if (!Number.isInteger(userTableCount) || userTableCount < 0) {
+    throw new Error("userTableCount must be a nonnegative integer");
+  }
+  if (userTableCount === 0) {
+    if (markerExists) {
+      throw new Error(
+        "Empty-database bootstrap marker cannot exist without a user table",
+      );
+    }
+    return "initialize";
+  }
+  return markerExists ? "resume" : "skip";
+}
+
+export function isBootstrapTransactionControlStatement(
+  statement: string,
+): boolean {
+  let remainder = statement.trimStart();
+  for (;;) {
+    if (remainder.startsWith("--")) {
+      const newline = remainder.search(/[\r\n]/);
+      remainder = newline < 0 ? "" : remainder.slice(newline + 1).trimStart();
+      continue;
+    }
+    if (remainder.startsWith("/*")) {
+      const closing = remainder.indexOf("*/", 2);
+      if (closing < 0) return false;
+      remainder = remainder.slice(closing + 2).trimStart();
+      continue;
+    }
+    break;
+  }
+  return /^(?:begin|commit)(?:\s+(?:work|transaction))?$/i.test(
+    remainder.trim(),
+  );
 }
 
 export function planDeployMigrations(
@@ -156,7 +222,170 @@ export function resolveMigrationDatabaseUrl(
   return parsed.toString();
 }
 
-export async function runDeployMigrations(): Promise<void> {
+async function countUserTables(client: MigrationClient): Promise<number> {
+  const result = await client.query(`
+    select count(*)::int as count
+    from pg_class relation
+    inner join pg_namespace namespace
+      on namespace.oid = relation.relnamespace
+    where relation.relkind in ('r', 'p')
+      and namespace.nspname <> 'information_schema'
+      and namespace.nspname !~ '^pg_'
+  `);
+  return Number(result.rows[0]?.count ?? 0);
+}
+
+async function bootstrapMarkerExists(client: MigrationClient): Promise<boolean> {
+  const result = await client.query(
+    "select to_regclass($1) is not null as exists",
+    ["public.mealscout_schema_bootstrap"],
+  );
+  return result.rows[0]?.exists === true;
+}
+
+async function initializeEmptyDatabaseBootstrap(
+  client: MigrationClient,
+): Promise<void> {
+  await client.query("begin");
+  try {
+    const userTableCount = await countUserTables(client);
+    if (userTableCount !== 0) {
+      throw new Error(
+        "Database became nonempty before bootstrap initialization; refusing historical replay",
+      );
+    }
+    await client.query(`
+      create table mealscout_schema_bootstrap (
+        bootstrap_key text primary key,
+        status text not null check (status in ('in_progress', 'complete')),
+        started_at timestamptz not null default now(),
+        completed_at timestamptz
+      )
+    `);
+    await client.query(`
+      create table mealscout_schema_bootstrap_migrations (
+        filename text primary key,
+        migration_number integer not null,
+        sha256 text not null,
+        execution_ms integer not null,
+        applied_at timestamptz not null default now()
+      )
+    `);
+    await client.query(
+      `insert into mealscout_schema_bootstrap (bootstrap_key, status)
+       values ($1, 'in_progress')`,
+      [EMPTY_DATABASE_BOOTSTRAP_KEY],
+    );
+    await client.query("commit");
+  } catch (error) {
+    await client.query("rollback").catch(() => undefined);
+    throw error;
+  }
+}
+
+async function runEmptyDatabaseBootstrap(
+  client: MigrationClient,
+  hooks: DeployMigrationHooks,
+): Promise<void> {
+  const stateResult = await client.query(
+    `select status
+     from mealscout_schema_bootstrap
+     where bootstrap_key = $1`,
+    [EMPTY_DATABASE_BOOTSTRAP_KEY],
+  );
+  if (stateResult.rows.length !== 1) {
+    throw new Error(
+      "Empty-database bootstrap marker is missing or ambiguous; refusing historical replay",
+    );
+  }
+  const status = String(stateResult.rows[0]?.status || "");
+  if (status !== "in_progress" && status !== "complete") {
+    throw new Error(`Unsupported empty-database bootstrap status: ${status}`);
+  }
+
+  const bootstrapMigrations = discoverBootstrapMigrations();
+  const appliedResult = await client.query(`
+    select
+      filename,
+      migration_number as "migrationNumber",
+      sha256
+    from mealscout_schema_bootstrap_migrations
+    order by migration_number, filename
+  `);
+  const pending = planDeployMigrations(
+    bootstrapMigrations,
+    appliedResult.rows as AppliedDeployMigration[],
+  );
+
+  if (status === "complete") {
+    if (pending.length > 0) {
+      throw new Error(
+        "Completed empty-database bootstrap has missing migration records",
+      );
+    }
+    console.log(
+      `Empty database bootstrap already complete (${bootstrapMigrations.length} verified)`,
+    );
+    return;
+  }
+
+  console.log(
+    `Empty database bootstrap ${appliedResult.rows.length === 0 ? "starting" : "resuming"} ` +
+      `(${pending.length} pending, ${appliedResult.rows.length} verified)`,
+  );
+  let completedCount = bootstrapMigrations.length - pending.length;
+  for (const migration of pending) {
+    await hooks.beforeBootstrapMigration?.(migration, completedCount);
+    const migrationSql = fs.readFileSync(migration.path, "utf8");
+    assertTransactionCompatibleMigration(migration, migrationSql);
+    const statements = splitSqlStatements(migrationSql).filter(
+      (statement) => !isBootstrapTransactionControlStatement(statement),
+    );
+    const startedAt = Date.now();
+
+    console.log(`Bootstrapping historical migration ${migration.filename}`);
+    await client.query("begin");
+    try {
+      for (const statement of statements) {
+        await client.query(statement);
+      }
+      await client.query(
+        `insert into mealscout_schema_bootstrap_migrations
+          (filename, migration_number, sha256, execution_ms)
+         values ($1, $2, $3, $4)`,
+        [
+          migration.filename,
+          migration.number,
+          migration.sha256,
+          Date.now() - startedAt,
+        ],
+      );
+      await client.query("commit");
+    } catch (error) {
+      await client.query("rollback").catch(() => undefined);
+      throw error;
+    }
+    completedCount += 1;
+  }
+
+  const completed = await client.query(
+    `update mealscout_schema_bootstrap
+     set status = 'complete', completed_at = now()
+     where bootstrap_key = $1 and status = 'in_progress'
+     returning bootstrap_key`,
+    [EMPTY_DATABASE_BOOTSTRAP_KEY],
+  );
+  if (completed.rows.length !== 1) {
+    throw new Error("Empty-database bootstrap completion marker update failed");
+  }
+  console.log(
+    `Empty database bootstrap PASS (${bootstrapMigrations.length} verified)`,
+  );
+}
+
+export async function runDeployMigrations(
+  hooks: DeployMigrationHooks = {},
+): Promise<void> {
   const pool = new Pool({
     connectionString: resolveMigrationDatabaseUrl(),
     max: 1,
@@ -174,6 +403,23 @@ export async function runDeployMigrations(): Promise<void> {
     ]);
     lockAcquired = true;
     await client.query("select set_config('statement_timeout', '0', false)");
+
+    const userTableCount = await countUserTables(client);
+    const markerExists = await bootstrapMarkerExists(client);
+    const bootstrapAction = resolveBootstrapAction(
+      userTableCount,
+      markerExists,
+    );
+    if (bootstrapAction === "initialize") {
+      await initializeEmptyDatabaseBootstrap(client);
+      await runEmptyDatabaseBootstrap(client, hooks);
+    } else if (bootstrapAction === "resume") {
+      await runEmptyDatabaseBootstrap(client, hooks);
+    } else {
+      console.log(
+        `Nonempty database without bootstrap marker; preserving deploy migration floor ${DEPLOY_MIGRATION_FLOOR}`,
+      );
+    }
 
     await client.query(`
       create table if not exists mealscout_release_migrations (

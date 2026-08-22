@@ -5,10 +5,13 @@ import {
   DEPLOY_MIGRATION_FLOOR,
   DEPLOY_MIGRATION_LOCK_TIMEOUT_MS,
   assertTransactionCompatibleMigration,
+  discoverBootstrapMigrations,
   discoverDeployMigrations,
+  isBootstrapTransactionControlStatement,
   migrationFingerprints,
   normalizeMigrationSqlForFingerprint,
   planDeployMigrations,
+  resolveBootstrapAction,
   resolveMigrationDatabaseUrl,
 } from "./runDeployMigrations";
 
@@ -31,16 +34,63 @@ assert.deepEqual(
 );
 
 const migrations = discoverDeployMigrations();
-assert.ok(migrations.length >= 4, "release migration set must include 119-122");
+assert.ok(migrations.length >= 6, "release migration set must include 119-124");
 assert.equal(migrations[0]?.number, DEPLOY_MIGRATION_FLOOR);
 assert.deepEqual(
-  migrations.slice(0, 4).map((migration) => migration.number),
-  [119, 120, 121, 122],
+  migrations.slice(0, 6).map((migration) => migration.number),
+  [119, 120, 121, 122, 123, 124],
 );
 assert.equal(
   planDeployMigrations(migrations, []).length,
   migrations.length,
   "an empty ledger must apply every release migration",
+);
+
+const bootstrapMigrations = discoverBootstrapMigrations();
+assert.equal(bootstrapMigrations[0]?.number, 0);
+assert.equal(bootstrapMigrations.at(-1)?.number, 118);
+assert.ok(
+  bootstrapMigrations.every(
+    (migration) => migration.number < DEPLOY_MIGRATION_FLOOR,
+  ),
+  "empty-database bootstrap must never replay release-ledger migrations",
+);
+assert.ok(
+  bootstrapMigrations.some(
+    (migration) => migration.filename === "089_online_menus_and_ordering.sql",
+  ),
+  "empty-database bootstrap must create menu_items before migration 119",
+);
+assert.equal(resolveBootstrapAction(0, false), "initialize");
+assert.equal(resolveBootstrapAction(1, true), "resume");
+assert.equal(resolveBootstrapAction(1, false), "skip");
+assert.throws(() => resolveBootstrapAction(-1, false), /nonnegative integer/);
+assert.throws(
+  () => resolveBootstrapAction(0, true),
+  /marker cannot exist without a user table/,
+);
+assert.equal(
+  isBootstrapTransactionControlStatement(
+    "-- authored transaction boundary\nBEGIN",
+  ),
+  true,
+);
+assert.equal(isBootstrapTransactionControlStatement("COMMIT TRANSACTION"), true);
+assert.equal(
+  isBootstrapTransactionControlStatement("select 'begin' as label"),
+  false,
+);
+assert.throws(
+  () =>
+    planDeployMigrations(bootstrapMigrations, [
+      {
+        filename: bootstrapMigrations[0]!.filename,
+        migrationNumber: bootstrapMigrations[0]!.number,
+        sha256: "changed-bootstrap-history",
+      },
+    ]),
+  /changed after execution/,
+  "resumable bootstrap history must fail closed when an applied file changes",
 );
 
 const applied = migrations.map((migration) => ({
@@ -148,6 +198,38 @@ assert.throws(
 );
 
 const runnerSource = readFileSync("scripts/runDeployMigrations.ts", "utf8");
+const emptyDatabaseCheck = runnerSource.indexOf(
+  "const userTableCount = await countUserTables(client)",
+);
+const releaseLedgerCreate = runnerSource.indexOf(
+  "create table if not exists mealscout_release_migrations",
+);
+assert.ok(
+  emptyDatabaseCheck >= 0 &&
+    releaseLedgerCreate >= 0 &&
+    emptyDatabaseCheck < releaseLedgerCreate,
+  "the deploy runner must classify a truly empty database before creating its release ledger",
+);
+assert.match(
+  runnerSource,
+  /bootstrapAction === "initialize"[\s\S]*initializeEmptyDatabaseBootstrap\(client\)[\s\S]*runEmptyDatabaseBootstrap\(client, hooks\)/,
+  "a truly empty database must durably initialize before historical replay",
+);
+assert.match(
+  runnerSource,
+  /bootstrapAction === "resume"[\s\S]*runEmptyDatabaseBootstrap\(client, hooks\)/,
+  "only a database carrying the bootstrap marker may resume historical replay",
+);
+assert.match(
+  runnerSource,
+  /create table mealscout_schema_bootstrap[\s\S]*create table mealscout_schema_bootstrap_migrations[\s\S]*'in_progress'/,
+  "bootstrap state and its fingerprint ledger must initialize atomically",
+);
+assert.match(
+  runnerSource,
+  /client\.query\("begin"\)[\s\S]*insert into mealscout_schema_bootstrap_migrations[\s\S]*client\.query\("commit"\)/,
+  "each historical migration and its bootstrap fingerprint must commit atomically",
+);
 assert.match(
   runnerSource,
   /const client = await pool\.connect\(\)/,
@@ -180,6 +262,23 @@ assert.match(
 assert.equal(
   packageJson.scripts["migrate:deploy"],
   "tsx scripts/runDeployMigrations.ts",
+);
+
+const claimRequestMigration = readFileSync(
+  "migrations/124_truck_claim_requests.sql",
+  "utf8",
+);
+assert.match(
+  claimRequestMigration,
+  /CREATE TABLE IF NOT EXISTS truck_claim_requests/i,
+);
+assert.match(
+  claimRequestMigration,
+  /listing_id VARCHAR NOT NULL REFERENCES truck_import_listings\(id\)/i,
+);
+assert.match(
+  claimRequestMigration,
+  /user_id VARCHAR NOT NULL REFERENCES users\(id\)/i,
 );
 
 console.log("mealscout-render-migration-gate.contract: PASS");
