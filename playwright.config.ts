@@ -6,6 +6,7 @@ export default defineConfig({
   testDir: "./playwright",
   timeout: 60_000,
   retries: 0,
+  workers: process.env.CI ? 1 : undefined,
   webServer: process.env.FRONTEND_URL
     ? undefined
     : {
