@@ -63,6 +63,7 @@ import {
 } from "../services/confirmedEventTrucks";
 import { isPublicDiscoveryEligibleEntity } from "@shared/publicDiscoveryIntegrity";
 import { resolvePublicProfileVisibility } from "../publicProfiles/publicProfileUtils";
+import { resolvePublicCanonicalOrigin } from "../seo/publicCanonicalOrigin";
 
 const normalizeParkingStatus = (value: unknown) =>
   String(value ?? "")
@@ -1209,9 +1210,10 @@ export function registerEventRoutes(
           .replace(/(^-|-$)+/g, "")
           .slice(0, 80);
 
-      const baseUrl = String(
-        process.env.PUBLIC_BASE_URL || "https://www.mealscout.us",
-      ).replace(/\/+$/, "");
+      const baseUrl = resolvePublicCanonicalOrigin({
+        publicBaseUrl: process.env.PUBLIC_BASE_URL,
+        serviceUrl: process.env.SERVICE_URL,
+      });
 
       const title =
         row.name ||
