@@ -26,9 +26,49 @@ import { buildSignInContinuationUrl } from "../server/utils/signInContinuation";
 
 const read = (path: string) => readFileSync(path, "utf8").replace(/\r\n/g, "\n");
 
+type VercelRoute = {
+  source?: string;
+  destination?: string;
+  src?: string;
+  dest?: string;
+  has?: Array<{ type?: string; key?: string; value?: string }>;
+};
+
+const crawlerUserAgentPattern =
+  ".*([Bb][Oo][Tt]|[Cc][Rr][Aa][Ww][Ll][Ee][Rr]|[Ss][Pp][Ii][Dd][Ee][Rr]|[Ss][Ll][Uu][Rr][Pp]|[Cc][Hh][Aa][Tt][Gg][Pp][Tt]-[Uu][Ss][Ee][Rr]|[Aa][Nn][Tt][Hh][Rr][Oo][Pp][Ii][Cc]-[Aa][Ii]|[Cc][Oo][Hh][Ee][Rr][Ee]-[Aa][Ii]).*";
+const crawlerUserAgentCondition = {
+  type: "header",
+  key: "user-agent",
+  value: crawlerUserAgentPattern,
+};
+const crawlerUserAgentMatcher = new RegExp(crawlerUserAgentPattern);
+const crawlerUserAgents = [
+  "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
+  "ExampleCrawler/1.0",
+  "ExampleSpider/1.0",
+  "Yahoo! Slurp",
+  "ChatGPT-User/1.0",
+  "Anthropic-AI/1.0",
+  "Cohere-AI/1.0",
+];
+const chromeUserAgent =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36";
+
+for (const crawlerUserAgent of crawlerUserAgents) {
+  assert(
+    crawlerUserAgentMatcher.test(crawlerUserAgent),
+    `Crawler user agent must match acquisition proxy condition: ${crawlerUserAgent}`,
+  );
+}
+assert.equal(
+  crawlerUserAgentMatcher.test(chromeUserAgent),
+  false,
+  "Ordinary Chrome must fall through to the Vercel SPA.",
+);
+
 const vercelConfig = JSON.parse(read("vercel.json")) as {
-  rewrites: Array<{ source?: string; destination?: string }>;
-  routes: Array<{ src?: string; dest?: string }>;
+  rewrites: VercelRoute[];
+  routes: VercelRoute[];
 };
 const acquisitionPaths = ["/for-food-trucks", "/for-restaurants"] as const;
 const rewriteFallbackIndex = vercelConfig.rewrites.findIndex(
@@ -42,14 +82,32 @@ assert(rewriteFallbackIndex >= 0, "Vercel rewrites must retain the SPA fallback.
 assert(routeFallbackIndex >= 0, "Vercel routes must retain the SPA fallback.");
 for (const acquisitionPath of acquisitionPaths) {
   const renderDestination = `https://mealscout.onrender.com${acquisitionPath}`;
-  const rewriteIndex = vercelConfig.rewrites.findIndex(
-    (route) =>
-      route.source === acquisitionPath &&
-      route.destination === renderDestination,
+  const matchingRewrites = vercelConfig.rewrites.filter(
+    (route) => route.source === acquisitionPath,
   );
-  const routeIndex = vercelConfig.routes.findIndex(
-    (route) => route.src === acquisitionPath && route.dest === renderDestination,
+  const matchingRoutes = vercelConfig.routes.filter(
+    (route) => route.src === acquisitionPath,
   );
+  assert.equal(
+    matchingRewrites.length,
+    1,
+    `${acquisitionPath} must have exactly one rewrite.`,
+  );
+  assert.equal(
+    matchingRoutes.length,
+    1,
+    `${acquisitionPath} must have exactly one route.`,
+  );
+
+  const rewrite = matchingRewrites[0];
+  const route = matchingRoutes[0];
+  assert.equal(rewrite.destination, renderDestination);
+  assert.equal(route.dest, renderDestination);
+  assert.deepEqual(rewrite.has, [crawlerUserAgentCondition]);
+  assert.deepEqual(route.has, [crawlerUserAgentCondition]);
+
+  const rewriteIndex = vercelConfig.rewrites.indexOf(rewrite);
+  const routeIndex = vercelConfig.routes.indexOf(route);
 
   assert(
     rewriteIndex >= 0 && rewriteIndex < rewriteFallbackIndex,
