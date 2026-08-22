@@ -93,6 +93,7 @@ import {
 } from "../services/publicSeoLandingData";
 import { buildAnonymousPublicEventFeed } from "./eventRoutes";
 import { collectPublicSeoRowsInBatches } from "../services/publicSeoBatchTraversal";
+import { resolvePublicCanonicalOrigin } from "../seo/publicCanonicalOrigin";
 
 const toSlug = (value: string | null | undefined) =>
   String(value || "")
@@ -103,11 +104,10 @@ const toSlug = (value: string | null | undefined) =>
     .slice(0, 80);
 
 const resolvePublicBaseUrl = () =>
-  String(
-    process.env.PUBLIC_BASE_URL ||
-      process.env.SERVICE_URL ||
-      "https://www.mealscout.us",
-  ).replace(/\/+$/, "");
+  resolvePublicCanonicalOrigin({
+    publicBaseUrl: process.env.PUBLIC_BASE_URL,
+    serviceUrl: process.env.SERVICE_URL,
+  });
 
 const friendlyLocationTypeLabel = (value: string | null | undefined) => {
   const normalized = String(value || "").trim().toLowerCase();

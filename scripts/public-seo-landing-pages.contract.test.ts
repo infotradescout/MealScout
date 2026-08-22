@@ -46,6 +46,14 @@ const publicDiscoveryRoutes = readFileSync(
   "server/routes/publicDiscoveryRoutes.ts",
   "utf8",
 );
+const publicCanonicalOrigin = readFileSync(
+  "server/seo/publicCanonicalOrigin.ts",
+  "utf8",
+);
+const publicSeoIntegration = readFileSync(
+  "scripts/public-seo-landing.integration.test.ts",
+  "utf8",
+);
 const dealDiscoveryRoutes = readFileSync(
   "server/routes/dealDiscoveryRoutes.ts",
   "utf8",
@@ -800,15 +808,94 @@ if (
     "Legacy /deals/:city must preserve bounded attribution through a fixed 308 canonical redirect while excluding /deals/featured",
   );
 }
-const legacyDealVercelRedirect = vercel.redirects.find(
-  (entry: any) => entry.source === "/deals/:city((?!featured$)[^/]+)",
+const legacyDealRewriteIndex = vercel.rewrites.findIndex(
+  (entry: any) => entry.source === "/deals/:city",
+);
+const featuredDealRewriteIndex = vercel.rewrites.findIndex(
+  (entry: any) => entry.source === "/deals/featured",
+);
+const publicEventsRewriteIndex = vercel.rewrites.findIndex(
+  (entry: any) => entry.source === "/events/public",
+);
+const broadProfileRewriteIndex = vercel.rewrites.findIndex(
+  (entry: any) => String(entry.source || "").startsWith("/:kind("),
+);
+const legacyDealRouteIndex = vercel.routes.findIndex(
+  (entry: any) => entry.src === "/deals/([^/]+)",
+);
+const featuredDealRouteIndex = vercel.routes.findIndex(
+  (entry: any) => entry.src === "/deals/featured",
+);
+const publicEventsRouteIndex = vercel.routes.findIndex(
+  (entry: any) => entry.src === "/events/public",
+);
+const broadProfileRouteIndex = vercel.routes.findIndex(
+  (entry: any) =>
+    String(entry.src || "").startsWith("/(restaurant|truck|bar|chef|location|event|events|deal|"),
 );
 if (
-  legacyDealVercelRedirect?.destination !== "/deals-today/:city" ||
-  legacyDealVercelRedirect?.permanent !== true
+  featuredDealRewriteIndex < 0 ||
+  legacyDealRewriteIndex < 0 ||
+  featuredDealRewriteIndex > legacyDealRewriteIndex ||
+  vercel.rewrites[featuredDealRewriteIndex]?.destination !== "/index.html" ||
+  vercel.rewrites[legacyDealRewriteIndex]?.destination !==
+    "https://mealscout.onrender.com/deals/:city" ||
+  String(vercel.rewrites[legacyDealRewriteIndex]?.destination).includes("?") ||
+  featuredDealRouteIndex < 0 ||
+  legacyDealRouteIndex < 0 ||
+  featuredDealRouteIndex > legacyDealRouteIndex ||
+  vercel.routes[featuredDealRouteIndex]?.dest !== "/index.html" ||
+  vercel.routes[legacyDealRouteIndex]?.dest !==
+    "https://mealscout.onrender.com/deals/$1" ||
+  String(vercel.routes[legacyDealRouteIndex]?.dest).includes("?") ||
+  vercel.redirects.some((entry: any) =>
+    String(entry.source || "").startsWith("/deals/"),
+  )
 ) {
   throw new Error(
-    "Vercel must preserve query parameters through the fixed legacy city-deals redirect and exclude /deals/featured",
+    "Vercel must keep /deals/featured on its SPA and pass query-preserving /deals/:city requests to Render's bounded 308 in both routing forms",
+  );
+}
+if (
+  publicEventsRewriteIndex < 0 ||
+  publicEventsRewriteIndex > broadProfileRewriteIndex ||
+  vercel.rewrites[publicEventsRewriteIndex]?.destination !== "/index.html" ||
+  !String(vercel.rewrites[broadProfileRewriteIndex]?.source).includes("events") ||
+  !String(vercel.rewrites[broadProfileRewriteIndex]?.destination).startsWith(
+    "https://mealscout.onrender.com/",
+  ) ||
+  publicEventsRouteIndex < 0 ||
+  publicEventsRouteIndex > broadProfileRouteIndex ||
+  vercel.routes[publicEventsRouteIndex]?.dest !== "/index.html" ||
+  !String(vercel.routes[broadProfileRouteIndex]?.src).includes("events") ||
+  !String(vercel.routes[broadProfileRouteIndex]?.dest).startsWith(
+    "https://mealscout.onrender.com/",
+  )
+) {
+  throw new Error(
+    "Vercel must keep exact /events/public on the local SPA before the unchanged external event-detail proxy",
+  );
+}
+
+if (
+  !publicDiscoveryRoutes.includes('from "../seo/publicCanonicalOrigin"') ||
+  !publicDiscoveryRoutes.includes("resolvePublicCanonicalOrigin({") ||
+  !publicCanonicalOrigin.includes(
+    'MEALSCOUT_PUBLIC_CANONICAL_ORIGIN = "https://www.mealscout.us"',
+  ) ||
+  !publicCanonicalOrigin.includes('replace(/^www\\./, "") === "mealscout.us"') ||
+  !publicSeoIntegration.includes(
+    'process.env.PUBLIC_BASE_URL = "https://mealscout.us"',
+  ) ||
+  !publicSeoIntegration.includes(
+    'assert.equal(dedicatedPublicEvent.body.canonicalUrl, `https://www.mealscout.us${publicEventPath}`)',
+  ) ||
+  !publicSeoIntegration.includes(
+    'assert.equal(genericActiveDeal.body.canonicalUrl, `https://www.mealscout.us${activeDealPath}`)',
+  )
+) {
+  throw new Error(
+    "Public discovery APIs must normalize an apex environment to the same exact www canonical used by SSR and sitemaps",
   );
 }
 if (

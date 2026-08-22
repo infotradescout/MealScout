@@ -21,6 +21,11 @@ import {
 import { buildJsonLdScript } from "../server/seo/jsonLdScript";
 import { canExposeAnonymousEventDetail } from "../server/publicProfiles/publicEventDetailAccess";
 import {
+  MEALSCOUT_PUBLIC_CANONICAL_ORIGIN,
+  normalizePublicCanonicalOrigin,
+  resolvePublicCanonicalOrigin,
+} from "../server/seo/publicCanonicalOrigin";
+import {
   mapPublicSeoLandingPathToEndpoint,
   mapPublicSeoLandingSourcePageType,
 } from "../client/src/lib/publicSeoLandingRoute";
@@ -61,6 +66,41 @@ const makeRepository = (
   loadCuisine: async () => [],
   loadLocationsWithTrucks: async () => [],
   ...overrides,
+});
+
+test("public canonical origin normalizes the MealScout apex before API URLs are built", () => {
+  for (const candidate of [
+    "mealscout.us",
+    "https://mealscout.us",
+    "http://mealscout.us/",
+    "https://www.mealscout.us/path?ignored=1",
+  ]) {
+    assert.equal(
+      normalizePublicCanonicalOrigin(candidate),
+      MEALSCOUT_PUBLIC_CANONICAL_ORIGIN,
+    );
+  }
+  assert.equal(
+    resolvePublicCanonicalOrigin({
+      publicBaseUrl: "https://mealscout.us",
+      serviceUrl: "https://preview.invalid",
+    }),
+    MEALSCOUT_PUBLIC_CANONICAL_ORIGIN,
+  );
+  assert.equal(
+    resolvePublicCanonicalOrigin({ serviceUrl: "http://127.0.0.1:5000/app" }),
+    "http://127.0.0.1:5000",
+  );
+  assert.equal(
+    normalizePublicCanonicalOrigin("javascript:alert(1)"),
+    MEALSCOUT_PUBLIC_CANONICAL_ORIGIN,
+  );
+  for (const malformed of ["http:/mealscout.us", "https//mealscout.us"]) {
+    assert.equal(
+      normalizePublicCanonicalOrigin(malformed),
+      MEALSCOUT_PUBLIC_CANONICAL_ORIGIN,
+    );
+  }
 });
 
 test("browser route mapping keeps the specific truck-cuisine endpoint before city-only", () => {

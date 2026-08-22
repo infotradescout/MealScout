@@ -13,11 +13,6 @@
       ],
       "destination": "https://www.mealscout.us/$1",
       "permanent": true
-    },
-    {
-      "source": "/deals/:city((?!featured$)[^/]+)",
-      "destination": "/deals-today/:city",
-      "permanent": true
     }
   ],
   "rewrites": [
@@ -118,6 +113,18 @@
     {
       "source": "/cuisine/:cuisine",
       "destination": "https://mealscout.onrender.com/cuisine/:cuisine"
+    },
+    {
+      "source": "/deals/featured",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/deals/:city",
+      "destination": "https://mealscout.onrender.com/deals/:city"
+    },
+    {
+      "source": "/events/public",
+      "destination": "/index.html"
     },
     {
       "source": "/api/(.*)",
@@ -272,6 +279,18 @@
     {
       "src": "/cuisine/([^/]+)",
       "dest": "https://mealscout.onrender.com/cuisine/$1"
+    },
+    {
+      "src": "/deals/featured",
+      "dest": "/index.html"
+    },
+    {
+      "src": "/deals/([^/]+)",
+      "dest": "https://mealscout.onrender.com/deals/$1"
+    },
+    {
+      "src": "/events/public",
+      "dest": "/index.html"
     },
     {
       "src": "/api/(.*)",

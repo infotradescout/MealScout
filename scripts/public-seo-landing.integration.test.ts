@@ -95,7 +95,7 @@ async function run() {
   const { databaseUrl, parsed } = requireDisposableLocalDatabase();
 
   process.env.NODE_ENV = "test";
-  process.env.PUBLIC_BASE_URL = "https://www.mealscout.us";
+  process.env.PUBLIC_BASE_URL = "https://mealscout.us";
   process.env.EMAIL_NOTIFICATIONS_MODE = "off";
   process.env.VAC_AUTO_VERIFY_ENABLED = "false";
   process.env.MERLIN_OR_ENABLED = "false";
@@ -2958,6 +2958,12 @@ async function run() {
     );
     const rootSitemap = await get("/sitemap.xml");
     assert.equal(rootSitemap.response.status, 200);
+    assert.match(rootSitemap.text, /<loc>https:\/\/www\.mealscout\.us\//);
+    assert.equal(
+      rootSitemap.text.includes("<loc>https://mealscout.us/"),
+      false,
+      "an apex PUBLIC_BASE_URL must not split API, SSR, and sitemap canonical hosts",
+    );
     assert.equal(
       rootSitemap.response.headers.get("x-mealscout-sitemap-membership"),
       "pd-v1-indexability-2",
