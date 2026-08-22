@@ -12,9 +12,163 @@ import {
 import { toPublicMapLocationsPayload } from "../server/publicProfiles/toPublicMapLocations";
 import { toPublicParkingPassListingArray } from "../server/publicProfiles/toPublicParkingPassListing";
 import { toPublicRestaurantReviewArray } from "../server/publicProfiles/toPublicRestaurantReview";
-import { canExposeAnonymousEventDetail } from "../server/publicProfiles/publicEventDetailAccess";
+import {
+  canExposeAnonymousEventDetail,
+  canExposeAnonymousEventFeedItem,
+  canExposeAnonymousEventListItem,
+} from "../server/publicProfiles/publicEventDetailAccess";
+import {
+  toPublicLocationProfile,
+  toPublicRestaurantProfile,
+  toPublicSupplierProfile,
+} from "../server/publicProfiles";
+import {
+  buildPublicCta,
+  normalizePublicUrl,
+} from "../server/publicProfiles/publicProfileUtils";
 
 // --- Runtime: forbidden fields must never survive the DTO ---------------
+
+const unsafePublicUrls = [
+  "javascript:alert(1)",
+  "data:text/html,unsafe",
+  "//attacker.example.invalid/path",
+  "https://user:password@attacker.example.invalid/path",
+];
+for (const unsafeUrl of unsafePublicUrls) {
+  assert.equal(normalizePublicUrl(unsafeUrl), null);
+  assert.equal(
+    buildPublicCta({ label: "Unsafe", href: unsafeUrl, type: "external" }),
+    null,
+  );
+}
+assert.equal(
+  normalizePublicUrl("merchant.example.invalid/menu"),
+  "https://merchant.example.invalid/menu",
+);
+assert.equal(
+  normalizePublicUrl("/menu/public", { allowInternalPath: true }),
+  "/menu/public",
+);
+assert.equal(normalizePublicUrl("/menu/public"), null);
+
+const unsafeRestaurantProfile = toPublicRestaurantProfile({
+  row: {
+    id: "unsafe-restaurant-url",
+    name: "Unsafe URL Kitchen",
+    businessType: "restaurant",
+    websiteUrl: unsafePublicUrls[0],
+    instagramUrl: unsafePublicUrls[1],
+    facebookPageUrl: unsafePublicUrls[2],
+    xUrl: unsafePublicUrls[3],
+    menuUrl: unsafePublicUrls[0],
+    menuImageUrl: unsafePublicUrls[1],
+    menuPdfUrl: unsafePublicUrls[2],
+    dealsItems: [
+      {
+        id: "unsafe-deal-url",
+        title: "Unsafe deal",
+        actionHref: unsafePublicUrls[0],
+        actionType: "website",
+      },
+    ],
+    eventsItems: [
+      {
+        id: "unsafe-event-url",
+        title: "Unsafe event",
+        actionHref: unsafePublicUrls[2],
+        actionType: "website",
+      },
+    ],
+  },
+  baseUrl: "https://www.mealscout.us",
+});
+const unsafeLocationProfile = toPublicLocationProfile({
+  row: {
+    id: "unsafe-location-url",
+    businessName: "Unsafe URL Location",
+    websiteUrl: unsafePublicUrls[0],
+    instagramUrl: unsafePublicUrls[1],
+    facebookPageUrl: unsafePublicUrls[2],
+    xUrl: unsafePublicUrls[3],
+    spotImageUrl: unsafePublicUrls[1],
+  },
+  baseUrl: "https://www.mealscout.us",
+});
+const unsafeSupplierProfile = toPublicSupplierProfile({
+  row: {
+    id: "unsafe-supplier-url",
+    businessName: "Unsafe URL Supplier",
+    websiteUrl: unsafePublicUrls[3],
+    logoUrl: unsafePublicUrls[2],
+  },
+  activeProductCount: 0,
+  baseUrl: "https://www.mealscout.us",
+});
+for (const projection of [
+  unsafeRestaurantProfile,
+  unsafeLocationProfile,
+  unsafeSupplierProfile,
+]) {
+  const serialized = JSON.stringify(projection);
+  for (const sentinel of ["javascript:", "data:", "//attacker", "user:password@"]) {
+    assert.equal(
+      serialized.includes(sentinel),
+      false,
+      `public projection leaked unsafe URL sentinel ${sentinel}`,
+    );
+  }
+}
+assert.deepEqual(unsafeRestaurantProfile.deals.items, []);
+assert.deepEqual(unsafeRestaurantProfile.events.items, []);
+
+for (const unsafeUrl of unsafePublicUrls) {
+  const unsafeEventMedia = toPublicEventListing({
+    id: "unsafe-event-media",
+    host: {
+      id: "unsafe-event-host",
+      businessName: "Unsafe Event Host",
+      spotImageUrl: unsafeUrl,
+    },
+    trucks: [
+      {
+        id: "unsafe-event-truck",
+        name: "Unsafe Event Truck",
+        logoUrl: unsafeUrl,
+        coverImageUrl: unsafeUrl,
+      },
+    ],
+  }) as any;
+  assert.equal(unsafeEventMedia.host.spotImageUrl, null);
+  assert.equal(unsafeEventMedia.trucks[0].logoUrl, null);
+  assert.equal(unsafeEventMedia.trucks[0].coverImageUrl, null);
+}
+
+const safeEventMedia = toPublicEventListing({
+  id: "safe-event-media",
+  host: {
+    id: "safe-event-host",
+    businessName: "Safe Event Host",
+    spotImageUrl: "/uploads/event-host.jpg",
+  },
+  trucks: [
+    {
+      id: "safe-event-truck",
+      name: "Safe Event Truck",
+      logoUrl: "https://cdn.example.invalid/truck-logo.jpg",
+      coverImageUrl: "merchant.example.invalid/truck-cover.jpg",
+    },
+  ],
+}) as any;
+assert.equal(safeEventMedia.host.spotImageUrl, "/uploads/event-host.jpg");
+assert.equal(
+  safeEventMedia.trucks[0].logoUrl,
+  "https://cdn.example.invalid/truck-logo.jpg",
+);
+assert.equal(
+  safeEventMedia.trucks[0].coverImageUrl,
+  "https://merchant.example.invalid/truck-cover.jpg",
+);
 
 const forbiddenRestaurantKeys = [
   "ownerId",
@@ -96,6 +250,19 @@ const forbiddenEventKeys = [
   "stripePriceId",
   "unbookedNotificationSentAt",
 ];
+const forbiddenAnonymousEventFeedPricingKeys = [
+  "hostPriceCents",
+  "breakfastPriceCents",
+  "lunchPriceCents",
+  "dinnerPriceCents",
+  "dailyPriceCents",
+  "weeklyPriceCents",
+  "monthlyPriceCents",
+];
+const forbiddenAnonymousEventFeedKeys = [
+  ...forbiddenEventKeys,
+  ...forbiddenAnonymousEventFeedPricingKeys,
+];
 const forbiddenHostKeys = [
   "userId",
   "contactPhone",
@@ -146,7 +313,7 @@ const rawEvent: Record<string, unknown> = {
     defaultHostPriceCents: 1234,
   },
 };
-for (const key of forbiddenEventKeys) {
+for (const key of forbiddenAnonymousEventFeedKeys) {
   rawEvent[key] = `SECRET_${key}`;
 }
 for (const key of forbiddenHostKeys) {
@@ -154,7 +321,7 @@ for (const key of forbiddenHostKeys) {
 }
 
 const publicEvent = toPublicEventListing(rawEvent);
-for (const key of forbiddenEventKeys) {
+for (const key of forbiddenAnonymousEventFeedKeys) {
   assert.equal(
     Object.prototype.hasOwnProperty.call(publicEvent, key),
     false,
@@ -171,7 +338,6 @@ for (const key of forbiddenHostKeys) {
   );
 }
 assert.equal(publicHost.businessName, "Downtown Taproom");
-assert.equal(publicEvent.hostPriceCents, 5000);
 assert.deepEqual(
   publicEvent.series,
   { id: "series-1", name: "Friday series" },
@@ -223,6 +389,7 @@ assert.deepEqual(toPublicEventListingArray([null, [], "invalid"]), [
 
 assert.equal(
   canExposeAnonymousEventDetail({
+    eventType: "event",
     requiresPayment: false,
     status: "open",
     slotIsPublic: true,
@@ -231,14 +398,88 @@ assert.equal(
   "a current confirmed free event may have an anonymous detail page",
 );
 for (const blockedDetail of [
-  { requiresPayment: true, status: "open", slotIsPublic: true },
-  { requiresPayment: false, status: "open", slotIsPublic: false },
-  { requiresPayment: false, status: "draft", slotIsPublic: true },
+  {
+    eventType: "event",
+    requiresPayment: true,
+    status: "open",
+    slotIsPublic: true,
+  },
+  {
+    eventType: "event",
+    requiresPayment: false,
+    status: "open",
+    slotIsPublic: false,
+  },
+  {
+    eventType: "event",
+    requiresPayment: false,
+    status: "draft",
+    slotIsPublic: true,
+  },
+  {
+    eventType: "private_event",
+    requiresPayment: false,
+    status: "open",
+    slotIsPublic: true,
+  },
 ]) {
   assert.equal(
     canExposeAnonymousEventDetail(blockedDetail),
     false,
     "paid, stale/unconfirmed, and draft event details must stay private",
+  );
+}
+
+const validAnonymousListEvent = {
+  eventType: "event",
+  requiresPayment: false,
+  status: "open",
+  eventName: "Harbor Lunch",
+  hostName: "Harbor Brewery",
+};
+assert.equal(
+  canExposeAnonymousEventListItem(validAnonymousListEvent),
+  true,
+  "a valid free public event and host must remain in anonymous list feeds",
+);
+for (const blockedListEvent of [
+  { ...validAnonymousListEvent, eventType: "private_event" },
+  { ...validAnonymousListEvent, requiresPayment: true },
+  { ...validAnonymousListEvent, status: "draft" },
+  { ...validAnonymousListEvent, eventName: "asdfasdf" },
+  { ...validAnonymousListEvent, hostName: "Test Truck 1728000000000" },
+  { ...validAnonymousListEvent, eventName: "" },
+  { ...validAnonymousListEvent, hostName: "" },
+]) {
+  assert.equal(
+    canExposeAnonymousEventListItem(blockedListEvent),
+    false,
+    "anonymous lists must reject private, paid, inactive, malformed, or synthetic event/host rows",
+  );
+}
+
+const validAnonymousFeedEvent = {
+  ...validAnonymousListEvent,
+  slotIsPublic: true,
+  hasPublicConfirmedTruck: true,
+  ended: false,
+};
+assert.equal(
+  canExposeAnonymousEventFeedItem(validAnonymousFeedEvent),
+  true,
+  "a current public event with a public confirmed truck may enter anonymous feeds",
+);
+for (const blockedFeedEvent of [
+  { ...validAnonymousFeedEvent, slotIsPublic: false },
+  { ...validAnonymousFeedEvent, hasPublicConfirmedTruck: false },
+  { ...validAnonymousFeedEvent, ended: true },
+  { ...validAnonymousFeedEvent, eventType: "private_event" },
+  { ...validAnonymousFeedEvent, eventName: "asdfasdf" },
+]) {
+  assert.equal(
+    canExposeAnonymousEventFeedItem(blockedFeedEvent),
+    false,
+    "anonymous feeds must reject stale, unconfirmed, ended, private, and synthetic events",
   );
 }
 
@@ -542,14 +783,47 @@ assert.match(
   "eventRoutes.ts must import the public event DTO",
 );
 assert.match(
-  sliceAfter(eventRoutesSource, 'app.get("/api/events/public"', 900),
-  /attachConfirmedPublicEventTrucks[\s\S]*toPublicEventListingArray/,
-  "GET /api/events/public must canonicalize truck bookings before returning sanitized event DTOs",
+  sliceAfter(eventRoutesSource, 'app.get("/api/events/public"', 1400),
+  /buildAnonymousPublicEventFeed\(\s*upcomingEvents,\s*publicEventNow\(\),?\s*\)[\s\S]*toPublicEventListingArray[\s\S]*sendPublicEventFeedUnavailable/,
+  "GET /api/events/public must gate public confirmed slots and fail terminally before returning sanitized event DTOs",
 );
 assert.match(
-  sliceAfter(eventRoutesSource, 'app.get("/api/events/upcoming"', 900),
-  /attachConfirmedPublicEventTrucks[\s\S]*toPublicEventListingArray/,
-  "GET /api/events/upcoming must canonicalize truck bookings before returning sanitized event DTOs",
+  sliceAfter(eventRoutesSource, 'app.get("/api/events/upcoming"', 1400),
+  /buildAnonymousPublicEventFeed\(\s*upcomingEvents,\s*publicEventNow\(\),?\s*\)[\s\S]*toPublicEventListingArray[\s\S]*sendPublicEventFeedUnavailable/,
+  "GET /api/events/upcoming must gate public confirmed slots and fail terminally before returning sanitized event DTOs",
+);
+for (const snippet of [
+  "canExposeAnonymousEventFeedItem",
+  "filterPublicConfirmedEventTrucks",
+  "resolveCityTimeZone",
+  "buildSlotDateTimes",
+  "isSlotPublic",
+  'setHeader("Retry-After", "60")',
+  'setHeader("Cache-Control", "no-store")',
+  'setHeader("X-Robots-Tag", "noindex,follow")',
+]) {
+  assert.ok(
+    eventRoutesSource.includes(snippet),
+    `anonymous event feed parity missing: ${snippet}`,
+  );
+}
+const publicDiscoveryRoutesSource = readSource(
+  "server/routes/publicDiscoveryRoutes.ts",
+);
+const publicProfileEventPayload = sliceAfter(
+  publicDiscoveryRoutesSource,
+  "const buildPublicEventsPayload",
+  9000,
+);
+assert.match(
+  publicProfileEventPayload,
+  /requiresPayment: events\.requiresPayment/,
+  "public profile event payloads must select paid/private eligibility truth",
+);
+assert.match(
+  publicProfileEventPayload,
+  /canExposeAnonymousEventFeedItem\([\s\S]*eventName: row\.title[\s\S]*hostName: row\.hostName/,
+  "public host and restaurant profile event arrays must reuse anonymous list eligibility",
 );
 const authenticatedEventsRoute = sliceAfter(
   eventRoutesSource,
@@ -581,15 +855,20 @@ assert.match(
   /canExposeAnonymousEventDetail/,
   "public event detail must gate paid and non-public rows",
 );
-assert.match(
+assert.doesNotMatch(
   publicEventDetailRoute,
-  /!isAuthed[\s\S]*res\.status\(404\)/,
-  "public event detail must hide protected rows from anonymous callers",
+  /isAuthed/,
+  "authenticated identity must not bypass public event detail eligibility",
 );
 assert.match(
   publicEventDetailRoute,
-  /isAuthed \? "private, no-store" : "public, max-age=60"/,
-  "authenticated event detail must never enter a shared cache",
+  /canExposeAnonymousEventDetail\([\s\S]*res\.status\(404\)/,
+  "public event detail must hide protected rows from every caller",
+);
+assert.match(
+  publicEventDetailRoute,
+  /hostPriceCents: row\.hostPriceCents \?\? null/,
+  "eligible event detail must retain the consumer booking price",
 );
 assert.match(
   eventRoutesSource,

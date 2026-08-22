@@ -1,6 +1,9 @@
-import { and, asc, eq, inArray, isNotNull, or } from "drizzle-orm";
-import { eventBookings, restaurants } from "@shared/schema";
+import { and, asc, eq, inArray, isNotNull } from "drizzle-orm";
+import { eventBookings, restaurants, users } from "@shared/schema";
 import { db } from "../db";
+import { publicTruckClassificationWhere } from "../seo/publicTruckClassification";
+import { isPublicRestaurantIndexable } from "../seo/publicRestaurantIndexability";
+import { projectPublicRestaurantMedia } from "../publicProfiles/toPublicRestaurantProfile";
 
 export type ConfirmedEventTruck = {
   bookingId: string;
@@ -13,7 +16,12 @@ export type ConfirmedEventTruck = {
   logoUrl: string | null;
   coverImageUrl: string | null;
   bookingConfirmedAt: Date | null;
+  isPublicIndexable: boolean;
 };
+
+export const filterPublicConfirmedEventTrucks = (
+  rows: ConfirmedEventTruck[],
+) => rows.filter((row) => row.isPublicIndexable);
 
 export async function loadConfirmedEventTrucks(eventIds: string[]) {
   const ids = Array.from(
@@ -34,24 +42,27 @@ export async function loadConfirmedEventTrucks(eventIds: string[]) {
       logoUrl: restaurants.logoUrl,
       coverImageUrl: restaurants.coverImageUrl,
       bookingConfirmedAt: eventBookings.bookingConfirmedAt,
+      isActive: restaurants.isActive,
+      ownerId: restaurants.ownerId,
+      ownerEmail: users.email,
+      address: restaurants.address,
+      description: restaurants.description,
+      rawData: restaurants.rawData,
+      phone: restaurants.phone,
+      websiteUrl: restaurants.websiteUrl,
     })
     .from(eventBookings)
     .innerJoin(restaurants, eq(eventBookings.truckId, restaurants.id))
+    .innerJoin(users, eq(restaurants.ownerId, users.id))
     .where(
       and(
         inArray(eventBookings.eventId, ids),
         eq(eventBookings.status, "confirmed"),
         isNotNull(eventBookings.bookingConfirmedAt),
         eq(restaurants.isActive, true),
-        or(
-          eq(restaurants.isFoodTruck, true),
-          inArray(restaurants.businessType, [
-            "food_truck",
-            "truck",
-            "food-truck",
-            "foodtruck",
-            "mobile_food_vendor",
-          ]),
+        publicTruckClassificationWhere(
+          restaurants.isFoodTruck,
+          restaurants.businessType,
         ),
       ),
     )
@@ -67,7 +78,8 @@ export async function loadConfirmedEventTrucks(eventIds: string[]) {
     if (existing.some((truck) => truck.truckId === String(row.truckId))) {
       continue;
     }
-    existing.push({
+    const publicMedia = projectPublicRestaurantMedia(row);
+    const candidate: ConfirmedEventTruck = {
       bookingId: String(row.bookingId),
       eventId,
       truckId: String(row.truckId),
@@ -75,10 +87,26 @@ export async function loadConfirmedEventTrucks(eventIds: string[]) {
       cuisineType: row.cuisineType ? String(row.cuisineType) : null,
       city: row.city ? String(row.city) : null,
       state: row.state ? String(row.state) : null,
-      logoUrl: row.logoUrl ? String(row.logoUrl) : null,
-      coverImageUrl: row.coverImageUrl ? String(row.coverImageUrl) : null,
+      logoUrl: publicMedia.logoUrl,
+      coverImageUrl: publicMedia.coverImageUrl,
       bookingConfirmedAt: row.bookingConfirmedAt || null,
-    });
+      isPublicIndexable: isPublicRestaurantIndexable({
+        name: row.name,
+        isActive: row.isActive,
+        ownerId: row.ownerId,
+        ownerEmail: row.ownerEmail,
+        address: row.address,
+        cuisineType: row.cuisineType,
+        description: row.description,
+        city: row.city,
+        state: row.state,
+        rawData: row.rawData,
+        phone: row.phone,
+        websiteUrl: row.websiteUrl,
+      }),
+    };
+    if (!candidate.isPublicIndexable) continue;
+    existing.push(candidate);
     byEvent.set(eventId, existing);
   }
 

@@ -10,7 +10,6 @@ import {
   Truck,
   CalendarDays,
   ChevronRight,
-  Tag,
   Share2,
 } from "lucide-react";
 import { SEOHead } from "@/components/seo-head";
@@ -31,8 +30,20 @@ import {
 type CityPayload = {
   city: { name: string; slug: string; state?: string | null };
   stats: { restaurants: number; trucks: number; events: number };
-  restaurants: Array<{ id: string; name: string; cuisineType?: string | null }>;
-  trucks: Array<{ id: string; name: string; cuisineType?: string | null }>;
+  restaurants: Array<{
+    id: string;
+    name: string;
+    cuisineType?: string | null;
+    profileType: "restaurant" | "bar";
+    profilePath: string;
+  }>;
+  trucks: Array<{
+    id: string;
+    name: string;
+    cuisineType?: string | null;
+    profileType: "truck";
+    profilePath: string;
+  }>;
   events: Array<{
     id: string;
     name?: string | null;
@@ -50,27 +61,15 @@ type CityIndexItem = {
   name: string;
   slug: string;
   state?: string | null;
+  hasFoodTrucks: boolean;
   cuisines: Array<{ slug: string; count: number }>;
+  foodCuisines: Array<{ slug: string; count: number }>;
 };
 
 type SearchTrend = {
   query: string;
   count?: number;
   lastSeen?: string | null;
-};
-
-type CityDeal = {
-  id: string;
-  title: string;
-  description?: string | null;
-  discountValue?: string | null;
-  dealType?: string | null;
-  dealPath: string;
-  restaurant: {
-    id: string;
-    name: string;
-    cuisineType?: string | null;
-  };
 };
 
 type AffiliateTag = {
@@ -142,22 +141,6 @@ export default function CityLanding() {
     staleTime: 60_000,
   });
 
-  const { data: cityDealsPayload } = useQuery<{
-    deals: CityDeal[];
-    totalDeals: number;
-  }>({
-    queryKey: ["/api/public/deals/city", citySlug],
-    queryFn: async () => {
-      const res = await fetch(
-        apiUrl(`/api/public/deals/city/${encodeURIComponent(citySlug)}`),
-      );
-      if (!res.ok) return { deals: [], totalDeals: 0 };
-      return res.json();
-    },
-    enabled: Boolean(citySlug),
-    staleTime: 120_000,
-  });
-
   const { data: affiliateTagData } = useQuery<AffiliateTag>({
     queryKey: ["/api/affiliate/tag", "city-landing"],
     queryFn: async () => {
@@ -223,8 +206,6 @@ export default function CityLanding() {
     cuisineLabel ? slugifySeoTerm(cuisineLabel) : undefined,
   );
 
-  const cityDeals = (cityDealsPayload?.deals ?? []).slice(0, 6);
-
   const faqEntries = [
     {
       q: `Are there food trucks in ${data.city.name}?`,
@@ -242,13 +223,6 @@ export default function CityLanding() {
               .map((c) => c.name)
               .join(", ")} and more on MealScout.`
           : `MealScout is building out cuisine coverage for ${cityLabel}. Explore restaurants above or browse deals.`,
-    },
-    {
-      q: `Are there restaurant deals in ${data.city.name}?`,
-      a:
-        cityDeals.length > 0
-          ? `Yes! There are currently ${cityDealsPayload?.totalDeals ?? cityDeals.length} active deal${(cityDealsPayload?.totalDeals ?? cityDeals.length) > 1 ? "s" : ""} in ${cityLabel}. Claim them free with a MealScout account.`
-          : `Restaurants in ${cityLabel} are joining MealScout. Sign up free to get notified when deals go live near you.`,
     },
     {
       q: `What events are happening in ${data.city.name}?`,
@@ -446,7 +420,7 @@ export default function CityLanding() {
           ) : (
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               {filtered.restaurants.slice(0, 8).map((restaurant) => (
-                <Link key={restaurant.id} href={`/restaurant/${restaurant.id}`}>
+                <Link key={restaurant.id} href={restaurant.profilePath}>
                   <Card className="h-full border-[color:var(--border-subtle)] bg-[var(--bg-surface)] shadow-clean hover:shadow-clean-lg transition-shadow">
                     <CardContent className="p-4">
                       <div className="font-medium text-foreground">
@@ -463,47 +437,17 @@ export default function CityLanding() {
           )}
         </section>
 
-        {cityDeals.length > 0 && (
-          <section className="rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-5 shadow-clean">
-            <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
-              <Tag className="w-4 h-4" />
-              Active Deals in {data.city.name}
-            </h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {cityDealsPayload?.totalDeals ?? cityDeals.length} active deal
-              {(cityDealsPayload?.totalDeals ?? cityDeals.length) !== 1
-                ? "s"
-                : ""}{" "}
-              available right now — claim them free with a MealScout account.
-            </p>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              {cityDeals.map((deal) => (
-                <Link key={deal.id} href={deal.dealPath}>
-                  <Card className="h-full border-[color:var(--border-subtle)] bg-[var(--bg-surface)] shadow-clean hover:shadow-clean-lg transition-shadow">
-                    <CardContent className="p-4">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="font-medium text-foreground text-sm leading-snug">
-                          {deal.title}
-                        </div>
-                        {deal.discountValue && (
-                          <span className="shrink-0 rounded-full bg-[color:var(--status-success)]/15 px-2 py-0.5 text-xs font-semibold text-[color:var(--status-success)]">
-                            {deal.discountValue}
-                          </span>
-                        )}
-                      </div>
-                      <div className="mt-1 text-xs text-muted-foreground">
-                        {deal.restaurant.name}
-                        {deal.restaurant.cuisineType
-                          ? ` · ${deal.restaurant.cuisineType}`
-                          : ""}
-                      </div>
-                    </CardContent>
-                  </Card>
-                </Link>
-              ))}
-            </div>
-          </section>
-        )}
+        <section className="rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-5 shadow-clean">
+          <h2 className="text-lg font-semibold text-foreground">Deals today</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Open the canonical deals page for currently eligible offers in {cityLabel}.
+          </p>
+          <Link href={`/deals-today/${encodeURIComponent(data.city.slug)}`}>
+            <span className="mt-3 inline-flex text-sm font-medium text-primary hover:underline">
+              Browse deals today in {data.city.name}
+            </span>
+          </Link>
+        </section>
 
         {data.events.length > 0 && (
           <section className="rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-5 shadow-clean">
@@ -541,7 +485,10 @@ export default function CityLanding() {
             </p>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               {relatedCities.map((city) => (
-                <Link key={city.id} href={`/food-trucks/${city.slug}`}>
+                <Link
+                  key={city.id}
+                  href={`/city/${encodeURIComponent(city.slug)}/food`}
+                >
                   <Card className="border-[color:var(--border-subtle)] bg-[var(--bg-surface)] shadow-clean hover:shadow-clean-lg transition-shadow">
                     <CardContent className="p-4">
                       <div className="font-medium text-foreground">
@@ -549,7 +496,7 @@ export default function CityLanding() {
                         {city.state ? `, ${city.state}` : ""}
                       </div>
                       <p className="mt-1 text-xs text-muted-foreground">
-                        {city.cuisines.length} cuisine pages available
+                        {city.foodCuisines.length} cuisine pages available
                       </p>
                     </CardContent>
                   </Card>

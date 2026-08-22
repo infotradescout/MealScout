@@ -35,7 +35,6 @@ Sitemap: https://www.mealscout.us/sitemap-events.xml
 Sitemap: https://www.mealscout.us/sitemap-deals.xml
 Sitemap: https://www.mealscout.us/sitemap-suppliers.xml
 Sitemap: https://www.mealscout.us/sitemap-videos.xml
-Sitemap: https://www.mealscout.us/sitemap-time-pages.xml
 
 AI: https://www.mealscout.us/llms.txt
 IndexNow: https://www.mealscout.us/0ff1f027d834416684f7c3dfd6fc3e96.txt

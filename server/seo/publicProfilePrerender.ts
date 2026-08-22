@@ -1,9 +1,8 @@
-import type { Express, Request, Response, NextFunction } from "express";
-import { and, desc, eq, gt, ilike, inArray, isNull, or, sql } from "drizzle-orm";
+import type { Express, NextFunction, Request, Response } from "express";
+import { and, desc, eq, gt, isNull, or, sql } from "drizzle-orm";
 
 import { db } from "../db";
 import {
-  cities,
   deals,
   events,
   hosts,
@@ -15,21 +14,45 @@ import {
 } from "@shared/schema";
 import { buildOfficialSocialEntityMetaTags } from "./officialSocialEntity";
 import {
-  isBarBusinessType,
-  isTruckBusinessType,
   toCanonicalFoodBusinessType,
 } from "@shared/businessTypes";
-import { loadConfirmedEventTrucks } from "../services/confirmedEventTrucks";
+import {
+  filterPublicConfirmedEventTrucks,
+  loadConfirmedEventTrucks,
+} from "../services/confirmedEventTrucks";
 import { resolveCityTimeZoneSync } from "../services/cityTimeZone";
 import { buildSlotDateTimes } from "../services/timeIntent";
 import { isSlotPublic } from "../services/publicSlotGate";
 import { canExposeAnonymousEventDetail } from "../publicProfiles/publicEventDetailAccess";
-import { isSyntheticPublicEntityName } from "@shared/publicDiscoveryIntegrity";
+import {
+  isPublicDiscoveryEligibleEntity,
+  isSyntheticPublicEntityName,
+} from "@shared/publicDiscoveryIntegrity";
 import {
   PUBLIC_RESTAURANT_INDEXABLE_ROBOTS,
   PUBLIC_RESTAURANT_NOINDEX_ROBOTS,
   publicRestaurantRobotsDirective,
 } from "./publicRestaurantIndexability";
+import {
+  toPublicLocationProfile,
+  toPublicRestaurantProfile,
+  toPublicSupplierProfile,
+} from "../publicProfiles";
+import { buildJsonLdScript } from "./jsonLdScript";
+import { loadPublicSeoLandingData } from "../services/publicSeoLandingData";
+import {
+  projectPublicSeoLandingForHtml,
+  isPublicSeoLandingRestaurantEligible,
+  publicSeoBusinessProfileType,
+  publicSeoCityRequest,
+  publicSeoCuisineRequest,
+  publicSeoFoodTruckCuisineRequest,
+  type PublicSeoLandingRequest,
+} from "../services/publicSeoLandingModel";
+import {
+  buildPublicProfilePath,
+  resolvePublicProfileVisibility,
+} from "../publicProfiles/publicProfileUtils";
 
 type PageLink = { label: string; href: string };
 
@@ -42,6 +65,7 @@ type PrerenderPage = {
   schema: object | object[];
   links: PageLink[];
   body: string[];
+  listingHtml?: string;
   selectiveIntelligence?: {
     manifestUrl: string;
     mcpUrl: string;
@@ -72,16 +96,25 @@ const defaultSocialImagePath = "/og-default.jpg?v=20260506";
 // real owner claims them - indexing thousands of thin, identical-template
 // pages en masse dilutes crawl budget and search quality for the pages that
 // matter (claimed, real businesses).
-async function resolveOwnerEmail(
-  ownerId: string | null,
-): Promise<string | null> {
-  if (!ownerId) return null;
+async function resolveOwnerPublicProfile(ownerId: string | null) {
+  if (!ownerId) {
+    return {
+      email: null,
+      ...resolvePublicProfileVisibility(null),
+    };
+  }
   const [owner] = await db
-    .select({ email: users.email })
+    .select({
+      email: users.email,
+      publicProfileSettings: users.publicProfileSettings,
+    })
     .from(users)
     .where(eq(users.id, ownerId))
     .limit(1);
-  return owner?.email ? String(owner.email) : null;
+  return {
+    email: owner?.email ? String(owner.email) : null,
+    ...resolvePublicProfileVisibility(owner?.publicProfileSettings),
+  };
 }
 
 const toSlug = (value: string | null | undefined) =>
@@ -91,6 +124,45 @@ const toSlug = (value: string | null | undefined) =>
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/(^-|-$)+/g, "")
     .slice(0, 80);
+
+const LEGACY_CITY_DEAL_REDIRECT_QUERY_KEYS = new Set([
+  "utm_source",
+  "utm_medium",
+  "utm_campaign",
+  "utm_content",
+  "utm_term",
+  "source",
+  "ref",
+  "reftag",
+  "promosource",
+]);
+
+const legacyCityDealRedirectQuery = (req: Request) => {
+  const incoming = new URL(
+    req.originalUrl || req.url || "/",
+    "https://www.mealscout.us",
+  );
+  const safe = new URLSearchParams();
+  let retained = 0;
+  incoming.searchParams.forEach((value, key) => {
+    if (retained >= 12) return;
+    const normalizedKey = String(key || "").trim().toLowerCase();
+    const normalizedValue = String(value || "")
+      .replace(/[\u0000-\u001f\u007f]/g, "")
+      .trim()
+      .slice(0, 200);
+    if (
+      !LEGACY_CITY_DEAL_REDIRECT_QUERY_KEYS.has(normalizedKey) ||
+      !normalizedValue
+    ) {
+      return;
+    }
+    safe.append(normalizedKey, normalizedValue);
+    retained += 1;
+  });
+  const serialized = safe.toString();
+  return serialized ? `?${serialized}` : "";
+};
 
 const extractId = (value: string | null | undefined) => {
   const raw = String(value || "").trim();
@@ -159,128 +231,6 @@ const labelize = (value: string | null | undefined) =>
 const indexableRobots = PUBLIC_RESTAURANT_INDEXABLE_ROBOTS;
 const noindexRobots = PUBLIC_RESTAURANT_NOINDEX_ROBOTS;
 
-const seoTruckBusinessTypeAliases = [
-  "food_truck",
-  "truck",
-  "food-truck",
-  "foodtruck",
-  "mobile_food_vendor",
-];
-
-const seoPublicProfilePath = (row: any) => {
-  const isTruck =
-    Boolean(row.isFoodTruck) ||
-    seoTruckBusinessTypeAliases.includes(String(row.businessType || "").toLowerCase());
-  const prefix = isTruck
-    ? "truck"
-    : isBarBusinessType(row.businessType)
-      ? "bar"
-      : "restaurant";
-  const slug = `${toSlug(row.name) || String(row.id)}--${String(row.id)}`;
-  return `/${prefix}/${encodeURIComponent(slug)}`;
-};
-
-const loadSeoListingLinks = async (input: {
-  path: string;
-  description: string;
-  fallbackLinks: PageLink[];
-}) => {
-  const segments = input.path.split("/").filter(Boolean);
-  const isTruckListing =
-    segments[0] === "food-trucks" || segments[0] === "food-trucks-today";
-  const isCityListing =
-    segments[0] === "city" && segments[2] === "food";
-  const isCuisineListing = segments[0] === "cuisine" && Boolean(segments[1]);
-
-  if (!isTruckListing && !isCityListing && !isCuisineListing) {
-    return {
-      links: input.fallbackLinks,
-      body: [input.description],
-    };
-  }
-
-  const citySlug = isCuisineListing
-    ? segments[2] || ""
-    : segments[1] || "";
-  const cuisineSlug = isCuisineListing ? segments[1] || "" : "";
-  const [city] = citySlug
-    ? await db
-        .select({ name: cities.name })
-        .from(cities)
-        .where(eq(cities.slug, citySlug))
-        .limit(1)
-    : [null];
-
-  const conditions: any[] = [eq(restaurants.isActive, true)];
-  if (city) {
-    const cityNeedle = `%${String(city.name || "").trim()}%`;
-    conditions.push(
-      or(
-        ilike(restaurants.city, cityNeedle),
-        ilike(restaurants.address, cityNeedle),
-      ),
-    );
-  }
-  if (isTruckListing) {
-    conditions.push(
-      or(
-        eq(restaurants.isFoodTruck, true),
-        inArray(restaurants.businessType, seoTruckBusinessTypeAliases),
-      ),
-    );
-  }
-  if (cuisineSlug) {
-    conditions.push(
-      ilike(restaurants.cuisineType, `%${cuisineSlug.replace(/-/g, " ")}%`),
-    );
-  }
-
-  const rows = await db
-    .select({
-      id: restaurants.id,
-      name: restaurants.name,
-      businessType: restaurants.businessType,
-      isFoodTruck: restaurants.isFoodTruck,
-      city: restaurants.city,
-      state: restaurants.state,
-      cuisineType: restaurants.cuisineType,
-      updatedAt: restaurants.updatedAt,
-    })
-    .from(restaurants)
-    .where(and(...conditions))
-    .orderBy(desc(restaurants.updatedAt))
-    .limit(60);
-
-  const listingLinks = rows
-    .filter((row: any) => String(row.id || "").trim() && String(row.name || "").trim())
-    .map((row: any) => ({
-      label: `${String(row.name).trim()}${row.cuisineType ? ` — ${String(row.cuisineType).trim()}` : ""}`,
-      href: seoPublicProfilePath(row),
-    }));
-
-  const links: PageLink[] = [];
-  const seen = new Set<string>();
-  for (const link of [...listingLinks, ...input.fallbackLinks]) {
-    if (!link.href || seen.has(link.href)) continue;
-    seen.add(link.href);
-    links.push(link);
-  }
-
-  const areaLabel = city?.name || (citySlug ? citySlug.replace(/-/g, " ") : "your area");
-  const body =
-    rows.length > 0
-      ? [
-          input.description,
-          `MealScout currently has ${rows.length} public local listing${rows.length === 1 ? "" : "s"} on this page for ${areaLabel}.`,
-        ]
-      : [
-          input.description,
-          `No matching public listings are available for ${areaLabel} yet. Check nearby food or come back soon.`,
-        ];
-
-  return { links, body };
-};
-
 const friendlyLocationTypeLabel = (value: string | null | undefined) => {
   const normalized = String(value || "")
     .trim()
@@ -337,13 +287,14 @@ const firstPhotoUrl = (value: unknown) => {
   return String(first?.url || first?.src || first?.photoUrl || "");
 };
 
-const resolveRestaurantImage = (baseUrl: string, row: any) =>
+const resolveRestaurantImage = (
+  baseUrl: string,
+  publicProfile: ReturnType<typeof toPublicRestaurantProfile>,
+) =>
   absoluteUrl(
     baseUrl,
-    row.coverImageUrl ||
-      row.facebookCoverUrl ||
-      row.logoUrl ||
-      firstPhotoUrl(row.googlePhotos) ||
+    publicProfile.coverImageUrl ||
+      publicProfile.logoUrl ||
       defaultSocialImagePath,
   );
 
@@ -464,10 +415,7 @@ const buildHtml = (baseUrl: string, page: PrerenderPage) => {
   <link rel="image_src" href="${escapeHtml(image)}">
   ${buildOfficialSocialEntityMetaTags()}
   ${schema
-    .map(
-      (entry) =>
-        `<script type="application/ld+json">${JSON.stringify(entry)}</script>`,
-    )
+    .map((entry) => buildJsonLdScript(entry))
     .join("\n  ")}
   <style>
     body { font-family: -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif; margin: 0; color: #111827; background: #fffaf2; }
@@ -477,6 +425,12 @@ const buildHtml = (baseUrl: string, page: PrerenderPage) => {
     img { max-width: 100%; border-radius: 12px; margin: 14px 0; }
     .links { margin-top: 20px; padding-top: 14px; border-top: 1px solid #fed7aa; }
     .links a { display: inline-block; margin: 8px 12px 0 0; color: #9a3412; font-weight: 700; text-decoration: none; }
+    .listing-results { margin-top: 24px; }
+    .listing-results ul { display: grid; grid-template-columns: repeat(auto-fit,minmax(230px,1fr)); gap: 14px; padding: 0; list-style: none; }
+    .listing-results li { border: 1px solid #fed7aa; border-radius: 12px; padding: 14px; background: #fff; }
+    .listing-results li > a, .listing-results li > span { display: block; margin-bottom: 8px; }
+    .listing-results li > a { color: #9a3412; }
+    .listing-results li p { font-size: 14px; margin-bottom: 6px; }
   </style>
 </head>
 <body>
@@ -485,6 +439,7 @@ const buildHtml = (baseUrl: string, page: PrerenderPage) => {
     <p>${escapeHtml(page.description)}</p>
     ${image ? `<img src="${escapeHtml(image)}" alt="${escapeHtml(page.title)}">` : ""}
     ${page.body.map((line) => `<p>${escapeHtml(line)}</p>`).join("\n    ")}
+    ${page.listingHtml || ""}
     <div class="links">
       ${page.links
         .map(
@@ -498,21 +453,33 @@ const buildHtml = (baseUrl: string, page: PrerenderPage) => {
 </html>`;
 };
 
-async function restaurantPage(baseUrl: string, restaurantId: string) {
+async function restaurantPage(
+  baseUrl: string,
+  restaurantId: string,
+  expectedProfileType?: "restaurant" | "truck" | "bar" | "private_chef",
+) {
   const [row] = await db
     .select()
     .from(restaurants)
     .where(eq(restaurants.id, restaurantId))
     .limit(1);
   if (!row || !row.isActive) return null;
-  const ownerEmail = await resolveOwnerEmail(row.ownerId);
+  const publicProfileType = publicSeoBusinessProfileType(row);
+  const canonicalBusinessType = toCanonicalFoodBusinessType(row.businessType);
+  const strictRouteProfileType =
+    publicProfileType ||
+    (canonicalBusinessType === "private_chef" ? "private_chef" : null);
+  if (expectedProfileType && strictRouteProfileType !== expectedProfileType) {
+    return null;
+  }
+  const ownerProfile = await resolveOwnerPublicProfile(row.ownerId);
 
   const name = cleanText(row.name, "MealScout business");
   const robots = publicRestaurantRobotsDirective({
     name,
     isActive: row.isActive,
     ownerId: row.ownerId,
-    ownerEmail,
+    ownerEmail: ownerProfile.email,
     address: row.address,
     cuisineType: row.cuisineType,
     description: row.description,
@@ -526,11 +493,22 @@ async function restaurantPage(baseUrl: string, restaurantId: string) {
     .map((value) => cleanText(value))
     .filter(Boolean)
     .join(", ");
-  const canonicalBusinessType = toCanonicalFoodBusinessType(row.businessType);
-  const isTruck =
-    Boolean(row.isFoodTruck) || isTruckBusinessType(row.businessType);
-  const isBar = isBarBusinessType(row.businessType);
+  const isTruck = publicProfileType === "truck";
+  const isBar = publicProfileType === "bar";
   const isPrivateChef = canonicalBusinessType === "private_chef";
+  const projectedProfileType =
+    publicProfileType ||
+    (canonicalBusinessType === "private_chef" ||
+    canonicalBusinessType === "caterer"
+      ? canonicalBusinessType
+      : "restaurant");
+  const publicProfile = toPublicRestaurantProfile({
+    row,
+    baseUrl,
+    profileType: projectedProfileType,
+    showAddress: ownerProfile.showAddress,
+    showContact: ownerProfile.showContact,
+  });
   const ownerType = isTruck ? "food_truck" : "restaurant";
   const rawCateringDetails =
     row.cateringDetails && typeof row.cateringDetails === "object"
@@ -554,15 +532,18 @@ async function restaurantPage(baseUrl: string, restaurantId: string) {
     cityState,
   );
   const canonicalPath = isTruck
-    ? `/truck/${encodeURIComponent(`${toSlug(name) || row.id}--${row.id}`)}`
+    ? buildPublicProfilePath({ entityType: "truck", name, id: row.id })
     : isBar
-      ? `/bar/${encodeURIComponent(`${toSlug(name) || row.id}--${row.id}`)}`
+      ? buildPublicProfilePath({ entityType: "bar", name, id: row.id })
       : isPrivateChef
         ? `/chef/${encodeURIComponent(`${toSlug(name) || row.id}--${row.id}`)}`
-        : `/restaurant/${encodeURIComponent(row.id)}/${encodeURIComponent(toSlug(name) || row.id)}`;
+        : publicProfileType === "restaurant"
+          ? buildPublicProfilePath({ entityType: "restaurant", name, id: row.id })
+          : `/restaurant/${encodeURIComponent(row.id)}/${encodeURIComponent(toSlug(name) || row.id)}`;
   const videos = await publicVideosFor(ownerType, row.id);
   const menuSnippet = await menuSnippetForRestaurant(row.id);
-  const image = videos[0]?.thumbnailUrl || resolveRestaurantImage(baseUrl, row);
+  const image =
+    videos[0]?.thumbnailUrl || resolveRestaurantImage(baseUrl, publicProfile);
   const menuHighlights = menuSnippet.itemNames.slice(0, 5);
   const menuSentence = menuHighlights.length
     ? ` Menu highlights include ${menuHighlights.join(", ")}.`
@@ -593,7 +574,7 @@ async function restaurantPage(baseUrl: string, restaurantId: string) {
     description,
     url: absoluteUrl(baseUrl, canonicalPath),
     image,
-    telephone: row.phone || row.googleFormattedPhone || undefined,
+    telephone: publicProfile.phonePublic || undefined,
     servesCuisine: row.cuisineType || undefined,
     hasMenu: row.menuUrl
       ? externalUrl(row.menuUrl)
@@ -620,16 +601,18 @@ async function restaurantPage(baseUrl: string, restaurantId: string) {
       : undefined,
     address: {
       "@type": "PostalAddress",
-      streetAddress: row.address || undefined,
+      streetAddress: publicProfile.addressPublicLabel
+        ? row.address || undefined
+        : undefined,
       addressLocality: row.city || undefined,
       addressRegion: row.state || undefined,
       addressCountry: "US",
     },
     sameAs: [
-      row.websiteUrl,
-      row.instagramUrl,
-      row.facebookPageUrl,
-      row.xUrl,
+      publicProfile.websiteUrl,
+      publicProfile.socialLinks.instagramUrl,
+      publicProfile.socialLinks.facebookPageUrl,
+      publicProfile.socialLinks.xUrl,
     ].filter(Boolean),
   };
 
@@ -683,6 +666,17 @@ async function hostPage(baseUrl: string, hostId: string) {
     .where(eq(hosts.id, hostId))
     .limit(1);
   if (!row) return null;
+  const ownerProfile = await resolveOwnerPublicProfile(row.userId);
+  const publicProfile = toPublicLocationProfile({
+    row,
+    baseUrl,
+    showAddress: ownerProfile.showAddress,
+    showContact: ownerProfile.showContact,
+  });
+  const publicPhoneHref = publicProfile.cta.find(
+    (cta) => cta.type === "phone",
+  )?.href;
+  const publicPhone = publicPhoneHref?.replace(/^tel:/i, "") || null;
   const name = cleanText(row.businessName, "MealScout host location");
   const cityState = [row.city, row.state]
     .map((value) => cleanText(value))
@@ -692,16 +686,23 @@ async function hostPage(baseUrl: string, hostId: string) {
   const videos = await publicVideosFor("host", row.id);
   const image = videos[0]?.thumbnailUrl || resolveHostImage(baseUrl, row);
   const description = cleanText(
-    row.description || row.notes,
+    publicProfile.description,
     `${name}${cityState ? ` in ${cityState}` : ""} is a MealScout host location for food truck parking and events.`,
   );
   const locationTypeLabel = friendlyLocationTypeLabel(row.locationType);
+  const hostIndexable = isPublicDiscoveryEligibleEntity({
+    name: row.businessName,
+    isActive: true,
+  });
 
   return {
     title: `${name} Food Truck Location${cityState ? ` in ${cityState}` : ""} | MealScout`,
     description,
     canonicalPath,
     imageUrl: image,
+    robots: hostIndexable
+      ? PUBLIC_RESTAURANT_INDEXABLE_ROBOTS
+      : PUBLIC_RESTAURANT_NOINDEX_ROBOTS,
     schema: [
       {
         "@context": "https://schema.org",
@@ -710,10 +711,12 @@ async function hostPage(baseUrl: string, hostId: string) {
         description,
         url: absoluteUrl(baseUrl, canonicalPath),
         image,
-        telephone: row.contactPhone || row.googleFormattedPhone || undefined,
+        telephone: publicPhone || undefined,
         address: {
           "@type": "PostalAddress",
-          streetAddress: row.address || undefined,
+          streetAddress: publicProfile.addressPublicLabel
+            ? row.address || undefined
+            : undefined,
           addressLocality: row.city || undefined,
           addressRegion: row.state || undefined,
           addressCountry: "US",
@@ -761,9 +764,16 @@ async function eventPage(baseUrl: string, eventId: string) {
   if (!row || row.eventType === "private_event" || row.requiresPayment) {
     return null;
   }
-  const confirmedTrucks =
+  if (
+    !isPublicDiscoveryEligibleEntity({ name: row.name, isActive: true }) ||
+    !isPublicDiscoveryEligibleEntity({ name: row.hostName, isActive: true })
+  ) {
+    return null;
+  }
+  const confirmedTrucks = filterPublicConfirmedEventTrucks(
     (await loadConfirmedEventTrucks([String(row.id)])).get(String(row.id)) ||
-    [];
+      [],
+  );
   const primaryTruck = confirmedTrucks[0] || null;
   const timeZone = resolveCityTimeZoneSync({
     city: row.hostCity || null,
@@ -791,6 +801,7 @@ async function eventPage(baseUrl: string, eventId: string) {
   );
   if (
     !canExposeAnonymousEventDetail({
+      eventType: row.eventType,
       requiresPayment: row.requiresPayment,
       status: row.status,
       slotIsPublic,
@@ -817,6 +828,10 @@ async function eventPage(baseUrl: string, eventId: string) {
   const ended = eventInterval
     ? eventInterval.endUtc.getTime() < Date.now()
     : true;
+  const eventIndexable =
+    Boolean(primaryTruck?.isPublicIndexable) &&
+    isPublicDiscoveryEligibleEntity({ name: row.hostName, isActive: true }) &&
+    isPublicDiscoveryEligibleEntity({ name: row.name, isActive: true });
 
   return {
     title: `${title}${cityState ? ` in ${cityState}` : ""} | MealScout`,
@@ -824,7 +839,7 @@ async function eventPage(baseUrl: string, eventId: string) {
     canonicalPath,
     imageUrl: videos[0]?.thumbnailUrl || defaultSocialImagePath,
     robots:
-      ended || row.status === "cancelled"
+      ended || row.status === "cancelled" || !eventIndexable
         ? "noindex,follow"
         : "index,follow,max-snippet:-1,max-image-preview:large,max-video-preview:-1",
     schema: [
@@ -899,9 +914,20 @@ async function dealPage(baseUrl: string, dealId: string) {
       city: restaurants.city,
       state: restaurants.state,
       cuisineType: restaurants.cuisineType,
+      restaurantIsFoodTruck: restaurants.isFoodTruck,
+      restaurantBusinessType: restaurants.businessType,
+      restaurantIsActive: restaurants.isActive,
+      restaurantOwnerId: restaurants.ownerId,
+      restaurantOwnerEmail: users.email,
+      restaurantAddress: restaurants.address,
+      restaurantDescription: restaurants.description,
+      restaurantRawData: restaurants.rawData,
+      restaurantPhone: restaurants.phone,
+      restaurantWebsiteUrl: restaurants.websiteUrl,
     })
     .from(deals)
     .innerJoin(restaurants, eq(deals.restaurantId, restaurants.id))
+    .innerJoin(users, eq(restaurants.ownerId, users.id))
     .where(eq(deals.id, dealId))
     .limit(1);
   if (!row) return null;
@@ -910,6 +936,26 @@ async function dealPage(baseUrl: string, dealId: string) {
     (!row.startDate ||
       new Date(row.startDate as any).getTime() <= now.getTime()) &&
     (!row.endDate || new Date(row.endDate as any).getTime() >= now.getTime());
+  const parentIndexable = isPublicSeoLandingRestaurantEligible({
+    name: row.restaurantName,
+    isActive: row.restaurantIsActive,
+    ownerId: row.restaurantOwnerId,
+    ownerEmail: row.restaurantOwnerEmail,
+    address: row.restaurantAddress,
+    cuisineType: row.cuisineType,
+    description: row.restaurantDescription,
+    city: row.city,
+    state: row.state,
+    rawData: row.restaurantRawData,
+    phone: row.restaurantPhone,
+    websiteUrl: row.restaurantWebsiteUrl,
+    isFoodTruck: row.restaurantIsFoodTruck,
+    businessType: row.restaurantBusinessType,
+  });
+  const titleEligible = isPublicDiscoveryEligibleEntity({
+    name: row.title,
+    isActive: true,
+  });
   const title = cleanText(row.title, "MealScout food deal");
   const canonicalPath = `/deal/${encodeURIComponent(`${toSlug(title) || row.id}--${row.id}`)}`;
   const cityState = [row.city, row.state]
@@ -926,7 +972,7 @@ async function dealPage(baseUrl: string, dealId: string) {
     description,
     canonicalPath,
     imageUrl: row.imageUrl || defaultSocialImagePath,
-    robots: active
+    robots: active && parentIndexable && titleEligible
       ? "index,follow,max-snippet:-1,max-image-preview:large,max-video-preview:-1"
       : "noindex,follow",
     schema: {
@@ -977,6 +1023,14 @@ async function supplierPage(baseUrl: string, supplierId: string) {
     .where(eq(suppliers.id, supplierId))
     .limit(1);
   if (!row || !row.isActive) return null;
+  const ownerProfile = await resolveOwnerPublicProfile(row.userId);
+  const publicProfile = toPublicSupplierProfile({
+    row,
+    activeProductCount: 0,
+    baseUrl,
+    showAddress: ownerProfile.showAddress,
+    showContact: ownerProfile.showContact,
+  });
   const name = cleanText(row.businessName, "MealScout supplier");
   const isSyntheticTestEntity = isSyntheticPublicEntityName(name);
   const cityState = [row.city, row.state]
@@ -998,10 +1052,12 @@ async function supplierPage(baseUrl: string, supplierId: string) {
       name,
       description,
       url: absoluteUrl(baseUrl, canonicalPath),
-      telephone: row.contactPhone || undefined,
+      telephone: publicProfile.phonePublic || undefined,
       address: {
         "@type": "PostalAddress",
-        streetAddress: row.address || undefined,
+        streetAddress: publicProfile.addressPublicLabel
+          ? row.address || undefined
+          : undefined,
         addressLocality: row.city || undefined,
         addressRegion: row.state || undefined,
         addressCountry: "US",
@@ -1021,49 +1077,66 @@ async function supplierPage(baseUrl: string, supplierId: string) {
 
 async function seoLandingPage(
   baseUrl: string,
-  input: {
-    path: string;
-    title: string;
-    description: string;
+  input: PublicSeoLandingRequest & {
     links: PageLink[];
   },
+  loadLanding: typeof loadPublicSeoLandingData = loadPublicSeoLandingData,
 ) {
-  const containsSyntheticPathSegment = input.path
+  const resolution = await loadLanding(input);
+  if (resolution.kind === "not_found") return null;
+
+  const { payload } = resolution;
+  const listing = projectPublicSeoLandingForHtml(payload, input.links);
+  const containsSyntheticPathSegment = payload.page.canonicalPath
     .split("/")
     .some((segment) => isSyntheticPublicEntityName(segment));
 
-  let listing = {
-    links: input.links,
-    body: [input.description],
-  };
-  try {
-    listing = await loadSeoListingLinks({
-      path: input.path,
-      description: input.description,
-      fallbackLinks: input.links,
-    });
-  } catch (error) {
-    console.warn("[seo-prerender] listing links unavailable", {
-      path: input.path,
-      error,
-    });
-  }
-
   return {
-    title: `${input.title} | MealScout`,
-    description: input.description,
-    canonicalPath: input.path,
-    imageUrl: defaultSocialImagePath,
-    robots: containsSyntheticPathSegment ? noindexRobots : indexableRobots,
+    title: `${payload.page.title} | MealScout`,
+    description: payload.page.description,
+    canonicalPath: payload.page.canonicalPath,
+    imageUrl: payload.page.ogImage,
+    robots:
+      containsSyntheticPathSegment || payload.total === 0
+        ? noindexRobots
+        : indexableRobots,
     schema: {
       "@context": "https://schema.org",
       "@type": "CollectionPage",
-      name: input.title,
-      description: input.description,
-      url: absoluteUrl(baseUrl, input.path),
+      name: payload.page.title,
+      description: payload.page.description,
+      url: absoluteUrl(baseUrl, payload.page.canonicalPath),
+      mainEntity: {
+        "@type": "ItemList",
+        numberOfItems: payload.total,
+        itemListElement: payload.items.map((item, index) => ({
+          "@type": "ListItem",
+          position: index + 1,
+          name: item.displayName,
+          url: absoluteUrl(baseUrl, item.profilePath),
+          description: item.summary || undefined,
+          item: {
+            "@type": item.profileType === "truck"
+              ? "FoodTruck"
+              : item.profileType === "bar"
+                ? "BarOrPub"
+                : "LocalBusiness",
+            name: item.displayName,
+            url: absoluteUrl(baseUrl, item.profilePath),
+            address: item.city || item.state
+              ? {
+                  "@type": "PostalAddress",
+                  addressLocality: item.city || undefined,
+                  addressRegion: item.state || undefined,
+                }
+              : undefined,
+          },
+        })),
+      },
     },
     links: listing.links,
     body: listing.body,
+    listingHtml: listing.listingHtml,
   } satisfies PrerenderPage;
 }
 
@@ -1087,6 +1160,18 @@ const sendPage = (
   res.send(buildHtml(baseUrl, page));
 };
 
+const sendPrerenderUnavailable = (res: Response) => {
+  res
+    .status(503)
+    .setHeader("Content-Type", "text/html; charset=utf-8")
+    .setHeader("Retry-After", "60")
+    .setHeader("Cache-Control", "no-store")
+    .setHeader("X-Robots-Tag", "noindex,follow")
+    .send(
+      '<!DOCTYPE html><html><head><title>Temporarily unavailable | MealScout</title><meta name="robots" content="noindex,follow"></head><body>Temporarily unavailable</body></html>',
+    );
+};
+
 /**
  * Public discovery profile routes serve entity SSR HTML for every GET, not only
  * crawler UAs. Authenticated app surfaces (/admin, /dashboard, etc.) are not
@@ -1095,41 +1180,120 @@ const sendPage = (
 export function registerPublicProfilePrerenderRoutes(
   app: Express,
   canonicalBaseUrl: string,
+  loadLanding: typeof loadPublicSeoLandingData = loadPublicSeoLandingData,
+  dependencies: {
+    restaurantPage?: typeof restaurantPage;
+    sendPage?: typeof sendPage;
+  } = {},
 ) {
+  const loadRestaurantPage = dependencies.restaurantPage || restaurantPage;
+  const renderPage = dependencies.sendPage || sendPage;
   const gate =
     (handler: (req: Request) => Promise<PrerenderPage | null>) =>
-    async (req: Request, res: Response, next: NextFunction) => {
+    async (req: Request, res: Response) => {
       try {
-        sendPage(canonicalBaseUrl, res, await handler(req));
+        renderPage(canonicalBaseUrl, res, await handler(req));
       } catch (error) {
         console.error("[seo-prerender] failed", error);
-        next();
+        sendPrerenderUnavailable(res);
       }
     };
 
+  const landingGate =
+    (handler: (req: Request) => Promise<PrerenderPage | null>) =>
+    async (req: Request, res: Response) => {
+      try {
+        renderPage(canonicalBaseUrl, res, await handler(req));
+      } catch (error) {
+        console.error("[seo-prerender] landing page failed", error);
+        sendPrerenderUnavailable(res);
+      }
+    };
+
+  const restaurantDetailGate = gate((req) =>
+    loadRestaurantPage(
+      canonicalBaseUrl,
+      extractId(req.params.id),
+      "restaurant",
+    ),
+  );
   app.get(
-    ["/restaurant/:id", "/restaurant/:id/:slug"],
-    gate((req) => restaurantPage(canonicalBaseUrl, extractId(req.params.id))),
+    "/restaurant/:id/:slug",
+    (req: Request, res: Response, next: NextFunction) => {
+      if (String(req.params.slug || "").trim().toLowerCase() === "reviews") {
+        res.setHeader("X-Robots-Tag", "noindex,nofollow,noarchive");
+        return next();
+      }
+      return restaurantDetailGate(req, res);
+    },
+  );
+  app.get(
+    "/restaurant/:id",
+    (req: Request, res: Response, next: NextFunction) => {
+      if (String(req.params.id || "").trim().toLowerCase() === "dashboard") {
+        return next();
+      }
+      return restaurantDetailGate(req, res);
+    },
   );
   app.get(
     "/truck/:slug",
-    gate((req) => restaurantPage(canonicalBaseUrl, extractId(req.params.slug))),
+    gate((req) =>
+      loadRestaurantPage(
+        canonicalBaseUrl,
+        extractId(req.params.slug),
+        "truck",
+      ),
+    ),
   );
   app.get(
     "/bar/:slug",
-    gate((req) => restaurantPage(canonicalBaseUrl, extractId(req.params.slug))),
+    gate((req) =>
+      loadRestaurantPage(
+        canonicalBaseUrl,
+        extractId(req.params.slug),
+        "bar",
+      ),
+    ),
   );
   app.get(
     "/chef/:slug",
-    gate((req) => restaurantPage(canonicalBaseUrl, extractId(req.params.slug))),
+    gate((req) =>
+      loadRestaurantPage(
+        canonicalBaseUrl,
+        extractId(req.params.slug),
+        "private_chef",
+      ),
+    ),
   );
   app.get(
     "/location/:slug",
     gate((req) => hostPage(canonicalBaseUrl, extractId(req.params.slug))),
   );
+  const eventDetailGate = gate((req) =>
+    eventPage(canonicalBaseUrl, extractId(req.params.slug)),
+  );
+  app.get("/event/:slug", eventDetailGate);
   app.get(
-    ["/event/:slug", "/events/:slug"],
-    gate((req) => eventPage(canonicalBaseUrl, extractId(req.params.slug))),
+    "/events/:slug",
+    (req: Request, res: Response, next: NextFunction) => {
+      if (String(req.params.slug || "").trim().toLowerCase() === "public") {
+        return next();
+      }
+      return eventDetailGate(req, res);
+    },
+  );
+  app.get(
+    "/deals/:city",
+    (req: Request, res: Response, next: NextFunction) => {
+      const citySlug = toSlug(req.params.city);
+      if (!citySlug || citySlug === "featured") return next();
+      res.setHeader("Cache-Control", "public, max-age=300");
+      return res.redirect(
+        308,
+        `/deals-today/${encodeURIComponent(citySlug)}${legacyCityDealRedirectQuery(req)}`,
+      );
+    },
   );
   app.get(
     "/deal/:slug",
@@ -1139,22 +1303,35 @@ export function registerPublicProfilePrerenderRoutes(
     ["/jobs/:jobId", "/jobs/:jobId/:jobSlug"],
     gate((req) => jobPage(canonicalBaseUrl, extractId(req.params.jobId))),
   );
-  app.get(
-    ["/supplier/:slug", "/suppliers/:supplierId"],
-    gate((req) =>
+  const supplierDetailGate = gate((req) =>
       supplierPage(
         canonicalBaseUrl,
         extractId(req.params.slug || req.params.supplierId),
       ),
-    ),
+    );
+  app.get("/suppliers/:supplierId", supplierDetailGate);
+  app.get(
+    "/supplier/:slug",
+    (req: Request, res: Response, next: NextFunction) => {
+      if (String(req.params.slug || "").trim().toLowerCase() === "dashboard") {
+        return next();
+      }
+      return supplierDetailGate(req, res);
+    },
   );
   app.get(
     ["/p/:profileType/:profileId", "/p/:profileType/:profileId/:profileSlug"],
     gate((req) => {
       const type = String(req.params.profileType || "").toLowerCase();
       const id = extractId(req.params.profileId);
-      if (type === "restaurant" || type === "food_truck" || type === "truck") {
-        return restaurantPage(canonicalBaseUrl, id);
+      if (type === "restaurant") {
+        return loadRestaurantPage(canonicalBaseUrl, id, "restaurant");
+      }
+      if (type === "food_truck" || type === "truck") {
+        return loadRestaurantPage(canonicalBaseUrl, id, "truck");
+      }
+      if (type === "bar") {
+        return loadRestaurantPage(canonicalBaseUrl, id, "bar");
       }
       if (type === "host" || type === "location") {
         return hostPage(canonicalBaseUrl, id);
@@ -1169,133 +1346,175 @@ export function registerPublicProfilePrerenderRoutes(
     }),
   );
   app.get(
+    "/food-trucks/:city/:cuisine",
+    landingGate((req) =>
+      seoLandingPage(
+        canonicalBaseUrl,
+        {
+          ...publicSeoFoodTruckCuisineRequest(
+            req.params.city,
+            req.params.cuisine,
+          ),
+          links: [
+            {
+              label: "List or claim your food truck",
+              href: "/for-food-trucks",
+            },
+            {
+              label: "All food trucks in this city",
+              href: `/food-trucks/${encodeURIComponent(String(req.params.city ?? ""))}`,
+            },
+          ],
+        },
+        loadLanding,
+      ),
+    ),
+  );
+  app.get(
     "/food-trucks/:city",
-    gate((req) =>
-      seoLandingPage(canonicalBaseUrl, {
-        path: `/food-trucks/${encodeURIComponent(String(req.params.city || ""))}`,
-        title: `Food trucks in ${String(req.params.city || "").replace(/-/g, " ")}`,
-        description:
-          "Find food trucks by city and open local MealScout profiles, menus, and location details.",
-        links: [
-          {
-            label: "Food trucks today",
-            href: `/food-trucks-today/${encodeURIComponent(String(req.params.city || ""))}`,
-          },
-          {
-            label: "Open Scout",
-            href: "/scout",
-          },
-        ],
-      }),
+    landingGate((req) =>
+      seoLandingPage(
+        canonicalBaseUrl,
+        {
+          ...publicSeoCityRequest("food-trucks", req.params.city),
+          links: [
+            {
+              label: "List or claim your food truck",
+              href: "/for-food-trucks",
+            },
+            {
+              label: "Food trucks today",
+              href: `/food-trucks-today/${encodeURIComponent(String(req.params.city || ""))}`,
+            },
+            {
+              label: "Open Scout",
+              href: "/scout",
+            },
+          ],
+        },
+        loadLanding,
+      ),
     ),
   );
   app.get(
     "/food-trucks-today/:city",
-    gate((req) =>
-      seoLandingPage(canonicalBaseUrl, {
-        path: `/food-trucks-today/${encodeURIComponent(String(req.params.city || ""))}`,
-        title: `Food trucks today in ${String(req.params.city || "").replace(/-/g, " ")}`,
-        description:
-          "Find local food trucks active today. Browse local profiles, menus, and nearby stops.",
-        links: [
-          {
-            label: "Open city food",
-            href: `/city/${encodeURIComponent(String(req.params.city || ""))}/food`,
-          },
-        ],
-      }),
+    landingGate((req) =>
+      seoLandingPage(
+        canonicalBaseUrl,
+        {
+          ...publicSeoCityRequest("food-trucks-today", req.params.city),
+          links: [
+            {
+              label: "List or claim your food truck",
+              href: "/for-food-trucks",
+            },
+            {
+              label: "Open city food",
+              href: `/city/${encodeURIComponent(String(req.params.city || ""))}/food`,
+            },
+          ],
+        },
+        loadLanding,
+      ),
     ),
   );
   app.get(
     "/deals-today/:city",
-    gate((req) =>
-      seoLandingPage(canonicalBaseUrl, {
-        path: `/deals-today/${encodeURIComponent(String(req.params.city || ""))}`,
-        title: `Deals today in ${String(req.params.city || "").replace(/-/g, " ")}`,
-        description:
-          "See local food deals active today and open the related business profiles.",
-        links: [
-          {
-            label: "Open city food",
-            href: `/city/${encodeURIComponent(String(req.params.city || ""))}/food`,
-          },
-        ],
-      }),
+    landingGate((req) =>
+      seoLandingPage(
+        canonicalBaseUrl,
+        {
+          ...publicSeoCityRequest("deals-today", req.params.city),
+          links: [
+            {
+              label: "Open city food",
+              href: `/city/${encodeURIComponent(String(req.params.city || ""))}/food`,
+            },
+          ],
+        },
+        loadLanding,
+      ),
     ),
   );
   app.get(
     "/events-today/:city",
-    gate((req) =>
-      seoLandingPage(canonicalBaseUrl, {
-        path: `/events-today/${encodeURIComponent(String(req.params.city || ""))}`,
-        title: `Food events today in ${String(req.params.city || "").replace(/-/g, " ")}`,
-        description:
-          "Find food events happening today and open local profile pages from each listing.",
-        links: [{ label: "Browse events", href: "/events/public" }],
-      }),
+    landingGate((req) =>
+      seoLandingPage(
+        canonicalBaseUrl,
+        {
+          ...publicSeoCityRequest("events-today", req.params.city),
+          links: [{ label: "Explore nearby food", href: "/scout" }],
+        },
+        loadLanding,
+      ),
     ),
   );
   app.get(
     "/city/:city/food",
-    gate((req) =>
-      seoLandingPage(canonicalBaseUrl, {
-        path: `/city/${encodeURIComponent(String(req.params.city || ""))}/food`,
-        title: `Places to eat in ${String(req.params.city || "").replace(/-/g, " ")}`,
-        description:
-          "Browse local food businesses and open their canonical MealScout profile pages.",
-        links: [
-          {
-            label: "Food trucks today",
-            href: `/food-trucks-today/${encodeURIComponent(String(req.params.city || ""))}`,
-          },
-          {
-            label: "Deals today",
-            href: `/deals-today/${encodeURIComponent(String(req.params.city || ""))}`,
-          },
-          {
-            label: "Events today",
-            href: `/events-today/${encodeURIComponent(String(req.params.city || ""))}`,
-          },
-        ],
-      }),
+    landingGate((req) =>
+      seoLandingPage(
+        canonicalBaseUrl,
+        {
+          ...publicSeoCityRequest("city", req.params.city),
+          links: [
+            {
+              label: "Food trucks today",
+              href: `/food-trucks-today/${encodeURIComponent(String(req.params.city || ""))}`,
+            },
+            {
+              label: "Deals today",
+              href: `/deals-today/${encodeURIComponent(String(req.params.city || ""))}`,
+            },
+            {
+              label: "Events today",
+              href: `/events-today/${encodeURIComponent(String(req.params.city || ""))}`,
+            },
+          ],
+        },
+        loadLanding,
+      ),
     ),
   );
   app.get(
     "/cuisine/:cuisine/:city?",
-    gate((req) =>
-      seoLandingPage(canonicalBaseUrl, {
-        path: req.params.city
-          ? `/cuisine/${encodeURIComponent(String(req.params.cuisine || ""))}/${encodeURIComponent(String(req.params.city || ""))}`
-          : `/cuisine/${encodeURIComponent(String(req.params.cuisine || ""))}`,
-        title: `${String(req.params.cuisine || "").replace(/-/g, " ")} food`,
-        description:
-          "Explore local cuisine pages and open canonical MealScout profiles for nearby options.",
-        links: req.params.city
-          ? [
-              {
-                label: "Open city food",
-                href: `/city/${encodeURIComponent(String(req.params.city || ""))}/food`,
-              },
-            ]
-          : [{ label: "Open search", href: "/search" }],
-      }),
+    landingGate((req) =>
+      seoLandingPage(
+        canonicalBaseUrl,
+        {
+          ...publicSeoCuisineRequest(req.params.cuisine, req.params.city),
+          links:
+            req.params.city === undefined
+              ? [{ label: "Open search", href: "/search" }]
+              : [
+                  {
+                    label: "Open city food",
+                    href: `/city/${encodeURIComponent(String(req.params.city))}/food`,
+                  },
+                ],
+        },
+        loadLanding,
+      ),
     ),
   );
   app.get(
     "/locations-with-trucks/:city",
-    gate((req) =>
-      seoLandingPage(canonicalBaseUrl, {
-        path: `/locations-with-trucks/${encodeURIComponent(String(req.params.city || ""))}`,
-        title: `Locations with food trucks in ${String(req.params.city || "").replace(/-/g, " ")}`,
-        description:
-          "Find host locations with active truck activity and open location profile pages.",
-        links: [
-          {
-            label: "Open city food",
-            href: `/city/${encodeURIComponent(String(req.params.city || ""))}/food`,
-          },
-        ],
-      }),
+    landingGate((req) =>
+      seoLandingPage(
+        canonicalBaseUrl,
+        {
+          ...publicSeoCityRequest(
+            "locations-with-trucks",
+            req.params.city,
+          ),
+          links: [
+            {
+              label: "Open city food",
+              href: `/city/${encodeURIComponent(String(req.params.city || ""))}/food`,
+            },
+          ],
+        },
+        loadLanding,
+      ),
     ),
   );
 }

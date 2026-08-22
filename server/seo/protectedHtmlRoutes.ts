@@ -19,6 +19,7 @@ export const PROTECTED_HTML_PATH_PREFIXES = [
   "/host/dashboard",
   "/event-coordinator/dashboard",
   "/supplier/dashboard",
+  "/restaurant/dashboard",
 ] as const;
 
 const MARKETING_HOMEPAGE_TITLE = "MealScout | Discover Local Food Near You";

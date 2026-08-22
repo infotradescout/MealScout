@@ -4,6 +4,7 @@ import {
   buildPublicCta,
   buildPublicProfilePath,
   joinedAddressLabel,
+  normalizePublicUrl,
   toSlug,
 } from "./publicProfileUtils";
 
@@ -27,9 +28,21 @@ export function toPublicSupplierProfile(input: {
     input.showAddress === false
       ? null
       : joinedAddressLabel(row.address, row.city, row.state);
+  const publicLatitude =
+    input.showAddress !== false && Number.isFinite(Number(row.latitude))
+      ? Number(row.latitude)
+      : null;
+  const publicLongitude =
+    input.showAddress !== false && Number.isFinite(Number(row.longitude))
+      ? Number(row.longitude)
+      : null;
   const phonePublic =
     input.showContact === false ? null : String(row.contactPhone || "").trim() || null;
-  const websiteUrl = String(row.websiteUrl || "").trim() || null;
+  const websiteUrl =
+    input.showContact === false ? null : normalizePublicUrl(row.websiteUrl);
+  const logoUrl = normalizePublicUrl(row.logoUrl, {
+    allowInternalPath: true,
+  });
 
   const cta = [
     buildPublicCta({ label: "View supplier", href: canonicalPath, type: "internal" }),
@@ -47,11 +60,11 @@ export function toPublicSupplierProfile(input: {
     addressPublicLabel,
     city: String(row.city || "").trim() || null,
     state: String(row.state || "").trim() || null,
-    latitude: Number.isFinite(Number(row.latitude)) ? Number(row.latitude) : null,
-    longitude: Number.isFinite(Number(row.longitude)) ? Number(row.longitude) : null,
+    latitude: publicLatitude,
+    longitude: publicLongitude,
     phonePublic,
     websiteUrl,
-    logoUrl: String(row.logoUrl || "").trim() || null,
+    logoUrl,
     cta,
     activeProductCount: Math.max(0, Number(input.activeProductCount || 0)),
     seo: toPublicProfileSeo({
@@ -63,7 +76,7 @@ export function toPublicSupplierProfile(input: {
       title: displayName,
       description:
         String(row.onlinePaymentsNotes || row.deliveryNotes || "").trim() || null,
-      ogImageUrl: String(row.logoUrl || "").trim() || null,
+      ogImageUrl: logoUrl,
     }),
   };
 }

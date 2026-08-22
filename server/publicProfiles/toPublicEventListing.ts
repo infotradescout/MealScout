@@ -5,6 +5,8 @@
 // host's contact phone, internal notes, Stripe Connect state, payout
 // settings, and Parking Pass pricing controls, none of which belong in a
 // response any anonymous caller can fetch.
+import { normalizePublicUrl } from "./publicProfileUtils";
+
 function toPublicEventHost(host: any): Record<string, unknown> | null {
   if (!host || typeof host !== "object" || Array.isArray(host)) return null;
 
@@ -33,7 +35,9 @@ function toPublicEventHost(host: any): Record<string, unknown> | null {
     locationType,
     amenities,
     isVerified,
-    spotImageUrl,
+    spotImageUrl: normalizePublicUrl(spotImageUrl, {
+      allowInternalPath: true,
+    }),
   };
 }
 
@@ -60,8 +64,12 @@ function toPublicEventTrucks(trucks: any): Record<string, unknown>[] {
       cuisineType: truck?.cuisineType || null,
       city: truck?.city || null,
       state: truck?.state || null,
-      logoUrl: truck?.logoUrl || null,
-      coverImageUrl: truck?.coverImageUrl || null,
+      logoUrl: normalizePublicUrl(truck?.logoUrl, {
+        allowInternalPath: true,
+      }),
+      coverImageUrl: normalizePublicUrl(truck?.coverImageUrl, {
+        allowInternalPath: true,
+      }),
     });
   }
   return projected;
@@ -83,13 +91,6 @@ export function toPublicEventListing(event: any): Record<string, unknown> {
     maxTrucks,
     status,
     hardCapEnabled,
-    hostPriceCents,
-    breakfastPriceCents,
-    lunchPriceCents,
-    dinnerPriceCents,
-    dailyPriceCents,
-    weeklyPriceCents,
-    monthlyPriceCents,
     requiresPayment,
     lastConfirmedAt,
     createdAt,
@@ -114,13 +115,6 @@ export function toPublicEventListing(event: any): Record<string, unknown> {
     status,
     bookedRestaurantId: publicTrucks[0]?.id || null,
     hardCapEnabled,
-    hostPriceCents,
-    breakfastPriceCents,
-    lunchPriceCents,
-    dinnerPriceCents,
-    dailyPriceCents,
-    weeklyPriceCents,
-    monthlyPriceCents,
     requiresPayment,
     lastConfirmedAt,
     createdAt,

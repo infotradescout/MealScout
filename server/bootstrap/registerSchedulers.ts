@@ -32,7 +32,7 @@ import {
   isWithinMarketingEmailWindow,
 } from "../utils/marketingEmailWindow";
 import { db } from "../db";
-import { requestLogs, adminDailyReports, cities } from "@shared/schema";
+import { requestLogs, adminDailyReports } from "@shared/schema";
 import { and, gte, lt, desc, or, sql } from "drizzle-orm";
 
 // ---------------------------------------------------------------------------
@@ -638,28 +638,18 @@ export async function registerSchedulers(app: Express): Promise<void> {
         const cfg = getIndexNowConfig();
         if (!cfg.enabled || !cfg.key) return;
         const baseUrl = `https://${cfg.host}`;
-        // Build the canonical URL list: home, discovery, city landing pages, deals, events
+        // Keep automated submissions to this reviewed static allowlist. Dynamic
+        // city/profile membership is published through the eligible sitemaps.
         const staticUrls = [
           baseUrl,
           `${baseUrl}/scout`,
           `${baseUrl}/deals/featured`,
-          `${baseUrl}/events/public`,
           `${baseUrl}/for-restaurants`,
           `${baseUrl}/for-food-trucks`,
           `${baseUrl}/for-bars`,
           `${baseUrl}/for-events`,
         ];
-        // Fetch active city slugs for city landing pages
-        const cityRows = await db
-          .select({ slug: cities.slug })
-          .from(cities)
-          .limit(200);
-        const cityUrls = cityRows
-          .filter((r: { slug: string | null }) => r.slug)
-          .map((r: { slug: string | null }) => `${baseUrl}/food-trucks/${encodeURIComponent(r.slug!)}`);
-
-        const allUrls = [...staticUrls, ...cityUrls];
-        const result = await submitIndexNowUrls(allUrls);
+        const result = await submitIndexNowUrls(staticUrls);
         const detail = result.ok || !result.body ? "" : ` body=${result.body.slice(0, 240)}`;
         console.log(`[indexnow] daily submission: ${result.submitted} URLs, status ${result.status}${detail}`);
       } catch (error) {

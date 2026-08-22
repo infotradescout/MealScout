@@ -3,7 +3,6 @@ import { readFileSync } from "node:fs";
 
 const shareLib = readFileSync("client/src/lib/share.ts", "utf8");
 const cityLanding = readFileSync("client/src/pages/city-landing.tsx", "utf8");
-const dealsCity = readFileSync("client/src/pages/deals-city.tsx", "utf8");
 const dealDetail = readFileSync("client/src/pages/deal-detail.tsx", "utf8");
 const publicProfile = readFileSync(
   "client/src/pages/public-profile.tsx",
@@ -34,7 +33,6 @@ assert(
 
 for (const file of [
   cityLanding,
-  dealsCity,
   dealDetail,
   publicProfile,
 ]) {
@@ -81,7 +79,7 @@ assert(
   "Owner dashboard public-profile copy action must resolve canonical attributed URL before copying and must not regress to raw fullUrl clipboard writes.",
 );
 
-for (const file of [cityLanding, dealsCity, dealDetail]) {
+for (const file of [cityLanding, dealDetail]) {
   assert(
     !file.includes("window.location.origin}/") ||
       file.includes("resolveCanonicalShareUrl"),
@@ -91,7 +89,6 @@ for (const file of [cityLanding, dealsCity, dealDetail]) {
 
 const finalShareSurfaces = [
   cityLanding,
-  dealsCity,
   dealDetail,
   shareButton,
   shareButtonCaps,

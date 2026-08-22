@@ -33,6 +33,7 @@ import { videoStories, restaurants, requestLogs } from "@shared/schema";
 import { parseCleanAffiliateBusinessRoute } from "@shared/cleanAffiliateLinks";
 import { and, eq } from "drizzle-orm";
 import { registerAcquisitionPrerenderRoutes } from "./seo/acquisitionPrerender";
+import { buildJsonLdScript } from "./seo/jsonLdScript";
 import { registerPublicProfilePrerenderRoutes } from "./seo/publicProfilePrerender";
 import { guardUnauthenticatedProtectedHtml } from "./seo/protectedHtmlRoutes";
 import { resolvePublicBusinessSlug } from "./publicProfiles/publicBusinessSlugResolver";
@@ -100,6 +101,7 @@ const privateNoIndexPrefixes = [
   "/host/dashboard",
   "/event-coordinator/dashboard",
   "/supplier/dashboard",
+  "/restaurant/dashboard",
   "/account-setup",
   "/owner/verify",
 ];
@@ -1072,9 +1074,7 @@ app.use((req, res, next) => {
       } - Video | MealScout</title>
             <meta name="description" content="${escapeHtml(description)}">
             <link rel="canonical" href="${canonical}">
-            <script type="application/ld+json">${JSON.stringify(
-              schema
-            )}</script>
+            ${buildJsonLdScript(schema)}
             <style>
               body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 800px; margin: 0 auto; padding: 16px; }
               .player { background: #000; aspect-ratio: 9/16; width: 100%; }

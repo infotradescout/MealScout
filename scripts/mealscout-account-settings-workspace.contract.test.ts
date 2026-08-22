@@ -103,8 +103,8 @@ for (const snippet of [
 }
 
 for (const snippet of [
-  "const showAddress = profileSettings.showAddress !== false",
-  "const showContact = profileSettings.showContact !== false",
+  "resolvePublicProfileVisibility(",
+  "ownerUser?.publicProfileSettings",
 ]) {
   if (!publicRoutes.includes(snippet)) {
     throw new Error(`Live public visibility behavior missing: ${snippet}`);

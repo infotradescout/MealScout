@@ -477,10 +477,33 @@ for (const path of [
   "server/routes/publicSeoLandingRoutes.ts",
   "server/routes/seoRoutes.ts",
 ]) {
-  const source = readFileSync(resolve(process.cwd(), path), "utf8");
+  const routeSource = readFileSync(resolve(process.cwd(), path), "utf8");
+  const source =
+    [
+      "server/routes/publicSeoLandingRoutes.ts",
+      "server/routes/seoRoutes.ts",
+    ].includes(path)
+      ? [
+          routeSource,
+          readFileSync(
+            resolve(
+              process.cwd(),
+              "server/services/publicSeoLandingModel.ts",
+            ),
+            "utf8",
+          ),
+          readFileSync(
+            resolve(
+              process.cwd(),
+              "server/services/publicSeoLandingData.ts",
+            ),
+            "utf8",
+          ),
+        ].join("\n")
+      : routeSource;
   assert.match(
     source,
-    /isTruckBusinessType|isBarBusinessType|toCanonicalFoodBusinessType/,
+    /isTruckBusinessType|isBarBusinessType|toCanonicalFoodBusinessType|resolveStoredFoodBusinessType/,
     `${path} must use the canonical business taxonomy`,
   );
   assert.doesNotMatch(
@@ -509,10 +532,18 @@ const dealDiscoverySource = readFileSync(
   resolve(process.cwd(), "server/routes/dealDiscoveryRoutes.ts"),
   "utf8",
 );
-assert.match(dealDiscoverySource, /entityPath: buildPublicProfilePath\(/);
-assert.match(dealDiscoverySource, /: "restaurant",/);
+const publicSeoLandingDataSource = readFileSync(
+  resolve(process.cwd(), "server/services/publicSeoLandingData.ts"),
+  "utf8",
+);
+assert.match(dealDiscoverySource, /res\.status\(410\)\.json\(/);
+assert.match(
+  publicSeoLandingDataSource,
+  /const profileType = publicSeoBusinessProfileType\(row\)/,
+);
+assert.match(publicSeoLandingDataSource, /buildPublicSeoProfilePath\(\{/);
 assert.doesNotMatch(
-  dealDiscoverySource,
+  `${dealDiscoverySource}\n${publicSeoLandingDataSource}`,
   /row\.businessType === "bar"/,
   "Deal discovery must route restaurant, truck, and bar profiles canonically",
 );

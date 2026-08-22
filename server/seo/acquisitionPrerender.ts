@@ -1,5 +1,7 @@
 import type { Express, Request, Response, NextFunction } from "express";
 
+import { buildJsonLdScript } from "./jsonLdScript";
+
 type AcquisitionPageConfig = {
   path: string;
   title: string;
@@ -61,7 +63,7 @@ const buildPageHtml = (
   <meta property="og:type" content="website">
   <meta property="og:url" content="${escapeHtml(canonical)}">
   <meta name="robots" content="index,follow,max-snippet:-1,max-image-preview:large,max-video-preview:-1">
-  <script type="application/ld+json">${JSON.stringify(schema)}</script>
+  ${buildJsonLdScript(schema)}
   <style>
     body { font-family: -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif; margin: 0; background: #fffaf2; color: #111827; }
     main { max-width: 840px; margin: 0 auto; padding: 28px 18px 44px; }
@@ -149,7 +151,7 @@ export function registerAcquisitionPrerenderRoutes(
       ctaLinks: [
         { label: "Host Partnership Signup", href: "/host-location-partner" },
         { label: "Host Program", href: "/for-hosts" },
-        { label: "Public Events", href: "/events/public" },
+        { label: "Explore nearby food", href: "/scout" },
         { label: "Sitemap", href: "/sitemap" },
       ],
       schemaType: "LocalBusiness",

@@ -72,7 +72,6 @@ const AdminMarketHeatmap = lazy(() => import("@/pages/admin-market-heatmap"));
 const AffiliateEarnings = lazy(() => import("@/pages/AffiliateEarnings"));
 const CategoryPage = lazy(() => import("@/pages/category"));
 const FeaturedDealsPage = lazy(() => import("@/pages/deals-featured"));
-const DealsCityPage = lazy(() => import("@/pages/deals-city"));
 const LocationDetailPage = lazy(() => import("@/pages/location-detail"));
 const LocationDiscoveryPage = lazy(() => import("@/pages/location-discovery"));
 const PublicSeoLandingPage = lazy(() => import("@/pages/public-seo-landing"));
@@ -394,7 +393,6 @@ function SharedPublicRoutes() {
       <Route path="/cuisine/:type" component={PublicSeoLandingPage} />
       <Route path="/deals" component={FeaturedDealsPage} />
       <Route path="/deals/featured" component={FeaturedDealsPage} />
-      <Route path="/deals/:city" component={DealsCityPage} />
       <Route
         path="/restaurant/:id/:profileSlug"
         component={PublicProfilePage}
@@ -475,11 +473,11 @@ function SharedPublicRoutes() {
       <Route path="/dashboard" component={DashboardRouter} />
       <Route path="/user-dashboard" component={UserDashboard} />
       <Route path="/food-trucks" component={RedirectToScout} />
-      <Route path="/food-trucks/:citySlug" component={PublicSeoLandingPage} />
       <Route
         path="/food-trucks/:citySlug/:cuisineSlug"
-        component={CityLanding}
+        component={PublicSeoLandingPage}
       />
+      <Route path="/food-trucks/:citySlug" component={PublicSeoLandingPage} />
       <Route path="/sitemap" component={Sitemap} />
       <Route path="/status" component={StatusPage} />
       <Route path="/golden-plate-winners" component={GoldenPlateWinners} />

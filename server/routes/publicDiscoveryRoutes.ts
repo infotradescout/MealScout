@@ -1,10 +1,9 @@
 import type { Express } from "express";
 import { createHash } from "crypto";
-import { and, desc, eq, gte, inArray, isNotNull, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNotNull, lte, sql } from "drizzle-orm";
 import { z } from "zod";
 import {
   isBarBusinessType,
-  isTruckBusinessType,
   toCanonicalFoodBusinessType,
 } from "@shared/businessTypes";
 import {
@@ -60,17 +59,40 @@ import {
 } from "../publicProfiles/publicBusinessSlugResolver";
 import { buildPublicTruckOperatingPlan } from "../services/truckOperatingPlan";
 import { createStructuredMenuRevision } from "../services/menuRevision";
-import { loadConfirmedEventTrucks } from "../services/confirmedEventTrucks";
+import {
+  filterPublicConfirmedEventTrucks,
+  loadConfirmedEventTrucks,
+} from "../services/confirmedEventTrucks";
 import { resolveCityTimeZoneSync } from "../services/cityTimeZone";
 import { buildSlotDateTimes } from "../services/timeIntent";
 import { isSlotPublic } from "../services/publicSlotGate";
-import { canExposeAnonymousEventDetail } from "../publicProfiles/publicEventDetailAccess";
-import { buildPublicProfilePath } from "../publicProfiles/publicProfileUtils";
+import {
+  canExposeAnonymousEventDetail,
+  canExposeAnonymousEventFeedItem,
+} from "../publicProfiles/publicEventDetailAccess";
+import {
+  buildPublicProfilePath,
+  resolvePublicProfileVisibility,
+  toPublicRouteSlug,
+} from "../publicProfiles/publicProfileUtils";
 import { isAuthenticated } from "../unifiedAuth";
 import { deriveProfileEvidenceQuarantineVisibility } from "../services/profileEvidenceQuarantine";
 import { buildOrderingReadiness } from "./menuRoutes";
 import { getPublicMerchantDeliveryAvailability } from "./merchantDeliveryRoutes";
 import { buildProfileAnalyticsDiscoveryMetadata } from "../services/discoveryObservatory";
+import { isPublicDiscoveryEligibleEntity } from "@shared/publicDiscoveryIntegrity";
+import {
+  isPublicSeoLandingRestaurantEligible,
+  publicSeoBusinessProfileType,
+  publicSeoCityIdentityMatches,
+  publicSeoCityRequest,
+} from "../services/publicSeoLandingModel";
+import {
+  loadPublicSeoCityNavigationData,
+  loadPublicSeoLandingData,
+} from "../services/publicSeoLandingData";
+import { buildAnonymousPublicEventFeed } from "./eventRoutes";
+import { collectPublicSeoRowsInBatches } from "../services/publicSeoBatchTraversal";
 
 const toSlug = (value: string | null | undefined) =>
   String(value || "")
@@ -193,6 +215,7 @@ const PUBLIC_PROFILE_ANALYTICS_ACTIONS = new Set([
 const PUBLIC_PROFILE_ANALYTICS_SOURCES = new Set([
   "public_profile",
   "qr",
+  "discovery_food_trucks_city",
   "discovery_food_trucks_today",
   "discovery_deals_today",
   "discovery_events_today",
@@ -212,6 +235,7 @@ const DISCOVERY_ANALYTICS_EVENT_TYPES = new Set([
 ]);
 
 const DISCOVERY_SOURCE_PAGE_TYPES = new Set([
+  "food_trucks_city",
   "food_trucks_today",
   "deals_today",
   "events_today",
@@ -283,8 +307,27 @@ const normalizePublicProfileEntity = (value: string | null | undefined) => {
   return normalized;
 };
 
+type PublicRestaurantProfileEntity =
+  | "restaurant"
+  | "truck"
+  | "bar"
+  | "caterer"
+  | "private_chef";
+
+const canonicalPublicRestaurantProfileEntity = (
+  row: any,
+): PublicRestaurantProfileEntity | null => {
+  if (!row) return null;
+  const discoveryProfileType = publicSeoBusinessProfileType(row);
+  if (discoveryProfileType) return discoveryProfileType;
+  const serviceType = toCanonicalFoodBusinessType(row.businessType);
+  return serviceType === "caterer" || serviceType === "private_chef"
+    ? serviceType
+    : null;
+};
+
 const isTruckRestaurantRow = (row: any) =>
-  Boolean(row && (row.isFoodTruck || isTruckBusinessType(row.businessType)));
+  canonicalPublicRestaurantProfileEntity(row) === "truck";
 
 const resolveTruckRestaurantForPublicId = async (id: string) => {
   const direct = await storage.getRestaurant(id);
@@ -300,11 +343,31 @@ const resolveTruckRestaurantForPublicId = async (id: string) => {
   return mapped || null;
 };
 
-const buildPublicDealsPayload = async (restaurantId: string, row?: any) => {
+const buildPublicDealsPayload = async (
+  restaurantId: string,
+  row?: any,
+  visibility?: { showContact?: boolean },
+) => {
   const now = new Date();
   const dealsRows = await storage.getDealsByRestaurant(restaurantId);
+  const profileType = canonicalPublicRestaurantProfileEntity(row) || "restaurant";
+  const publicContact = row
+    ? toPublicRestaurantProfile({
+        row,
+        baseUrl: resolvePublicBaseUrl(),
+        profileType,
+        showAddress: false,
+        showContact: visibility?.showContact,
+      })
+    : null;
   const activeDeals = (Array.isArray(dealsRows) ? dealsRows : [])
     .filter((deal: any) => Boolean(deal?.isActive !== false))
+    .filter((deal: any) =>
+      isPublicDiscoveryEligibleEntity({
+        name: deal?.title,
+        isActive: true,
+      }),
+    )
     .filter((deal: any) => {
       const startDate = deal?.startDate ? new Date(deal.startDate) : null;
       const endDate = deal?.endDate ? new Date(deal.endDate) : null;
@@ -332,8 +395,8 @@ const buildPublicDealsPayload = async (restaurantId: string, row?: any) => {
           ? `${startTime} - ${endTime}`
           : startTime || endTime || null;
       const imageUrl = String(deal?.imageUrl || "").trim() || null;
-      const websiteUrl = String(row?.websiteUrl || "").trim() || null;
-      const phone = String(row?.phone || "").trim() || null;
+      const websiteUrl = publicContact?.websiteUrl || null;
+      const phone = publicContact?.phonePublic || null;
       let actionLabel = "Show this deal";
       let actionHref = `/deal/${encodeURIComponent(id)}`;
       let actionType:
@@ -417,6 +480,7 @@ const buildPublicEventsPayload = async (input: {
   restaurantId?: string;
   hostId?: string;
   restaurantRow?: any;
+  showContact?: boolean;
 }) => {
   const now = new Date();
   const queryStart = new Date(now);
@@ -431,7 +495,12 @@ const buildPublicEventsPayload = async (input: {
     startTime: events.startTime,
     endTime: events.endTime,
     status: events.status,
+    requiresPayment: events.requiresPayment,
+    updatedAt: events.updatedAt,
+    lastConfirmedAt: events.lastConfirmedAt,
     hostId: events.hostId,
+    hostUserId: hosts.userId,
+    hostPublicProfileSettings: users.publicProfileSettings,
     hostName: hosts.businessName,
     hostAddress: hosts.address,
     hostCity: hosts.city,
@@ -443,6 +512,7 @@ const buildPublicEventsPayload = async (input: {
         .from(eventBookings)
         .innerJoin(events, eq(eventBookings.eventId, events.id))
         .leftJoin(hosts, eq(events.hostId, hosts.id))
+        .leftJoin(users, eq(hosts.userId, users.id))
         .where(
           and(
             eq(eventBookings.truckId, input.restaurantId),
@@ -456,16 +526,23 @@ const buildPublicEventsPayload = async (input: {
         .select(publicEventFields)
         .from(events)
         .leftJoin(hosts, eq(events.hostId, hosts.id))
+        .leftJoin(users, eq(hosts.userId, users.id))
         .where(
           input.hostId
             ? and(eq(events.hostId, input.hostId), gte(events.date, queryStart))
             : gte(events.date, queryStart),
         );
 
+  const confirmedByEvent = await loadConfirmedEventTrucks(
+    Array.from(
+      new Set(
+        rows
+          .map((row: any) => String(row.id || "").trim())
+          .filter(Boolean),
+      ),
+    ),
+  );
   const upcoming = rows
-    .filter(
-      (row: any) => String(row.status || "").toLowerCase() !== "cancelled",
-    )
     .sort(
       (a: any, b: any) =>
         new Date(a.date as any).getTime() - new Date(b.date as any).getTime(),
@@ -490,7 +567,48 @@ const buildPublicEventsPayload = async (input: {
               endTime,
             })
           : null;
-      if (!interval || interval.endUtc.getTime() < now.getTime()) return null;
+      const confirmedTrucks = filterPublicConfirmedEventTrucks(
+        confirmedByEvent.get(id) || [],
+      );
+      const primaryTruck = confirmedTrucks[0] || null;
+      const lastConfirmedAtUtc = new Date(
+        primaryTruck?.bookingConfirmedAt ||
+          row.lastConfirmedAt ||
+          row.updatedAt ||
+          row.date ||
+          Number.NaN,
+      );
+      const slotIsPublic = Boolean(
+        primaryTruck &&
+          interval &&
+          Number.isFinite(lastConfirmedAtUtc.getTime()) &&
+          isSlotPublic({
+            slot: {
+              source: "parking_pass_booking",
+              status: "confirmed",
+              startsAtUtc: interval.startUtc,
+              endsAtUtc: interval.endUtc,
+              lastConfirmedAtUtc,
+            },
+            now,
+            ttlHours: 24 * 365 * 100,
+          }),
+      );
+      if (
+        !interval ||
+        !canExposeAnonymousEventFeedItem({
+          eventType: row.eventType,
+          requiresPayment: row.requiresPayment,
+          status: row.status,
+          eventName: row.title,
+          hostName: row.hostName,
+          slotIsPublic,
+          hasPublicConfirmedTruck: Boolean(primaryTruck),
+          ended: interval.endUtc.getTime() <= now.getTime(),
+        })
+      ) {
+        return null;
+      }
       const dateLabel = new Intl.DateTimeFormat("en-US", {
         timeZone,
         year: "numeric",
@@ -501,19 +619,29 @@ const buildPublicEventsPayload = async (input: {
         startTime && endTime
           ? `${startTime} - ${endTime}`
           : startTime || endTime || null;
-      const addressPublicLabel = [row.hostAddress, row.hostCity, row.hostState]
-        .map((v) => String(v || "").trim())
-        .filter(Boolean)
-        .join(", ");
+      const { showAddress } = resolvePublicProfileVisibility(
+        row.hostPublicProfileSettings,
+      );
+      const addressPublicLabel = showAddress
+        ? [row.hostAddress, row.hostCity, row.hostState]
+            .map((v) => String(v || "").trim())
+            .filter(Boolean)
+            .join(", ")
+        : "";
       let actionLabel: string = "View event";
-      let actionHref: string = `/event/${id}`;
+      let actionHref: string = `/event/${encodeURIComponent(
+        toPublicRouteSlug(title, id),
+      )}`;
       let actionType: "rsvp" | "share" | "website" | "directions" | "internal" =
         "internal";
       if (addressPublicLabel) {
         actionLabel = "Get directions";
         actionHref = `https://maps.google.com/?q=${encodeURIComponent(addressPublicLabel)}`;
         actionType = "directions";
-      } else if (String(input.restaurantRow?.websiteUrl || "").trim()) {
+      } else if (
+        input.showContact !== false &&
+        String(input.restaurantRow?.websiteUrl || "").trim()
+      ) {
         actionLabel = "Website";
         actionHref = String(input.restaurantRow.websiteUrl).trim();
         actionType = "website";
@@ -1609,6 +1737,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
       const safeBase = resolvePublicBaseUrl();
 
       if (["restaurant", "truck", "bar", "caterer", "private_chef"].includes(entity)) {
+        const requestedEntity = entity as PublicRestaurantProfileEntity;
         let row: any =
           entity === "truck"
             ? await resolveTruckRestaurantForPublicId(idHint)
@@ -1618,45 +1747,18 @@ export function registerPublicDiscoveryRoutes(app: Express) {
             (candidate: any) => Boolean(candidate?.isActive),
           );
           const slugKey = toSlug(slugOrId.replace(/--[0-9a-f-]{36}$/i, ""));
-          row = allRows.find((candidate: any) => {
-            if (entity === "truck" && !isTruckRestaurantRow(candidate))
-              return false;
-            if (
-              entity === "bar" &&
-              !isBarBusinessType(candidate?.businessType)
-            )
-              return false;
-            if (
-              (entity === "caterer" || entity === "private_chef") &&
-              toCanonicalFoodBusinessType(candidate?.businessType) !== entity
-            )
-              return false;
-            return toSlug(candidate?.name) === slugKey;
-          });
+          row = allRows.find(
+            (candidate: any) =>
+              canonicalPublicRestaurantProfileEntity(candidate) ===
+                requestedEntity && toSlug(candidate?.name) === slugKey,
+          );
         }
-        if (!row) {
+        const routeEntity = canonicalPublicRestaurantProfileEntity(row);
+        if (!row || routeEntity !== requestedEntity) {
           return res.status(404).json({ exists: false, reason: "not_found" });
         }
 
         const rowSlug = toSlug(row.name) || String(row.id);
-        const canonicalBusinessType = toCanonicalFoodBusinessType(row.businessType);
-        const serviceEntity =
-          canonicalBusinessType === "caterer" ||
-          canonicalBusinessType === "private_chef"
-            ? canonicalBusinessType
-            : null;
-        const routeEntity =
-          entity === "truck"
-            ? "truck"
-            : entity === "bar"
-              ? "bar"
-              : isTruckRestaurantRow(row)
-                ? "truck"
-                : isBarBusinessType(row.businessType)
-                  ? "bar"
-                  : serviceEntity
-                    ? serviceEntity
-                    : "restaurant";
         const canonicalPath = buildPublicProfilePath({
           entityType: routeEntity,
           name: row.name,
@@ -1771,9 +1873,10 @@ export function registerPublicDiscoveryRoutes(app: Express) {
 
       const baseUrl = resolvePublicBaseUrl();
 
-      if (entity === "restaurant") {
+      if (["restaurant", "truck", "bar"].includes(entity)) {
         const row = await storage.getRestaurant(id);
-        if (!row || !row.isActive) {
+        const canonicalEntity = canonicalPublicRestaurantProfileEntity(row);
+        if (!row || !row.isActive || canonicalEntity !== entity) {
           return res.status(404).json({ message: "Entity not found" });
         }
 
@@ -1797,12 +1900,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           (row.isVerified || row.mobileOnline || row.isFoodTruck ? 1 : 0);
 
         const canonicalPath = buildPublicProfilePath({
-          entityType:
-            isTruckRestaurantRow(row)
-              ? "truck"
-              : isBarBusinessType(row.businessType)
-                ? "bar"
-                : "restaurant",
+          entityType: canonicalEntity,
           name: row.name,
           id: row.id,
         });
@@ -1821,7 +1919,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           truckPresence.broadcastState === "live";
 
         return sendPublicJson(res, {
-          entityType: "restaurant",
+          entityType: canonicalEntity,
           entityId: row.id,
           title: row.name,
           canonicalPath,
@@ -1877,6 +1975,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
             maxTrucks: events.maxTrucks,
             requiresPayment: events.requiresPayment,
             hostId: events.hostId,
+            hostUserId: hosts.userId,
             hostName: hosts.businessName,
             hostAddress: hosts.address,
             hostCity: hosts.city,
@@ -1890,12 +1989,34 @@ export function registerPublicDiscoveryRoutes(app: Express) {
         if (!row) {
           return res.status(404).json({ message: "Entity not found" });
         }
+        if (
+          !isPublicDiscoveryEligibleEntity({ name: row.name, isActive: true }) ||
+          !isPublicDiscoveryEligibleEntity({
+            name: row.hostName,
+            isActive: true,
+          })
+        ) {
+          return res.status(404).json({ message: "Entity not found" });
+        }
 
-        const confirmedTrucks =
+        const confirmedTrucks = filterPublicConfirmedEventTrucks(
           (await loadConfirmedEventTrucks([String(row.id)])).get(
             String(row.id),
-          ) || [];
+          ) || [],
+        );
         const primaryTruck = confirmedTrucks[0] || null;
+        const hostOwner = await storage.getUser(row.hostUserId);
+        const hostVisibility = resolvePublicProfileVisibility(
+          hostOwner?.publicProfileSettings,
+        );
+        const publicHostLocation = [
+          ...(hostVisibility.showAddress ? [row.hostAddress] : []),
+          row.hostCity,
+          row.hostState,
+        ]
+          .map((value) => String(value || "").trim())
+          .filter(Boolean)
+          .join(", ");
         const latestBookingConfirmation = confirmedTrucks
           .map((truck) => truck.bookingConfirmedAt)
           .filter((value): value is Date => value instanceof Date)
@@ -1932,6 +2053,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
         );
         if (
           !canExposeAnonymousEventDetail({
+            eventType: row.eventType,
             requiresPayment: row.requiresPayment,
             status: row.status,
             slotIsPublic,
@@ -1955,7 +2077,9 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           (row.hostId ? 1 : 0) +
           (confirmedTrucks.length > 0 ? 1 : 0);
 
-        const canonicalPath = `/event/${row.id}`;
+        const canonicalPath = `/event/${encodeURIComponent(
+          toPublicRouteSlug(row.name || "Event", row.id),
+        )}`;
 
         return sendPublicJson(res, {
           entityType: "event",
@@ -1988,11 +2112,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           knowledgeGaps,
           sourceTruthStatements: [
             row.hostName ? `Hosted by ${row.hostName}` : null,
-            row.hostAddress || row.hostCity
-              ? [row.hostAddress, row.hostCity, row.hostState]
-                  .filter(Boolean)
-                  .join(", ")
-              : null,
+            publicHostLocation || null,
             confirmedTrucks.length > 0
               ? confirmedTrucks.length === 1
                 ? `Confirmed truck: ${primaryTruck?.name}`
@@ -2015,21 +2135,19 @@ export function registerPublicDiscoveryRoutes(app: Express) {
 
         const freshnessHours = hoursSince(row.updatedAt || row.createdAt);
         const knowledgeGaps = [
-          !row.notes ? "missing_description" : null,
           !row.address || !row.city || !row.state
             ? "missing_location_context"
             : null,
           !row.spotCount ? "missing_spot_capacity" : null,
+          !row.locationType ? "missing_location_type" : null,
           !row.isVerified ? "unverified_host" : null,
-          !row.stripeOnboardingCompleted ? "stripe_not_ready" : null,
         ].filter(Boolean) as string[];
 
         const readinessScore =
-          (row.notes ? 1 : 0) +
           (row.address && row.city && row.state ? 1 : 0) +
           (row.spotCount ? 1 : 0) +
-          (row.isVerified ? 1 : 0) +
-          (row.stripeOnboardingCompleted ? 1 : 0);
+          (row.locationType ? 1 : 0) +
+          (row.isVerified ? 1 : 0);
 
         const canonicalPath = buildPublicProfilePath({
           entityType: "location",
@@ -2052,21 +2170,18 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           active: true,
           evidenceSummary: {
             spotCount: Number(row.spotCount || 0),
-            stripeReady: Boolean(row.stripeOnboardingCompleted),
             locationType: row.locationType || null,
           },
           sourceFields: {
-            hasDescription: Boolean(row.notes),
             hasAddress: Boolean(row.address && row.city && row.state),
             hasSpotCapacity: Boolean(row.spotCount),
-            hasStripe: Boolean(row.stripeOnboardingCompleted),
+            hasLocationType: Boolean(row.locationType),
             hasImage: Boolean(row.spotImageUrl),
           },
           knowledgeGaps,
           sourceTruthStatements: [
             locationTypeLabel ? `Location type: ${locationTypeLabel}` : null,
             row.spotCount ? `${row.spotCount} parking spots configured` : null,
-            row.stripeOnboardingCompleted ? "Stripe onboarding complete" : null,
             row.isVerified ? "Verified host on MealScout" : null,
           ].filter(Boolean),
         });
@@ -2088,9 +2203,23 @@ export function registerPublicDiscoveryRoutes(app: Express) {
             isActive: deals.isActive,
             createdAt: deals.createdAt,
             restaurantName: restaurants.name,
+            restaurantIsFoodTruck: restaurants.isFoodTruck,
+            restaurantBusinessType: restaurants.businessType,
+            restaurantIsActive: restaurants.isActive,
+            restaurantOwnerId: restaurants.ownerId,
+            restaurantOwnerEmail: users.email,
+            restaurantAddress: restaurants.address,
+            restaurantCity: restaurants.city,
+            restaurantState: restaurants.state,
+            restaurantCuisineType: restaurants.cuisineType,
+            restaurantDescription: restaurants.description,
+            restaurantRawData: restaurants.rawData,
+            restaurantPhone: restaurants.phone,
+            restaurantWebsiteUrl: restaurants.websiteUrl,
           })
           .from(deals)
           .innerJoin(restaurants, eq(deals.restaurantId, restaurants.id))
+          .innerJoin(users, eq(restaurants.ownerId, users.id))
           .where(eq(deals.id, id))
           .limit(1);
 
@@ -2113,7 +2242,34 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           (row.startTime && row.endTime ? 1 : 0) +
           (row.restaurantId ? 1 : 0);
 
-        const canonicalPath = `/deal/${row.id}`;
+        const now = new Date();
+        const active =
+          Boolean(row.isActive) &&
+          isPublicDiscoveryEligibleEntity({
+            name: row.title,
+            isActive: true,
+          }) &&
+          (!row.startDate || new Date(row.startDate as any).getTime() <= now.getTime()) &&
+          (!row.endDate || new Date(row.endDate as any).getTime() >= now.getTime()) &&
+          isPublicSeoLandingRestaurantEligible({
+            name: row.restaurantName,
+            isActive: row.restaurantIsActive,
+            ownerId: row.restaurantOwnerId,
+            ownerEmail: row.restaurantOwnerEmail,
+            address: row.restaurantAddress,
+            city: row.restaurantCity,
+            state: row.restaurantState,
+            cuisineType: row.restaurantCuisineType,
+            description: row.restaurantDescription,
+            rawData: row.restaurantRawData,
+            phone: row.restaurantPhone,
+            websiteUrl: row.restaurantWebsiteUrl,
+            isFoodTruck: row.restaurantIsFoodTruck,
+            businessType: row.restaurantBusinessType,
+          });
+        const canonicalPath = `/deal/${encodeURIComponent(
+          toPublicRouteSlug(row.title || "Deal", row.id),
+        )}`;
 
         return sendPublicJson(res, {
           entityType: "deal",
@@ -2126,7 +2282,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           machineReadiness: machineReadinessBucket(readinessScore),
           updatedAt: row.createdAt || row.startDate || null,
           verified: false,
-          active: Boolean(row.isActive),
+          active,
           evidenceSummary: {
             dealType: row.dealType,
             discountValue: row.discountValue,
@@ -2143,7 +2299,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
             row.restaurantName ? `Offered by ${row.restaurantName}` : null,
             row.dealType ? `Deal type: ${row.dealType}` : null,
             row.discountValue ? `Discount value: ${row.discountValue}` : null,
-            row.isActive
+            active
               ? "Deal currently active on MealScout"
               : "Deal is not active",
           ].filter(Boolean),
@@ -2172,22 +2328,16 @@ export function registerPublicDiscoveryRoutes(app: Express) {
       if (!source || !source.isActive) {
         return res.status(404).json({ message: "Profile not found" });
       }
-      if (entity === "truck" && !isTruckRestaurantRow(source)) {
-        return res.status(404).json({ message: "Profile not found" });
-      }
-      if (entity === "bar" && !isBarBusinessType(source.businessType)) {
-        return res.status(404).json({ message: "Profile not found" });
-      }
       if (
-        (entity === "caterer" || entity === "private_chef") &&
-        toCanonicalFoodBusinessType(source.businessType) !== entity
+        canonicalPublicRestaurantProfileEntity(source) !==
+        (entity as PublicRestaurantProfileEntity)
       ) {
         return res.status(404).json({ message: "Profile not found" });
       }
 
       const sourceCity = String(source.city || "").trim().toLowerCase();
       const sourceState = String(source.state || "").trim().toLowerCase();
-      if (!sourceCity) {
+      if (!sourceCity || !sourceState) {
         return sendPublicJson(res, {
           sourceProfileId: id,
           attributionApplied: false,
@@ -2243,34 +2393,59 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           sql`lower(trim(${restaurants.state})) = ${sourceState}`,
         );
       }
-      const rows = await db
-        .select()
-        .from(restaurants)
-        .where(and(...marketConditions))
-        .limit(32);
-
-      const candidates: PublicCrossPromotionCandidate[] = [];
-      for (const row of rows) {
-        if (
-          String(row.id) === id ||
-          deriveProfileEvidenceQuarantineVisibility(row).isQuarantined ||
-          !promotionCandidateAllowed({
+      const rows = await collectPublicSeoRowsInBatches<any>({
+        visibleLimit: 32,
+        loadBatch: (offset, limit) =>
+          db
+            .select({
+              id: restaurants.id,
+              ownerId: restaurants.ownerId,
+              ownerEmail: users.email,
+              name: restaurants.name,
+              address: restaurants.address,
+              businessType: restaurants.businessType,
+              cuisineType: restaurants.cuisineType,
+              isFoodTruck: restaurants.isFoodTruck,
+              isActive: restaurants.isActive,
+              city: restaurants.city,
+              state: restaurants.state,
+              description: restaurants.description,
+              rawData: restaurants.rawData,
+              phone: restaurants.phone,
+              websiteUrl: restaurants.websiteUrl,
+              updatedAt: restaurants.updatedAt,
+            })
+            .from(restaurants)
+            .innerJoin(users, eq(restaurants.ownerId, users.id))
+            .where(and(...marketConditions))
+            .orderBy(desc(restaurants.updatedAt), asc(restaurants.id))
+            .limit(limit)
+            .offset(offset),
+        selectVisible: (row) =>
+          String(row.id) !== id &&
+          publicSeoBusinessProfileType(row) !== null &&
+          isPublicSeoLandingRestaurantEligible(row) &&
+          promotionCandidateAllowed({
             enabled: promotionPolicy?.enabled !== false,
             approvalMode:
               promotionPolicy?.approvalMode === "approved_only"
                 ? "approved_only"
                 : "automatic",
             partnerStatus: partnerStatusByTarget.get(String(row.id)),
-          })
+          }),
+      });
+
+      const candidates: PublicCrossPromotionCandidate[] = [];
+      for (const row of rows) {
+        if (
+          String(row.id) === id ||
+          deriveProfileEvidenceQuarantineVisibility(row).isQuarantined
         ) {
           continue;
         }
 
-        const profileType = isTruckRestaurantRow(row)
-          ? "truck"
-          : isBarBusinessType(row.businessType)
-            ? "bar"
-            : "restaurant";
+        const profileType = publicSeoBusinessProfileType(row);
+        if (!profileType) continue;
         const profilePath = await resolveUniqueCleanBusinessPathForEntity({
           entityType: profileType,
           id: String(row.id),
@@ -2289,10 +2464,8 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           cuisineType: row.cuisineType ? String(row.cuisineType) : null,
           city: row.city ? String(row.city) : null,
           state: row.state ? String(row.state) : null,
-          logoUrl: row.logoUrl ? String(row.logoUrl) : null,
-          coverImageUrl: row.coverImageUrl
-            ? String(row.coverImageUrl)
-            : null,
+          logoUrl: null,
+          coverImageUrl: null,
           profilePath,
           attributedProfilePath: promotionProfilePath,
           attributionApplied: attributedProfilePath !== profilePath,
@@ -2339,13 +2512,17 @@ export function registerPublicDiscoveryRoutes(app: Express) {
 
       if (entity === "truck") {
         const row = await resolveTruckRestaurantForPublicId(id);
-        if (!row || !row.isActive || !isTruckRestaurantRow(row)) {
+        if (
+          !row ||
+          !row.isActive ||
+          canonicalPublicRestaurantProfileEntity(row) !== "truck"
+        ) {
           return res.status(404).json({ message: "Profile not found" });
         }
         const ownerUser = await storage.getUser(row.ownerId);
-        const profileSettings = (ownerUser?.publicProfileSettings || {}) as any;
-        const showAddress = profileSettings.showAddress !== false;
-        const showContact = profileSettings.showContact !== false;
+        const { showAddress, showContact } = resolvePublicProfileVisibility(
+          ownerUser?.publicProfileSettings,
+        );
         const [menuPayload, operatingPlanPayload, dealsPayload] =
           await Promise.all([
             buildPublicMenuPayload(String(row.id), {
@@ -2354,7 +2531,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
               viewerUserId,
             }),
             buildPublicTruckOperatingPlan(String(row.id)),
-            buildPublicDealsPayload(String(row.id), row),
+            buildPublicDealsPayload(String(row.id), row, { showContact }),
           ]);
         const mapped = toPublicTruckProfile({
           row: {
@@ -2394,23 +2571,28 @@ export function registerPublicDiscoveryRoutes(app: Express) {
 
       if (entity === "bar") {
         const row = await storage.getRestaurant(id);
-        if (!row || !row.isActive || !isBarBusinessType(row.businessType)) {
+        if (
+          !row ||
+          !row.isActive ||
+          canonicalPublicRestaurantProfileEntity(row) !== "bar"
+        ) {
           return res.status(404).json({ message: "Profile not found" });
         }
         const ownerUser = await storage.getUser(row.ownerId);
-        const profileSettings = (ownerUser?.publicProfileSettings || {}) as any;
-        const showAddress = profileSettings.showAddress !== false;
-        const showContact = profileSettings.showContact !== false;
+        const { showAddress, showContact } = resolvePublicProfileVisibility(
+          ownerUser?.publicProfileSettings,
+        );
         const [menuPayload, dealsPayload, eventsPayload] = await Promise.all([
           buildPublicMenuPayload(String(row.id), {
             preferredMenuId: queryPreferredMenuId || null,
             eventId: queryEventId || null,
             viewerUserId,
           }),
-          buildPublicDealsPayload(String(row.id), row),
+          buildPublicDealsPayload(String(row.id), row, { showContact }),
           buildPublicEventsPayload({
             restaurantId: String(row.id),
             restaurantRow: row,
+            showContact,
           }),
         ]);
         const mapped = toPublicBarProfile({
@@ -2435,7 +2617,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
         );
         return sendPublicJson(res, {
           ...mapped,
-          entity: "restaurant",
+          entity: "bar",
           title: mapped.displayName,
           subtitle: mapped.serviceType || "Bar",
           address: mapped.addressPublicLabel,
@@ -2454,25 +2636,27 @@ export function registerPublicDiscoveryRoutes(app: Express) {
         if (
           !row ||
           !row.isActive ||
-          toCanonicalFoodBusinessType(row.businessType) !== entity
+          canonicalPublicRestaurantProfileEntity(row) !== entity
         ) {
           return res.status(404).json({ message: "Profile not found" });
         }
         const ownerUser = await storage.getUser(row.ownerId);
-        const profileSettings = (ownerUser?.publicProfileSettings || {}) as any;
-        const showAddress =
-          entity === "private_chef" ? false : profileSettings.showAddress !== false;
-        const showContact = profileSettings.showContact !== false;
+        const visibility = resolvePublicProfileVisibility(
+          ownerUser?.publicProfileSettings,
+        );
+        const showAddress = entity === "private_chef" ? false : visibility.showAddress;
+        const showContact = visibility.showContact;
         const [menuPayload, dealsPayload, eventsPayload] = await Promise.all([
           buildPublicMenuPayload(String(row.id), {
             preferredMenuId: queryPreferredMenuId || null,
             eventId: queryEventId || null,
             viewerUserId,
           }),
-          buildPublicDealsPayload(String(row.id), row),
+          buildPublicDealsPayload(String(row.id), row, { showContact }),
           buildPublicEventsPayload({
             restaurantId: String(row.id),
             restaurantRow: row,
+            showContact,
           }),
         ]);
         const mapped = toPublicRestaurantProfile({
@@ -2514,9 +2698,9 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           return res.status(404).json({ message: "Profile not found" });
         }
         const ownerUser = await storage.getUser(row.userId);
-        const profileSettings = (ownerUser?.publicProfileSettings || {}) as any;
-        const showAddress = profileSettings.showAddress !== false;
-        const showContact = profileSettings.showContact !== false;
+        const { showAddress, showContact } = resolvePublicProfileVisibility(
+          ownerUser?.publicProfileSettings,
+        );
         const eventsPayload = await buildPublicEventsPayload({
           hostId: String(row.id),
         });
@@ -2568,14 +2752,17 @@ export function registerPublicDiscoveryRoutes(app: Express) {
 
       if (entity === "restaurant") {
         const row = await storage.getRestaurant(id);
-        if (!row || !row.isActive) {
+        if (
+          !row ||
+          !row.isActive ||
+          canonicalPublicRestaurantProfileEntity(row) !== "restaurant"
+        ) {
           return res.status(404).json({ message: "Profile not found" });
         }
         const ownerUser = await storage.getUser(row.ownerId);
-        const profileSettings = (ownerUser?.publicProfileSettings || {}) as any;
-        const showAddress = profileSettings.showAddress !== false;
-        const showContact = profileSettings.showContact !== false;
-        const isTruckProfile = isTruckRestaurantRow(row);
+        const { showAddress, showContact } = resolvePublicProfileVisibility(
+          ownerUser?.publicProfileSettings,
+        );
         const [menuPayload, dealsPayload, profileActivityPayload] =
           await Promise.all([
             buildPublicMenuPayload(String(row.id), {
@@ -2583,84 +2770,13 @@ export function registerPublicDiscoveryRoutes(app: Express) {
               eventId: queryEventId || null,
               viewerUserId,
             }),
-            buildPublicDealsPayload(String(row.id), row),
-            isTruckProfile
-              ? buildPublicTruckOperatingPlan(String(row.id))
-              : buildPublicEventsPayload({
-                  restaurantId: String(row.id),
-                  restaurantRow: row,
-                }),
+            buildPublicDealsPayload(String(row.id), row, { showContact }),
+            buildPublicEventsPayload({
+              restaurantId: String(row.id),
+              restaurantRow: row,
+              showContact,
+            }),
           ]);
-        if (isTruckProfile) {
-          const mapped = toPublicTruckProfile({
-            row: {
-              ...row,
-              ...menuPayload,
-              ...dealsPayload,
-              ...profileActivityPayload,
-            },
-            baseUrl,
-            showAddress,
-            showContact,
-          });
-          const cleanBusinessPath =
-            await resolveUniqueCleanBusinessPathForEntity({
-              entityType: "truck",
-              id: String(row.id),
-              name: String(
-                (row as any).name || (row as any).businessName || row.id,
-              ),
-            });
-          return sendPublicJson(res, {
-            ...mapped,
-            entity: "truck",
-            title: mapped.displayName,
-            subtitle: mapped.serviceType || "Food Truck",
-            address: mapped.addressPublicLabel,
-            phone: mapped.phonePublic,
-            imageUrl: mapped.coverImageUrl || mapped.logoUrl,
-            profilePath: mapped.seo.canonicalUrl.replace(baseUrl, ""),
-            cleanBusinessPath,
-            canonicalUrl: mapped.seo.canonicalUrl,
-            websiteUrl: mapped.websiteUrl,
-            social: mapped.socialLinks,
-          });
-        }
-        if (isBarBusinessType(row.businessType)) {
-          const mapped = toPublicBarProfile({
-            row: {
-              ...row,
-              ...menuPayload,
-              ...dealsPayload,
-              ...profileActivityPayload,
-            },
-            baseUrl,
-            showAddress,
-            showContact,
-          });
-          const cleanBusinessPath =
-            await resolveUniqueCleanBusinessPathForEntity({
-              entityType: "bar",
-              id: String(row.id),
-              name: String(
-                (row as any).name || (row as any).businessName || row.id,
-              ),
-            });
-          return sendPublicJson(res, {
-            ...mapped,
-            entity: "bar",
-            title: mapped.displayName,
-            subtitle: mapped.serviceType || "Bar",
-            address: mapped.addressPublicLabel,
-            phone: mapped.phonePublic,
-            imageUrl: mapped.coverImageUrl || mapped.logoUrl,
-            profilePath: mapped.seo.canonicalUrl.replace(baseUrl, ""),
-            cleanBusinessPath,
-            canonicalUrl: mapped.seo.canonicalUrl,
-            websiteUrl: mapped.websiteUrl,
-            social: mapped.socialLinks,
-          });
-        }
         const mapped = toPublicRestaurantProfile({
           row: {
             ...row,
@@ -2703,9 +2819,9 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           return res.status(404).json({ message: "Profile not found" });
         }
         const ownerUser = await storage.getUser(row.userId);
-        const profileSettings = (ownerUser?.publicProfileSettings || {}) as any;
-        const showAddress = profileSettings.showAddress !== false;
-        const showContact = profileSettings.showContact !== false;
+        const { showAddress, showContact } = resolvePublicProfileVisibility(
+          ownerUser?.publicProfileSettings,
+        );
         const mapped = toPublicLocationProfile({
           row,
           baseUrl,
@@ -2753,9 +2869,9 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           return res.status(404).json({ message: "Profile not found" });
         }
         const ownerUser = await storage.getUser(row.userId);
-        const profileSettings = (ownerUser?.publicProfileSettings || {}) as any;
-        const showAddress = profileSettings.showAddress !== false;
-        const showContact = profileSettings.showContact !== false;
+        const { showAddress, showContact } = resolvePublicProfileVisibility(
+          ownerUser?.publicProfileSettings,
+        );
         const [counts] = await db
           .select({
             activeProductCount: sql<number>`count(*)`,
@@ -3406,46 +3522,29 @@ export function registerPublicDiscoveryRoutes(app: Express) {
         })
         .from(cities)
         .orderBy(desc(cities.createdAt));
-
-      const restaurantRows = await db
-        .select({
-          city: restaurants.city,
-          cuisineType: restaurants.cuisineType,
-          updatedAt: restaurants.updatedAt,
-        })
-        .from(restaurants)
-        .where(eq(restaurants.isActive, true));
-
-      const cuisineByCity = new Map<string, Map<string, number>>();
-      for (const row of restaurantRows as any[]) {
-        const cityName = String(row.city || "")
-          .trim()
-          .toLowerCase();
-        const cuisine = toSlug(row.cuisineType || "");
-        if (!cityName || !cuisine) continue;
-        if (!cuisineByCity.has(cityName)) {
-          cuisineByCity.set(cityName, new Map());
-        }
-        const cityMap = cuisineByCity.get(cityName)!;
-        cityMap.set(cuisine, (cityMap.get(cuisine) || 0) + 1);
+      const payloadBySlug = new Map<string, any>();
+      for (const cityRow of cityRows) {
+        const requestedSlug = String(cityRow.slug || "").trim().toLowerCase();
+        if (!requestedSlug || payloadBySlug.has(requestedSlug)) continue;
+        const navigation = await loadPublicSeoCityNavigationData(requestedSlug);
+        if (!navigation || navigation.totalFood === 0) continue;
+        const canonicalSlug = String(navigation.city.slug || "").trim();
+        const canonicalName = String(navigation.city.name || "").trim();
+        if (!canonicalSlug || !canonicalName || payloadBySlug.has(canonicalSlug)) continue;
+        payloadBySlug.set(canonicalSlug, {
+          id: canonicalSlug,
+          name: canonicalName,
+          slug: canonicalSlug,
+          state: navigation.city.state,
+          hasFoodTrucks: navigation.totalTrucks > 0,
+          // Keep the established `cuisines` field truck-specific for existing
+          // clients while exposing the complete eligible food-cuisine set for
+          // global cuisine navigation.
+          cuisines: navigation.truckCuisines,
+          foodCuisines: navigation.foodCuisines,
+        });
       }
-
-      const payload = cityRows.map((city: any) => {
-        const cityCuisineMap =
-          cuisineByCity.get(String(city.name || "").toLowerCase()) || new Map();
-        const cuisines = Array.from(cityCuisineMap.entries())
-          .sort((a, b) => b[1] - a[1])
-          .slice(0, 6)
-          .map(([slug, count]) => ({ slug, count }));
-        return {
-          id: city.id,
-          name: city.name,
-          slug: city.slug,
-          state: city.state,
-          updatedAt: city.createdAt,
-          cuisines,
-        };
-      });
+      const payload = Array.from(payloadBySlug.values());
 
       res.setHeader(
         "Cache-Control",
@@ -3460,69 +3559,74 @@ export function registerPublicDiscoveryRoutes(app: Express) {
 
   app.get("/api/cities/:slug", async (req, res) => {
     try {
-      const { slug } = req.params as { slug: string };
-      const [city] = await db
-        .select()
-        .from(cities)
-        .where(eq(cities.slug, slug));
-      if (!city) {
+      const slug = String(req.params.slug || "").trim();
+      const now = new Date();
+      const cityResolution = await loadPublicSeoLandingData(
+        publicSeoCityRequest("city", slug),
+        now,
+      );
+      const truckResolution = await loadPublicSeoLandingData(
+        publicSeoCityRequest("food-trucks", slug),
+        now,
+      );
+      if (cityResolution.kind !== "found") {
         return res.status(404).json({ message: "City not found" });
       }
-
-      const cityRestaurants = await db
-        .select()
-        .from(restaurants)
-        .where(eq(restaurants.city, city.name));
-      const trucks = cityRestaurants.filter((row: any) =>
-        isTruckRestaurantRow(row),
+      const canonicalCity = {
+        id: "",
+        name: String(cityResolution.payload.page.cityName || ""),
+        slug: String(cityResolution.payload.page.citySlug || ""),
+        state: cityResolution.payload.page.cityState,
+      };
+      const toCityBusiness = (item: (typeof cityResolution.payload.items)[number]) => ({
+        id: item.id,
+        name: item.displayName,
+        cuisineType: item.cuisineTags[0] || null,
+        profileType: item.profileType,
+        profilePath: item.profilePath,
+      });
+      const trucks =
+        truckResolution.kind === "found"
+          ? truckResolution.payload.items.map(toCityBusiness)
+          : [];
+      const restaurantsOnly = cityResolution.payload.items
+        .filter((item) => item.profileType !== "truck")
+        .map(toCityBusiness);
+      const publicEvents = await buildAnonymousPublicEventFeed(
+        await storage.getAllUpcomingEvents(),
+        now,
       );
-      const restaurantsOnly = cityRestaurants.filter(
-        (row: any) => !isTruckRestaurantRow(row),
-      );
-
-      const hostRows = await db
-        .select()
-        .from(hosts)
-        .where(eq(hosts.city, city.name));
-      const hostIds = hostRows.map((row: any) => row.id);
-      let upcomingEvents: any[] = [];
-      if (hostIds.length) {
-        const now = new Date();
-        upcomingEvents = await db
-          .select()
-          .from(events)
-          .where(eq(events.status, "open"));
-        upcomingEvents = upcomingEvents.filter(
-          (row: any) =>
-            new Date(row.date) >= now && hostIds.includes(row.hostId),
-        );
-      }
-
-      const restaurantIds = cityRestaurants.map((row: any) => row.id);
-      let stories: any[] = [];
-      if (restaurantIds.length) {
-        stories = await db
-          .select()
-          .from(videoStories)
-          .orderBy(desc(videoStories.createdAt));
-        stories = stories
-          .filter(
-            (row: any) =>
-              row.restaurantId && restaurantIds.includes(row.restaurantId),
-          )
-          .slice(0, 8);
-      }
-
+      const upcomingEvents = publicEvents
+        .filter((event: any) =>
+          publicSeoCityIdentityMatches(
+            {
+              city: event?.host?.city,
+              state: event?.host?.state,
+            },
+            canonicalCity,
+          ),
+        )
+        .map((event: any) => ({
+          id: String(event.id),
+          name: String(event.name || "").trim() || null,
+          date: event.date ? new Date(event.date).toISOString() : null,
+          startTime: String(event.startTime || "").trim() || null,
+          endTime: String(event.endTime || "").trim() || null,
+        }));
       const cuisineCounts: Record<string, number> = {};
-      for (const row of cityRestaurants) {
-        if ((row as any).cuisineType) {
-          const cuisine = String((row as any).cuisineType).toLowerCase();
+      for (const row of trucks) {
+        if (row.cuisineType) {
+          const cuisine = String(row.cuisineType).trim();
           cuisineCounts[cuisine] = (cuisineCounts[cuisine] || 0) + 1;
         }
       }
 
       sendPublicJson(res, {
-        city: { name: city.name, slug: city.slug, state: city.state },
+        city: {
+          name: canonicalCity.name,
+          slug: canonicalCity.slug,
+          state: canonicalCity.state,
+        },
         stats: {
           restaurants: restaurantsOnly.length,
           trucks: trucks.length,
@@ -3535,12 +3639,15 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           .map(([name, count]) => ({ name, count }))
           .sort((a, b) => b.count - a.count)
           .slice(0, 12),
-        stories,
+        stories: [],
         updatedAt: new Date().toISOString(),
       });
     } catch (error) {
       console.error("Error building city page:", error);
-      res.status(500).json({ message: "Failed to load city" });
+      res.setHeader("Retry-After", "60");
+      res.setHeader("Cache-Control", "no-store");
+      res.setHeader("X-Robots-Tag", "noindex,follow");
+      res.status(503).json({ message: "City is temporarily unavailable" });
     }
   });
 }

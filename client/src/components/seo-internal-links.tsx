@@ -3,17 +3,16 @@ import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { apiUrl } from "@/lib/api";
-import {
-  buildFoodTrucksCityPath,
-  titleCaseSeoTerm,
-} from "@/lib/seo-city";
+import { buildFoodTrucksCityPath, titleCaseSeoTerm } from "@/lib/seo-city";
 
 type CityIndexItem = {
   id: string;
   name: string;
   slug: string;
   state?: string | null;
+  hasFoodTrucks: boolean;
   cuisines: Array<{ slug: string; count: number }>;
+  foodCuisines: Array<{ slug: string; count: number }>;
 };
 
 type SEOInternalLinksProps = {
@@ -62,24 +61,31 @@ export function SEOInternalLinks({
             className="border-[color:var(--border-subtle)] bg-[var(--bg-surface)] shadow-clean"
           >
             <CardContent className="p-4 space-y-3">
-              <Link href={buildFoodTrucksCityPath(city.slug)}>
+              <Link href={`/city/${encodeURIComponent(city.slug)}/food`}>
                 <div className="font-medium text-foreground hover:text-[color:var(--accent-text)]">
-                  Food trucks in {city.name}
+                  Local food in {city.name}
                   {city.state ? `, ${city.state}` : ""}
                 </div>
               </Link>
-              <div className="flex flex-wrap gap-2">
-                {(city.cuisines || []).slice(0, maxCuisineLinksPerCity).map((cuisine) => (
-                  <Link
-                    key={`${city.slug}-${cuisine.slug}`}
-                    href={buildFoodTrucksCityPath(city.slug, cuisine.slug)}
-                  >
-                    <span className="inline-flex rounded-full border border-[color:var(--border-subtle)] px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground">
-                      {titleCaseSeoTerm(cuisine.slug)}
-                    </span>
-                  </Link>
-                ))}
-              </div>
+              {city.hasFoodTrucks && (
+                <div className="flex flex-wrap gap-2">
+                  {(city.cuisines || [])
+                    .slice(0, maxCuisineLinksPerCity)
+                    .map((cuisine) => (
+                      <Link
+                        key={`${city.slug}-${cuisine.slug}`}
+                        href={buildFoodTrucksCityPath(
+                          city.slug,
+                          cuisine.slug,
+                        )}
+                      >
+                        <span className="inline-flex rounded-full border border-[color:var(--border-subtle)] px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground">
+                          {titleCaseSeoTerm(cuisine.slug)}
+                        </span>
+                      </Link>
+                    ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         ))}

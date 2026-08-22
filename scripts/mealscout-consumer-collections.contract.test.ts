@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 
 const shell = readFileSync(
   "client/src/components/consumer-collection-shell.tsx",
@@ -7,7 +7,19 @@ const shell = readFileSync(
 );
 const favorites = readFileSync("client/src/pages/favorites.tsx", "utf8");
 const deals = readFileSync("client/src/pages/deals-featured.tsx", "utf8");
-const cityDeals = readFileSync("client/src/pages/deals-city.tsx", "utf8");
+const appRoutes = readFileSync("client/src/App.tsx", "utf8");
+const publicSeoLanding = readFileSync(
+  "client/src/pages/public-seo-landing.tsx",
+  "utf8",
+);
+const publicSeoRoute = readFileSync(
+  "client/src/lib/publicSeoLandingRoute.ts",
+  "utf8",
+);
+const dealDiscoveryRoutes = readFileSync(
+  "server/routes/dealDiscoveryRoutes.ts",
+  "utf8",
+);
 const events = readFileSync("client/src/pages/events.tsx", "utf8");
 const eventsRouter = readFileSync("client/src/pages/events-router.tsx", "utf8");
 const eventCoordinator = readFileSync(
@@ -43,10 +55,35 @@ assert(!deals.includes("<Navigation"));
 assert(!deals.includes(">Sort<"));
 assert(!deals.includes(">Filter<"));
 
-assert(cityDeals.includes("<ConsumerCollectionShell"));
-assert(cityDeals.includes('section="deals"'));
-assert(!cityDeals.includes("<BackHeader"));
-assert(!cityDeals.includes('href="/search"'));
+assert.equal(
+  existsSync("client/src/pages/deals-city.tsx"),
+  false,
+  "The retired legacy city-deals page must not be restored.",
+);
+assert(
+  appRoutes.includes(
+    '<Route path="/deals-today/:city" component={PublicSeoLandingPage} />',
+  ),
+  "City deal discovery must use the canonical deals-today public SEO surface.",
+);
+assert(
+  publicSeoRoute.includes('parts[0] === "deals-today"') &&
+    publicSeoRoute.includes("/api/public/seo/deals-today/"),
+  "The canonical deals-today browser page must resolve through the shared public SEO API.",
+);
+assert(
+  publicSeoLanding.includes("mapPublicSeoLandingPathToEndpoint") &&
+    publicSeoLanding.includes("item.profilePath") &&
+    publicSeoLanding.includes("item.statusLabel"),
+  "The canonical deals-today collection must render shared public cards and status truth.",
+);
+assert(
+  dealDiscoveryRoutes.includes('app.get("/api/public/deals/city/:citySlug"') &&
+    dealDiscoveryRoutes.includes("res.status(410).json") &&
+    dealDiscoveryRoutes.includes("replacementPath") &&
+    dealDiscoveryRoutes.includes("deals: []"),
+  "The retired city-deals API must fail terminally with its canonical replacement.",
+);
 
 assert(events.includes('queryKey: ["/api/events/upcoming"]'));
 assert(events.includes('section="events"'));
@@ -73,7 +110,7 @@ for (const destination of [
 assert(profile.includes('href: "/favorites"'));
 assert(profile.includes('title: "Saved"'));
 
-const publicCopy = `${shell}\n${favorites}\n${deals}\n${cityDeals}\n${events}`.toLowerCase();
+const publicCopy = `${shell}\n${favorites}\n${deals}\n${publicSeoLanding}\n${events}`.toLowerCase();
 for (const prohibited of [
   "open scout",
   "scout nearby",

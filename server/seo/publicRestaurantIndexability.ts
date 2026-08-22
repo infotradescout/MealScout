@@ -14,7 +14,7 @@ export const PUBLIC_RESTAURANT_INDEXABLE_ROBOTS =
 export const PUBLIC_RESTAURANT_NOINDEX_ROBOTS = "noindex,follow";
 
 /** Bump when sitemap membership rules change so CDN/browser caches cannot keep excluded URLs. */
-export const SITEMAP_MEMBERSHIP_VERSION = "pd-v1-indexability-1";
+export const SITEMAP_MEMBERSHIP_VERSION = "pd-v1-indexability-2";
 
 export const IMPORT_SYSTEM_EMAIL = (
   process.env.IMPORT_SYSTEM_EMAIL || "system-import@mealscout.us"
@@ -153,5 +153,4 @@ export function applySitemapMembershipCacheHeaders(res: {
     "public, max-age=60, s-maxage=300, must-revalidate",
   );
   res.setHeader("X-MealScout-Sitemap-Membership", SITEMAP_MEMBERSHIP_VERSION);
-  res.setHeader("ETag", `"sitemap-membership-${SITEMAP_MEMBERSHIP_VERSION}"`);
 }
