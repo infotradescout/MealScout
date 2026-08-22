@@ -880,6 +880,11 @@ if (
 if (
   !publicDiscoveryRoutes.includes('from "../seo/publicCanonicalOrigin"') ||
   !publicDiscoveryRoutes.includes("resolvePublicCanonicalOrigin({") ||
+  !eventRoutes.includes('from "../seo/publicCanonicalOrigin"') ||
+  !publicEventDetailSource.includes("resolvePublicCanonicalOrigin({") ||
+  publicEventDetailSource.includes(
+    'process.env.PUBLIC_BASE_URL || "https://www.mealscout.us"',
+  ) ||
   !publicCanonicalOrigin.includes(
     'MEALSCOUT_PUBLIC_CANONICAL_ORIGIN = "https://www.mealscout.us"',
   ) ||
