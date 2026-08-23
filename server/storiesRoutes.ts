@@ -37,6 +37,7 @@ import {
 import { normalizePublicUrl } from './publicProfiles/publicProfileUtils';
 import { deriveProfileEvidenceQuarantineVisibility } from './services/profileEvidenceQuarantine';
 import { distributedRateLimit } from './middleware/distributedRateLimit';
+import { loadEligiblePage } from './utils/eligiblePagination';
 
 const storyViewLimiter = distributedRateLimit({
   scope: 'public-story-view',
@@ -46,6 +47,17 @@ const storyViewLimiter = distributedRateLimit({
     `${String(req.params.storyId || '')}:${String(
       (req as any).user?.id || (req as any).sessionID || req.ip || 'anonymous',
     )}`,
+});
+
+const STORY_FEED_MAX_PAGE = 25;
+const STORY_FEED_CANDIDATE_BATCH_SIZE = 100;
+const STORY_FEED_MAX_SCAN_BATCHES = 10;
+const storyFeedLimiter = distributedRateLimit({
+  scope: 'public-story-feed',
+  limit: 60,
+  windowMs: 60 * 1000,
+  key: (req) =>
+    String((req as any).user?.id || req.ip || (req as any).sessionID || 'anonymous'),
 });
 
 const storyShareLimiter = distributedRateLimit({
@@ -346,50 +358,83 @@ export default function setupStoriesRoutes(app: Express) {
 
   // GET - Feed (infinite scroll)
   // Feed algorithm: 30% community (recent), 20% featured (sponsored), 20% trending, 20% nearby, 10% discovery
-  app.get('/api/stories/feed', async (req, res) => {
+  app.get('/api/stories/feed', storyFeedLimiter, async (req, res) => {
     try {
       const userId = (req as any).user?.id;
-      const page = parseInt(req.query.page as string) || 0;
+      const requestedPage = Number(String(req.query.page ?? '0').trim() || '0');
+      if (
+        !Number.isSafeInteger(requestedPage) ||
+        requestedPage < 0 ||
+        requestedPage > STORY_FEED_MAX_PAGE
+      ) {
+        return res.status(400).json({ message: 'Invalid story feed page' });
+      }
+      const page = requestedPage;
       const limit = 10;
-      const offset = page * limit;
 
       // Get featured videos (sponsored content)
-      const featuredStoryCandidates = await db
-        .select({
-          ...getTableColumns(videoStories),
-          creatorDisabled: users.isDisabled,
-          restaurantActive: restaurants.isActive,
-          restaurantName: restaurants.name,
-          restaurantAddress: restaurants.address,
-          restaurantCity: restaurants.city,
-          restaurantState: restaurants.state,
-          restaurantCuisineType: restaurants.cuisineType,
-          restaurantDescription: restaurants.description,
-          restaurantOwnerDisabled: sql<boolean | null>`(
-            select linked_owner.is_disabled from users linked_owner
-            where linked_owner.id = ${restaurants.ownerId} limit 1
-          )`,
-          restaurantRawData: restaurants.rawData,
-        })
-        .from(videoStories)
-        .innerJoin(users, eq(videoStories.userId, users.id))
-        .leftJoin(restaurants, eq(videoStories.restaurantId, restaurants.id))
-        .where(
-          and(
-            eq(videoStories.isFeatured, true),
-            publicStoryPublicationWhere(sql`NOW()`),
-            eq(users.isDisabled, false),
-            or(
-              isNull(videoStories.restaurantId),
-              eq(restaurants.isActive, true),
+      const loadFeaturedStoryCandidates = async (
+        candidateOffset: number,
+        candidateLimit: number,
+      ) =>
+        db
+          .select({
+            ...getTableColumns(videoStories),
+            creatorDisabled: users.isDisabled,
+            restaurantActive: restaurants.isActive,
+            restaurantName: restaurants.name,
+            restaurantAddress: restaurants.address,
+            restaurantCity: restaurants.city,
+            restaurantState: restaurants.state,
+            restaurantCuisineType: restaurants.cuisineType,
+            restaurantDescription: restaurants.description,
+            restaurantPhone: restaurants.phone,
+            restaurantWebsiteUrl: restaurants.websiteUrl,
+            restaurantOwnerDisabled: sql<boolean | null>`(
+              select linked_owner.is_disabled from users linked_owner
+              where linked_owner.id = ${restaurants.ownerId} limit 1
+            )`,
+            restaurantEmail: sql<string | null>`(
+              select linked_owner.email from users linked_owner
+              where linked_owner.id = ${restaurants.ownerId} limit 1
+            )`,
+            restaurantRawData: restaurants.rawData,
+          })
+          .from(videoStories)
+          .innerJoin(users, eq(videoStories.userId, users.id))
+          .leftJoin(restaurants, eq(videoStories.restaurantId, restaurants.id))
+          .where(
+            and(
+              eq(videoStories.isFeatured, true),
+              publicStoryPublicationWhere(sql`NOW()`),
+              eq(users.isDisabled, false),
+              or(
+                isNull(videoStories.restaurantId),
+                eq(restaurants.isActive, true),
+              ),
             ),
           )
-        )
-        .orderBy(desc(videoStories.featuredStartedAt))
-        .limit(8);
-      const featuredStories = featuredStoryCandidates
-        .filter((row: any) => isPublicStoryAssociationEligible(row))
-        .slice(0, 2); // Show 2 featured videos per page
+          .orderBy(
+            desc(videoStories.featuredStartedAt),
+            desc(videoStories.id),
+          )
+          .limit(candidateLimit)
+          .offset(candidateOffset);
+      const featuredPage = await loadEligiblePage<any>({
+        offset: 0,
+        limit: 2,
+        batchSize: STORY_FEED_CANDIDATE_BATCH_SIZE,
+        maxBatches: STORY_FEED_MAX_SCAN_BATCHES,
+        loadBatch: loadFeaturedStoryCandidates,
+        isEligible: (row) => isPublicStoryAssociationEligible(row),
+      }); // Show 2 eligible featured videos per page
+      if (featuredPage.scanLimitReached) {
+        res.setHeader('Retry-After', '5');
+        return res
+          .status(503)
+          .json({ message: 'Story feed is temporarily unavailable' });
+      }
+      const featuredStories = featuredPage.items;
 
       // Get active ads (house + affiliate)
       const nowSql = sql`NOW()`;
@@ -412,43 +457,72 @@ export default function setupStoriesRoutes(app: Express) {
         .limit(5); // fetch a handful of ads to rotate
 
       // Get community stories (recent uploads)
-      const communityStoryCandidates = await db
-        .select({
-          ...getTableColumns(videoStories),
-          creatorDisabled: users.isDisabled,
-          restaurantActive: restaurants.isActive,
-          restaurantName: restaurants.name,
-          restaurantAddress: restaurants.address,
-          restaurantCity: restaurants.city,
-          restaurantState: restaurants.state,
-          restaurantCuisineType: restaurants.cuisineType,
-          restaurantDescription: restaurants.description,
-          restaurantOwnerDisabled: sql<boolean | null>`(
-            select linked_owner.is_disabled from users linked_owner
-            where linked_owner.id = ${restaurants.ownerId} limit 1
-          )`,
-          restaurantRawData: restaurants.rawData,
-        })
-        .from(videoStories)
-        .innerJoin(users, eq(videoStories.userId, users.id))
-        .leftJoin(restaurants, eq(videoStories.restaurantId, restaurants.id))
-        .where(
-          and(
-            publicStoryPublicationWhere(sql`NOW()`),
-            eq(users.isDisabled, false),
-            or(
-              isNull(videoStories.restaurantId),
-              eq(restaurants.isActive, true),
+      const communityPageSize = limit - featuredStories.length;
+      const communityOffset = page * communityPageSize;
+      const featuredStoryIds = new Set(
+        featuredStories.map((story) => String(story.id)),
+      );
+      const loadCommunityStoryCandidates = async (
+        candidateOffset: number,
+        candidateLimit: number,
+      ) =>
+        db
+          .select({
+            ...getTableColumns(videoStories),
+            creatorDisabled: users.isDisabled,
+            restaurantActive: restaurants.isActive,
+            restaurantName: restaurants.name,
+            restaurantAddress: restaurants.address,
+            restaurantCity: restaurants.city,
+            restaurantState: restaurants.state,
+            restaurantCuisineType: restaurants.cuisineType,
+            restaurantDescription: restaurants.description,
+            restaurantPhone: restaurants.phone,
+            restaurantWebsiteUrl: restaurants.websiteUrl,
+            restaurantOwnerDisabled: sql<boolean | null>`(
+              select linked_owner.is_disabled from users linked_owner
+              where linked_owner.id = ${restaurants.ownerId} limit 1
+            )`,
+            restaurantEmail: sql<string | null>`(
+              select linked_owner.email from users linked_owner
+              where linked_owner.id = ${restaurants.ownerId} limit 1
+            )`,
+            restaurantRawData: restaurants.rawData,
+          })
+          .from(videoStories)
+          .innerJoin(users, eq(videoStories.userId, users.id))
+          .leftJoin(restaurants, eq(videoStories.restaurantId, restaurants.id))
+          .where(
+            and(
+              publicStoryPublicationWhere(sql`NOW()`),
+              eq(users.isDisabled, false),
+              or(
+                isNull(videoStories.restaurantId),
+                eq(restaurants.isActive, true),
+              ),
+              lte(videoStories.createdAt, sql`NOW()`),
             ),
-            lte(videoStories.createdAt, sql`NOW()`),
           )
-        )
-        .orderBy(desc(videoStories.createdAt))
-        .limit((limit - featuredStories.length) * 4)
-        .offset(offset);
-      const communityStories = communityStoryCandidates
-        .filter((row: any) => isPublicStoryAssociationEligible(row))
-        .slice(0, limit - featuredStories.length);
+          .orderBy(desc(videoStories.createdAt), desc(videoStories.id))
+          .limit(candidateLimit)
+          .offset(candidateOffset);
+      const communityPage = await loadEligiblePage<any>({
+        offset: communityOffset,
+        limit: communityPageSize,
+        batchSize: STORY_FEED_CANDIDATE_BATCH_SIZE,
+        maxBatches: STORY_FEED_MAX_SCAN_BATCHES,
+        loadBatch: loadCommunityStoryCandidates,
+        isEligible: (row) =>
+          !featuredStoryIds.has(String(row.id)) &&
+          isPublicStoryAssociationEligible(row),
+      });
+      if (communityPage.scanLimitReached) {
+        res.setHeader('Retry-After', '5');
+        return res
+          .status(503)
+          .json({ message: 'Story feed is temporarily unavailable' });
+      }
+      const communityStories = communityPage.items;
 
       // Combine featured + community
       let allStories: any[] = [...featuredStories, ...communityStories];
@@ -536,7 +610,7 @@ export default function setupStoriesRoutes(app: Express) {
 
       res.json({
         stories: enrichedStories.filter(Boolean),
-        hasMore: communityStories.length === limit - featuredStories.length,
+        hasMore: communityPage.hasMore,
         page,
       });
     } catch (error) {

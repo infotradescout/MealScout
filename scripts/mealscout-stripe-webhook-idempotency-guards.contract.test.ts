@@ -169,6 +169,10 @@ requireIncludes(
   "pickup transfer Stripe idempotency key",
 );
 requireIncludes(
+  'String(event.account || "").trim()',
+  "deauthorized Connect account is read from the Stripe event envelope",
+);
+requireIncludes(
   "pickupOrderFinancialLockKey(candidate.id)",
   "pickup payout and confirmation use the shared per-order financial lock",
 );

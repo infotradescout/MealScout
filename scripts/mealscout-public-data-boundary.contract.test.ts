@@ -29,6 +29,7 @@ import {
 } from "../server/publicProfiles/publicProfileUtils";
 import { extractIdFromSlug } from "../client/src/lib/seo-slug";
 import { assessParkingPassTruckEligibility } from "../server/services/parkingPassTruckEligibility";
+import { loadEligiblePage } from "../server/utils/eligiblePagination";
 
 // --- Runtime: forbidden fields must never survive the DTO ---------------
 
@@ -1249,6 +1250,70 @@ assert.match(
 );
 
 const storiesRoutesSource = readSource("server/storiesRoutes.ts");
+const eligiblePaginationFixture = [
+  { id: "eligible-a", eligible: true },
+  { id: "hidden-a", eligible: false },
+  { id: "eligible-b", eligible: true },
+  { id: "hidden-b", eligible: false },
+  { id: "hidden-c", eligible: false },
+  { id: "eligible-c", eligible: true },
+  { id: "eligible-d", eligible: true },
+  { id: "hidden-d", eligible: false },
+  { id: "eligible-e", eligible: true },
+  { id: "eligible-f", eligible: true },
+];
+const loadEligiblePaginationFixture = async (offset: number, limit: number) =>
+  eligiblePaginationFixture.slice(offset, offset + limit);
+const firstEligiblePage = await loadEligiblePage({
+  offset: 0,
+  limit: 3,
+  batchSize: 2,
+  maxBatches: 10,
+  loadBatch: loadEligiblePaginationFixture,
+  isEligible: (item) => item.eligible,
+});
+const secondEligiblePage = await loadEligiblePage({
+  offset: 3,
+  limit: 3,
+  batchSize: 2,
+  maxBatches: 10,
+  loadBatch: loadEligiblePaginationFixture,
+  isEligible: (item) => item.eligible,
+});
+assert.deepEqual(
+  firstEligiblePage.items.map((item) => item.id),
+  ["eligible-a", "eligible-b", "eligible-c"],
+  "the first story page must paginate the eligible sequence",
+);
+assert.equal(firstEligiblePage.hasMore, true);
+assert.deepEqual(
+  secondEligiblePage.items.map((item) => item.id),
+  ["eligible-d", "eligible-e", "eligible-f"],
+  "the next story page must neither repeat nor skip eligible rows",
+);
+assert.equal(secondEligiblePage.hasMore, false);
+let adversarialBatchCalls = 0;
+const boundedAdversarialPage = await loadEligiblePage({
+  offset: 1_000_000,
+  limit: 3,
+  batchSize: 2,
+  maxBatches: 4,
+  loadBatch: async () => {
+    adversarialBatchCalls += 1;
+    return [
+      { id: `hidden-${adversarialBatchCalls}-a`, eligible: false },
+      { id: `hidden-${adversarialBatchCalls}-b`, eligible: false },
+    ];
+  },
+  isEligible: (item) => item.eligible,
+});
+assert.equal(
+  adversarialBatchCalls,
+  4,
+  "adversarial eligible offsets must not cause unbounded database batches",
+);
+assert.equal(boundedAdversarialPage.scanLimitReached, true);
+assert.deepEqual(boundedAdversarialPage.items, []);
 assert.match(
   storiesRoutesSource,
   /const loadPublicEngageableStory[\s\S]*publicStoryPublicationWhere\(sql`NOW\(\)`\)[\s\S]*isPublicStoryAssociationEligible\(story\)/,
@@ -1291,12 +1356,38 @@ for (const requiredStoryBoundary of [
 const publicStoryFeedRoute = sliceAfter(
   storiesRoutesSource,
   "app.get('/api/stories/feed'",
-  7500,
+  14000,
 );
 assert.match(
   publicStoryFeedRoute,
   /publicStoryPublicationWhere\(sql`NOW\(\)`\)[\s\S]*eq\(users\.isDisabled, false\)[\s\S]*isPublicStoryAssociationEligible\(row\)[\s\S]*projectPublicStoryRow\(story\)/,
   "anonymous story feed must gate moderation state and return only the public story DTO",
+);
+assert.match(
+  publicStoryFeedRoute,
+  /communityOffset = page \* communityPageSize[\s\S]*loadEligiblePage<any>\([\s\S]*offset: communityOffset[\s\S]*hasMore: communityPage\.hasMore/,
+  "story feed pagination must offset and report continuation after association eligibility",
+);
+assert.match(
+  publicStoryFeedRoute,
+  /storyFeedLimiter[\s\S]*STORY_FEED_MAX_PAGE[\s\S]*STORY_FEED_MAX_SCAN_BATCHES[\s\S]*scanLimitReached/,
+  "anonymous story feed work must be rate-limited and bounded by page and scan budgets",
+);
+assert.match(
+  publicStoryFeedRoute,
+  /featuredStoryIds[\s\S]*!featuredStoryIds\.has\(String\(row\.id\)\)/,
+  "featured stories must not repeat in the community page",
+);
+const videoDetailSource = readSource("client/src/pages/video-detail.tsx");
+assert.match(
+  videoDetailSource,
+  /onTimeUpdate[\s\S]*currentTarget\.played[\s\S]*recordQualifiedView\(watchDuration\)/,
+  "story detail must wait for three seconds of played media before claiming the view limiter key",
+);
+assert.match(
+  videoDetailSource,
+  /body: JSON\.stringify\(\{ watchDuration: Math\.floor\(watchDuration\) \}\)/,
+  "story detail must send the qualified watch duration to the view endpoint",
 );
 const publicUserStoriesRoute = sliceAfter(
   storiesRoutesSource,

@@ -2665,8 +2665,7 @@ export function registerStripeWebhookRoutes(
         }
 
         case "account.application.deauthorized": {
-          const deauth = event.data.object as { account?: string };
-          const accountId = String(deauth?.account || "").trim();
+          const accountId = String(event.account || "").trim();
           if (!accountId) break;
 
           const revokedValues = {
