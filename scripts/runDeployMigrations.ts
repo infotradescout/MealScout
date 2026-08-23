@@ -17,6 +17,8 @@ export const EMPTY_DATABASE_BOOTSTRAP_FLOOR = 0;
 export const EMPTY_DATABASE_BOOTSTRAP_KEY = "historical-0-through-118";
 export const DEPLOY_MIGRATION_LOCK_KEY = 2026081101;
 export const DEPLOY_MIGRATION_LOCK_TIMEOUT_MS = 120_000;
+export const DEPLOY_MIGRATION_DDL_LOCK_TIMEOUT_MS = 5_000;
+export const DEPLOY_MIGRATION_STATEMENT_TIMEOUT_MS = 300_000;
 
 neonConfig.webSocketConstructor = ws;
 
@@ -402,7 +404,12 @@ export async function runDeployMigrations(
       DEPLOY_MIGRATION_LOCK_KEY,
     ]);
     lockAcquired = true;
-    await client.query("select set_config('statement_timeout', '0', false)");
+    await client.query("select set_config('lock_timeout', $1, false)", [
+      `${DEPLOY_MIGRATION_DDL_LOCK_TIMEOUT_MS}ms`,
+    ]);
+    await client.query("select set_config('statement_timeout', $1, false)", [
+      `${DEPLOY_MIGRATION_STATEMENT_TIMEOUT_MS}ms`,
+    ]);
 
     const userTableCount = await countUserTables(client);
     const markerExists = await bootstrapMarkerExists(client);

@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
-import { shouldAttemptPickupWebhookPayoutTransfer } from "../server/utils/pickupWebhookPayout";
+import {
+  resolvePickupPayoutSourceTransaction,
+  shouldAttemptPickupWebhookPayoutTransfer,
+} from "../server/utils/pickupWebhookPayout";
 
 type Case = {
   name: string;
@@ -106,6 +109,22 @@ for (const testCase of cases) {
     testCase.name,
   );
 }
+
+assert.equal(
+  resolvePickupPayoutSourceTransaction("ch_direct_fixture"),
+  "ch_direct_fixture",
+  "a PaymentIntent charge id must bind the transfer to its captured funds",
+);
+assert.equal(
+  resolvePickupPayoutSourceTransaction({ id: "ch_expanded_fixture" }),
+  "ch_expanded_fixture",
+  "an expanded latest_charge object must resolve to its charge id",
+);
+assert.equal(
+  resolvePickupPayoutSourceTransaction(null),
+  null,
+  "a succeeded event without a source charge must fail closed",
+);
 
 console.log(
   `mealscout-pickup-webhook-payout-eligibility: PASS (${cases.length}/${cases.length})`,

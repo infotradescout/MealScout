@@ -389,6 +389,7 @@ async function run() {
           reversed: false,
           currency: params.currency,
           destination: params.destination,
+          source_transaction: params.source_transaction,
           transfer_group: params.transfer_group,
           metadata: { ...(params.metadata || {}) },
         };
@@ -420,6 +421,7 @@ async function run() {
           amount: 1300,
           amount_received: 1300,
           currency: "usd",
+          latest_charge: `ch_${intentId}`,
           transfer_group:
             intentId === fixtures.pickupPendingIntent
               ? fixtures.pickupTransferGroup
@@ -496,6 +498,7 @@ async function run() {
     amount_received: amount,
     currency: "usd",
     status: "succeeded",
+    latest_charge: `ch_${intentId}`,
     transfer_group: transferGroup || null,
     metadata,
   });

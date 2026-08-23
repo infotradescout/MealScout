@@ -5,6 +5,21 @@ export type PickupWebhookPayoutEligibilityInput = {
   payoutStatus: string | null | undefined;
 };
 
+export type PickupPayoutLatestCharge =
+  | string
+  | { id?: string | null }
+  | null
+  | undefined;
+
+export function resolvePickupPayoutSourceTransaction(
+  latestCharge: PickupPayoutLatestCharge,
+): string | null {
+  const chargeId =
+    typeof latestCharge === "string" ? latestCharge : latestCharge?.id;
+  const normalized = String(chargeId || "").trim();
+  return normalized || null;
+}
+
 export function shouldAttemptPickupWebhookPayoutTransfer(
   input: PickupWebhookPayoutEligibilityInput,
 ): boolean {

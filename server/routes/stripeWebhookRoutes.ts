@@ -23,7 +23,10 @@ import {
   utcDateFromDateKey,
 } from "../services/dateKeys";
 import { storage } from "../storage";
-import { shouldAttemptPickupWebhookPayoutTransfer } from "../utils/pickupWebhookPayout";
+import {
+  resolvePickupPayoutSourceTransaction,
+  shouldAttemptPickupWebhookPayoutTransfer,
+} from "../utils/pickupWebhookPayout";
 import { pickupOrderFinancialLockKey } from "../utils/pickupOrderFinancialLock";
 import { isRestaurantOrderingAuthorityVersionCurrent } from "../services/restaurantOrderingAuthorityVersion";
 import { shouldRevokeUserSubscriptionEntitlements } from "../utils/stripeSubscriptionEntitlements";
@@ -827,6 +830,17 @@ export function registerStripeWebhookRoutes(
                             )
                         : merchantGrossCents,
                     );
+                    const sourceTransactionId =
+                      resolvePickupPayoutSourceTransaction(
+                        paymentIntent.latest_charge,
+                      );
+                    if (transferAmount > 0 && !sourceTransactionId) {
+                      return failPayout(
+                        new Error(
+                          `Stripe source charge missing for pickup order ${order.id}`,
+                        ),
+                      );
+                    }
                     try {
                       if (transferAmount > 0) {
                         await stripe.transfers.create(
@@ -834,6 +848,7 @@ export function registerStripeWebhookRoutes(
                             amount: transferAmount,
                             currency: "usd",
                             destination: connectAccountId,
+                            source_transaction: sourceTransactionId!,
                             transfer_group: transferGroupId,
                             metadata: { pickupOrderId: order.id },
                           },

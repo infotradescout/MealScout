@@ -489,6 +489,11 @@ const checks: Array<[string, () => void]> = [
       assert.match(webhookRoutes, /payoutStatus: "failed"/);
       assert.match(webhookRoutes, /stripeConnectAccountId: null/);
       assert.match(webhookRoutes, /pickup-order:\$\{order\.id\}:transfer/);
+      assert.match(
+        webhookRoutes,
+        /source_transaction:\s*sourceTransactionId/,
+        "Merchant transfer must be funded by the exact successful pickup charge",
+      );
       assert.match(pickupRoutes, /code: "PAYOUT_RECONCILIATION_REQUIRED"/);
       assert.match(pickupRoutes, /order\.payoutStatus !== "transferred"/);
       assert.match(ownerOrders, /cardSettlementBlocked/);
