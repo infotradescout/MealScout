@@ -13,6 +13,19 @@ export type LoadEligiblePageInput<T> = {
   isEligible: (item: T) => boolean;
 };
 
+export function publicStoryFeedRateLimitKey(input: {
+  userId?: unknown;
+  ip?: unknown;
+  sessionId?: unknown;
+}): string {
+  const userId = String(input.userId || '').trim();
+  if (userId) return `user:${userId}`;
+  const ip = String(input.ip || '').trim();
+  if (ip) return `ip:${ip}`;
+  const sessionId = String(input.sessionId || '').trim();
+  return `session:${sessionId || 'anonymous'}`;
+}
+
 /**
  * Applies pagination to the eligible sequence, even when eligibility must be
  * evaluated in application code after database rows are loaded.

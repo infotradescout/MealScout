@@ -29,7 +29,10 @@ import {
 } from "../server/publicProfiles/publicProfileUtils";
 import { extractIdFromSlug } from "../client/src/lib/seo-slug";
 import { assessParkingPassTruckEligibility } from "../server/services/parkingPassTruckEligibility";
-import { loadEligiblePage } from "../server/utils/eligiblePagination";
+import {
+  loadEligiblePage,
+  publicStoryFeedRateLimitKey,
+} from "../server/utils/eligiblePagination";
 
 // --- Runtime: forbidden fields must never survive the DTO ---------------
 
@@ -1314,6 +1317,28 @@ assert.equal(
 );
 assert.equal(boundedAdversarialPage.scanLimitReached, true);
 assert.deepEqual(boundedAdversarialPage.items, []);
+assert.equal(
+  publicStoryFeedRateLimitKey({
+    ip: "203.0.113.10",
+    sessionId: "anonymous-session-a",
+  }),
+  publicStoryFeedRateLimitKey({
+    ip: "203.0.113.10",
+    sessionId: "anonymous-session-b",
+  }),
+  "cookie-less sessions from the same IP must share the story feed limiter identity",
+);
+assert.notEqual(
+  publicStoryFeedRateLimitKey({
+    userId: "user-a",
+    ip: "203.0.113.10",
+  }),
+  publicStoryFeedRateLimitKey({
+    userId: "user-b",
+    ip: "203.0.113.10",
+  }),
+  "authenticated story feed traffic must remain attributable per user",
+);
 assert.match(
   storiesRoutesSource,
   /const loadPublicEngageableStory[\s\S]*publicStoryPublicationWhere\(sql`NOW\(\)`\)[\s\S]*isPublicStoryAssociationEligible\(story\)/,

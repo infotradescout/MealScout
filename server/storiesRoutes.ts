@@ -37,7 +37,10 @@ import {
 import { normalizePublicUrl } from './publicProfiles/publicProfileUtils';
 import { deriveProfileEvidenceQuarantineVisibility } from './services/profileEvidenceQuarantine';
 import { distributedRateLimit } from './middleware/distributedRateLimit';
-import { loadEligiblePage } from './utils/eligiblePagination';
+import {
+  loadEligiblePage,
+  publicStoryFeedRateLimitKey,
+} from './utils/eligiblePagination';
 
 const storyViewLimiter = distributedRateLimit({
   scope: 'public-story-view',
@@ -57,7 +60,11 @@ const storyFeedLimiter = distributedRateLimit({
   limit: 60,
   windowMs: 60 * 1000,
   key: (req) =>
-    String((req as any).user?.id || req.ip || (req as any).sessionID || 'anonymous'),
+    publicStoryFeedRateLimitKey({
+      userId: (req as any).user?.id,
+      ip: req.ip,
+      sessionId: (req as any).sessionID,
+    }),
 });
 
 const storyShareLimiter = distributedRateLimit({
