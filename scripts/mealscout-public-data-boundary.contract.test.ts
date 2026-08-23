@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { sql } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 import {
   toPublicRestaurantListing,
   toPublicRestaurantListingArray,
@@ -33,8 +35,19 @@ import {
   loadEligiblePage,
   publicStoryFeedRateLimitKey,
 } from "../server/utils/eligiblePagination";
+import { postgresTextArray } from "../server/utils/postgresTextArray";
 
 // --- Runtime: forbidden fields must never survive the DTO ---------------
+
+const compiledTextArrayQuery = new PgDialect().sqlToQuery(
+  sql`select 1 where candidate_id = any(${postgresTextArray(["one", "two"])})`,
+);
+assert.match(
+  compiledTextArrayQuery.sql,
+  /any\(array\[\$1, \$2\]::text\[\]\)/,
+  "PostgreSQL text arrays must compile as arrays, not parenthesized records",
+);
+assert.deepEqual(compiledTextArrayQuery.params, ["one", "two"]);
 
 const virtualParkingPassId =
   "pp:1a125115-d1a9-4d5d-9ef1-a8250e2d91d3:2026-08-22";
@@ -1010,10 +1023,31 @@ assert.match(
   /toPublicRestaurantListingArrayWithVisibility\([\s\S]*filterProjectedPublicNearbyRestaurantRows\(/,
   "GET /api/restaurants/nearby must return sanitized restaurant DTOs",
 );
+const publicRestaurantRouteSource = sliceAfter(
+  restaurantRoutesSource,
+  'app.get("/api/restaurants/public"',
+  14000,
+);
 assert.match(
-  sliceAfter(restaurantRoutesSource, 'app.get("/api/restaurants/public"', 14000),
+  publicRestaurantRouteSource,
   /toPublicRestaurantListingArrayWithVisibility\(activeRestaurants\)[\s\S]*res\.json\(sorted\.slice/,
   "GET /api/restaurants/public must return sanitized restaurant DTOs",
+);
+assert.match(
+  publicRestaurantRouteSource,
+  /restaurantIdArraySql = postgresTextArray\(restaurantIds\)/,
+  "GET /api/restaurants/public must bind ranking ids as a PostgreSQL text array",
+);
+assert.equal(
+  (publicRestaurantRouteSource.match(/any\(\$\{restaurantIdArraySql\}\)/g) || [])
+    .length,
+  3,
+  "all three raw ranking aggregates must use the bound text-array expression",
+);
+assert.doesNotMatch(
+  publicRestaurantRouteSource,
+  /any\(\$\{restaurantIds\}::text\[\]\)/,
+  "Drizzle expands a directly interpolated JavaScript array as a record, not text[]",
 );
 assert.doesNotMatch(
   sliceAfter(

@@ -72,6 +72,7 @@ import {
   publicRestaurantDistanceKm,
 } from "../services/publicRestaurantSearchProjection";
 import { publicStoryPublicationWhere } from "../services/publicStoryProjection";
+import { postgresTextArray } from "../utils/postgresTextArray";
 
 const ensureTrialForUser = ensurePremiumTrialForUser;
 
@@ -425,6 +426,7 @@ export function registerRestaurantCoreRoutes(
       const restaurantIds = publicActiveRestaurants
         .map((restaurant: any) => String(restaurant?.id || "").trim())
         .filter(Boolean);
+      const restaurantIdArraySql = postgresTextArray(restaurantIds);
 
       const safeQuery = async <T>(
         label: string,
@@ -551,7 +553,7 @@ export function registerRestaurantCoreRoutes(
                       cast(sum(case rr.reaction_type when 'like' then 1 when 'dislike' then -1 else 0 end) as integer) as score
                     from recommendation_reactions rr
                     inner join restaurant_user_recommendations rur on rur.id = rr.recommendation_id
-                    where rur.restaurant_id = any(${restaurantIds}::text[])
+                    where rur.restaurant_id = any(${restaurantIdArraySql})
                     group by rur.restaurant_id
                   `),
                 { rows: [] } as any,
@@ -568,7 +570,7 @@ export function registerRestaurantCoreRoutes(
                       cast(count(*) as integer) as count
                     from recommendation_shares rs
                     inner join restaurant_user_recommendations rur on rur.id = rs.recommendation_id
-                    where rur.restaurant_id = any(${restaurantIds}::text[])
+                    where rur.restaurant_id = any(${restaurantIdArraySql})
                     group by rur.restaurant_id
                   `),
                 { rows: [] } as any,
@@ -586,7 +588,7 @@ export function registerRestaurantCoreRoutes(
                     from video_stories vs
                     inner join users vu on vu.id = vs.user_id
                     where
-                      vs.restaurant_id = any(${restaurantIds}::text[])
+                      vs.restaurant_id = any(${restaurantIdArraySql})
                       and vs.status = 'ready'
                       and vs.is_approved = true
                       and vs.deleted_at is null
