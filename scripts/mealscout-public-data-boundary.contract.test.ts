@@ -333,6 +333,77 @@ for (const key of forbiddenRestaurantKeys) {
   );
 }
 
+const revocableListingNow = Date.now();
+const revocableListing = {
+  id: "rest-revocable",
+  ownerId: "owner-revocable",
+  name: "Revocable Truck",
+  address: "456 Current Stop",
+  phone: "555-0111",
+  websiteUrl: "https://revocable.example.invalid",
+  businessType: "food_truck",
+  isFoodTruck: true,
+  latitude: "30.41",
+  longitude: "-87.21",
+  mobileOnline: true,
+  liveBroadcasting: true,
+  currentLatitude: "30.42",
+  currentLongitude: "-87.22",
+  lastBroadcastAt: new Date(revocableListingNow).toISOString(),
+  liveUntilAt: new Date(revocableListingNow + 60_000).toISOString(),
+  locationSource: "owner_gps",
+  rawData: {
+    profileLocations: { addressKind: "operating_location" },
+  },
+};
+const visibleListing = toPublicRestaurantListingArray(
+  [revocableListing],
+  new Map([
+    [
+      "owner-revocable",
+      { showAddress: true, showContact: true, ownerEnabled: true },
+    ],
+  ]),
+)[0] as any;
+assert.equal(visibleListing.address, "456 Current Stop");
+assert.equal(visibleListing.phone, "555-0111");
+assert.equal(visibleListing.currentLatitude, 30.42);
+assert.equal(visibleListing.currentLongitude, -87.22);
+
+const hiddenListing = toPublicRestaurantListingArray(
+  [
+    {
+      ...revocableListing,
+      mobileOnline: false,
+      liveBroadcasting: false,
+    },
+  ],
+  new Map([
+    [
+      "owner-revocable",
+      { showAddress: false, showContact: false, ownerEnabled: true },
+    ],
+  ]),
+)[0] as any;
+assert.equal(hiddenListing.address, null);
+assert.equal(hiddenListing.phone, null);
+assert.equal(hiddenListing.websiteUrl, null);
+assert.equal(hiddenListing.currentLatitude, null);
+assert.equal(hiddenListing.currentLongitude, null);
+assert.deepEqual(
+  toPublicRestaurantListingArray(
+    [revocableListing],
+    new Map([
+      [
+        "owner-revocable",
+        { showAddress: true, showContact: true, ownerEnabled: false },
+      ],
+    ]),
+  ),
+  [],
+  "a second projection must drop the listing immediately after owner authority is revoked",
+);
+
 const forbiddenEventKeys = [
   "coordinatorUserId",
   "stripeProductId",

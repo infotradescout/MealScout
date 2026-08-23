@@ -2,7 +2,7 @@
  * Pickup Checkout page
  * Customer fills in contact info and completes verified pickup card payment.
  */
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link, useParams, useLocation } from "wouter";
 import {
   Elements,
@@ -33,13 +33,30 @@ import {
   toAuthoritativePaymentOrder,
   type AuthoritativePaymentOrder,
 } from "@/lib/pickupCheckoutTruth";
+import {
+  clearPickupCheckoutRecovery,
+  readPickupCheckoutRecovery,
+  writePickupCheckoutRecovery,
+  type PickupCheckoutReplayPayload,
+  type PickupCheckoutServerTotals,
+} from "@/lib/pickupCheckoutRecovery";
 
 const stripePublicKey = import.meta.env.VITE_STRIPE_PUBLIC_KEY || "";
 const stripePromise = stripePublicKey ? loadStripe(stripePublicKey) : null;
 
 const CART_KEY = "mealscout_cart";
+const TERMINAL_CHECKOUT_RECOVERY_CODES = new Set([
+  "CHECKOUT_EXPIRED",
+  "PAYMENT_SETUP_MISMATCH",
+  "ORDERING_CHANGED",
+]);
 const formatMoney = (cents: number) =>
   `$${(Number(cents || 0) / 100).toFixed(2)}`;
+
+const generateCustomerAccessToken = () =>
+  Array.from(crypto.getRandomValues(new Uint8Array(32)), (value) =>
+    value.toString(16).padStart(2, "0"),
+  ).join("");
 
 function getCart(): CartItem[] {
   try {
@@ -99,26 +116,50 @@ export default function CheckoutPage() {
     phone: "",
   });
   const [orderError, setOrderError] = useState<string | null>(null);
-  const [isCreating, setIsCreating] = useState(false);
-  const [orderId, setOrderId] = useState<string | null>(null);
+  const [restoredCheckout] = useState(() =>
+    readPickupCheckoutRecovery(restaurantId ?? ""),
+  );
+  const restoredCheckoutAttempted = useRef(false);
+  const [isCreating, setIsCreating] = useState(
+    Boolean(restoredCheckout?.checkoutPayload),
+  );
+  const [checkoutPayload, setCheckoutPayload] =
+    useState<PickupCheckoutReplayPayload | null>(
+      restoredCheckout?.checkoutPayload ?? null,
+    );
+  const [orderId, setOrderId] = useState<string | null>(
+    restoredCheckout?.orderId ?? null,
+  );
+  // A saved client secret is never trusted directly after reload. The server
+  // must replay the durable request and revalidate status, expiry, binding,
+  // and current ordering readiness before Stripe Elements is restored.
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [authoritativePaymentOrder, setAuthoritativePaymentOrder] =
-    useState<AuthoritativePaymentOrder | null>(null);
-  const [checkoutRequestId] = useState(() => crypto.randomUUID());
-  const [customerAccessToken] = useState(() =>
-    Array.from(crypto.getRandomValues(new Uint8Array(32)), (value) =>
-      value.toString(16).padStart(2, "0"),
-    ).join(""),
+    useState<AuthoritativePaymentOrder | null>(
+      restoredCheckout?.authoritativePaymentOrder ?? null,
+    );
+  const [checkoutRequestId, setCheckoutRequestId] = useState(
+    () => restoredCheckout?.checkoutRequestId || crypto.randomUUID(),
   );
-  const [serverTotals, setServerTotals] = useState<{
-    subtotalCents: number;
-    mealscoutFeeCents: number;
-    processingFeeCents: number;
-    platformFeeCents: number;
-    totalCents: number;
-    feePaidByBusiness: boolean;
-  } | null>(null);
+  const [customerAccessToken, setCustomerAccessToken] = useState(
+    () => restoredCheckout?.customerAccessToken || generateCustomerAccessToken(),
+  );
+  const [serverTotals, setServerTotals] =
+    useState<PickupCheckoutServerTotals | null>(
+      restoredCheckout?.serverTotals ?? null,
+    );
   const hostileBrowser = isPaymentHostileBrowser();
+
+  const resetCheckoutRecovery = () => {
+    clearPickupCheckoutRecovery(restaurantId ?? "");
+    setCheckoutPayload(null);
+    setOrderId(null);
+    setClientSecret(null);
+    setAuthoritativePaymentOrder(null);
+    setServerTotals(null);
+    setCheckoutRequestId(crypto.randomUUID());
+    setCustomerAccessToken(generateCustomerAccessToken());
+  };
 
   useEffect(() => {
     const restaurantCart = getCart().filter(
@@ -174,6 +215,124 @@ export default function CheckoutPage() {
         .catch(() => setMenuInfoError(true));
     }
   }, [restaurantId]);
+
+  useEffect(() => {
+    if (
+      restoredCheckoutAttempted.current ||
+      !restoredCheckout?.checkoutPayload
+    ) {
+      return;
+    }
+    restoredCheckoutAttempted.current = true;
+    let cancelled = false;
+
+    const reconcileRestoredCheckout = async () => {
+      setIsCreating(true);
+      setOrderError(null);
+      try {
+        const response = await fetch("/api/pickup-orders", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify(restoredCheckout.checkoutPayload),
+        });
+        const data = await response.json();
+        if (cancelled) return;
+        if (!response.ok) {
+          const code = String(data.code || "");
+          if (TERMINAL_CHECKOUT_RECOVERY_CODES.has(code)) {
+            resetCheckoutRecovery();
+          } else if (
+            ["PAYMENT_PROCESSING", "CHECKOUT_REQUEST_MISMATCH"].includes(
+              code,
+            ) &&
+            restoredCheckout.orderId
+          ) {
+            window.sessionStorage.setItem(
+              `mealscout:order-access:${restoredCheckout.orderId}`,
+              restoredCheckout.customerAccessToken,
+            );
+            navigate(`/order-confirmation/${restoredCheckout.orderId}`);
+            return;
+          }
+          throw new Error(
+            data.message || "The saved checkout could not be restored.",
+          );
+        }
+
+        if (String(data.order?.status || "") !== "pending") {
+          clearPickupCheckoutRecovery(restaurantId ?? "");
+          if (data.customerAccessToken) {
+            window.sessionStorage.setItem(
+              `mealscout:order-access:${data.order.id}`,
+              data.customerAccessToken,
+            );
+          }
+          navigate(`/order-confirmation/${data.order.id}`);
+          return;
+        }
+        if (!data.clientSecret) {
+          throw new Error(
+            "The saved payment could not be verified. Check the order status before trying again.",
+          );
+        }
+
+        setOrderId(data.order.id);
+        window.sessionStorage.setItem(
+          `mealscout:order-access:${data.order.id}`,
+          data.customerAccessToken || restoredCheckout.customerAccessToken,
+        );
+        setServerTotals({
+          subtotalCents: Number(data.order.subtotalCents || 0),
+          mealscoutFeeCents: Number(data.order.mealscoutFeeCents ?? 0),
+          processingFeeCents: Number(data.order.processingFeeCents ?? 0),
+          platformFeeCents: Number(data.order.platformFeeCents ?? 0),
+          totalCents: Number(data.order.totalCents || 0),
+          feePaidByBusiness: Boolean(data.order.feePaidByBusiness),
+        });
+        setAuthoritativePaymentOrder(toAuthoritativePaymentOrder(data.order));
+        setClientSecret(data.clientSecret);
+      } catch (error: any) {
+        if (!cancelled) {
+          setOrderError(
+            String(error?.message || "The saved checkout could not be restored."),
+          );
+        }
+      } finally {
+        if (!cancelled) setIsCreating(false);
+      }
+    };
+
+    void reconcileRestoredCheckout();
+    return () => {
+      cancelled = true;
+    };
+  }, [navigate, restaurantId, restoredCheckout]);
+
+  useEffect(() => {
+    if (!restaurantId) return;
+    writePickupCheckoutRecovery({
+      version: 1,
+      restaurantId,
+      checkoutRequestId,
+      customerAccessToken,
+      checkoutPayload,
+      orderId,
+      clientSecret,
+      authoritativePaymentOrder,
+      serverTotals,
+      updatedAt: Date.now(),
+    });
+  }, [
+    restaurantId,
+    checkoutRequestId,
+    customerAccessToken,
+    checkoutPayload,
+    orderId,
+    clientSecret,
+    authoritativePaymentOrder,
+    serverTotals,
+  ]);
 
   const cartMenuIds = new Set(cart.map((item) => item.menuId));
   const cartHasMixedMenus = cartMenuIds.size > 1;
@@ -317,8 +476,8 @@ export default function CheckoutPage() {
     setOrderError(null);
     setIsCreating(true);
     try {
-      const payload = {
-        restaurantId,
+      const payload: PickupCheckoutReplayPayload = {
+        restaurantId: restaurantId ?? "",
         menuId,
         customerName: contact.name.trim(),
         customerEmail: contact.email.trim() || undefined,
@@ -338,6 +497,22 @@ export default function CheckoutPage() {
           specialInstructions: i.specialInstructions || undefined,
         })),
       };
+      setCheckoutPayload(payload);
+      // Persist the replay identity and exact request before the network call.
+      // If the page reloads after the server creates the order but before this
+      // response arrives, the next mount can only replay this same checkout.
+      writePickupCheckoutRecovery({
+        version: 1,
+        restaurantId: restaurantId ?? "",
+        checkoutRequestId,
+        customerAccessToken,
+        checkoutPayload: payload,
+        orderId,
+        clientSecret,
+        authoritativePaymentOrder,
+        serverTotals,
+        updatedAt: Date.now(),
+      });
       const res = await fetch("/api/pickup-orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -345,7 +520,19 @@ export default function CheckoutPage() {
         body: JSON.stringify(payload),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Failed to create order");
+      if (!res.ok) {
+        const code = String(data.code || "");
+        if (TERMINAL_CHECKOUT_RECOVERY_CODES.has(code)) {
+          resetCheckoutRecovery();
+        } else if (
+          ["PAYMENT_PROCESSING", "CHECKOUT_REQUEST_MISMATCH"].includes(code) &&
+          orderId
+        ) {
+          navigate(`/order-confirmation/${orderId}`);
+          return;
+        }
+        throw new Error(data.message || "Failed to create order");
+      }
 
       setOrderId(data.order.id);
       if (data.customerAccessToken) {
@@ -355,6 +542,7 @@ export default function CheckoutPage() {
         );
       }
       if (String(data.order.status || "") !== "pending") {
+        clearPickupCheckoutRecovery(restaurantId ?? "");
         navigate(`/order-confirmation/${data.order.id}`);
         return;
       }
@@ -460,6 +648,7 @@ export default function CheckoutPage() {
               orderId={orderId}
               restaurantId={restaurantId ?? ""}
               onSuccess={() => {
+                clearPickupCheckoutRecovery(restaurantId ?? "");
                 clearCartForRestaurant(restaurantId ?? "");
                 navigate(`/order-confirmation/${orderId}`);
               }}

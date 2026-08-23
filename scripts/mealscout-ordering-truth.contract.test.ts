@@ -4,42 +4,49 @@ import {
   canManageLockedRestaurantConnect,
   restaurantConnectAccountCreationIdempotencyKey,
 } from "../server/utils/restaurantConnectOnboarding";
+import { parseGoldenPlateAreaSelection } from "../server/utils/goldenPlateArea";
+import {
+  clearPickupCheckoutRecovery,
+  readPickupCheckoutRecovery,
+  writePickupCheckoutRecovery,
+  type PickupCheckoutRecovery,
+} from "../client/src/lib/pickupCheckoutRecovery";
 
 const read = (path: string) => readFileSync(path, "utf8");
 const initialConnectCreationKey =
   restaurantConnectAccountCreationIdempotencyKey({
     restaurantId: "restaurant-fixture",
-    connectStatus: "pending",
-    updatedAt: "2026-08-23T00:00:00.000Z",
+    restaurantOwnerId: "owner-a",
+    connectGeneration: 4,
   });
 assert.equal(
   initialConnectCreationKey,
   restaurantConnectAccountCreationIdempotencyKey({
     restaurantId: "restaurant-fixture",
-    connectStatus: "pending",
-    updatedAt: "2026-08-24T00:00:00.000Z",
+    restaurantOwnerId: "owner-a",
+    connectGeneration: 4,
   }),
-  "initial Connect account retries must keep a stable per-restaurant key",
+  "Connect account retries in one owner generation must keep a stable key",
 );
-const revokedConnectCreationKey =
+const transferredOwnerConnectCreationKey =
   restaurantConnectAccountCreationIdempotencyKey({
     restaurantId: "restaurant-fixture",
-    connectStatus: "revoked",
-    updatedAt: "2026-08-25T00:00:00.000Z",
+    restaurantOwnerId: "owner-b",
+    connectGeneration: 5,
   });
 assert.notEqual(
-  revokedConnectCreationKey,
+  transferredOwnerConnectCreationKey,
   initialConnectCreationKey,
-  "a revoked connection must start a new account-creation generation",
+  "owner transfer must start a different Connect account-creation generation",
 );
-assert.equal(
-  revokedConnectCreationKey,
+assert.notEqual(
+  transferredOwnerConnectCreationKey,
   restaurantConnectAccountCreationIdempotencyKey({
     restaurantId: "restaurant-fixture",
-    connectStatus: "revoked",
-    updatedAt: "2026-08-25T00:00:00.000Z",
+    restaurantOwnerId: "owner-b",
+    connectGeneration: 6,
   }),
-  "retries in one revoked generation must reuse the same key",
+  "Connect deauthorization must advance to a different account-creation key",
 );
 assert.equal(
   canManageLockedRestaurantConnect({
@@ -68,12 +75,87 @@ assert.equal(
   true,
   "the intentional internal-team support path must remain available",
 );
+assert.deepEqual(parseGoldenPlateAreaSelection("Winston-Salem"), {
+  kind: "single",
+  value: "winston-salem",
+});
+assert.deepEqual(parseGoldenPlateAreaSelection("Winston-Salem-NC"), {
+  kind: "city_state",
+  city: "winston-salem",
+  state: "nc",
+});
+const checkoutRecoveryValues = new Map<string, string>();
+const checkoutRecoveryStorage = {
+  getItem: (key: string) => checkoutRecoveryValues.get(key) ?? null,
+  setItem: (key: string, value: string) => {
+    checkoutRecoveryValues.set(key, value);
+  },
+  removeItem: (key: string) => {
+    checkoutRecoveryValues.delete(key);
+  },
+};
+const checkoutRecoveryFixture: PickupCheckoutRecovery = {
+  version: 1,
+  restaurantId: "restaurant-fixture",
+  checkoutRequestId: "00000000-0000-4000-8000-000000000001",
+  customerAccessToken: "a".repeat(64),
+  checkoutPayload: {
+    restaurantId: "restaurant-fixture",
+    menuId: "menu-fixture",
+    customerName: "Test Customer",
+    customerEmail: "customer@example.com",
+    orderType: "pickup",
+    checkoutRequestId: "00000000-0000-4000-8000-000000000001",
+    customerAccessToken: "a".repeat(64),
+    paymentMethod: "card",
+    items: [{ menuItemId: "item-fixture", quantity: 1 }],
+  },
+  orderId: "order-fixture",
+  clientSecret: "pi_fixture_secret_fixture",
+  authoritativePaymentOrder: {
+    merchantNameSnapshot: "Fixture Kitchen",
+    pickupAddressSnapshot: "1 Test Way",
+    pricesIncludeTax: true,
+  },
+  serverTotals: {
+    subtotalCents: 1000,
+    mealscoutFeeCents: 100,
+    processingFeeCents: 63,
+    platformFeeCents: 163,
+    totalCents: 1163,
+    feePaidByBusiness: false,
+  },
+  updatedAt: Date.now(),
+};
+writePickupCheckoutRecovery(checkoutRecoveryFixture, checkoutRecoveryStorage);
+assert.deepEqual(
+  readPickupCheckoutRecovery(
+    checkoutRecoveryFixture.restaurantId,
+    checkoutRecoveryStorage,
+  ),
+  checkoutRecoveryFixture,
+  "reload recovery must restore the same checkout request, access token, order, and payment state",
+);
+clearPickupCheckoutRecovery(
+  checkoutRecoveryFixture.restaurantId,
+  checkoutRecoveryStorage,
+);
+assert.equal(
+  readPickupCheckoutRecovery(
+    checkoutRecoveryFixture.restaurantId,
+    checkoutRecoveryStorage,
+  ),
+  null,
+  "terminal checkout cleanup must remove recovery state",
+);
 const menuRoutes = read("server/routes/menuRoutes.ts");
 const pickupRoutes = read("server/routes/pickupOrderRoutes.ts");
 const pickupOrderIdentity = read(
   "server/services/pickupOrderIdentityService.ts",
 );
 const paymentRoutes = read("server/routes/restaurantPaymentRoutes.ts");
+const awardsRoutes = read("server/routes/awardsRoutes.ts");
+const awardCalculations = read("server/awardCalculations.ts");
 const routeRegistry = read("server/routes.ts");
 const webhookRoutes = read("server/routes/stripeWebhookRoutes.ts");
 const notificationService = read(
@@ -119,6 +201,7 @@ const refundTruth = read("shared/pickupOrderFinancialTruth.ts");
 const menuBuilder = read("client/src/pages/menu-builder.tsx");
 const onlineMenu = read("client/src/pages/online-menu.tsx");
 const checkout = read("client/src/pages/pickup-checkout.tsx");
+const checkoutRecovery = read("client/src/lib/pickupCheckoutRecovery.ts");
 const checkoutTruth = read("client/src/lib/pickupCheckoutTruth.ts");
 const confirmation = read("client/src/pages/order-confirmation.tsx");
 const ownerOrders = read("client/src/components/owner-orders-workspace.tsx");
@@ -198,8 +281,68 @@ const payoutRecoveryMigration = read(
 const orderingAuthorityVersionMigration = read(
   "migrations/140_restaurant_ordering_authority_version.sql",
 );
+const connectGenerationMigration = read(
+  "migrations/141_restaurant_stripe_connect_generation.sql",
+);
 
 const checks: Array<[string, () => void]> = [
+  [
+    "Golden Plate areas preserve hyphenated cities and score every eligible candidate",
+    () => {
+      assert.match(
+        awardsRoutes,
+        /parseGoldenPlateAreaSelection\(req\.params\.area\)/,
+      );
+      assert.match(
+        awardsRoutes,
+        /selection\.kind === "city_state"[\s\S]*and\([\s\S]*restaurants\.city[\s\S]*restaurants\.state/,
+      );
+      const leaderboardRoute = awardsRoutes.slice(
+        awardsRoutes.indexOf('"/api/awards/golden-plate/leaderboard/:area"'),
+        awardsRoutes.indexOf(
+          'app.get("/api/restaurants/:restaurantId/ranking-stats"',
+        ),
+      );
+      assert.match(leaderboardRoute, /goldenPlateLeaderboardLimiter/);
+      assert.match(
+        leaderboardRoute,
+        /GOLDEN_PLATE_LEADERBOARD_MAX_CANDIDATES \+ 1/,
+      );
+      assert.match(leaderboardRoute, /LEADERBOARD_AREA_TOO_BROAD/);
+      assert.match(
+        leaderboardRoute,
+        /calculateRestaurantRankingScores\([\s\S]*publicCandidates\.map/,
+      );
+      assert.doesNotMatch(
+        leaderboardRoute,
+        /calculateRestaurantRankingScore\(/,
+      );
+      assert.match(
+        leaderboardRoute,
+        /Cache-Control", "no-store, max-age=0"/,
+      );
+      assert.doesNotMatch(
+        leaderboardRoute,
+        /public,\s*max-age|stale-while-revalidate/,
+      );
+      const batchScorer = awardCalculations.slice(
+        awardCalculations.indexOf(
+          "export async function calculateRestaurantRankingScores",
+        ),
+        awardCalculations.indexOf(
+          "export async function awardGoldenPlatesForArea",
+          awardCalculations.indexOf(
+            "export async function calculateRestaurantRankingScores",
+          ),
+        ),
+      );
+      assert.equal(
+        (batchScorer.match(/database\.execute\(/g) || []).length,
+        1,
+        "batch leaderboard scoring must use one database call regardless of candidate count",
+      );
+    },
+  ],
   [
     "public restaurant search ranks and returns only projected trust fields",
     () => {
@@ -538,6 +681,8 @@ const checks: Array<[string, () => void]> = [
       );
       assert.match(paymentRoutes, /canManageBusinessFinancials/);
       assert.match(paymentRoutes, /stripe\.accounts\.create/);
+      assert.match(paymentRoutes, /stripeConnectGeneration/);
+      assert.match(paymentRoutes, /restaurantOwnerId: String\(lockedRestaurant\.ownerId\)/);
       assert.match(
         paymentRoutes,
         /db\.transaction[\s\S]*\.for\("update"\)[\s\S]*canManageLockedRestaurantConnect[\s\S]*stripe\.accounts\.create[\s\S]*idempotencyKey: createIdempotencyKey[\s\S]*tx[\s\S]*\.update\(restaurants\)/,
@@ -546,6 +691,15 @@ const checks: Array<[string, () => void]> = [
       assert.match(paymentRoutes, /stripe\.accountLinks\.create/);
       assert.match(paymentRoutes, /stripe\.accounts\.retrieve/);
       assert.match(paymentRoutes, /stripeConnectStatus === "revoked"/);
+      assert.match(schema, /stripeConnectGeneration:/);
+      assert.match(
+        connectGenerationMigration,
+        /NEW\.owner_id IS DISTINCT FROM OLD\.owner_id/,
+      );
+      assert.match(
+        connectGenerationMigration,
+        /NEW\.stripe_connect_status = 'revoked'/,
+      );
       assert.match(menuBuilder, /Connect Stripe payouts/);
       assert.match(menuBuilder, /Refresh status/);
     },
@@ -1030,6 +1184,22 @@ const checks: Array<[string, () => void]> = [
       assert.match(checkout, /toAuthoritativePaymentOrder\(data\.order\)/);
       assert.match(checkoutTruth, /order\.merchantNameSnapshot/);
       assert.match(checkoutTruth, /order\.pickupAddressSnapshot/);
+      assert.match(checkout, /readPickupCheckoutRecovery\(restaurantId/);
+      assert.match(checkout, /writePickupCheckoutRecovery\(\{/);
+      assert.match(checkout, /clearPickupCheckoutRecovery\(restaurantId/);
+      assert.match(checkoutRecovery, /window\.sessionStorage/);
+      assert.match(checkoutRecovery, /checkoutRequestId/);
+      assert.match(checkoutRecovery, /customerAccessToken/);
+      assert.match(checkoutRecovery, /clientSecret/);
+      assert.match(
+        checkout,
+        /reconcileRestoredCheckout[\s\S]*fetch\("\/api\/pickup-orders"[\s\S]*restoredCheckout\.checkoutPayload/,
+      );
+      assert.doesNotMatch(
+        checkout,
+        /useState<string \| null>\(\s*restoredCheckout\?\.clientSecret/,
+      );
+      assert.match(checkout, /TERMINAL_CHECKOUT_RECOVERY_CODES/);
       const paymentScreen = checkout.slice(
         checkout.indexOf("// If we have a clientSecret"),
         checkout.indexOf(

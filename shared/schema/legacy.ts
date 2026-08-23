@@ -253,6 +253,12 @@ export const restaurants = pgTable("restaurants", {
   stripePayoutsEnabled: boolean("stripe_payouts_enabled")
     .notNull()
     .default(false),
+  // Durable generation for Connect account creation. It advances on owner
+  // transfer and deauthorization so Stripe retries cannot reattach an account
+  // from an earlier owner or connection lifecycle.
+  stripeConnectGeneration: integer("stripe_connect_generation")
+    .notNull()
+    .default(0),
   // Native ordering requires a separate evidence-backed approval. Generic
   // profile verification (including VAC-lite) must never unlock checkout.
   orderingApprovedAt: timestamp("ordering_approved_at"),

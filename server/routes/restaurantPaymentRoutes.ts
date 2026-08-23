@@ -220,8 +220,8 @@ export function registerRestaurantPaymentRoutes(
           const createIdempotencyKey =
             restaurantConnectAccountCreationIdempotencyKey({
               restaurantId: lockedRestaurant.id,
-              connectStatus: lockedRestaurant.stripeConnectStatus,
-              updatedAt: lockedRestaurant.updatedAt,
+              restaurantOwnerId: lockedRestaurant.ownerId,
+              connectGeneration: lockedRestaurant.stripeConnectGeneration,
             });
           const account = await stripe.accounts.create(
             {
@@ -233,6 +233,10 @@ export function registerRestaurantPaymentRoutes(
               },
               metadata: {
                 restaurantId: lockedRestaurant.id,
+                restaurantOwnerId: String(lockedRestaurant.ownerId),
+                connectGeneration: String(
+                  lockedRestaurant.stripeConnectGeneration,
+                ),
               },
             },
             { idempotencyKey: createIdempotencyKey },

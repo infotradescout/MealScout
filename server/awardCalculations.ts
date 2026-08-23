@@ -404,6 +404,162 @@ export async function calculateRestaurantRankingScore(restaurantId: string): Pro
 }
 
 /**
+ * Calculate the same public award score for a bounded candidate set in one
+ * database statement. Public leaderboard routes must not fan out into one
+ * query bundle per restaurant.
+ */
+export async function calculateRestaurantRankingScores(
+  restaurantIds: string[],
+  database: Pick<typeof db, 'execute'> = db,
+): Promise<Map<string, number>> {
+  const normalizedIds = Array.from(
+    new Set(restaurantIds.map((id) => String(id || '').trim()).filter(Boolean)),
+  );
+  if (normalizedIds.length === 0) return new Map();
+
+  const candidateValues = sql.join(
+    normalizedIds.map((id) => sql`(${id})`),
+    sql`, `,
+  );
+  const result = await database.execute(sql<{
+    restaurant_id: string;
+    ranking_score: number | string | null;
+  }>`
+    with candidate_ids(restaurant_id) as (
+      values ${candidateValues}
+    ),
+    manual_recommendations as (
+      select rur.restaurant_id, count(*)::bigint as count
+      from restaurant_user_recommendations rur
+      join candidate_ids candidate on candidate.restaurant_id = rur.restaurant_id
+      group by rur.restaurant_id
+    ),
+    published_videos as (
+      select
+        story.restaurant_id,
+        count(*)::bigint as recommendation_count,
+        coalesce(sum(
+          coalesce(story.like_count, 0) +
+          coalesce(story.comment_count, 0) +
+          coalesce(story.share_count, 0)
+        ), 0)::bigint as engagement_count
+      from video_stories story
+      join users creator on creator.id = story.user_id
+      join candidate_ids candidate on candidate.restaurant_id = story.restaurant_id
+      where story.status = 'ready'
+        and story.is_approved = true
+        and story.deleted_at is null
+        and story.expires_at >= now()
+        and creator.is_disabled = false
+      group by story.restaurant_id
+    ),
+    favorite_counts as (
+      select favorite.restaurant_id, count(*)::bigint as count
+      from restaurant_favorites favorite
+      join candidate_ids candidate on candidate.restaurant_id = favorite.restaurant_id
+      group by favorite.restaurant_id
+    ),
+    follow_counts as (
+      select follow_row.restaurant_id, count(*)::bigint as count
+      from restaurant_follows follow_row
+      join candidate_ids candidate on candidate.restaurant_id = follow_row.restaurant_id
+      group by follow_row.restaurant_id
+    ),
+    dish_recommendations as (
+      select recommendation.restaurant_id, count(*)::bigint as count
+      from menu_item_recommendations recommendation
+      join candidate_ids candidate on candidate.restaurant_id = recommendation.restaurant_id
+      group by recommendation.restaurant_id
+    ),
+    current_deals as (
+      select deal.id, deal.restaurant_id
+      from deals deal
+      join candidate_ids candidate on candidate.restaurant_id = deal.restaurant_id
+      where deal.is_active = true
+        and deal.start_date <= now()
+        and (deal.end_date is null or deal.end_date >= now())
+    ),
+    deal_claim_counts as (
+      select deal.restaurant_id, count(claim.id)::bigint as count
+      from current_deals deal
+      left join deal_claims claim on claim.deal_id = deal.id
+      group by deal.restaurant_id
+    ),
+    deal_view_counts as (
+      select deal.restaurant_id, count(view_row.id)::bigint as count
+      from current_deals deal
+      left join deal_views view_row on view_row.deal_id = deal.id
+      group by deal.restaurant_id
+    ),
+    reaction_scores as (
+      select
+        recommendation.restaurant_id,
+        coalesce(sum(
+          case reaction.reaction_type
+            when 'like' then 1
+            when 'dislike' then -1
+            else 0
+          end
+        ), 0)::bigint as score
+      from recommendation_reactions reaction
+      join restaurant_user_recommendations recommendation
+        on recommendation.id = reaction.recommendation_id
+      join candidate_ids candidate
+        on candidate.restaurant_id = recommendation.restaurant_id
+      group by recommendation.restaurant_id
+    ),
+    share_counts as (
+      select recommendation.restaurant_id, count(*)::bigint as count
+      from recommendation_shares share_row
+      join restaurant_user_recommendations recommendation
+        on recommendation.id = share_row.recommendation_id
+      join candidate_ids candidate
+        on candidate.restaurant_id = recommendation.restaurant_id
+      group by recommendation.restaurant_id
+    )
+    select
+      candidate.restaurant_id,
+      (
+        coalesce(manual.count, 0) * ${AWARD_RANKING_WEIGHTS.manualRecommendation} +
+        coalesce(video.recommendation_count, 0) * ${AWARD_RANKING_WEIGHTS.videoRecommendation} +
+        coalesce(dish.count, 0) * ${AWARD_RANKING_WEIGHTS.dishRecommendation} +
+        coalesce(favorite.count, 0) * ${AWARD_RANKING_WEIGHTS.favorites} +
+        coalesce(follow_row.count, 0) * ${AWARD_RANKING_WEIGHTS.follows} +
+        coalesce(claim.count, 0) * ${AWARD_RANKING_WEIGHTS.totalDealClaims} +
+        coalesce(view_row.count, 0) * ${AWARD_RANKING_WEIGHTS.totalDealViews} +
+        (
+          coalesce(reaction.score, 0) +
+          coalesce(share_row.count, 0) +
+          coalesce(video.engagement_count, 0)
+        ) * ${AWARD_RANKING_WEIGHTS.communityActivity}
+      )::double precision as ranking_score
+    from candidate_ids candidate
+    left join manual_recommendations manual using (restaurant_id)
+    left join published_videos video using (restaurant_id)
+    left join dish_recommendations dish using (restaurant_id)
+    left join favorite_counts favorite using (restaurant_id)
+    left join follow_counts follow_row using (restaurant_id)
+    left join deal_claim_counts claim using (restaurant_id)
+    left join deal_view_counts view_row using (restaurant_id)
+    left join reaction_scores reaction using (restaurant_id)
+    left join share_counts share_row using (restaurant_id)
+  `);
+  const rows = Array.isArray((result as any)?.rows)
+    ? ((result as any).rows as Array<{
+        restaurant_id: string;
+        ranking_score: number | string | null;
+      }>)
+    : [];
+  const scores = new Map<string, number>(
+    normalizedIds.map((id) => [id, 0] as const),
+  );
+  for (const row of rows) {
+    scores.set(String(row.restaurant_id), Number(row.ranking_score || 0));
+  }
+  return scores;
+}
+
+/**
  * Award Golden Plates for a specific geographic area
  */
 export async function awardGoldenPlatesForArea(area: string): Promise<number> {
