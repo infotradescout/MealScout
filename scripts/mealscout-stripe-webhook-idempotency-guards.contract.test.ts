@@ -149,11 +149,9 @@ requireIncludes(
 );
 requireIncludes(".onConflictDoNothing()", "booking upsert onConflictDoNothing");
 
-// Pickup-order payouts can be retried after the order transition committed,
-// but only while the order is confirmed (or was atomically changed from
-// pending to confirmed by this delivery). Stripe receives a stable
-// idempotency key, preventing a second transfer if the first transfer
-// succeeded but the local payout-status write failed.
+// Pickup-order payouts settle before a pending order is confirmed. Stripe
+// receives a stable idempotency key, preventing a second transfer if the first
+// transfer succeeded but a later local write failed.
 requireIncludes(
   'eq(pickupOrders.status, "pending")',
   "pickup transition is restricted to a still-pending row",
@@ -163,12 +161,20 @@ requireIncludes(
   "pickup payout state eligibility guard",
 );
 requireIncludes(
-  "transitionedToConfirmed: Boolean(updated)",
-  "pickup payout requires proof of the pending-to-confirmed transition",
+  'paymentSucceeded: paymentIntent.status === "succeeded"',
+  "pickup payout requires a succeeded payment",
 );
 requireIncludes(
   "idempotencyKey: `pickup-order:${order.id}:transfer`",
   "pickup transfer Stripe idempotency key",
+);
+requireIncludes(
+  "pickupOrderFinancialLockKey(candidate.id)",
+  "pickup payout and confirmation use the shared per-order financial lock",
+);
+assert.ok(
+  pickupOrderSource.includes("pickupOrderFinancialLockKey(orderId)"),
+  "Missing idempotency guard: owner cancellation uses the same per-order financial lock",
 );
 requireIncludes(
   "const pickupOrderId = String(",
@@ -184,11 +190,12 @@ requireIncludes(
 );
 requireIncludes(
   'eq(pickupOrders.status, "pending")',
-  "pickup payment_failed only transitions pending orders",
+  "pickup payment_failed only attaches identity to a still-pending order",
 );
-requireIncludes(
-  "restoreTrackedInventoryForPickupOrderByOrderId(",
-  "pickup payment_failed restores tracked inventory when cancelling pending orders",
+assert.match(
+  source,
+  /A PaymentIntent can fail one confirmation attempt and later[\s\S]*Keep the order and its[\s\S]*reservation pending/,
+  "pickup payment_failed must remain retryable until bounded expiry",
 );
 assert.ok(
   pickupOrderSource.includes("cleanupPendingPickupOrderAfterPaymentSetupFailure"),
@@ -197,12 +204,12 @@ assert.ok(
 assert.equal(
   (pickupOrderSource.match(/cleanupPendingPickupOrderAfterPaymentSetupFailure/g) || [])
     .length,
-  3,
-  "Missing Stripe and Stripe creation failure must share the same cleanup path.",
+  5,
+  "Missing Stripe, Stripe creation failure, invalid setup, and a safely cancelled attachment failure must share the cleanup path.",
 );
 assert.ok(
-  pickupOrderSource.includes("eq(pickupOrders.status, order.status)"),
-  "Missing idempotency guard: owner cancellation expected-status compare-and-swap",
+  pickupOrderSource.includes("eq(pickupOrders.status, lockedOrder.status)"),
+  "Missing idempotency guard: owner cancellation re-reads and compare-and-swaps locked status",
 );
 
 // Primary mutation failures must escape their local diagnostic catches and

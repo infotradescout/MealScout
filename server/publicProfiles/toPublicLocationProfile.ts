@@ -2,10 +2,12 @@ import type { PublicLocationProfile } from "@shared/publicProfiles";
 import { toPublicProfileSeo } from "./toPublicProfileSeo";
 import {
   buildPublicCta,
+  buildPublicDirectionsUrl,
   buildPublicProfilePath,
   imageAsset,
   joinedAddressLabel,
   normalizePublicUrl,
+  resolvePublicCoordinatePair,
   toSlug,
 } from "./publicProfileUtils";
 
@@ -37,14 +39,12 @@ export function toPublicLocationProfile(input: {
     input.showAddress === false
       ? null
       : joinedAddressLabel(row.address, row.city, row.state);
-  const publicLatitude =
-    input.showAddress !== false && Number.isFinite(Number(row.latitude))
-      ? Number(row.latitude)
+  const publicCoordinatePair =
+    input.showAddress !== false
+      ? resolvePublicCoordinatePair(row.latitude, row.longitude)
       : null;
-  const publicLongitude =
-    input.showAddress !== false && Number.isFinite(Number(row.longitude))
-      ? Number(row.longitude)
-      : null;
+  const publicLatitude = publicCoordinatePair?.latitude ?? null;
+  const publicLongitude = publicCoordinatePair?.longitude ?? null;
   const contactPhone =
     input.showContact === false ? null : String(row.contactPhone || "").trim() || null;
   const websiteUrl =
@@ -68,10 +68,13 @@ export function toPublicLocationProfile(input: {
     buildPublicCta({ label: "See food here", href: canonicalPath, type: "internal", priority: 95 }),
     buildPublicCta({
       label: "Get directions",
-      href:
-        publicLatitude != null && publicLongitude != null
-          ? `https://maps.google.com/?q=${publicLatitude},${publicLongitude}`
+      href: buildPublicDirectionsUrl({
+        latitude: publicLatitude,
+        longitude: publicLongitude,
+        addressPublicLabel: String(row.address || "").trim()
+          ? addressPublicLabel
           : null,
+      }),
       type: "map",
       priority: 100,
     }),

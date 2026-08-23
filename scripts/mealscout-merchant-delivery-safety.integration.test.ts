@@ -47,7 +47,7 @@ async function run() {
     orderIds.push(orderId);
     const totals = calculateAuthoritativeMerchantDeliveryTotals({ subtotalCents: 1200 * quantity, platformFeeCents: 100, deliveryFeeCents: 500 });
     await tx.execute(sql`insert into pickup_orders (id, restaurant_id, customer_name, customer_email, order_type, status, subtotal_cents, platform_fee_cents, total_cents, payment_method, delivery_address, delivery_city, delivery_state, delivery_postal_code, delivery_instructions, delivery_fee_cents, tax_cents, tip_cents, discount_cents, checkout_request_id, customer_access_token_hash) values (${orderId},${restaurantId},'Delivery customer','delivery@example.com','delivery','pending',${totals.subtotalCents},${totals.platformFeeCents},${totals.totalCents},'card','10 Snapshot Ave','Dallas','TX','75201','Side door',${totals.deliveryFeeCents},${totals.taxCents},${totals.tipCents},${totals.discountCents},${requestId},${hashCustomerAccessToken("a".repeat(64))})`);
-    await tx.execute(sql`insert into pickup_order_items (order_id, menu_item_id, item_name, base_price_cents, quantity, line_total_cents) values (${orderId},${itemId},${`Snapshot ${label}`},1200,${quantity},${1200 * quantity})`);
+    await tx.execute(sql`insert into pickup_order_items (order_id, menu_item_id, item_name, base_price_cents, quantity, inventory_reserved_quantity, line_total_cents) values (${orderId},${itemId},${`Snapshot ${label}`},1200,${quantity},${quantity},${1200 * quantity})`);
     await reserveTrackedInventoryForPickupOrder(tx, [{ menuItemId: itemId, quantity }]);
     return orderId;
   }

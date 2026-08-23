@@ -107,6 +107,7 @@ import {
   type Claim,
   type InsertClaim,
 } from "@shared/schema";
+import { buildRestaurantOrderingAuthorityRevocation } from "./services/restaurantOrderingAuthorityReset";
 import { PARKING_PASS_MEAL_WINDOWS } from "@shared/parkingPassSlots";
 import {
   deriveTruckPresence,
@@ -2945,7 +2946,12 @@ export class DatabaseStorage implements IStorage {
       })
       .from(reviews)
       .leftJoin(users, eq(reviews.userId, users.id))
-      .where(eq(reviews.restaurantId, restaurantId))
+      .where(
+        and(
+          eq(reviews.restaurantId, restaurantId),
+          or(eq(users.isDisabled, false), isNull(users.id)),
+        ),
+      )
       .orderBy(desc(reviews.createdAt));
   }
 
@@ -3937,6 +3943,7 @@ export class DatabaseStorage implements IStorage {
         .update(restaurants)
         .set({
           isVerified: false,
+          ...buildRestaurantOrderingAuthorityRevocation(),
           updatedAt: new Date(),
         })
         .where(eq(restaurants.id, request.restaurantId));
@@ -3951,6 +3958,7 @@ export class DatabaseStorage implements IStorage {
       .update(restaurants)
       .set({
         isVerified,
+        ...(!isVerified ? buildRestaurantOrderingAuthorityRevocation() : {}),
         updatedAt: new Date(),
       })
       .where(eq(restaurants.id, restaurantId));

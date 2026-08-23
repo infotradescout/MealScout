@@ -535,7 +535,7 @@ if (
 }
 if (
   !publicRestaurantIndexability.includes(
-    'SITEMAP_MEMBERSHIP_VERSION = "pd-v1-indexability-2"',
+    'SITEMAP_MEMBERSHIP_VERSION = "pd-v1-indexability-3"',
   ) ||
   !publicRestaurantIndexability.includes(
     'res.setHeader("X-MealScout-Sitemap-Membership", SITEMAP_MEMBERSHIP_VERSION)',

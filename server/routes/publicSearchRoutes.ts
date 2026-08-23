@@ -1,38 +1,25 @@
 import type { Express } from "express";
-import {
-  and,
-  asc,
-  desc,
-  eq,
-  gte,
-  isNull,
-  or,
-  sql,
-} from "drizzle-orm";
+import { and, asc, desc, eq, gte, isNull, or, sql } from "drizzle-orm";
 
 import { db } from "../db";
 import { storage } from "../storage";
 import { computeParkingPassQualityFlags } from "../services/parkingPassQuality";
-import { isPublicBusinessVisible } from "../utils/publicBusinessVisibility";
 import {
   deals,
   eventSeries,
   events,
   hosts,
   restaurants,
+  users,
   videoStories,
 } from "@shared/schema";
-import {
-  expandScoutSearchTerms,
-  scoutSearchRelevanceScore,
-} from "@shared/scoutSearchIntent";
+import { expandScoutSearchTerms } from "@shared/scoutSearchIntent";
 import { recordInternalSearchOutcome } from "../services/discoveryObservatory";
 import {
   AGGREGATE_SEARCH_DEAL_LIMIT,
   AGGREGATE_SEARCH_EVENT_LIMIT,
   AGGREGATE_SEARCH_HOST_LIMIT,
   AGGREGATE_SEARCH_RESTAURANT_CANDIDATE_LIMIT,
-  AGGREGATE_SEARCH_RESTAURANT_LIMIT,
   AGGREGATE_SEARCH_VIDEO_LIMIT,
   MAX_SEARCH_RESPONSE_BYTES,
   PUBLIC_SEARCH_TIMEOUT_MS,
@@ -40,17 +27,19 @@ import {
   isDeadlineError,
   withDeadline,
 } from "@shared/searchResponseBounds";
-
-function publicRestaurantActivityScore(restaurant: any): number {
-  return (
-    Number(restaurant.homeRankingScore || restaurant.rankingScore || 0) * 10 +
-    Number(restaurant.communityActivityCount || 0) * 5 +
-    Number(restaurant.recommendationCount || 0) * 4 +
-    Number(restaurant.favoriteCount || 0) * 3 +
-    Number(restaurant.followCount || 0) * 2 +
-    Number(restaurant.activeDealCount || restaurant.activeDealsCount || 0) * 4
-  );
-}
+import { loadPublicRestaurantListingVisibility } from "../publicProfiles/toPublicRestaurantListingWithVisibility";
+import {
+  buildPublicRestaurantSearchSuggestions,
+  rankPublicRestaurantSearchRows,
+} from "../services/publicRestaurantSearchProjection";
+import { projectPublicDealRows } from "../services/publicDealProjection";
+import { resolvePublicHostProximityCoordinates } from "../services/publicHostProximityProjection";
+import { resolvePublicProfileVisibility } from "../publicProfiles/publicProfileUtils";
+import {
+  isPublicStoryAssociationEligible,
+  publicStoryPublicationWhere,
+} from "../services/publicStoryProjection";
+import { canExposeAnonymousEventListItem } from "../publicProfiles/publicEventDetailAccess";
 
 function restaurantSearchMatchSql(searchTerms: string[]) {
   const terms = searchTerms.length > 0 ? searchTerms : [""];
@@ -60,7 +49,6 @@ function restaurantSearchMatchSql(searchTerms: string[]) {
       return or(
         sql`lower(${restaurants.name}) like ${like}`,
         sql`lower(coalesce(${restaurants.cuisineType}, '')) like ${like}`,
-        sql`lower(coalesce(${restaurants.address}, '')) like ${like}`,
         sql`lower(coalesce(${restaurants.city}, '')) like ${like}`,
         sql`lower(coalesce(${restaurants.state}, '')) like ${like}`,
         sql`lower(coalesce(${restaurants.description}, '')) like ${like}`,
@@ -83,6 +71,7 @@ export async function searchPublicRestaurantResults(
   const restaurantMatches = await database
     .select({
       id: restaurants.id,
+      ownerId: restaurants.ownerId,
       name: restaurants.name,
       cuisineType: restaurants.cuisineType,
       address: restaurants.address,
@@ -94,7 +83,9 @@ export async function searchPublicRestaurantResults(
       businessType: restaurants.businessType,
       isFoodTruck: restaurants.isFoodTruck,
       isVerified: restaurants.isVerified,
-      rankingScore: restaurants.rankingScore,
+      isActive: restaurants.isActive,
+      rawData: restaurants.rawData,
+      homeRankingScore: restaurants.rankingScore,
     })
     .from(restaurants)
     .where(
@@ -110,71 +101,26 @@ export async function searchPublicRestaurantResults(
         when lower(${restaurants.name}) like ${searchValue} then 2
         else 3
       end`),
-      desc(restaurants.isVerified),
       desc(restaurants.rankingScore),
       asc(restaurants.name),
     )
     .limit(AGGREGATE_SEARCH_RESTAURANT_CANDIDATE_LIMIT);
 
-  return restaurantMatches
-    .filter((restaurant: any) => {
-      if (!isPublicBusinessVisible(restaurant)) return false;
-      const haystack = [
-        restaurant.name,
-        restaurant.cuisineType,
-        restaurant.address,
-        restaurant.city,
-        restaurant.state,
-        restaurant.description,
-      ]
-        .map((value) => String(value || "").toLowerCase())
-        .join(" ");
-      return searchTerms.some((term) => haystack.includes(term));
-    })
-    .sort((a: any, b: any) => {
-      const relevanceDelta =
-        scoutSearchRelevanceScore(b, searchTerm) -
-        scoutSearchRelevanceScore(a, searchTerm);
-      if (relevanceDelta !== 0) return relevanceDelta;
-
-      const verifiedDelta =
-        Number(Boolean(b.isVerified)) - Number(Boolean(a.isVerified));
-      if (verifiedDelta !== 0) return verifiedDelta;
-
-      const activityDelta =
-        publicRestaurantActivityScore(b) - publicRestaurantActivityScore(a);
-      if (activityDelta !== 0) return activityDelta;
-
-      return String(a.name || "").localeCompare(String(b.name || ""));
-    })
-    .slice(0, AGGREGATE_SEARCH_RESTAURANT_LIMIT)
-    .map((restaurant: any) => ({
-      id: restaurant.id,
-      name: restaurant.name,
-      cuisineType: restaurant.cuisineType,
-      address: restaurant.address,
-      city: restaurant.city || null,
-      state: restaurant.state || null,
-      slug: null,
-      description: restaurant.description || null,
-      logoUrl: restaurant.logoUrl || null,
-      coverImageUrl: restaurant.coverImageUrl || null,
-      imageUrl: restaurant.coverImageUrl || restaurant.logoUrl || null,
-      businessType: restaurant.businessType || null,
-      isFoodTruck: Boolean(restaurant.isFoodTruck),
-      isVerified: Boolean(restaurant.isVerified),
-      activeDealCount: 0,
-      favoriteCount: 0,
-      followCount: 0,
-      recommendationCount: 0,
-      communityActivityCount: 0,
-      homeRankingScore: Number(restaurant.rankingScore || 0),
-    }));
+  const visibilityByOwnerId = await loadPublicRestaurantListingVisibility(
+    restaurantMatches,
+    database,
+  );
+  return rankPublicRestaurantSearchRows(
+    restaurantMatches,
+    query,
+    visibilityByOwnerId,
+  );
 }
 
 export function registerPublicSearchRoutes(app: Express) {
   app.get("/api/search/suggestions/:query", async (req, res) => {
     try {
+      res.setHeader("Cache-Control", "no-store");
       const { query } = req.params;
       if (!query || query.length < 2) {
         return res.json([]);
@@ -187,9 +133,16 @@ export function registerPublicSearchRoutes(app: Express) {
       const restaurantRows = await db
         .select({
           id: restaurants.id,
+          ownerId: restaurants.ownerId,
           name: restaurants.name,
           cuisineType: restaurants.cuisineType,
           address: restaurants.address,
+          city: restaurants.city,
+          state: restaurants.state,
+          businessType: restaurants.businessType,
+          isFoodTruck: restaurants.isFoodTruck,
+          isActive: restaurants.isActive,
+          rawData: restaurants.rawData,
         })
         .from(restaurants)
         .where(
@@ -198,43 +151,31 @@ export function registerPublicSearchRoutes(app: Express) {
             or(
               sql`lower(${restaurants.name}) like ${searchValue}`,
               sql`lower(coalesce(${restaurants.cuisineType}, '')) like ${searchValue}`,
-              sql`lower(coalesce(${restaurants.address}, '')) like ${searchValue}`,
+              sql`lower(coalesce(${restaurants.city}, '')) like ${searchValue}`,
+              sql`lower(coalesce(${restaurants.state}, '')) like ${searchValue}`,
             ),
           ),
         )
         .limit(6);
 
-      const cuisineSuggestions = new Map<string, any>();
-      for (const row of restaurantRows) {
-        suggestionsV2.push({
-          id: `restaurant-${row.id}`,
-          text: row.name,
-          type: "restaurant",
-          subtitle:
-            `${row.cuisineType || "Restaurant"} - ${row.address || ""}`.trim(),
-        });
-
-        const cuisine = String(row.cuisineType || "").trim();
-        if (cuisine && cuisine.toLowerCase().includes(searchTerm)) {
-          const key = cuisine.toLowerCase();
-          if (!cuisineSuggestions.has(key)) {
-            cuisineSuggestions.set(key, {
-              id: `cuisine-${key}`,
-              text: cuisine,
-              type: "cuisine",
-              subtitle: "Food category",
-            });
-          }
-        }
-      }
-      suggestionsV2.push(...Array.from(cuisineSuggestions.values()));
+      const visibilityByOwnerId = await loadPublicRestaurantListingVisibility(
+        restaurantRows,
+        db,
+      );
+      suggestionsV2.push(
+        ...buildPublicRestaurantSearchSuggestions(
+          restaurantRows,
+          searchTerm,
+          visibilityByOwnerId,
+        ),
+      );
 
       const dealRows = await db
         .select({
           id: deals.id,
+          restaurantId: deals.restaurantId,
           title: deals.title,
           discountValue: deals.discountValue,
-          restaurantName: restaurants.name,
         })
         .from(deals)
         .innerJoin(restaurants, eq(deals.restaurantId, restaurants.id))
@@ -248,18 +189,22 @@ export function registerPublicSearchRoutes(app: Express) {
           ),
         )
         .limit(6);
-      for (const row of dealRows) {
+      const publicDealRows = await projectPublicDealRows(dealRows, {
+        database: db,
+      });
+      for (const row of publicDealRows) {
         suggestionsV2.push({
           id: `deal-${row.id}`,
           text: row.title,
           type: "deal",
-          subtitle: `${row.restaurantName || "Restaurant"} - ${row.discountValue}% off`,
+          subtitle: `${row.restaurant?.name || "Restaurant"} - ${row.discountValue}% off`,
         });
       }
 
       const hostRows = await db
         .select({
           hostId: hosts.id,
+          hostUserId: hosts.userId,
           businessName: hosts.businessName,
           address: hosts.address,
           city: hosts.city,
@@ -278,16 +223,18 @@ export function registerPublicSearchRoutes(app: Express) {
           dailyPriceCents: eventSeries.defaultDailyPriceCents,
           weeklyPriceCents: eventSeries.defaultWeeklyPriceCents,
           monthlyPriceCents: eventSeries.defaultMonthlyPriceCents,
+          publicProfileSettings: users.publicProfileSettings,
         })
         .from(eventSeries)
         .innerJoin(hosts, eq(eventSeries.hostId, hosts.id))
+        .innerJoin(users, eq(hosts.userId, users.id))
         .where(
           and(
             eq(eventSeries.seriesType, "parking_pass"),
             eq(eventSeries.status, "published"),
+            eq(users.isDisabled, false),
             or(
               sql`lower(${hosts.businessName}) like ${searchValue}`,
-              sql`lower(${hosts.address}) like ${searchValue}`,
               sql`lower(coalesce(${hosts.city}, '')) like ${searchValue}`,
               sql`lower(coalesce(${hosts.state}, '')) like ${searchValue}`,
             ),
@@ -296,13 +243,19 @@ export function registerPublicSearchRoutes(app: Express) {
         .orderBy(desc(eventSeries.updatedAt))
         .limit(10);
       for (const row of hostRows.slice(0, 4)) {
+        const publicCoordinates = resolvePublicHostProximityCoordinates({
+          latitude: row.latitude,
+          longitude: row.longitude,
+          publicProfileSettings: row.publicProfileSettings,
+        });
+        if (!publicCoordinates) continue;
         const qualityFlags = computeParkingPassQualityFlags({
           host: {
             address: row.address,
             city: row.city,
             state: row.state,
-            latitude: row.latitude,
-            longitude: row.longitude,
+            latitude: publicCoordinates.latitude,
+            longitude: publicCoordinates.longitude,
             stripeConnectAccountId: row.stripeConnectAccountId,
             stripeChargesEnabled: row.stripeChargesEnabled,
           },
@@ -330,15 +283,32 @@ export function registerPublicSearchRoutes(app: Express) {
         .select({
           id: videoStories.id,
           title: videoStories.title,
+          restaurantId: videoStories.restaurantId,
           restaurantName: restaurants.name,
+          restaurantActive: restaurants.isActive,
+          restaurantAddress: restaurants.address,
+          restaurantCity: restaurants.city,
+          restaurantState: restaurants.state,
+          restaurantCuisineType: restaurants.cuisineType,
+          restaurantDescription: restaurants.description,
+          restaurantOwnerDisabled: sql<boolean | null>`(
+            select linked_owner.is_disabled from users linked_owner
+            where linked_owner.id = ${restaurants.ownerId} limit 1
+          )`,
+          restaurantRawData: restaurants.rawData,
+          creatorDisabled: users.isDisabled,
         })
         .from(videoStories)
+        .innerJoin(users, eq(videoStories.userId, users.id))
         .leftJoin(restaurants, eq(videoStories.restaurantId, restaurants.id))
         .where(
           and(
-            eq(videoStories.status, "ready"),
-            gte(videoStories.expiresAt, nowSql as any),
-            isNull(videoStories.deletedAt),
+            publicStoryPublicationWhere(nowSql as any),
+            eq(users.isDisabled, false),
+            or(
+              isNull(videoStories.restaurantId),
+              eq(restaurants.isActive, true),
+            ),
             or(
               sql`lower(coalesce(${videoStories.title}, '')) like ${searchValue}`,
               sql`lower(coalesce(${restaurants.name}, '')) like ${searchValue}`,
@@ -346,8 +316,11 @@ export function registerPublicSearchRoutes(app: Express) {
           ),
         )
         .orderBy(desc(videoStories.createdAt))
-        .limit(4);
-      for (const row of storyRows) {
+        .limit(16);
+      const publicStoryRows = storyRows
+        .filter((row: any) => isPublicStoryAssociationEligible(row))
+        .slice(0, 4);
+      for (const row of publicStoryRows) {
         suggestionsV2.push({
           id: `video-${row.id}`,
           text: row.title || "Video",
@@ -362,15 +335,20 @@ export function registerPublicSearchRoutes(app: Express) {
         .select({
           id: events.id,
           name: events.name,
+          eventType: events.eventType,
+          requiresPayment: events.requiresPayment,
+          status: events.status,
           hostBusinessName: hosts.businessName,
           hostCity: hosts.city,
           hostState: hosts.state,
         })
         .from(events)
         .innerJoin(hosts, eq(events.hostId, hosts.id))
+        .innerJoin(users, eq(hosts.userId, users.id))
         .where(
           and(
             eq(events.eventType, "event"),
+            eq(users.isDisabled, false),
             gte(events.date, nowSql as any),
             or(
               sql`lower(coalesce(${events.name}, '')) like ${searchValue}`,
@@ -382,6 +360,17 @@ export function registerPublicSearchRoutes(app: Express) {
         .orderBy(asc(events.date))
         .limit(4);
       for (const row of eventRows) {
+        if (
+          !canExposeAnonymousEventListItem({
+            eventType: row.eventType,
+            requiresPayment: row.requiresPayment,
+            status: row.status,
+            eventName: row.name,
+            hostName: row.hostBusinessName,
+          })
+        ) {
+          continue;
+        }
         suggestionsV2.push({
           id: `event-${row.id}`,
           text: row.name || row.hostBusinessName || "Event",
@@ -391,10 +380,14 @@ export function registerPublicSearchRoutes(app: Express) {
       }
 
       const limitedSuggestionsV2 = suggestionsV2.slice(0, 10).sort((a, b) => {
-        const aExact = String(a.text || "").toLowerCase().startsWith(searchTerm)
+        const aExact = String(a.text || "")
+          .toLowerCase()
+          .startsWith(searchTerm)
           ? 1
           : 0;
-        const bExact = String(b.text || "").toLowerCase().startsWith(searchTerm)
+        const bExact = String(b.text || "")
+          .toLowerCase()
+          .startsWith(searchTerm)
           ? 1
           : 0;
         return bExact - aExact;
@@ -409,6 +402,7 @@ export function registerPublicSearchRoutes(app: Express) {
 
   app.get("/api/search", async (req, res) => {
     try {
+      res.setHeader("Cache-Control", "no-store");
       const query = String(req.query?.q || "").trim();
       if (!query || query.length < 2) {
         return res.json({
@@ -427,17 +421,28 @@ export function registerPublicSearchRoutes(app: Express) {
           const searchValue = `%${searchTerm}%`;
           const restaurantsOut = await searchPublicRestaurantResults(db, query);
 
-          const dealsOut = (
-            await storage.searchDeals({
-              query,
-              sortBy: "relevance",
-              radius: 9999,
+          const publicDeals = await projectPublicDealRows(
+            await storage.getActiveDeals(),
+            { database: db },
+          );
+          const dealsOut = publicDeals
+            .filter((deal: any) => {
+              const searchable = [
+                deal.title,
+                deal.description,
+                deal.restaurant?.name,
+                deal.restaurant?.cuisineType,
+              ]
+                .map((value) => String(value || "").toLowerCase())
+                .join(" ");
+              return searchable.includes(searchTerm);
             })
-          ).slice(0, AGGREGATE_SEARCH_DEAL_LIMIT);
+            .slice(0, AGGREGATE_SEARCH_DEAL_LIMIT);
 
           const hostSeriesRows = await db
             .select({
               hostId: hosts.id,
+              hostUserId: hosts.userId,
               businessName: hosts.businessName,
               address: hosts.address,
               city: hosts.city,
@@ -457,16 +462,18 @@ export function registerPublicSearchRoutes(app: Express) {
               weeklyPriceCents: eventSeries.defaultWeeklyPriceCents,
               monthlyPriceCents: eventSeries.defaultMonthlyPriceCents,
               updatedAt: eventSeries.updatedAt,
+              publicProfileSettings: users.publicProfileSettings,
             })
             .from(eventSeries)
             .innerJoin(hosts, eq(eventSeries.hostId, hosts.id))
+            .innerJoin(users, eq(hosts.userId, users.id))
             .where(
               and(
                 eq(eventSeries.seriesType, "parking_pass"),
                 eq(eventSeries.status, "published"),
+                eq(users.isDisabled, false),
                 or(
                   sql`lower(${hosts.businessName}) like ${searchValue}`,
-                  sql`lower(${hosts.address}) like ${searchValue}`,
                   sql`lower(coalesce(${hosts.city}, '')) like ${searchValue}`,
                   sql`lower(coalesce(${hosts.state}, '')) like ${searchValue}`,
                 ),
@@ -483,13 +490,19 @@ export function registerPublicSearchRoutes(app: Express) {
 
           const parkingPassHostsOut = Array.from(bestHostById.values())
             .map((row: any) => {
+              const publicCoordinates = resolvePublicHostProximityCoordinates({
+                latitude: row.latitude,
+                longitude: row.longitude,
+                publicProfileSettings: row.publicProfileSettings,
+              });
+              if (!publicCoordinates) return null;
               const qualityFlags = computeParkingPassQualityFlags({
                 host: {
                   address: row.address,
                   city: row.city,
                   state: row.state,
-                  latitude: row.latitude,
-                  longitude: row.longitude,
+                  latitude: publicCoordinates.latitude,
+                  longitude: publicCoordinates.longitude,
                   stripeConnectAccountId: row.stripeConnectAccountId,
                   stripeChargesEnabled: row.stripeChargesEnabled,
                 },
@@ -510,39 +523,57 @@ export function registerPublicSearchRoutes(app: Express) {
                 address: row.address,
                 city: row.city,
                 state: row.state,
-                latitude: row.latitude,
-                longitude: row.longitude,
+                latitude: publicCoordinates.latitude,
+                longitude: publicCoordinates.longitude,
                 spotImageUrl: row.spotImageUrl,
                 qualityFlags,
               };
             })
             .filter(
               (row: any) =>
+                row !== null &&
                 Array.isArray(row.qualityFlags) &&
                 row.qualityFlags.length === 0,
             )
             .slice(0, AGGREGATE_SEARCH_HOST_LIMIT);
 
           const nowSql = sql`NOW()`;
-          const videoRows = await db
+          const videoRows = (
+            await db
             .select({
               id: videoStories.id,
               title: videoStories.title,
               description: videoStories.description,
               restaurantId: videoStories.restaurantId,
               restaurantName: restaurants.name,
+              restaurantActive: restaurants.isActive,
+              restaurantAddress: restaurants.address,
+              restaurantCity: restaurants.city,
+              restaurantState: restaurants.state,
+              restaurantCuisineType: restaurants.cuisineType,
+              restaurantDescription: restaurants.description,
+              restaurantOwnerDisabled: sql<boolean | null>`(
+                select linked_owner.is_disabled from users linked_owner
+                where linked_owner.id = ${restaurants.ownerId} limit 1
+              )`,
+              restaurantRawData: restaurants.rawData,
+              creatorDisabled: users.isDisabled,
               createdAt: videoStories.createdAt,
             })
             .from(videoStories)
+            .innerJoin(users, eq(videoStories.userId, users.id))
             .leftJoin(
               restaurants,
               eq(videoStories.restaurantId, restaurants.id),
             )
             .where(
               and(
-                eq(videoStories.status, "ready"),
-                gte(videoStories.expiresAt, nowSql as any),
-                isNull(videoStories.deletedAt),
+                publicStoryPublicationWhere(nowSql as any),
+                eq(users.isDisabled, false),
+                or(
+                  isNull(videoStories.restaurantId),
+                  eq(restaurants.isActive, true),
+                ),
                 or(
                   sql`lower(coalesce(${videoStories.title}, '')) like ${searchValue}`,
                   sql`lower(coalesce(${videoStories.description}, '')) like ${searchValue}`,
@@ -551,13 +582,33 @@ export function registerPublicSearchRoutes(app: Express) {
               ),
             )
             .orderBy(desc(videoStories.createdAt))
-            .limit(AGGREGATE_SEARCH_VIDEO_LIMIT);
+            .limit(AGGREGATE_SEARCH_VIDEO_LIMIT * 4)
+          )
+            .filter((row: any) => isPublicStoryAssociationEligible(row))
+            .slice(0, AGGREGATE_SEARCH_VIDEO_LIMIT)
+            .map(
+              ({
+                restaurantActive: _restaurantActive,
+                restaurantAddress: _restaurantAddress,
+                restaurantCity: _restaurantCity,
+                restaurantState: _restaurantState,
+                restaurantCuisineType: _restaurantCuisineType,
+                restaurantDescription: _restaurantDescription,
+                restaurantOwnerDisabled: _restaurantOwnerDisabled,
+                restaurantRawData: _restaurantRawData,
+                creatorDisabled: _creatorDisabled,
+                ...publicVideo
+              }: any) => publicVideo,
+            );
 
           const eventsRows = await db
             .select({
               id: events.id,
               name: events.name,
               description: events.description,
+              eventType: events.eventType,
+              requiresPayment: events.requiresPayment,
+              status: events.status,
               date: events.date,
               startTime: events.startTime,
               endTime: events.endTime,
@@ -566,12 +617,15 @@ export function registerPublicSearchRoutes(app: Express) {
               hostAddress: hosts.address,
               hostCity: hosts.city,
               hostState: hosts.state,
+              hostPublicProfileSettings: users.publicProfileSettings,
             })
             .from(events)
             .innerJoin(hosts, eq(events.hostId, hosts.id))
+            .innerJoin(users, eq(hosts.userId, users.id))
             .where(
               and(
                 eq(events.eventType, "event"),
+                eq(users.isDisabled, false),
                 gte(events.date, nowSql as any),
                 or(
                   sql`lower(coalesce(${events.name}, '')) like ${searchValue}`,
@@ -584,13 +638,41 @@ export function registerPublicSearchRoutes(app: Express) {
             .orderBy(asc(events.date))
             .limit(AGGREGATE_SEARCH_EVENT_LIMIT);
 
+          const publicEventsRows = eventsRows.flatMap((row: any) => {
+            if (
+              !canExposeAnonymousEventListItem({
+                eventType: row.eventType,
+                requiresPayment: row.requiresPayment,
+                status: row.status,
+                eventName: row.name,
+                hostName: row.hostBusinessName,
+              })
+            ) {
+              return [];
+            }
+            const visibility = resolvePublicProfileVisibility(
+              row.hostPublicProfileSettings,
+            );
+            const {
+              hostPublicProfileSettings: _settings,
+              eventType: _eventType,
+              requiresPayment: _requiresPayment,
+              status: _status,
+              ...publicEvent
+            } = row;
+            return [{
+              ...publicEvent,
+              hostAddress: visibility.showAddress ? row.hostAddress : null,
+            }];
+          });
+
           return {
             query,
             restaurants: restaurantsOut,
             deals: dealsOut,
             parkingPassHosts: parkingPassHostsOut,
             videos: videoRows,
-            events: eventsRows,
+            events: publicEventsRows,
           };
         })(),
         PUBLIC_SEARCH_TIMEOUT_MS,

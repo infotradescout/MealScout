@@ -117,7 +117,15 @@ export function registerLocationDemandRoutes(app: Express) {
       });
       res
         .status(201)
-        .json({ message: "Location request submitted", request: created });
+        .json({
+          message: "Location request submitted",
+          request: {
+            id: created.id,
+            status: created.status,
+            demandStatus: created.demandStatus,
+            createdAt: created.createdAt,
+          },
+        });
     } catch (error: any) {
       console.error("Error creating location request:", error);
       if (error instanceof z.ZodError) {
@@ -132,7 +140,10 @@ export function registerLocationDemandRoutes(app: Express) {
     }
   });
 
-  app.get("/api/location-requests/demand", async (req: any, res) => {
+  app.get(
+    "/api/location-requests/demand",
+    isRestaurantOwner,
+    async (req: any, res) => {
     try {
       const limit = Number(req.query?.limit ?? 100) || 100;
       const queue = await storage.getLocationDemandQueue(limit);
@@ -161,7 +172,8 @@ export function registerLocationDemandRoutes(app: Express) {
       console.error("Error loading location demand queue:", error);
       res.status(500).json({ message: "Failed to load location demand queue" });
     }
-  });
+    },
+  );
 
   app.get(
     "/api/location-requests/demand/me",

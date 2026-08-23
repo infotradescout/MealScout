@@ -53,6 +53,7 @@ import {
   buildPublicProfilePath,
   resolvePublicProfileVisibility,
 } from "../publicProfiles/publicProfileUtils";
+import { isPublicBusinessVisible } from "../utils/publicBusinessVisibility";
 
 type PageLink = { label: string; href: string };
 
@@ -100,12 +101,14 @@ async function resolveOwnerPublicProfile(ownerId: string | null) {
   if (!ownerId) {
     return {
       email: null,
+      ownerEnabled: false,
       ...resolvePublicProfileVisibility(null),
     };
   }
   const [owner] = await db
     .select({
       email: users.email,
+      isDisabled: users.isDisabled,
       publicProfileSettings: users.publicProfileSettings,
     })
     .from(users)
@@ -113,6 +116,7 @@ async function resolveOwnerPublicProfile(ownerId: string | null) {
     .limit(1);
   return {
     email: owner?.email ? String(owner.email) : null,
+    ownerEnabled: owner?.isDisabled === false,
     ...resolvePublicProfileVisibility(owner?.publicProfileSettings),
   };
 }
@@ -473,6 +477,7 @@ async function restaurantPage(
     return null;
   }
   const ownerProfile = await resolveOwnerPublicProfile(row.ownerId);
+  if (!ownerProfile.ownerEnabled || !isPublicBusinessVisible(row)) return null;
 
   const name = cleanText(row.name, "MealScout business");
   const robots = publicRestaurantRobotsDirective({
@@ -667,6 +672,16 @@ async function hostPage(baseUrl: string, hostId: string) {
     .limit(1);
   if (!row) return null;
   const ownerProfile = await resolveOwnerPublicProfile(row.userId);
+  if (
+    !ownerProfile.ownerEnabled ||
+    !isPublicBusinessVisible({
+      name: row.businessName,
+      city: row.city,
+      state: row.state,
+    })
+  ) {
+    return null;
+  }
   const publicProfile = toPublicLocationProfile({
     row,
     baseUrl,
@@ -759,7 +774,8 @@ async function eventPage(baseUrl: string, eventId: string) {
     })
     .from(events)
     .innerJoin(hosts, eq(events.hostId, hosts.id))
-    .where(eq(events.id, eventId))
+    .innerJoin(users, eq(hosts.userId, users.id))
+    .where(and(eq(events.id, eventId), eq(users.isDisabled, false)))
     .limit(1);
   if (!row || row.eventType === "private_event" || row.requiresPayment) {
     return null;
@@ -919,6 +935,7 @@ async function dealPage(baseUrl: string, dealId: string) {
       restaurantIsActive: restaurants.isActive,
       restaurantOwnerId: restaurants.ownerId,
       restaurantOwnerEmail: users.email,
+      restaurantOwnerDisabled: users.isDisabled,
       restaurantAddress: restaurants.address,
       restaurantDescription: restaurants.description,
       restaurantRawData: restaurants.rawData,
@@ -930,7 +947,7 @@ async function dealPage(baseUrl: string, dealId: string) {
     .innerJoin(users, eq(restaurants.ownerId, users.id))
     .where(eq(deals.id, dealId))
     .limit(1);
-  if (!row) return null;
+  if (!row || row.restaurantOwnerDisabled !== false) return null;
   const active =
     Boolean(row.isActive) &&
     (!row.startDate ||
@@ -1024,6 +1041,19 @@ async function supplierPage(baseUrl: string, supplierId: string) {
     .limit(1);
   if (!row || !row.isActive) return null;
   const ownerProfile = await resolveOwnerPublicProfile(row.userId);
+  if (
+    !ownerProfile.ownerEnabled ||
+    !isPublicBusinessVisible({
+      name: row.businessName,
+      city: row.city,
+      state: row.state,
+      description: [row.onlinePaymentsNotes, row.deliveryNotes]
+        .filter(Boolean)
+        .join(" "),
+    })
+  ) {
+    return null;
+  }
   const publicProfile = toPublicSupplierProfile({
     row,
     activeProductCount: 0,
@@ -1153,10 +1183,10 @@ const sendPage = (
     return;
   }
   res.setHeader("Content-Type", "text/html; charset=utf-8");
-  res.setHeader(
-    "Cache-Control",
-    "public, max-age=120, s-maxage=900, stale-while-revalidate=86400",
-  );
+  // Owner disable/privacy changes must revoke public HTML, JSON-LD, address,
+  // and contact data on the next request; do not retain profile pages in a
+  // browser or shared cache.
+  res.setHeader("Cache-Control", "no-store");
   res.send(buildHtml(baseUrl, page));
 };
 

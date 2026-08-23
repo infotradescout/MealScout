@@ -15,10 +15,23 @@ const safeResponse = read("server/publicProfiles/assertPublicResponseSafe.ts");
 const ownerWorkspace = read("client/src/components/owner-profile-workspace.tsx");
 const publicMenu = read("client/src/components/public-profile/PublicProfileMenu.tsx");
 const hoursPanel = read("client/src/components/public-profile/RestaurantHoursPanel.tsx");
+const orderingEligibility = read(
+  "server/services/restaurantOrderingEligibility.ts",
+);
 
 const checks: Array<[string, () => void]> = [
-  ["claimed authority requires owner and verification", () => {
-    assert.match(discovery, /profileAuthority\?\.ownerId && profileAuthority\?\.isVerified === true/);
+  ["claimed source authority requires a real owner identity", () => {
+    assert.match(discovery, /profileAuthority\?\.ownerId &&/);
+    assert.match(discovery, /profileAuthority\?\.ownerEmail &&/);
+    assert.match(
+      discovery,
+      /!isImportSystemOwnerEmail\(String\(profileAuthority\.ownerEmail\)\)/,
+    );
+    assert.match(discovery, /orderingApprovedAt: restaurants\.orderingApprovedAt/);
+    assert.match(
+      discovery,
+      /orderingApprovedByUserId: restaurants\.orderingApprovedByUserId/,
+    );
   }],
   ["owner controls retain canonical authorization", () => {
     assert.match(ownerRoutes, /verifyRestaurantOwnership\([\s\S]*?"manageProfile"/);
@@ -35,11 +48,15 @@ const checks: Array<[string, () => void]> = [
     assert.match(publicMenu, /Sold out/);
   }],
   ["hours are merchant-timezone aware", () => {
-    assert.match(menuRoutes, /Intl\.DateTimeFormat/);
+    assert.match(menuRoutes, /resolveCityTimeZoneStrict/);
+    assert.match(orderingEligibility, /Intl\.DateTimeFormat/);
     assert.match(hoursPanel, /profile\.timeZone/);
   }],
   ["claimed ordering uses the native merchant path", () => {
-    assert.match(mapper, /claimedProfile && orderingPath/);
+    assert.match(
+      mapper,
+      /claimedProfile && row\?\.ordering\?\.enabled === true && orderingPath/,
+    );
     assert.match(publicMenu, /claimed_profile_ordering/);
   }],
   ["checkout identity is scoped to restaurant and menu", () => {
@@ -51,9 +68,9 @@ const checks: Array<[string, () => void]> = [
     assert.match(pickupRoutes, /restaurantId:/);
     assert.match(pickupRoutes, /metadata/);
   }],
-  ["delivery remains server eligibility controlled", () => {
+  ["delivery remains server-inspected but publicly suppressed", () => {
     assert.match(deliveryRoutes, /getPublicMerchantDeliveryAvailability/);
-    assert.match(discovery, /delivery\?\.configured && delivery\?\.availableNow/);
+    assert.match(discovery, /const deliveryEnabled = false/);
   }],
   ["owner visibility requires verified ownership", () => {
     assert.match(ownerRoutes, /parsed\.isActive === true/);

@@ -82,6 +82,13 @@ export function projectOrderForCustomer(
   const {
     stripePaymentIntentId: _stripePaymentIntentId,
     stripeTransferGroupId: _stripeTransferGroupId,
+    merchantOwnerIdSnapshot: _merchantOwnerIdSnapshot,
+    stripeConnectAccountIdSnapshot: _stripeConnectAccountIdSnapshot,
+    stripeRefundId: _stripeRefundId,
+    refundFailureReason: _refundFailureReason,
+    payoutReversalFailureReason: _payoutReversalFailureReason,
+    stripeDisputeId: _stripeDisputeId,
+    disputeFailureReason: _disputeFailureReason,
     customerAccessTokenHash: _customerAccessTokenHash,
     checkoutRequestId: _checkoutRequestId,
     ...withoutSecrets
@@ -99,4 +106,29 @@ export function projectOrderForCustomer(
     ...publicOrder
   } = withoutSecrets;
   return publicOrder;
+}
+
+export function projectPickupOrderItemsForCustomer(
+  items: Array<Record<string, any>>,
+  canViewPrivateFulfillment: boolean,
+) {
+  return items.map((item) => ({
+    id: item.id,
+    itemName: item.itemName,
+    quantity: item.quantity,
+    variantLabel:
+      item.variantLabel || item.selectedVariant?.label || null,
+    modifierLabels: Array.isArray(item.modifierLabels)
+      ? item.modifierLabels
+      : Array.isArray(item.selectedModifiers)
+        ? item.selectedModifiers
+            .map((modifier: any) => modifier?.label)
+            .filter(Boolean)
+        : [],
+    lineSubtotalCents: item.lineSubtotalCents,
+    lineTotalCents: item.lineTotalCents,
+    ...(canViewPrivateFulfillment
+      ? { specialInstructions: item.specialInstructions || null }
+      : {}),
+  }));
 }

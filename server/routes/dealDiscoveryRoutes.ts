@@ -10,6 +10,10 @@ import {
   users,
 } from "@shared/schema";
 import { toPublicRestaurantReviewArray } from "../publicProfiles/toPublicRestaurantReview";
+import { projectPublicDealRows } from "../services/publicDealProjection";
+import { toPublicRestaurantListingWithVisibility } from "../publicProfiles/toPublicRestaurantListingWithVisibility";
+import { deriveProfileEvidenceQuarantineVisibility } from "../services/profileEvidenceQuarantine";
+import { isPublicBusinessVisible } from "../utils/publicBusinessVisibility";
 
 type DealDiscoveryRouteDependencies = {
   filterDealsByBusinessAccess: <T extends { restaurantId?: string | null }>(
@@ -25,13 +29,20 @@ export function registerDealDiscoveryRoutes(
     hasCompleteProfileAccess,
   }: DealDiscoveryRouteDependencies,
 ) {
+  const projectAccessibleDeals = async (
+    dealRows: any[],
+    options: { userLat?: number; userLng?: number; radiusKm?: number } = {},
+  ) =>
+    projectPublicDealRows(
+      await filterDealsByBusinessAccess(dealRows as any[]),
+      options,
+    );
+
   app.get("/api/deals/active", async (_req, res) => {
     try {
+      res.setHeader("Cache-Control", "no-store");
       const activeDeals = await storage.getActiveDeals();
-      const filteredDeals = await filterDealsByBusinessAccess(
-        activeDeals as any[],
-      );
-      res.json(filteredDeals);
+      res.json(await projectAccessibleDeals(activeDeals as any[]));
     } catch (error) {
       console.error("Error fetching active deals:", error);
       res.status(500).json({ message: "Failed to fetch deals" });
@@ -63,21 +74,9 @@ export function registerDealDiscoveryRoutes(
       const showLimitedTimeOnly = filter === "limited-time";
 
       const featuredDeals = await storage.getFilteredDeals(showLimitedTimeOnly);
-      const filteredDeals = await filterDealsByBusinessAccess(
-        featuredDeals as any[],
-      );
-      const payloadDeals =
-        filteredDeals.length > 0 || featuredDeals.length === 0
-          ? filteredDeals
-          : featuredDeals;
-      if (filteredDeals.length === 0 && featuredDeals.length > 0) {
-        res.setHeader("X-MealScout-Fallback", "unfiltered-featured-deals");
-      }
+      const payloadDeals = await projectAccessibleDeals(featuredDeals as any[]);
 
-      res.set({
-        "Cache-Control": "public, max-age=300",
-        ETag: `"deals-${filter || "all"}-${Date.now()}"`,
-      });
+      res.setHeader("Cache-Control", "no-store");
 
       res.json(payloadDeals);
     } catch (error) {
@@ -128,21 +127,13 @@ export function registerDealDiscoveryRoutes(
         return res.json([]);
       }
 
-      const activeDeals = (await storage.getDealsByRestaurant(restaurantId))
-        .filter((deal) => deal.isActive)
-        .map((deal) => ({
-          ...deal,
-          restaurant: {
-            name: restaurant.name,
-            cuisineType: restaurant.cuisineType,
-            phone: restaurant.phone,
-          },
-        }));
+      const activeDeals = await projectPublicDealRows(
+        (await storage.getDealsByRestaurant(restaurantId)).filter(
+          (deal) => deal.isActive,
+        ),
+      );
 
-      res.set({
-        "Cache-Control": "public, max-age=180",
-        ETag: `"restaurant-deals-${restaurantId}-${Date.now()}"`,
-      });
+      res.setHeader("Cache-Control", "no-store");
 
       res.json(activeDeals);
     } catch (error: any) {
@@ -156,22 +147,30 @@ export function registerDealDiscoveryRoutes(
 
   app.get("/api/deals/nearby/:lat/:lng", async (req, res) => {
     try {
+      res.setHeader("Cache-Control", "no-store");
       const lat = parseFloat(req.params.lat);
       const lng = parseFloat(req.params.lng);
       const radius = parseFloat(req.query.radius as string) || 5;
-
-      const nearbyDeals = await storage.getNearbyDeals(lat, lng, radius);
-      const filteredDeals = await filterDealsByBusinessAccess(
-        nearbyDeals as any[],
-      );
-      const payloadDeals =
-        filteredDeals.length > 0 || nearbyDeals.length === 0
-          ? filteredDeals
-          : nearbyDeals;
-      if (filteredDeals.length === 0 && nearbyDeals.length > 0) {
-        res.setHeader("X-MealScout-Fallback", "unfiltered-nearby-deals");
+      if (
+        !Number.isFinite(lat) ||
+        !Number.isFinite(lng) ||
+        lat < -90 ||
+        lat > 90 ||
+        lng < -180 ||
+        lng > 180 ||
+        !Number.isFinite(radius) ||
+        radius <= 0
+      ) {
+        return res.status(400).json({ message: "Invalid coordinates or radius" });
       }
-      res.json(payloadDeals);
+
+      res.json(
+        await projectAccessibleDeals((await storage.getActiveDeals()) as any[], {
+          userLat: lat,
+          userLng: lng,
+          radiusKm: radius,
+        }),
+      );
     } catch (error) {
       console.error("Error fetching nearby deals:", error);
       res.status(500).json({ message: "Failed to fetch nearby deals" });
@@ -180,6 +179,7 @@ export function registerDealDiscoveryRoutes(
 
   app.get("/api/deals/search", async (req, res) => {
     try {
+      res.setHeader("Cache-Control", "no-store");
       const {
         q: query,
         cuisine,
@@ -191,19 +191,72 @@ export function registerDealDiscoveryRoutes(
         sortBy = "relevance",
       } = req.query;
 
-      const dealRows = await storage.searchDeals({
-        query: query as string,
-        cuisineType: cuisine as string,
-        minPrice: minPrice ? parseFloat(minPrice as string) : undefined,
-        maxPrice: maxPrice ? parseFloat(maxPrice as string) : undefined,
-        latitude: lat ? parseFloat(lat as string) : undefined,
-        longitude: lng ? parseFloat(lng as string) : undefined,
-        radius: parseFloat(radius as string),
-        sortBy: sortBy as string,
-      });
-
-      const filteredDeals = await filterDealsByBusinessAccess(dealRows as any[]);
-      res.json(filteredDeals);
+      const userLat = lat ? parseFloat(lat as string) : undefined;
+      const userLng = lng ? parseFloat(lng as string) : undefined;
+      const radiusKm = parseFloat(radius as string);
+      const hasLocation = Number.isFinite(userLat) && Number.isFinite(userLng);
+      let publicDeals = await projectAccessibleDeals(
+        (await storage.getActiveDeals()) as any[],
+        hasLocation
+          ? { userLat, userLng, radiusKm }
+          : {},
+      );
+      const searchTerm = String(query || "").trim().toLowerCase();
+      if (searchTerm) {
+        publicDeals = publicDeals.filter((deal: any) =>
+          [
+            deal.title,
+            deal.description,
+            deal.restaurant?.name,
+            deal.restaurant?.cuisineType,
+          ]
+            .map((value) => String(value || "").toLowerCase())
+            .some((value) => value.includes(searchTerm)),
+        );
+      }
+      const cuisineTerm = String(cuisine || "").trim().toLowerCase();
+      if (cuisineTerm) {
+        publicDeals = publicDeals.filter((deal: any) =>
+          String(deal.restaurant?.cuisineType || "")
+            .toLowerCase()
+            .includes(cuisineTerm),
+        );
+      }
+      const minimum = minPrice ? parseFloat(minPrice as string) : null;
+      const maximum = maxPrice ? parseFloat(maxPrice as string) : null;
+      if (Number.isFinite(minimum)) {
+        publicDeals = publicDeals.filter(
+          (deal: any) => Number(deal.minOrderAmount || 0) >= Number(minimum),
+        );
+      }
+      if (Number.isFinite(maximum)) {
+        publicDeals = publicDeals.filter(
+          (deal: any) => Number(deal.minOrderAmount || 0) <= Number(maximum),
+        );
+      }
+      if (sortBy === "price-low") {
+        publicDeals.sort(
+          (a: any, b: any) =>
+            Number(a.minOrderAmount || 0) - Number(b.minOrderAmount || 0),
+        );
+      } else if (sortBy === "price-high") {
+        publicDeals.sort(
+          (a: any, b: any) =>
+            Number(b.minOrderAmount || 0) - Number(a.minOrderAmount || 0),
+        );
+      } else if (sortBy === "discount") {
+        publicDeals.sort(
+          (a: any, b: any) =>
+            Number(b.discountValue || 0) - Number(a.discountValue || 0),
+        );
+      } else if (sortBy === "date") {
+        publicDeals.sort(
+          (a: any, b: any) =>
+            new Date(b.createdAt || 0).getTime() -
+            new Date(a.createdAt || 0).getTime(),
+        );
+      }
+      res.json(publicDeals);
     } catch (error) {
       console.error("Error searching deals:", error);
       res.status(500).json({ message: "Failed to search deals" });
@@ -212,11 +265,12 @@ export function registerDealDiscoveryRoutes(
 
   app.get("/api/deals/recommended", async (req: any, res) => {
     try {
+      res.setHeader("Cache-Control", "no-store");
       const userId = req.user?.id;
       const sessionId = req.sessionID || "anonymous";
 
       const recommendedDeals = await storage.getActiveDeals();
-      const filteredDeals = await filterDealsByBusinessAccess(
+      const filteredDeals = await projectAccessibleDeals(
         recommendedDeals as any[],
       );
 
@@ -249,6 +303,7 @@ export function registerDealDiscoveryRoutes(
 
   app.get("/api/deals/:id", async (req, res) => {
     try {
+      res.setHeader("Cache-Control", "no-store");
       const deal = await storage.getDeal(req.params.id);
       if (!deal) {
         return res.status(404).json({ message: "Deal not found" });
@@ -270,7 +325,11 @@ export function registerDealDiscoveryRoutes(
         return res.status(404).json({ message: "Deal not found" });
       }
 
-      res.json(deal);
+      const [publicDeal] = await projectPublicDealRows([deal]);
+      if (!publicDeal) {
+        return res.status(404).json({ message: "Deal not found" });
+      }
+      res.json(publicDeal);
     } catch (error) {
       console.error("Error fetching deal:", error);
       res.status(500).json({ message: "Failed to fetch deal" });
@@ -307,6 +366,19 @@ export function registerDealDiscoveryRoutes(
 
   app.get("/api/reviews/restaurant/:restaurantId", async (req, res) => {
     try {
+      const restaurant = await storage.getRestaurant(req.params.restaurantId);
+      const publicRestaurant = restaurant
+        ? await toPublicRestaurantListingWithVisibility(restaurant)
+        : null;
+      if (
+        !restaurant ||
+        restaurant.isActive !== true ||
+        !isPublicBusinessVisible(restaurant) ||
+        !(publicRestaurant as any)?.id ||
+        deriveProfileEvidenceQuarantineVisibility(restaurant).isQuarantined
+      ) {
+        return res.status(404).json({ message: "Restaurant not found" });
+      }
       const reviews = await storage.getRestaurantReviews(
         req.params.restaurantId,
       );

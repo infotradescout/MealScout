@@ -396,6 +396,10 @@ interface RestaurantSummary {
   longitude?: number | null;
   lat?: number | null;
   lng?: number | null;
+  isOpen?: boolean | null;
+  openNow?: boolean | null;
+  openStatus?: string | null;
+  hoursStatus?: string | null;
 }
 
 interface MenuPreviewItem {
@@ -1855,6 +1859,7 @@ function buildCravingBoardItems({
   }
 
   for (const { restaurant, score } of rankedRestaurants.slice(0, 4)) {
+    const restaurantOpenState = getRestaurantOpenState(restaurant);
     addPick(items, {
       id: `restaurant-${restaurant.id}`,
       kind: "Place",
@@ -1882,7 +1887,10 @@ function buildCravingBoardItems({
           Number(restaurant.recommendationCount || 0) > 0 ||
           Number(restaurant.videoRecommendationCount || 0) > 0,
         hasDistance: Boolean(getRestaurantDistance(restaurant)),
-        isOpen: true,
+        isOpen:
+          restaurantOpenState === "unknown"
+            ? undefined
+            : restaurantOpenState === "open",
       },
       score,
     });
@@ -2128,6 +2136,7 @@ function buildLocalActivityItems({
 
   for (const restaurant of restaurants.slice(0, 4)) {
     const distance = getRestaurantDistance(restaurant);
+    const restaurantOpenState = getRestaurantOpenState(restaurant);
     const freshnessMeta: FreshnessMeta = {
       kind: "restaurant",
       updatedAt: readStringField(restaurant, ["updatedAt", "lastUpdatedAt"]),
@@ -2143,14 +2152,24 @@ function buildLocalActivityItems({
         Number(restaurant.recommendationCount || 0) > 0 ||
         Number(restaurant.videoRecommendationCount || 0) > 0,
       hasDistance: Boolean(distance),
-      isOpen: true,
+      isOpen:
+        restaurantOpenState === "unknown"
+          ? undefined
+          : restaurantOpenState === "open",
     };
     const timestamp = getKnownTimestamp(freshnessMeta);
     const hasUpdateToday = Boolean(timestamp && isTodayDate(timestamp.value));
     items.push({
       id: `restaurant-${restaurant.id}`,
-      type: hasUpdateToday ? "update" : "open",
-      title: hasUpdateToday ? "Updated today" : "Open now",
+      type:
+        hasUpdateToday || restaurantOpenState !== "open" ? "update" : "open",
+      title: hasUpdateToday
+        ? "Updated today"
+        : restaurantOpenState === "open"
+          ? "Open now"
+          : restaurantOpenState === "closed"
+            ? "Closed now"
+            : "Schedule not posted",
       subtitle: [
         getRestaurantName(restaurant),
         restaurant.cuisineType,
@@ -10651,6 +10670,7 @@ function NearbyRestaurantCard({
       : null,
     communityActivityCount > 0 ? "active buzz" : null,
   ].filter((update): update is string => Boolean(update));
+  const restaurantOpenState = getRestaurantOpenState(restaurant);
   const statusLabels = [
     ...getOperationalBadges({
       kind: isFoodTruckEntity ? "truck" : "restaurant",
@@ -10665,7 +10685,9 @@ function NearbyRestaurantCard({
       hasDistance: Boolean(distLabel),
       isOpen: isFoodTruckEntity
         ? isTruckServingNow(restaurant as unknown as LiveTruckSummary)
-        : true,
+        : restaurantOpenState === "unknown"
+          ? undefined
+          : restaurantOpenState === "open",
     }),
   ];
   const cardShellClass = isFoodTruckEntity
@@ -10674,10 +10696,16 @@ function NearbyRestaurantCard({
   const labelPillClass = isFoodTruckEntity
     ? "bg-[#120805]/72 text-orange-100 ring-orange-200/20"
     : "bg-[#1b0e08]/76 text-orange-50 ring-orange-200/24";
-  const statusDotClass = isFoodTruckEntity ? "bg-orange-400" : "bg-emerald-400";
+  const statusDotClass = isFoodTruckEntity
+    ? "bg-orange-400"
+    : restaurantOpenState === "open"
+      ? "bg-emerald-400"
+      : "bg-amber-400";
   const statusTextClass = isFoodTruckEntity
     ? "text-orange-300"
-    : "text-emerald-300";
+    : restaurantOpenState === "open"
+      ? "text-emerald-300"
+      : "text-amber-300";
   const placeIcon = isFoodTruckEntity ? (
     <TruckIcon className="h-5 w-5 text-white/80" aria-hidden="true" />
   ) : (
@@ -10900,7 +10928,9 @@ function NearbyRestaurantCard({
                 style={{
                   boxShadow: isFoodTruckEntity
                     ? "0 0 6px rgba(251,146,60,0.8)"
-                    : "0 0 6px rgba(52,211,153,0.7)",
+                    : restaurantOpenState === "open"
+                      ? "0 0 6px rgba(52,211,153,0.7)"
+                      : "0 0 6px rgba(251,191,36,0.65)",
                 }}
                 aria-hidden="true"
               />

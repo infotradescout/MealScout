@@ -1,6 +1,6 @@
 /**
  * Pickup Checkout page
- * Customer fills in contact info, chooses card/cash, and pays via Stripe.
+ * Customer fills in contact info and completes verified pickup card payment.
  */
 import { useState, useEffect } from "react";
 import { Link, useParams, useLocation } from "wouter";
@@ -12,6 +12,7 @@ import {
 } from "@stripe/react-stripe-js";
 import { loadStripe } from "@stripe/stripe-js";
 import { PublicOrderingTopBar } from "@/components/public-ordering/PublicOrderingTopBar";
+import { normalizeOrderContactPhone } from "@shared/orderContact";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,41 +23,23 @@ import {
   ShoppingCart,
   AlertCircle,
   CreditCard,
-  Banknote,
   ArrowLeft,
   MapPin,
 } from "lucide-react";
 import type { CartItem } from "./online-menu";
 import PaymentBrowserGate from "@/components/payment-browser-gate";
 import { isPaymentHostileBrowser } from "@/lib/inAppBrowser";
+import {
+  toAuthoritativePaymentOrder,
+  type AuthoritativePaymentOrder,
+} from "@/lib/pickupCheckoutTruth";
 
 const stripePublicKey = import.meta.env.VITE_STRIPE_PUBLIC_KEY || "";
 const stripePromise = stripePublicKey ? loadStripe(stripePublicKey) : null;
 
 const CART_KEY = "mealscout_cart";
-const MEALSCOUT_ORDER_FEE_CENTS = 100;
-const STRIPE_FEE_BPS = 290;
-const STRIPE_FEE_FIXED_CENTS = 30;
 const formatMoney = (cents: number) =>
   `$${(Number(cents || 0) / 100).toFixed(2)}`;
-
-function estimateProcessingFeeCents(baseBeforeProcessingCents: number) {
-  if (!Number.isFinite(baseBeforeProcessingCents) || baseBeforeProcessingCents <= 0) {
-    return 0;
-  }
-  const denominator = 10_000 - STRIPE_FEE_BPS;
-  if (denominator <= 0) {
-    return Math.ceil(
-      (baseBeforeProcessingCents * STRIPE_FEE_BPS) / 10_000 +
-        STRIPE_FEE_FIXED_CENTS,
-    );
-  }
-  const gross = Math.ceil(
-    ((baseBeforeProcessingCents + STRIPE_FEE_FIXED_CENTS) * 10_000) /
-      denominator,
-  );
-  return Math.max(0, gross - baseBeforeProcessingCents);
-}
 
 function getCart(): CartItem[] {
   try {
@@ -77,24 +60,21 @@ function clearCartForRestaurant(restaurantId: string) {
 }
 
 interface MenuInfo {
-  acceptsCash: boolean;
+  cardPaymentsEnabled: boolean;
   hidePlatformFee: boolean;
-}
-
-interface DeliveryInfo {
-  enabled: boolean;
-  configured: boolean;
-  availableNow: boolean;
-  unavailableReason?: string | null;
-  feeCents: number;
-  minimumOrderCents: number;
-  estimatedMinutes: number;
-  postalCodes: string[];
-  instructions?: string | null;
+  pricesIncludeTax: boolean;
 }
 
 interface OrderingReadiness {
   blockingReasons: string[];
+  restaurantName?: string | null;
+  restaurantCity?: string | null;
+  restaurantState?: string | null;
+  pickupAddressLabel?: string | null;
+  paymentMethods?: {
+    card: boolean;
+    cash: boolean;
+  };
   checks: Array<{
     id: string;
     label: string;
@@ -110,17 +90,9 @@ export default function CheckoutPage() {
   const [menuInfo, setMenuInfo] = useState<MenuInfo | null>(null);
   const [menuInfoError, setMenuInfoError] = useState(false);
   const [readiness, setReadiness] = useState<OrderingReadiness | null>(null);
-  const [orderingEnabled, setOrderingEnabled] = useState(true);
-  const [paymentMethod, setPaymentMethod] = useState<"card" | "cash">("card");
-  const [orderType, setOrderType] = useState<"pickup" | "dine_in" | "delivery" | null>(null);
-  const [deliveryInfo, setDeliveryInfo] = useState<DeliveryInfo | null>(null);
-  const [deliveryAddress, setDeliveryAddress] = useState({
-    address: "",
-    city: "",
-    state: "",
-    postalCode: "",
-    instructions: "",
-  });
+  const [orderingEnabled, setOrderingEnabled] = useState(false);
+  const paymentMethod = "card" as const;
+  const [orderType, setOrderType] = useState<"pickup" | null>(null);
   const [contact, setContact] = useState({
     name: "",
     email: "",
@@ -130,18 +102,21 @@ export default function CheckoutPage() {
   const [isCreating, setIsCreating] = useState(false);
   const [orderId, setOrderId] = useState<string | null>(null);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
+  const [authoritativePaymentOrder, setAuthoritativePaymentOrder] =
+    useState<AuthoritativePaymentOrder | null>(null);
   const [checkoutRequestId] = useState(() => crypto.randomUUID());
-  const [deliveryAccessToken] = useState(() =>
+  const [customerAccessToken] = useState(() =>
     Array.from(crypto.getRandomValues(new Uint8Array(32)), (value) =>
       value.toString(16).padStart(2, "0"),
     ).join(""),
   );
   const [serverTotals, setServerTotals] = useState<{
     subtotalCents: number;
+    mealscoutFeeCents: number;
+    processingFeeCents: number;
     platformFeeCents: number;
     totalCents: number;
     feePaidByBusiness: boolean;
-    deliveryFeeCents: number;
   } | null>(null);
   const hostileBrowser = isPaymentHostileBrowser();
 
@@ -151,7 +126,7 @@ export default function CheckoutPage() {
     );
     setCart(restaurantCart);
 
-    // Also fetch menu to check acceptsCash + hidePlatformFee
+    // Fetch the exact menu's card readiness and fee presentation.
     if (restaurantId) {
       setMenuInfoError(false);
       fetch(`/api/menus/${encodeURIComponent(restaurantId)}`)
@@ -160,27 +135,48 @@ export default function CheckoutPage() {
           return r.json();
         })
         .then((payload: any) => {
-          setOrderingEnabled(Boolean(payload?.orderingEnabled));
           setReadiness(payload?.readiness || null);
           const menus = Array.isArray(payload?.menus) ? payload.menus : [];
-          const activeMenu = menus.find((m: any) => m.isActive);
+          const cartMenuIds = new Set(
+            restaurantCart.map((item) => item.menuId),
+          );
+          const cartMenuId =
+            cartMenuIds.size === 1
+              ? String(restaurantCart[0]?.menuId || "")
+              : "";
+          const activeMenu = menus.find(
+            (menu: any) => menu.isActive && menu.id === cartMenuId,
+          );
           if (activeMenu) {
+            const cardPaymentsEnabled = Boolean(
+              activeMenu?.paymentMethods?.card,
+            );
+            const pricesIncludeTax = activeMenu.pricesIncludeTax === true;
+            setOrderingEnabled(
+              Boolean(
+                activeMenu.orderingEnabled &&
+                cardPaymentsEnabled &&
+                pricesIncludeTax,
+              ),
+            );
             setMenuInfo({
-              acceptsCash: activeMenu.acceptsCash,
+              cardPaymentsEnabled,
               hidePlatformFee: activeMenu.hidePlatformFee,
+              pricesIncludeTax,
             });
+          } else {
+            setOrderingEnabled(false);
+            setMenuInfo(null);
+            setMenuInfoError(true);
           }
         })
-        // A failed lookup previously left menuInfo null, which silently
-        // hides the cash option with no explanation -- surface it instead
-        // so a diner who expected to pay cash isn't just confused.
+        // A failed lookup must remain a visible, fail-closed checkout state.
         .catch(() => setMenuInfoError(true));
-      fetch(`/api/restaurants/${encodeURIComponent(restaurantId)}/delivery`)
-        .then((response) => response.ok ? response.json() : null)
-        .then((payload) => setDeliveryInfo(payload))
-        .catch(() => setDeliveryInfo(null));
     }
   }, [restaurantId]);
+
+  const cartMenuIds = new Set(cart.map((item) => item.menuId));
+  const cartHasMixedMenus = cartMenuIds.size > 1;
 
   if (cart.length === 0) {
     return (
@@ -223,37 +219,99 @@ export default function CheckoutPage() {
     );
   }
 
+  if (cartHasMixedMenus) {
+    return (
+      <div className="mealscout-public-profile min-h-screen bg-[color:var(--profile-page)]">
+        <PublicOrderingTopBar
+          secondaryHref={`/menu/${restaurantId}`}
+          secondaryLabel="Menu"
+        />
+        <main className="mx-auto flex min-h-[70vh] w-full max-w-2xl items-center justify-center px-4 py-20">
+          <section className="profile-surface w-full rounded-[2rem] p-7 text-center sm:p-10">
+            <AlertCircle className="mx-auto h-10 w-10 text-destructive" />
+            <h1 className="mt-4 text-2xl font-black tracking-tight text-[color:var(--profile-ink)]">
+              Choose one menu per order
+            </h1>
+            <p className="mt-2 text-sm text-[color:var(--profile-muted)]">
+              This saved cart contains items from different menus, so its
+              payment rules and fees cannot be verified safely.
+            </p>
+            <div className="mt-6 flex flex-wrap justify-center gap-3">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  clearCartForRestaurant(restaurantId ?? "");
+                  setCart([]);
+                }}
+              >
+                Clear saved cart
+              </Button>
+              <Link
+                href={`/menu/${restaurantId}`}
+                className="profile-action-primary inline-flex min-h-10 items-center rounded-full px-5 text-sm font-black"
+              >
+                Return to menu
+              </Link>
+            </div>
+          </section>
+        </main>
+      </div>
+    );
+  }
+
   const subtotal = cart.reduce((sum, i) => sum + i.lineTotalCents, 0);
-  const platformFee = menuInfo?.hidePlatformFee
-    ? 0
-    : MEALSCOUT_ORDER_FEE_CENTS +
-      (paymentMethod === "card"
-        ? estimateProcessingFeeCents(subtotal + MEALSCOUT_ORDER_FEE_CENTS)
-        : 0);
-  const deliveryFee = orderType === "delivery" ? Number(deliveryInfo?.feeCents || 0) : 0;
-  const total = subtotal + platformFee + deliveryFee;
+  const knownTotalBeforeCardFees = subtotal;
+  const customerCardFeesPending = Boolean(
+    paymentMethod === "card" && menuInfo && !menuInfo.hidePlatformFee,
+  );
   const displayedSubtotal = serverTotals?.subtotalCents ?? subtotal;
-  const displayedFee = serverTotals?.feePaidByBusiness
+  const displayedMealscoutFee = serverTotals?.feePaidByBusiness
     ? 0
-    : (serverTotals?.platformFeeCents ?? platformFee);
-  const displayedTotal = serverTotals?.totalCents ?? total;
+    : (serverTotals?.mealscoutFeeCents ?? 0);
+  const displayedProcessingFee = serverTotals?.feePaidByBusiness
+    ? 0
+    : (serverTotals?.processingFeeCents ?? 0);
+  const displayedTotal = serverTotals?.totalCents ?? knownTotalBeforeCardFees;
   const menuId = cart[0].menuId;
+  const normalizedContactPhone = contact.phone.trim()
+    ? normalizeOrderContactPhone(contact.phone)
+    : null;
 
   const createOrder = async () => {
+    if (new Set(cart.map((item) => item.menuId)).size !== 1) {
+      setOrderError("Choose items from one menu before checkout.");
+      return;
+    }
     if (!contact.name.trim()) {
       setOrderError("Please enter your name.");
       return;
     }
     if (!orderType) {
-      setOrderError("Choose pickup, dine in, or merchant delivery.");
+      setOrderError("Choose pickup.");
       return;
     }
-    if (paymentMethod === "card" && hostileBrowser) {
-      setOrderError("Open this page in Chrome or Safari to complete card payment.");
+    if (!contact.email.trim() && !contact.phone.trim()) {
+      setOrderError(
+        "Enter an email address or phone number so you can receive order updates.",
+      );
       return;
     }
-    if (orderType === "delivery" && (!deliveryAddress.address.trim() || !deliveryAddress.city.trim() || !deliveryAddress.state.trim() || !deliveryAddress.postalCode.trim())) {
-      setOrderError("Enter the complete delivery address.");
+    if (contact.phone.trim() && !normalizedContactPhone) {
+      setOrderError(
+        "Enter a valid phone number that can receive order updates.",
+      );
+      return;
+    }
+    if (hostileBrowser) {
+      setOrderError(
+        "Open this page in Chrome or Safari to complete card payment.",
+      );
+      return;
+    }
+    if (!stripePromise) {
+      setOrderError(
+        "Secure card payment is not configured on this checkout. No order was created.",
+      );
       return;
     }
     setOrderError(null);
@@ -264,20 +322,14 @@ export default function CheckoutPage() {
         menuId,
         customerName: contact.name.trim(),
         customerEmail: contact.email.trim() || undefined,
-        customerPhone: contact.phone.trim() || undefined,
+        customerPhone: normalizedContactPhone || undefined,
         orderType,
-        checkoutRequestId: orderType === "delivery" ? checkoutRequestId : undefined,
-        customerAccessToken: orderType === "delivery" ? deliveryAccessToken : undefined,
-        deliveryAddress: orderType === "delivery" ? deliveryAddress.address.trim() : undefined,
-        deliveryCity: orderType === "delivery" ? deliveryAddress.city.trim() : undefined,
-        deliveryState: orderType === "delivery" ? deliveryAddress.state.trim() : undefined,
-        deliveryPostalCode: orderType === "delivery" ? deliveryAddress.postalCode.trim() : undefined,
-        deliveryInstructions: orderType === "delivery" ? deliveryAddress.instructions.trim() || undefined : undefined,
+        checkoutRequestId,
+        customerAccessToken,
         paymentMethod,
         promotionToken:
-          window.localStorage.getItem(
-            `mealscout:promotion:${restaurantId}`,
-          ) || undefined,
+          window.localStorage.getItem(`mealscout:promotion:${restaurantId}`) ||
+          undefined,
         items: cart.map((i) => ({
           menuItemId: i.menuItemId,
           quantity: i.quantity,
@@ -302,23 +354,28 @@ export default function CheckoutPage() {
           data.customerAccessToken,
         );
       }
+      if (String(data.order.status || "") !== "pending") {
+        navigate(`/order-confirmation/${data.order.id}`);
+        return;
+      }
+      if (!data.clientSecret) {
+        throw new Error(
+          "Secure payment setup did not finish. No payment can be submitted from this checkout.",
+        );
+      }
       setServerTotals({
         subtotalCents: Number(data.order.subtotalCents || subtotal) || subtotal,
-        platformFeeCents:
-          Number(data.order.platformFeeCents || platformFee) || platformFee,
-        totalCents: Number(data.order.totalCents || total) || total,
+        mealscoutFeeCents: Number(data.order.mealscoutFeeCents ?? 0),
+        processingFeeCents: Number(data.order.processingFeeCents ?? 0),
+        platformFeeCents: Number(data.order.platformFeeCents ?? 0),
+        totalCents:
+          Number(data.order.totalCents || knownTotalBeforeCardFees) ||
+          knownTotalBeforeCardFees,
         feePaidByBusiness: Boolean(data.order.feePaidByBusiness),
-        deliveryFeeCents: Number(data.order.deliveryFeeCents || 0) || 0,
       });
+      setAuthoritativePaymentOrder(toAuthoritativePaymentOrder(data.order));
 
-      if (paymentMethod === "cash") {
-        // No payment needed — redirect immediately
-        clearCartForRestaurant(restaurantId ?? "");
-        navigate(`/order-confirmation/${data.order.id}`);
-      } else {
-        // Card payment — show Stripe Elements
-        setClientSecret(data.clientSecret);
-      }
+      setClientSecret(data.clientSecret);
     } catch (err: any) {
       const message = String(err?.message || "Failed to create order");
       setOrderError(message);
@@ -339,10 +396,23 @@ export default function CheckoutPage() {
           secondaryLabel="Menu"
         />
         <main className="mx-auto w-full max-w-2xl px-4 py-6 sm:py-8">
-          <p className="profile-section-label">{orderType === "delivery" ? "Merchant delivery" : "Pickup order"}</p>
+          <p className="profile-section-label">Pickup order</p>
           <h1 className="mb-6 mt-1 text-3xl font-black tracking-tight text-[color:var(--profile-ink)]">
             Payment
           </h1>
+          {authoritativePaymentOrder?.merchantNameSnapshot ? (
+            <div className="mb-4 rounded-2xl border border-[color:var(--profile-border)] bg-white px-4 py-3 text-sm">
+              <p className="font-black">
+                {authoritativePaymentOrder.merchantNameSnapshot}
+              </p>
+              {authoritativePaymentOrder.pickupAddressSnapshot ? (
+                <p className="mt-1 flex items-start gap-1.5 text-xs text-muted-foreground">
+                  <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  {authoritativePaymentOrder.pickupAddressSnapshot}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
           {hostileBrowser ? (
             <div className="mb-4">
               <PaymentBrowserGate
@@ -358,18 +428,24 @@ export default function CheckoutPage() {
                 <span className="text-muted-foreground">Subtotal</span>
                 <span>{formatMoney(displayedSubtotal)}</span>
               </div>
-              {displayedFee > 0 && (
+              {displayedMealscoutFee > 0 && (
                 <div className="flex justify-between text-sm mb-1">
-                  <span className="text-muted-foreground">Processing + MealScout fee</span>
-                  <span>{formatMoney(displayedFee)}</span>
+                  <span className="text-muted-foreground">MealScout fee</span>
+                  <span>{formatMoney(displayedMealscoutFee)}</span>
                 </div>
               )}
-              {Number(serverTotals?.deliveryFeeCents || 0) > 0 && (
+              {displayedProcessingFee > 0 && (
                 <div className="flex justify-between text-sm mb-1">
-                  <span className="text-muted-foreground">Merchant delivery</span>
-                  <span>{formatMoney(serverTotals?.deliveryFeeCents || 0)}</span>
+                  <span className="text-muted-foreground">Card processing</span>
+                  <span>{formatMoney(displayedProcessingFee)}</span>
                 </div>
               )}
+              {authoritativePaymentOrder?.pricesIncludeTax ? (
+                <div className="flex justify-between text-sm mb-1">
+                  <span className="text-muted-foreground">Tax</span>
+                  <span>Included in item prices</span>
+                </div>
+              ) : null}
               <div className="mt-2 flex justify-between border-t border-[#ead7c7] pt-2 font-black">
                 <span>Total</span>
                 <span>{formatMoney(displayedTotal)}</span>
@@ -381,11 +457,11 @@ export default function CheckoutPage() {
             options={{ clientSecret, appearance: { theme: "stripe" } }}
           >
             <StripePaymentForm
-                orderId={orderId}
-                restaurantId={restaurantId ?? ""}
-                onSuccess={() => {
-                  clearCartForRestaurant(restaurantId ?? "");
-                  navigate(`/order-confirmation/${orderId}`);
+              orderId={orderId}
+              restaurantId={restaurantId ?? ""}
+              onSuccess={() => {
+                clearCartForRestaurant(restaurantId ?? "");
+                navigate(`/order-confirmation/${orderId}`);
               }}
             />
           </Elements>
@@ -426,13 +502,31 @@ export default function CheckoutPage() {
                   Waiting on: {readiness.blockingReasons.join(", ")}.
                 </p>
               ) : (
-                <p className="mt-1 text-xs">
-                  Please order in person for now.
-                </p>
+                <p className="mt-1 text-xs">Please order in person for now.</p>
               )}
             </div>
           </div>
         )}
+
+        {readiness?.restaurantName ? (
+          <Card className="profile-surface mb-4 rounded-3xl">
+            <CardContent className="pt-4">
+              <p className="font-black text-[color:var(--profile-ink)]">
+                {readiness.restaurantName}
+              </p>
+              {readiness.pickupAddressLabel ? (
+                <p className="mt-1 flex items-start gap-1.5 text-sm text-[color:var(--profile-muted)]">
+                  <MapPin className="mt-0.5 h-4 w-4 shrink-0" />
+                  {readiness.pickupAddressLabel}
+                </p>
+              ) : null}
+              <p className="mt-2 text-xs text-[color:var(--profile-muted)]">
+                The status page will show when the business starts preparation
+                and when the order is ready.
+              </p>
+            </CardContent>
+          </Card>
+        ) : null}
 
         {/* Order summary */}
         <Card className="profile-surface mb-6 rounded-3xl">
@@ -461,21 +555,17 @@ export default function CheckoutPage() {
                 <span>Subtotal</span>
                 <span>{formatMoney(subtotal)}</span>
               </div>
-              {platformFee > 0 && (
+              {customerCardFeesPending && (
                 <div className="flex justify-between text-sm text-muted-foreground">
-                  <span>Processing + MealScout fee</span>
-                  <span>{formatMoney(platformFee)}</span>
-                </div>
-              )}
-              {deliveryFee > 0 && (
-                <div className="flex justify-between text-sm text-muted-foreground">
-                  <span>Merchant delivery</span>
-                  <span>{formatMoney(deliveryFee)}</span>
+                  <span>Card fees</span>
+                  <span>Calculated before payment</span>
                 </div>
               )}
               <div className="flex justify-between pt-1 text-base font-black">
-                <span>Total</span>
-                <span>{formatMoney(total)}</span>
+                <span>
+                  {customerCardFeesPending ? "Before card fees" : "Total"}
+                </span>
+                <span>{formatMoney(knownTotalBeforeCardFees)}</span>
               </div>
             </div>
           </CardContent>
@@ -490,8 +580,14 @@ export default function CheckoutPage() {
           </CardHeader>
           <CardContent className="space-y-3">
             <div>
-              <Label className="font-black text-[color:var(--profile-ink)]">Name *</Label>
+              <Label
+                htmlFor="customer-name"
+                className="font-black text-[color:var(--profile-ink)]"
+              >
+                Name *
+              </Label>
               <Input
+                id="customer-name"
                 value={contact.name}
                 onChange={(e) =>
                   setContact((c) => ({ ...c, name: e.target.value }))
@@ -501,13 +597,17 @@ export default function CheckoutPage() {
               />
             </div>
             <div>
-              <Label className="font-black text-[color:var(--profile-ink)]">
+              <Label
+                htmlFor="customer-email"
+                className="font-black text-[color:var(--profile-ink)]"
+              >
                 Email{" "}
                 <span className="text-muted-foreground text-xs">
-                  (for confirmation)
+                  (email or phone required)
                 </span>
               </Label>
               <Input
+                id="customer-email"
                 type="email"
                 value={contact.email}
                 onChange={(e) =>
@@ -518,14 +618,20 @@ export default function CheckoutPage() {
               />
             </div>
             <div>
-              <Label className="font-black text-[color:var(--profile-ink)]">
+              <Label
+                htmlFor="customer-phone"
+                className="font-black text-[color:var(--profile-ink)]"
+              >
                 Phone{" "}
                 <span className="text-muted-foreground text-xs">
-                  (for SMS when ready)
+                  (email or phone required)
                 </span>
               </Label>
               <Input
+                id="customer-phone"
                 type="tel"
+                autoComplete="tel"
+                maxLength={40}
                 value={contact.phone}
                 onChange={(e) =>
                   setContact((c) => ({ ...c, phone: e.target.value }))
@@ -547,7 +653,7 @@ export default function CheckoutPage() {
           <CardContent>
             <RadioGroup
               value={orderType || ""}
-              onValueChange={(v) => setOrderType(v as "pickup" | "dine_in" | "delivery")}
+              onValueChange={() => setOrderType("pickup")}
               className="flex flex-wrap gap-4"
             >
               <div className="flex items-center gap-2">
@@ -559,54 +665,9 @@ export default function CheckoutPage() {
                   Pickup
                 </Label>
               </div>
-              <div className="flex items-center gap-2">
-                <RadioGroupItem value="dine_in" id="ot-dinein" />
-                <Label
-                  htmlFor="ot-dinein"
-                  className="cursor-pointer font-normal"
-                >
-                  Dine In
-                </Label>
-              </div>
-              {deliveryInfo?.enabled && deliveryInfo.availableNow && (
-                <div className="flex items-center gap-2">
-                  <RadioGroupItem value="delivery" id="ot-delivery" />
-                  <Label htmlFor="ot-delivery" className="cursor-pointer font-normal">
-                    Delivery · {formatMoney(deliveryInfo.feeCents)}
-                  </Label>
-                </div>
-              )}
             </RadioGroup>
-            {deliveryInfo?.configured && !deliveryInfo.availableNow ? (
-              <p className="mt-3 text-sm text-muted-foreground">
-                {deliveryInfo.unavailableReason || "Merchant delivery is unavailable at this time."}
-              </p>
-            ) : null}
           </CardContent>
         </Card>
-
-        {orderType === "delivery" && (
-          <Card className="profile-surface mb-4 rounded-3xl">
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 text-base font-black">
-                <MapPin className="h-4 w-4" /> Delivery address
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-3 sm:grid-cols-2">
-              <Input className="sm:col-span-2" placeholder="Street address" value={deliveryAddress.address} onChange={(e) => setDeliveryAddress((v) => ({ ...v, address: e.target.value }))} />
-              <Input placeholder="City" value={deliveryAddress.city} onChange={(e) => setDeliveryAddress((v) => ({ ...v, city: e.target.value }))} />
-              <div className="grid grid-cols-2 gap-3">
-                <Input placeholder="State" value={deliveryAddress.state} onChange={(e) => setDeliveryAddress((v) => ({ ...v, state: e.target.value }))} />
-                <Input placeholder="ZIP code" value={deliveryAddress.postalCode} onChange={(e) => setDeliveryAddress((v) => ({ ...v, postalCode: e.target.value }))} />
-              </div>
-              <Input className="sm:col-span-2" placeholder="Gate code or delivery note (optional)" value={deliveryAddress.instructions} onChange={(e) => setDeliveryAddress((v) => ({ ...v, instructions: e.target.value }))} />
-              <p className="sm:col-span-2 text-xs text-muted-foreground">
-                {deliveryInfo?.estimatedMinutes || 45}-minute estimate
-                {deliveryInfo?.minimumOrderCents ? ` · ${formatMoney(deliveryInfo.minimumOrderCents)} minimum` : ""}
-              </p>
-            </CardContent>
-          </Card>
-        )}
 
         {/* Payment method */}
         <Card className="profile-surface mb-6 rounded-3xl">
@@ -616,39 +677,47 @@ export default function CheckoutPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <RadioGroup
-              value={paymentMethod}
-              onValueChange={(v) => setPaymentMethod(v as "card" | "cash")}
-              className="flex gap-4"
-            >
-              <div className="flex items-center gap-2">
-                <RadioGroupItem value="card" id="pm-card" />
-                <Label
-                  htmlFor="pm-card"
-                  className="cursor-pointer font-normal flex items-center gap-1"
-                >
-                  <CreditCard className="w-4 h-4" /> Card
-                </Label>
-              </div>
-              {menuInfo?.acceptsCash && (
+            <RadioGroup value={paymentMethod} className="flex gap-4">
+              {menuInfo?.cardPaymentsEnabled ? (
                 <div className="flex items-center gap-2">
-                  <RadioGroupItem value="cash" id="pm-cash" />
+                  <RadioGroupItem value="card" id="pm-card" />
                   <Label
-                    htmlFor="pm-cash"
+                    htmlFor="pm-card"
                     className="cursor-pointer font-normal flex items-center gap-1"
                   >
-                    <Banknote className="w-4 h-4" /> Cash at Pickup
+                    <CreditCard className="w-4 h-4" /> Card
                   </Label>
                 </div>
-              )}
+              ) : null}
             </RadioGroup>
             {menuInfoError && (
               <p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
                 <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                Couldn't check whether this restaurant accepts cash at pickup.
-                Card payment is available; refresh to try again.
+                Payment availability could not be verified. Refresh before
+                placing an order.
               </p>
             )}
+            {menuInfo?.cardPaymentsEnabled ? (
+              <p className="mt-2 text-xs text-muted-foreground">
+                Menu availability, hours, pickup location, and payment readiness
+                are checked again when payment completes. If they changed, the
+                order is blocked from fulfillment and payment cancellation or
+                refund reconciliation begins.
+              </p>
+            ) : null}
+            {menuInfo && !menuInfo.cardPaymentsEnabled ? (
+              <p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
+                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                This business has not enabled a safe online payment method yet.
+              </p>
+            ) : null}
+            {menuInfo && !menuInfo.pricesIncludeTax ? (
+              <p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
+                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                Checkout stays unavailable until this business confirms that
+                displayed prices include applicable tax.
+              </p>
+            ) : null}
           </CardContent>
         </Card>
 
@@ -665,15 +734,17 @@ export default function CheckoutPage() {
           disabled={
             isCreating ||
             !contact.name.trim() ||
+            (!contact.email.trim() && !contact.phone.trim()) ||
+            (Boolean(contact.phone.trim()) && !normalizedContactPhone) ||
             !orderType ||
             !orderingEnabled ||
-            (paymentMethod === "card" && hostileBrowser)
+            !menuInfo?.cardPaymentsEnabled ||
+            !stripePromise ||
+            hostileBrowser
           }
         >
           {isCreating && <Loader2 className="w-5 h-5 mr-2 animate-spin" />}
-          {paymentMethod === "cash"
-            ? "Place Order (Cash)"
-            : `Pay ${formatMoney(total)}`}
+          Continue to secure payment
         </Button>
       </main>
     </div>

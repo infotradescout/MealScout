@@ -14,6 +14,12 @@ import {
   incSubscribeNearby,
   maybeWarnIfChurn,
 } from "./utils/realtimeMetrics";
+import {
+  toPublicRestaurantListingArrayWithVisibility,
+  toPublicRestaurantListingWithVisibility,
+} from "./publicProfiles/toPublicRestaurantListingWithVisibility";
+import { deriveProfileEvidenceQuarantineVisibility } from "./services/profileEvidenceQuarantine";
+import { isPublicBusinessVisible } from "./utils/publicBusinessVisibility";
 
 const PgSession = connectPg(session);
 
@@ -30,9 +36,7 @@ type ClientToServerEvents = {
   ping: () => void;
 };
 
-type NearbyTruck = Awaited<
-  ReturnType<typeof storage.getLiveTrucksNearby>
->[number];
+type NearbyTruck = Record<string, unknown>;
 
 type BroadcastLocation = {
   latitude: number | string;
@@ -43,6 +47,12 @@ type BroadcastLocation = {
   heading?: number | string | null;
   altitude?: number | string | null;
   [key: string]: unknown;
+};
+
+type PublicBroadcastLocation = {
+  latitude: number;
+  longitude: number;
+  timestamp: string;
 };
 
 type ServerToClientEvents = {
@@ -77,7 +87,7 @@ type ServerToClientEvents = {
   truck_location_update: (payload: {
     type: "truck_location_update";
     restaurantId: string;
-    location: BroadcastLocation;
+    location: PublicBroadcastLocation;
     timestamp: string;
   }) => void;
   status_update: (payload: {
@@ -251,7 +261,8 @@ export function setupWebSocketServer(httpServer: Server): SocketIOServer {
                 latitude < -90 ||
                 latitude > 90 ||
                 longitude < -180 ||
-                longitude > 180
+                longitude > 180 ||
+                (latitude === 0 && longitude === 0)
               ) {
                 socket.emit("error", { message: "Invalid coordinates" });
                 return;
@@ -282,9 +293,33 @@ export function setupWebSocketServer(httpServer: Server): SocketIOServer {
               const nearbyTrucks = await storage.getLiveTrucksNearby(
                 latitude,
                 longitude,
-                radiusKm,
+                Math.max(1, Math.min(50, Number(radiusKm) || 5)),
               );
-              socket.emit("nearby_trucks", { trucks: nearbyTrucks });
+              const authorizedNearbyTrucks = (
+                await Promise.all(
+                  nearbyTrucks.map(async (candidate: any) => {
+                    const fullRestaurant = await storage.getRestaurant(
+                      String(candidate?.id || ""),
+                    );
+                    if (
+                      !fullRestaurant ||
+                      fullRestaurant.isActive !== true ||
+                      fullRestaurant.mobileOnline !== true ||
+                      !isPublicBusinessVisible(fullRestaurant) ||
+                      deriveProfileEvidenceQuarantineVisibility(fullRestaurant)
+                        .isQuarantined
+                    ) {
+                      return null;
+                    }
+                    return fullRestaurant;
+                  }),
+                )
+              ).filter(Boolean);
+              const publicNearbyTrucks =
+                await toPublicRestaurantListingArrayWithVisibility(
+                  authorizedNearbyTrucks,
+                );
+              socket.emit("nearby_trucks", { trucks: publicNearbyTrucks });
 
               console.log(
                 `User ${userKey} subscribed to nearby trucks in ${roomKey}`,
@@ -438,7 +473,7 @@ export function setupWebSocketServer(httpServer: Server): SocketIOServer {
 }
 
 // Broadcast location update to subscribers
-export function broadcastLocationUpdate(
+export async function broadcastLocationUpdate(
   restaurantId: string,
   locationData: BroadcastLocation,
 ) {
@@ -457,7 +492,8 @@ export function broadcastLocationUpdate(
       timestamp: new Date().toISOString(),
     });
 
-    // Broadcast to geographic grid rooms (for nearby customers)
+    // Public grid rooms receive only a server-authorized live coordinate DTO.
+    // Owner-only restaurant rooms above retain the richer operational payload.
     if (locationData.latitude && locationData.longitude) {
       const gridSize = 0.1;
       const latNum =
@@ -469,13 +505,54 @@ export function broadcastLocationUpdate(
           ? Number(locationData.longitude)
           : locationData.longitude;
 
-      if (Number.isNaN(latNum) || Number.isNaN(lngNum)) {
+      if (
+        !Number.isFinite(latNum) ||
+        !Number.isFinite(lngNum) ||
+        latNum < -90 ||
+        latNum > 90 ||
+        lngNum < -180 ||
+        lngNum > 180 ||
+        (latNum === 0 && lngNum === 0)
+      ) {
         console.warn("Skipping broadcast: invalid coordinates", locationData);
         return;
       }
 
-      const gridLat = Math.floor(latNum / gridSize) * gridSize;
-      const gridLng = Math.floor(lngNum / gridSize) * gridSize;
+      const restaurant = await storage.getRestaurant(restaurantId);
+      const publicRestaurant = restaurant
+        ? await toPublicRestaurantListingWithVisibility(restaurant)
+        : null;
+      if (
+        !restaurant ||
+        restaurant.isActive !== true ||
+        !isPublicBusinessVisible(restaurant) ||
+        deriveProfileEvidenceQuarantineVisibility(restaurant).isQuarantined ||
+        !publicRestaurant?.id ||
+        publicRestaurant.mobileOnline !== true
+      ) {
+        return;
+      }
+      const publicLat = Number(publicRestaurant.currentLatitude);
+      const publicLng = Number(publicRestaurant.currentLongitude);
+      if (
+        !Number.isFinite(publicLat) ||
+        !Number.isFinite(publicLng) ||
+        (publicLat === 0 && publicLng === 0)
+      ) {
+        return;
+      }
+      const publicTimestamp =
+        typeof locationData.timestamp === "string" && locationData.timestamp
+          ? locationData.timestamp
+          : new Date().toISOString();
+      const publicLocation: PublicBroadcastLocation = {
+        latitude: publicLat,
+        longitude: publicLng,
+        timestamp: publicTimestamp,
+      };
+
+      const gridLat = Math.floor(publicLat / gridSize) * gridSize;
+      const gridLng = Math.floor(publicLng / gridSize) * gridSize;
 
       // Broadcast to current grid and adjacent grids for seamless coverage
       for (let latOffset = -1; latOffset <= 1; latOffset++) {
@@ -487,7 +564,7 @@ export function broadcastLocationUpdate(
           io.to(gridRoom).emit("truck_location_update", {
             type: "truck_location_update",
             restaurantId,
-            location: locationData,
+            location: publicLocation,
             timestamp: new Date().toISOString(),
           });
         }

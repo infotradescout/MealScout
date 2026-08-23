@@ -74,6 +74,7 @@ assert.deepEqual(
 assert.equal(resolveCoordinatePair("91", "-87.2169"), null);
 assert.equal(resolveCoordinatePair("30.4213", "-181"), null);
 assert.equal(resolveCoordinatePair(true, -87.2169), null);
+assert.equal(resolveCoordinatePair(0, 0), null);
 
 const freshLiveCoordinates = resolveTruckCoordinates(
   {

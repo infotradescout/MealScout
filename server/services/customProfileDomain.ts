@@ -2,6 +2,9 @@ import type { RequestHandler } from "express";
 import { sql } from "drizzle-orm";
 
 import { db } from "../db";
+import { storage } from "../storage";
+import { toPublicRestaurantListingWithVisibility } from "../publicProfiles/toPublicRestaurantListingWithVisibility";
+import { deriveProfileEvidenceQuarantineVisibility } from "./profileEvidenceQuarantine";
 
 const PLATFORM_HOSTS = new Set([
   "mealscout.us",
@@ -48,16 +51,29 @@ export async function resolveCustomProfileDomain(hostnameValue: unknown) {
     )) = ${hostname}
       and u.account_settings->'customDomain'->>'status' = 'verified'
       and r.owner_id = u.id
+      and u.is_disabled = false
       and r.is_active = true
     limit 2
   `);
   const rows = result.rows as CustomDomainRow[];
   if (rows.length !== 1) return null;
 
+  const restaurantId = String(rows[0].restaurant_id);
+  const restaurant = await storage.getRestaurant(restaurantId);
+  const publicListing = restaurant
+    ? await toPublicRestaurantListingWithVisibility(restaurant)
+    : null;
+  if (
+    !(publicListing as any)?.id ||
+    deriveProfileEvidenceQuarantineVisibility(restaurant).isQuarantined
+  ) {
+    return null;
+  }
+
   return {
-    restaurantId: String(rows[0].restaurant_id),
+    restaurantId,
     canonicalPath: `/restaurant/${encodeURIComponent(
-      String(rows[0].restaurant_id),
+      restaurantId,
     )}`,
   };
 }
@@ -75,7 +91,7 @@ export const customProfileDomainRootRedirect: RequestHandler = async (
     const resolved = await resolveCustomProfileDomain(req.hostname);
     if (!resolved) return next();
 
-    res.setHeader("Cache-Control", "public, max-age=60");
+    res.setHeader("Cache-Control", "no-store");
     return res.redirect(302, resolved.canonicalPath);
   } catch (error) {
     console.error("[custom-profile-domain] resolution failed:", error);

@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, isNull, sql } from "drizzle-orm";
 
 import { db } from "../db";
 import { storage } from "../storage";
@@ -11,9 +11,13 @@ import {
 import { buildLocalRecommendations } from "./recommendationEngine";
 import {
   deals,
+  eventSeries,
+  events,
+  hosts,
   restaurantFavorites,
   restaurantFollows,
   restaurantUserRecommendations,
+  users,
   videoStories,
 } from "@shared/schema";
 import type {
@@ -21,6 +25,16 @@ import type {
   ScoutSurfaceResponse,
   ScoutSurfaceSection,
 } from "@shared/constants/scoutSurface";
+import { toPublicRestaurantListingArrayWithVisibility } from "../publicProfiles/toPublicRestaurantListingWithVisibility";
+import { resolvePublicProfileVisibility } from "../publicProfiles/publicProfileUtils";
+import { resolvePublicHostProximityCoordinates } from "./publicHostProximityProjection";
+import { projectPublicDealRows } from "./publicDealProjection";
+import { publicStoryPublicationWhere } from "./publicStoryProjection";
+import { deriveProfileEvidenceQuarantineVisibility } from "./profileEvidenceQuarantine";
+import { computeParkingPassQualityFlags } from "./parkingPassQuality";
+import { canExposeAnonymousEventListItem } from "../publicProfiles/publicEventDetailAccess";
+import { resolveCityTimeZoneSync } from "./cityTimeZone";
+import { buildSlotDateTimes } from "./timeIntent";
 
 type BuildScoutSurfaceInput = {
   lat?: number;
@@ -470,11 +484,12 @@ async function getRestaurantSignals(
           count: sql<number>`cast(count(*) as integer)`,
         })
         .from(videoStories)
+        .innerJoin(users, eq(videoStories.userId, users.id))
         .where(
           and(
             inArray(videoStories.restaurantId, restaurantIds),
-            eq(videoStories.status, "ready"),
-            isNull(videoStories.deletedAt),
+            publicStoryPublicationWhere(sql`NOW()`),
+            eq(users.isDisabled, false),
           ),
         )
         .groupBy(videoStories.restaurantId),
@@ -613,17 +628,43 @@ export async function buildScoutSurface(
   const radiusKm = radiusMiles * 1.609344;
 
   const [
-    allRestaurants,
-    activeDeals,
-    upcomingEvents,
+    allRestaurantRows,
+    activeDealRows,
+    upcomingEventRows,
     liveTrucks,
     localRecommendations,
   ] = await Promise.all([
     storage.getAllRestaurants(),
-    hasLocation
-      ? storage.getNearbyDeals(Number(lat), Number(lng), radiusKm)
-      : storage.getActiveDeals(),
-    storage.getAllUpcomingEvents(),
+    storage.getActiveDeals(),
+    db
+      .select({
+        event: events,
+        host: hosts,
+        series: eventSeries,
+        hostOwnerDisabled: users.isDisabled,
+        hostPublicProfileSettings: users.publicProfileSettings,
+      })
+      .from(events)
+      .innerJoin(hosts, eq(events.hostId, hosts.id))
+      .innerJoin(users, eq(hosts.userId, users.id))
+      .leftJoin(eventSeries, eq(events.seriesId, eventSeries.id))
+      .where(
+        and(
+          gte(events.date, new Date(Date.now() - 24 * 60 * 60 * 1000)),
+          inArray(events.status, ["open", "booked", "filled"]),
+          eq(users.isDisabled, false),
+        ),
+      )
+      .limit(500)
+      .then((rows: any[]) =>
+        rows.map((row: any) => ({
+          ...row.event,
+          host: row.host,
+          series: row.series,
+          hostOwnerDisabled: row.hostOwnerDisabled,
+          hostPublicProfileSettings: row.hostPublicProfileSettings,
+        })),
+      ),
     hasLocation
       ? storage.getLiveTrucksNearby(Number(lat), Number(lng), radiusKm)
       : Promise.resolve([]),
@@ -638,9 +679,105 @@ export async function buildScoutSurface(
       : Promise.resolve([]),
   ]);
 
-  const restaurants = (Array.isArray(allRestaurants) ? allRestaurants : [])
-    .filter((row: any) => row?.isActive)
-    .filter((row: any) => isPublicBusinessVisible(row));
+  const restaurants = await toPublicRestaurantListingArrayWithVisibility(
+    (Array.isArray(allRestaurantRows) ? allRestaurantRows : [])
+      .filter((row: any) => row?.isActive)
+      .filter(
+        (row: any) =>
+          isPublicBusinessVisible(row) &&
+          !deriveProfileEvidenceQuarantineVisibility(row).isQuarantined,
+      ),
+  );
+  const publicLiveTrucks = await toPublicRestaurantListingArrayWithVisibility(
+    (Array.isArray(liveTrucks) ? liveTrucks : []).filter(
+      (row: any) =>
+        isPublicBusinessVisible(row) &&
+        !deriveProfileEvidenceQuarantineVisibility(row).isQuarantined,
+    ),
+  );
+  const activeDeals = await projectPublicDealRows(
+    Array.isArray(activeDealRows) ? activeDealRows : [],
+    hasLocation
+      ? { userLat: Number(lat), userLng: Number(lng), radiusKm }
+      : {},
+  );
+  const upcomingEvents = (Array.isArray(upcomingEventRows)
+    ? upcomingEventRows
+    : []
+  ).flatMap((event: any) => {
+    const host = event?.host || null;
+    if (
+      event.hostOwnerDisabled !== false ||
+      !host ||
+      !isPublicBusinessVisible({
+        name: host.businessName,
+        city: host.city,
+        state: host.state,
+      })
+    ) {
+      return [];
+    }
+    const visibility = resolvePublicProfileVisibility(
+      event.hostPublicProfileSettings,
+    );
+    const coordinates = resolvePublicHostProximityCoordinates({
+      latitude: host?.latitude,
+      longitude: host?.longitude,
+      showAddress: visibility.showAddress,
+    });
+    if (!coordinates) return [];
+    const interval = buildSlotDateTimes({
+      timeZone: resolveCityTimeZoneSync({
+        city: host.city || null,
+        state: host.state || null,
+      }),
+      date: event.date,
+      startTime: String(event.startTime || ""),
+      endTime: String(event.endTime || ""),
+    });
+    if (!interval || interval.endUtc.getTime() <= Date.now()) return [];
+    const requiresPayment = event.requiresPayment === true;
+    const publicFreeEvent = canExposeAnonymousEventListItem({
+      eventType: event.eventType,
+      requiresPayment: event.requiresPayment,
+      status: event.status,
+      eventName: event.name,
+      hostName: host.businessName,
+    });
+    const parkingPassBookable = Boolean(
+      requiresPayment &&
+        event.status === "open" &&
+        event.series?.seriesType === "parking_pass" &&
+        event.series?.status === "published" &&
+        computeParkingPassQualityFlags({
+          host,
+          startTime: event.startTime,
+          endTime: event.endTime,
+          maxTrucks: event.maxTrucks,
+          breakfastPriceCents: event.breakfastPriceCents,
+          lunchPriceCents: event.lunchPriceCents,
+          dinnerPriceCents: event.dinnerPriceCents,
+          dailyPriceCents: event.dailyPriceCents,
+          weeklyPriceCents: event.weeklyPriceCents,
+          monthlyPriceCents: event.monthlyPriceCents,
+        }).length === 0,
+    );
+    if (!publicFreeEvent && !parkingPassBookable) return [];
+    return [{
+      ...event,
+      parkingPassBookable,
+      host: host
+        ? {
+            id: host.id,
+            businessName: host.businessName,
+            city: host.city,
+            state: host.state,
+            latitude: coordinates?.latitude ?? null,
+            longitude: coordinates?.longitude ?? null,
+          }
+        : null,
+    }];
+  });
   const scoutEligibleRestaurants = restaurants;
 
   const restaurantById = new Map(
@@ -735,7 +872,7 @@ export async function buildScoutSurface(
     recommendationCards.push(card);
   }
 
-  for (const truck of Array.isArray(liveTrucks) ? liveTrucks : []) {
+  for (const truck of publicLiveTrucks) {
     if (!hasTruckScheduleSignal(truck)) {
       // Menu-only trucks should not be treated as "live".
       continue;
@@ -971,6 +1108,7 @@ export async function buildScoutSurface(
     const subtitle = restaurant
       ? String((restaurant as any)?.name || "").trim() || undefined
       : undefined;
+    const restaurantAvailability = getRestaurantAvailabilityState(restaurant);
 
     const card: ScoutSurfaceCard = {
       id: `deal:${dealId}`,
@@ -989,7 +1127,7 @@ export async function buildScoutSurface(
         (deal as any)?.dealType ? String((deal as any).dealType) : "",
       ]),
       reasons: dedupe([
-        "Available right now",
+        restaurantAvailability === "open_now" ? "Open now" : "Active offer",
         subtitle ? `From ${subtitle}` : "Nearby option",
       ]),
       availability: "deal_today",
@@ -1069,7 +1207,7 @@ export async function buildScoutSurface(
       cardPool.moreNearby.push(baseEventCard);
     }
 
-    if (requiresPayment) {
+    if (requiresPayment && (event as any).parkingPassBookable === true) {
       const hostId = String(
         (host as any)?.id || (event as any)?.hostId || "",
       ).trim();

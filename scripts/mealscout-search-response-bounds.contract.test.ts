@@ -231,6 +231,10 @@ assert.equal(clampLiveTrucksLimit("nope"), LIVE_TRUCKS_DEFAULT_LIMIT);
 
 // --- Handler wiring contracts (source) ---
 const aggregateSource = readFileSync("server/routes/publicSearchRoutes.ts", "utf8");
+const restaurantSearchProjectionSource = readFileSync(
+  "server/services/publicRestaurantSearchProjection.ts",
+  "utf8",
+);
 const restaurantSearchSource = readFileSync(
   "server/routes/restaurantCoreRoutes.ts",
   "utf8",
@@ -248,7 +252,7 @@ assert.ok(
 );
 
 assert.match(
-  aggregateSource,
+  `${aggregateSource}\n${restaurantSearchProjectionSource}`,
   /AGGREGATE_SEARCH_RESTAURANT_LIMIT/,
   "aggregate /api/search must use shared restaurant result limit",
 );
@@ -263,7 +267,7 @@ assert.match(
   "aggregate /api/search must cap SQL restaurant candidates",
 );
 assert.match(
-  aggregateSource,
+  `${aggregateSource}\n${restaurantSearchProjectionSource}`,
   /scoutSearchRelevanceScore/,
   "aggregate /api/search must rank business-name intent before activity",
 );

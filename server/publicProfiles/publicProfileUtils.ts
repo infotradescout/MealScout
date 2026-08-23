@@ -1,4 +1,5 @@
 import type { PublicCta, PublicCtaType, PublicImageAsset } from "@shared/publicProfiles";
+import { resolveCoordinatePair } from "@shared/consumerEntity";
 
 export const toSlug = (value: unknown) =>
   String(value || "")
@@ -168,6 +169,29 @@ export const joinedAddressLabel = (
   [String(address || "").trim(), String(city || "").trim(), String(state || "").trim()]
     .filter(Boolean)
     .join(", ") || null;
+
+export const resolvePublicCoordinatePair = (
+  latitudeValue: unknown,
+  longitudeValue: unknown,
+) => resolveCoordinatePair(latitudeValue, longitudeValue);
+
+export const buildPublicDirectionsUrl = (input: {
+  latitude: unknown;
+  longitude: unknown;
+  addressPublicLabel?: unknown;
+}) => {
+  const coordinates = resolvePublicCoordinatePair(
+    input.latitude,
+    input.longitude,
+  );
+  if (coordinates) {
+    return `https://maps.google.com/?q=${coordinates.latitude},${coordinates.longitude}`;
+  }
+  const address = String(input.addressPublicLabel || "").trim();
+  return address
+    ? `https://maps.google.com/?q=${encodeURIComponent(address)}`
+    : null;
+};
 
 export const resolvePublicProfileVisibility = (settings: unknown) => {
   const value =

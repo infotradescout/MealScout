@@ -9,27 +9,27 @@ const cards = [
     title: "MealScout vs DoorDash",
     href: "/compare/doordash",
     points: [
-      "No pay-to-rank model",
-      "Community trust signals drive visibility",
-      "Stronger direct relationship with local operators",
+      "Early local profile and menu discovery",
+      "Eligibility-gated ASAP pickup by card",
+      "No native courier-delivery parity claim",
     ],
   },
   {
     title: "MealScout vs Uber Eats",
     href: "/compare/uber-eats",
     points: [
-      "Local-first discovery over ad placement",
-      "Transparent profile ranking factors",
-      "Built for small business sustainability",
+      "Early local profile and menu discovery",
+      "Eligibility-gated ASAP pickup by card",
+      "No marketplace-breadth parity claim",
     ],
   },
   {
     title: "MealScout vs Grubhub",
     href: "/compare/grubhub",
     points: [
-      "Community engagement prioritized",
-      "Profiles stay visible even without ad spend",
-      "Deal and menu visibility in one experience",
+      "Early local profile and menu discovery",
+      "Eligibility-gated ASAP pickup by card",
+      "No marketplace-breadth parity claim",
     ],
   },
 ];
@@ -38,8 +38,8 @@ export default function ComparePage() {
   return (
     <div className="page">
       <SEOHead
-        title="MealScout vs Legacy Delivery Apps | Fair Local Discovery"
-        description="Compare MealScout with DoorDash, Uber Eats, and Grubhub. Learn how MealScout ranks food businesses by community trust and local relevance instead of paid placement."
+        title="MealScout and Delivery Marketplaces | An Honest Scope Comparison"
+        description="MealScout is an early local discovery product with limited eligible pickup checkout, not a replacement for mature delivery marketplaces."
         canonicalUrl="https://www.mealscout.us/compare"
       />
 
@@ -47,30 +47,31 @@ export default function ComparePage() {
         <div className="content">
           <div className="max-w-3xl">
             <p className="text-xs font-semibold uppercase tracking-wide text-[color:var(--accent-text)]">
-              Fair Ranking Philosophy
+              Honest product scope
             </p>
             <h1 className="mt-2 text-2xl font-bold text-foreground">
-              MealScout vs legacy delivery and ordering marketplaces
+              MealScout alongside mature delivery marketplaces
             </h1>
             <p className="mt-2 text-sm text-muted-foreground">
-              MealScout does not sell top placement. We rank public restaurant,
-              bar, and truck profiles using community trust and local relevance.
+              MealScout supports local profiles, menus, and discovery. It does
+              not currently match the merchant coverage, ordering breadth, or
+              courier operations of DoorDash, Uber Eats, or Grubhub.
             </p>
             <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
               <span className="rounded-full border border-[color:var(--border-subtle)] px-2 py-1">
-                Recommendations
+                Public profiles
               </span>
               <span className="rounded-full border border-[color:var(--border-subtle)] px-2 py-1">
-                Follows
+                Menus
               </span>
               <span className="rounded-full border border-[color:var(--border-subtle)] px-2 py-1">
-                Favorites
+                Local discovery
               </span>
               <span className="rounded-full border border-[color:var(--border-subtle)] px-2 py-1">
-                Active deals
+                Eligible pickup
               </span>
               <span className="rounded-full border border-[color:var(--border-subtle)] px-2 py-1">
-                Nearby relevance
+                No delivery network
               </span>
             </div>
           </div>
@@ -108,27 +109,27 @@ export default function ComparePage() {
           <Card>
             <CardContent className="p-4">
               <Scale className="h-5 w-5 text-[color:var(--accent-text)]" />
-              <h3 className="mt-2 text-sm font-semibold">No pay-to-win ranking</h3>
+              <h3 className="mt-2 text-sm font-semibold">Discovery scope</h3>
               <p className="mt-1 text-xs text-muted-foreground">
-                Visibility is earned through community trust and active value.
+                Browse local profiles, menus, and available business context.
               </p>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="p-4">
               <Users className="h-5 w-5 text-[color:var(--accent-text)]" />
-              <h3 className="mt-2 text-sm font-semibold">Local operator focus</h3>
+              <h3 className="mt-2 text-sm font-semibold">Limited pickup scope</h3>
               <p className="mt-1 text-xs text-muted-foreground">
-                Small businesses can compete on quality and consistency, not ad budget.
+                ASAP card pickup appears only after current eligibility checks pass.
               </p>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="p-4">
               <ShieldCheck className="h-5 w-5 text-[color:var(--accent-text)]" />
-              <h3 className="mt-2 text-sm font-semibold">Transparent inputs</h3>
+              <h3 className="mt-2 text-sm font-semibold">No parity claim</h3>
               <p className="mt-1 text-xs text-muted-foreground">
-                Ranking factors are explicit and aligned with real customer intent.
+                MealScout does not operate a native courier-delivery network today.
               </p>
             </CardContent>
           </Card>

@@ -49,18 +49,24 @@ test("guest access token protects delivery data", () => {
   assert.equal(projectOrderForCustomer(order, true).stripePaymentIntentId, undefined);
 });
 
-test("checkout and notification integration retain server authority and replay guards", () => {
+test("public checkout is pickup-only while legacy delivery utilities stay isolated", () => {
   const route = fs.readFileSync(new URL("../server/routes/pickupOrderRoutes.ts", import.meta.url), "utf8");
+  const deliveryRoute = fs.readFileSync(new URL("../server/routes/merchantDeliveryRoutes.ts", import.meta.url), "utf8");
   const notifications = fs.readFileSync(new URL("../server/services/pickupOrderNotificationService.ts", import.meta.url), "utf8");
   const checkout = fs.readFileSync(new URL("../client/src/pages/pickup-checkout.tsx", import.meta.url), "utf8");
   assert.match(route, /checkoutRequestId: z\.string\(\)\.uuid\(\)/);
-  assert.match(route, /getDeliveryQuote\([\s\S]*?tx,[\s\S]*?true/);
+  assert.match(route, /body\.orderType !== "pickup"/);
+  assert.match(route, /code: "FULFILLMENT_MODE_UNAVAILABLE"/);
+  assert.doesNotMatch(route, /getDeliveryQuote\(/);
   assert.match(route, /projectOrderForCustomer/);
   assert.doesNotMatch(route, /totalCents:\s*z\./);
+  assert.match(deliveryRoute, /code: "DELIVERY_ORDERING_UNAVAILABLE"/);
+  assert.match(deliveryRoute, /enabled: false/);
   assert.match(notifications, /onConflictDoNothing/);
   assert.match(notifications, /merchant_new_order/);
   assert.match(checkout, /!orderType/);
-  assert.match(checkout, /deliveryInfo\.availableNow/);
+  assert.doesNotMatch(checkout, /deliveryInfo\.availableNow/);
+  assert.doesNotMatch(checkout, /value="delivery"/);
 });
 
 test("merchant delivery accepts an eligible order", () => {

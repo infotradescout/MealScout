@@ -31,6 +31,7 @@ import {
   menus,
   restaurants,
   truckManualSchedules,
+  users,
 } from "@shared/schema";
 import { listParkingPassOccurrences } from "../services/parkingPassVirtual";
 import {
@@ -81,6 +82,8 @@ import {
   DEFAULT_TRUCK_BROADCAST_FRESHNESS_MS,
   deriveTruckPresence,
 } from "@shared/consumerEntity";
+import { resolvePublicProfileVisibility } from "../publicProfiles/publicProfileUtils";
+import { resolvePublicHostProximityCoordinates } from "../services/publicHostProximityProjection";
 
 const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY)
@@ -117,6 +120,14 @@ type ActionApiParkingPassOccurrenceProvider =
 export type ActionApiRouterDependencies = {
   database: ActionApiReadDatabase;
   listParkingPassOccurrences: ActionApiParkingPassOccurrenceProvider;
+  loadPublicProfileVisibilityByUserIds: (
+    userIds: string[],
+  ) => Promise<
+    Map<
+      string,
+      { showAddress: boolean; showContact: boolean; ownerEnabled: boolean }
+    >
+  >;
   now: () => Date;
 };
 
@@ -155,6 +166,8 @@ const resolveActionApiPublicBaseUrl = () =>
 // quarantine verdict and must never enter a response projection.
 const ACTION_API_BUSINESS_ELIGIBILITY_SELECT = {
   id: restaurants.id,
+  ownerId: restaurants.ownerId,
+  ownerDisabled: users.isDisabled,
   name: restaurants.name,
   address: restaurants.address,
   phone: restaurants.phone,
@@ -252,7 +265,6 @@ async function findDeals(params: {
       const location = `%${params.location}%`;
       conditions.push(
         or(
-          ilike(restaurants.address, location),
           ilike(restaurants.city, location),
           ilike(restaurants.state, location),
         ),
@@ -272,6 +284,7 @@ async function findDeals(params: {
           })
           .from(deals)
           .innerJoin(restaurants, eq(deals.restaurantId, restaurants.id))
+          .innerJoin(users, eq(restaurants.ownerId, users.id))
           .where(and(...conditions))
           .orderBy(desc(deals.updatedAt), desc(deals.id))
           .limit(PUBLIC_SCAN_BATCH_SIZE)
@@ -305,6 +318,7 @@ async function findDeals(params: {
         .select(ACTION_API_PUBLIC_DEAL_SELECT)
         .from(deals)
         .innerJoin(restaurants, eq(deals.restaurantId, restaurants.id))
+        .innerJoin(users, eq(restaurants.ownerId, users.id))
         .where(
           and(
             inArray(deals.id, eligibleDealIds),
@@ -312,6 +326,7 @@ async function findDeals(params: {
             lte(deals.startDate, now),
             or(isNull(deals.endDate), gte(deals.endDate, now)),
             eq(restaurants.isActive, true),
+            eq(users.isDisabled, false),
           ),
         );
       const publicById = new Map(
@@ -355,7 +370,6 @@ async function findRestaurants(params: {
     if (params.location) {
       conditions.push(
         or(
-          ilike(restaurants.address, `%${params.location}%`),
           ilike(restaurants.city, `%${params.location}%`),
           ilike(restaurants.state, `%${params.location}%`),
         ),
@@ -375,6 +389,7 @@ async function findRestaurants(params: {
         const candidates: any[] = await transaction
           .select(ACTION_API_BUSINESS_ELIGIBILITY_SELECT)
           .from(restaurants)
+          .innerJoin(users, eq(restaurants.ownerId, users.id))
           .where(and(...conditions))
           .orderBy(asc(restaurants.name), asc(restaurants.id))
           .limit(PUBLIC_SCAN_BATCH_SIZE)
@@ -407,10 +422,12 @@ async function findRestaurants(params: {
       const publicRows: any[] = await transaction
         .select(ACTION_API_PUBLIC_RESTAURANT_SELECT)
         .from(restaurants)
+        .innerJoin(users, eq(restaurants.ownerId, users.id))
         .where(
           and(
             inArray(restaurants.id, eligibleRestaurantIds),
             eq(restaurants.isActive, true),
+            eq(users.isDisabled, false),
           ),
         );
       const publicById = new Map(
@@ -1843,6 +1860,7 @@ async function getFoodTruckLocations(params: {
           liveUntilAt: restaurants.liveUntilAt,
         })
         .from(restaurants)
+        .innerJoin(users, eq(restaurants.ownerId, users.id))
         .where(
           and(
             eq(restaurants.isFoodTruck, true),
@@ -1903,12 +1921,14 @@ async function getFoodTruckLocations(params: {
       const publicRows: any[] = await transaction
         .select(ACTION_API_PUBLIC_TRUCK_SELECT)
         .from(restaurants)
+        .innerJoin(users, eq(restaurants.ownerId, users.id))
         .where(
           and(
             inArray(restaurants.id, eligibleTruckIds),
             eq(restaurants.isFoodTruck, true),
             eq(restaurants.mobileOnline, true),
             eq(restaurants.isActive, true),
+            eq(users.isDisabled, false),
           ),
         );
       const publicById = new Map(
@@ -1984,6 +2004,15 @@ async function getParkingPassSpots(params: {
       horizonDays,
       includeDraft: false,
     });
+    const hostOwnerIds = Array.from(
+      new Set(
+        (occurrences as any[])
+          .map((event) => String(event?.host?.userId || "").trim())
+          .filter(Boolean),
+      ),
+    );
+    const hostVisibilityByOwnerId =
+      await dependencies.loadPublicProfileVisibilityByUserIds(hostOwnerIds);
 
     const byHostId = new Map<
       string,
@@ -1995,7 +2024,16 @@ async function getParkingPassSpots(params: {
 
       const host = event?.host ?? null;
       const hostId = String(host?.id || "").trim();
-      if (!hostId) continue;
+      const hostOwnerId = String(host?.userId || "").trim();
+      const hostVisibility = hostVisibilityByOwnerId.get(hostOwnerId);
+      if (
+        !hostId ||
+        !hostOwnerId ||
+        !hostVisibility?.ownerEnabled ||
+        !hostVisibility.showAddress
+      ) {
+        continue;
+      }
 
       if (
         !isHostProfileMapEligible({
@@ -2008,10 +2046,14 @@ async function getParkingPassSpots(params: {
         continue;
       }
 
-      const lat = toNumberOrNull(host?.latitude);
-      const lng = toNumberOrNull(host?.longitude);
-      if (lat === null || lng === null) continue;
-      if (Math.abs(lat) > 90 || Math.abs(lng) > 180) continue;
+      const hostCoordinates = resolvePublicHostProximityCoordinates({
+        latitude: host?.latitude,
+        longitude: host?.longitude,
+        showAddress: hostVisibility.showAddress,
+      });
+      if (!hostCoordinates) continue;
+      const lat = hostCoordinates.latitude;
+      const lng = hostCoordinates.longitude;
 
       const distanceKm = haversineDistanceKm(center, { lat, lng });
       if (!Number.isFinite(distanceKm) || distanceKm > radius) continue;
@@ -2175,10 +2217,12 @@ async function getRestaurantDetails(
       const [eligibilityCandidate] = await transaction
         .select(ACTION_API_BUSINESS_ELIGIBILITY_SELECT)
         .from(restaurants)
+        .innerJoin(users, eq(restaurants.ownerId, users.id))
         .where(
           and(
             eq(restaurants.id, params.restaurantId),
             eq(restaurants.isActive, true),
+            eq(users.isDisabled, false),
           ),
         )
         .limit(1);
@@ -2195,10 +2239,12 @@ async function getRestaurantDetails(
       const [publicRestaurantRow] = await transaction
         .select(ACTION_API_PUBLIC_RESTAURANT_SELECT)
         .from(restaurants)
+        .innerJoin(users, eq(restaurants.ownerId, users.id))
         .where(
           and(
             eq(restaurants.id, params.restaurantId),
             eq(restaurants.isActive, true),
+            eq(users.isDisabled, false),
           ),
         )
         .limit(1);
@@ -2294,6 +2340,35 @@ export function createActionApiRouter(
     database: overrides.database ?? db,
     listParkingPassOccurrences:
       overrides.listParkingPassOccurrences ?? listParkingPassOccurrences,
+    loadPublicProfileVisibilityByUserIds:
+      overrides.loadPublicProfileVisibilityByUserIds ??
+      (async (userIds) => {
+        if (userIds.length === 0) return new Map();
+        const rows = await db
+          .select({
+            id: users.id,
+            isDisabled: users.isDisabled,
+            publicProfileSettings: users.publicProfileSettings,
+          })
+          .from(users)
+          .where(inArray(users.id, userIds));
+        return new Map(
+          rows.map((row: any) => {
+            const visibility = resolvePublicProfileVisibility(
+              row.publicProfileSettings,
+            );
+            const ownerEnabled = row.isDisabled === false;
+            return [
+              String(row.id),
+              {
+                showAddress: ownerEnabled && visibility.showAddress,
+                showContact: ownerEnabled && visibility.showContact,
+                ownerEnabled,
+              },
+            ];
+          }),
+        );
+      }),
     now: overrides.now ?? (() => new Date()),
   };
   const router = Router();

@@ -17,6 +17,13 @@ const publicSearch = readFileSync(
   new URL("../server/routes/publicSearchRoutes.ts", import.meta.url),
   "utf8",
 );
+const publicRestaurantSearchProjection = readFileSync(
+  new URL(
+    "../server/services/publicRestaurantSearchProjection.ts",
+    import.meta.url,
+  ),
+  "utf8",
+);
 const sharedIntent = readFileSync(
   new URL("../shared/scoutSearchIntent.ts", import.meta.url),
   "utf8",
@@ -70,12 +77,12 @@ assert.deepEqual(tokenizeScoutSearchIntent("find tacos near me"), ["tacos"]);
 assert.ok(expandScoutSearchTerms("find tacos near me").includes("mexican"));
 assert.ok(!expandScoutSearchTerms("find tacos near me").includes("me"));
 assert.match(
-  publicSearch,
+  publicRestaurantSearchProjection,
   /publicRestaurantActivityScore/,
   "Network-wide matches must be ranked by real MealScout activity",
 );
-assert.match(publicSearch, /city: restaurant\.city \|\| null/);
-assert.match(publicSearch, /state: restaurant\.state \|\| null/);
+assert.match(publicRestaurantSearchProjection, /city: restaurant\.city \|\| null/);
+assert.match(publicRestaurantSearchProjection, /state: restaurant\.state \|\| null/);
 assert.match(
   publicMap,
   /const county = extractAddressComponent\([\s\S]*administrative_area_level_2/,

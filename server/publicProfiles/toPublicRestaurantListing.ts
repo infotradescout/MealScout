@@ -1,3 +1,18 @@
+import {
+  DEFAULT_TRUCK_BROADCAST_FRESHNESS_MS,
+  deriveTruckPresence,
+  resolveCoordinatePair,
+} from "@shared/consumerEntity";
+import { deriveProfileEvidenceQuarantineVisibility } from "../services/profileEvidenceQuarantine";
+import { shouldExposeStaticTruckProfileLocation } from "../utils/truckLocationSemantics";
+import { projectPublicRestaurantMedia } from "./toPublicRestaurantProfile";
+
+export type PublicRestaurantListingVisibility = {
+  showAddress: boolean;
+  showContact: boolean;
+  ownerEnabled?: boolean;
+};
+
 // Allowlisted projection for unauthenticated restaurant list/detail responses
 // (/api/restaurants/public, /search, /nearby, /subscribed, /:id). Keeps the
 // existing flat field names consumers already read (name, address, latitude,
@@ -5,8 +20,80 @@
 // columns that were never meant to leave the server: owner identity, raw
 // import payloads, insurance/verification audit trail, and internal
 // pricing/ranking controls.
-export function toPublicRestaurantListing(row: any): Record<string, unknown> {
+export function toPublicRestaurantListing(
+  row: any,
+  visibility: PublicRestaurantListingVisibility = {
+    showAddress: false,
+    showContact: false,
+  },
+): Record<string, unknown> {
   if (!row || typeof row !== "object") return row;
+  if (visibility.ownerEnabled === false) return {};
+
+  const {
+    hidePublicTrustFields,
+    isAccepted,
+    isRejected,
+    isAcceptedWithLegacyFallback,
+    isRejectedWithLegacyFallback,
+  } = deriveProfileEvidenceQuarantineVisibility(row);
+  const isPrivateChef =
+    String(row.businessType || "")
+      .trim()
+      .toLowerCase() === "private_chef";
+  const addressVisible = Boolean(
+    visibility.showAddress &&
+    !isPrivateChef &&
+    !isRejected("contact_address") &&
+    (!hidePublicTrustFields || isAccepted("contact_address")) &&
+    shouldExposeStaticTruckProfileLocation(row),
+  );
+  const phoneVisible = Boolean(
+    visibility.showContact &&
+    !isRejected("contact_phone") &&
+    (!hidePublicTrustFields || isAccepted("contact_phone")),
+  );
+  const staticCoordinates = addressVisible
+    ? resolveCoordinatePair(row.latitude, row.longitude)
+    : null;
+  const isTruck =
+    row.isFoodTruck === true ||
+    String(row.businessType || "")
+      .trim()
+      .toLowerCase() === "food_truck";
+  const truckPresence = isTruck
+    ? deriveTruckPresence(
+        {
+          mobileOnline: row.mobileOnline,
+          liveBroadcasting: row.liveBroadcasting,
+          currentLatitude: row.currentLatitude,
+          currentLongitude: row.currentLongitude,
+          lastBroadcastAt: row.lastBroadcastAt,
+          liveUntilAt: row.liveUntilAt,
+          locationSource: row.locationSource || "owner_gps",
+          gpsAccuracy: row.gpsAccuracy,
+        },
+        { freshnessMs: DEFAULT_TRUCK_BROADCAST_FRESHNESS_MS },
+      )
+    : null;
+  const liveCoordinates =
+    truckPresence?.broadcastState === "live" ? truckPresence.location : null;
+  const contactFieldVisible = (
+    evidenceId:
+      "website_link" | "social_instagram" | "social_facebook" | "social_x",
+    legacyEvidenceId?: "social_links",
+  ) =>
+    Boolean(
+      visibility.showContact &&
+      !(legacyEvidenceId
+        ? isRejectedWithLegacyFallback(evidenceId, legacyEvidenceId)
+        : isRejected(evidenceId)) &&
+      (!hidePublicTrustFields ||
+        (legacyEvidenceId
+          ? isAcceptedWithLegacyFallback(evidenceId, legacyEvidenceId)
+          : isAccepted(evidenceId))),
+    );
+  const publicMedia = projectPublicRestaurantMedia(row);
 
   const {
     id,
@@ -15,22 +102,15 @@ export function toPublicRestaurantListing(row: any): Record<string, unknown> {
     phone,
     businessType,
     cuisineType,
-    latitude,
-    longitude,
     city,
     state,
     isFoodTruck,
-    mobileOnline,
-    currentLatitude,
-    currentLongitude,
     lastBroadcastAt,
     liveUntilAt,
     operatingHours,
     isActive,
     isVerified,
     insuranceVerified,
-    logoUrl,
-    coverImageUrl,
     description,
     websiteUrl,
     instagramUrl,
@@ -59,31 +139,38 @@ export function toPublicRestaurantListing(row: any): Record<string, unknown> {
   return {
     id,
     name,
-    address,
-    phone,
+    address: addressVisible ? String(address || "").trim() || null : null,
+    phone: phoneVisible ? String(phone || "").trim() || null : null,
     businessType,
     cuisineType,
-    latitude,
-    longitude,
+    latitude: staticCoordinates?.latitude ?? null,
+    longitude: staticCoordinates?.longitude ?? null,
     city,
     state,
     isFoodTruck,
-    mobileOnline,
-    currentLatitude,
-    currentLongitude,
+    mobileOnline: Boolean(liveCoordinates),
+    currentLatitude: liveCoordinates?.latitude ?? null,
+    currentLongitude: liveCoordinates?.longitude ?? null,
     lastBroadcastAt,
     liveUntilAt,
     operatingHours,
     isActive,
-    isVerified,
+    isVerified:
+      hidePublicTrustFields && !isAccepted("identity_verification")
+        ? false
+        : Boolean(isVerified),
     insuranceVerified,
-    logoUrl,
-    coverImageUrl,
+    logoUrl: publicMedia.logoUrl,
+    coverImageUrl: publicMedia.coverImageUrl,
     description,
-    websiteUrl,
-    instagramUrl,
-    facebookPageUrl,
-    xUrl,
+    websiteUrl: contactFieldVisible("website_link") ? websiteUrl : null,
+    instagramUrl: contactFieldVisible("social_instagram", "social_links")
+      ? instagramUrl
+      : null,
+    facebookPageUrl: contactFieldVisible("social_facebook", "social_links")
+      ? facebookPageUrl
+      : null,
+    xUrl: contactFieldVisible("social_x", "social_links") ? xUrl : null,
     amenities,
     hasGoldenPlate,
     goldenPlateEarnedAt,
@@ -98,9 +185,7 @@ export function toPublicRestaurantListing(row: any): Record<string, unknown> {
     ...(videoRecommendationCount !== undefined
       ? { videoRecommendationCount }
       : {}),
-    ...(communityActivityCount !== undefined
-      ? { communityActivityCount }
-      : {}),
+    ...(communityActivityCount !== undefined ? { communityActivityCount } : {}),
     ...(activeDealCount !== undefined ? { activeDealCount } : {}),
     ...(homeRankingScore !== undefined ? { homeRankingScore } : {}),
     ...(homeRankingReason !== undefined ? { homeRankingReason } : {}),
@@ -109,6 +194,14 @@ export function toPublicRestaurantListing(row: any): Record<string, unknown> {
 
 export function toPublicRestaurantListingArray(
   rows: any[] | null | undefined,
+  visibilityByOwnerId?: ReadonlyMap<string, PublicRestaurantListingVisibility>,
 ): Record<string, unknown>[] {
-  return Array.isArray(rows) ? rows.map(toPublicRestaurantListing) : [];
+  if (!Array.isArray(rows)) return [];
+  return rows.flatMap((row) => {
+    const visibility = visibilityByOwnerId?.get(String(row?.ownerId || ""));
+    if (visibilityByOwnerId && (!visibility || visibility.ownerEnabled === false)) {
+      return [];
+    }
+    return [toPublicRestaurantListing(row, visibility)];
+  });
 }

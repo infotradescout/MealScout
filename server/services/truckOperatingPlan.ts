@@ -25,6 +25,7 @@ import {
   isSlotPublic,
 } from "./publicSlotGate";
 import { isPublicDiscoveryEligibleEntity } from "@shared/publicDiscoveryIntegrity";
+import { resolveCoordinatePair } from "@shared/consumerEntity";
 
 export type TruckOperatingPlanRow = {
   restaurantId?: unknown;
@@ -124,16 +125,6 @@ const normalizeSourceStatus = (value: unknown) =>
     .trim()
     .toLowerCase();
 
-const toCoordinate = (value: unknown, min: number, max: number) => {
-  if (value === null || value === undefined || String(value).trim() === "") {
-    return null;
-  }
-  const coordinate = Number(value);
-  return Number.isFinite(coordinate) && coordinate >= min && coordinate <= max
-    ? coordinate
-    : null;
-};
-
 const classifyStopStatus = (input: {
   startsAt: Date | null;
   endsAt: Date | null;
@@ -145,7 +136,7 @@ const classifyStopStatus = (input: {
   if (input.sourceStatus.includes("closed_early")) return "closed_early";
   if (input.sourceStatus.includes("move")) return "moved";
   if (!input.startsAt || !input.endsAt) return "scheduled";
-  if (input.now >= input.startsAt && input.now <= input.endsAt) {
+  if (input.now >= input.startsAt && input.now < input.endsAt) {
     return "here_now";
   }
   if (input.now > input.endsAt) return "completed";
@@ -165,13 +156,13 @@ const buildHostProfilePath = (hostId: unknown, hostName: unknown) => {
 const buildDirectionsUrl = (input: {
   latitude: number | null;
   longitude: number | null;
-  addressPublicLabel: string | null;
+  exactAddressPublicLabel: string | null;
 }) => {
   if (input.latitude !== null && input.longitude !== null) {
     return `https://maps.google.com/?q=${input.latitude},${input.longitude}`;
   }
-  return input.addressPublicLabel
-    ? `https://maps.google.com/?q=${encodeURIComponent(input.addressPublicLabel)}`
+  return input.exactAddressPublicLabel
+    ? `https://maps.google.com/?q=${encodeURIComponent(input.exactAddressPublicLabel)}`
     : null;
 };
 
@@ -310,16 +301,28 @@ export function assembleTruckOperatingPlan(input: {
         sourceStatus,
       });
       const addressVisible = row.addressVisible !== false;
+      const streetAddress = addressVisible
+        ? String(row.address || "").trim()
+        : "";
+      const city = String(row.city || "").trim();
+      const state = String(row.state || "").trim();
+      const exactAddressPublicLabel =
+        streetAddress && city && state
+          ? [streetAddress, city, state].join(", ")
+          : null;
       const addressPublicLabel = [
-        ...(addressVisible ? [row.address] : []),
-        row.city,
-        row.state,
+        ...(streetAddress ? [streetAddress] : []),
+        city,
+        state,
       ]
         .map((value) => String(value || "").trim())
         .filter(Boolean)
         .join(", ") || null;
-      const latitude = toCoordinate(row.latitude, -90, 90);
-      const longitude = toCoordinate(row.longitude, -180, 180);
+      const coordinates = addressVisible
+        ? resolveCoordinatePair(row.latitude, row.longitude)
+        : null;
+      const latitude = coordinates?.latitude ?? null;
+      const longitude = coordinates?.longitude ?? null;
       const actionable =
         (status === "scheduled" || status === "here_now") &&
         row.mapEligible !== false;
@@ -343,7 +346,11 @@ export function assembleTruckOperatingPlan(input: {
           ? buildHostProfilePath(row.hostId, row.hostName)
           : null,
         directionsUrl: actionable && addressVisible
-          ? buildDirectionsUrl({ latitude, longitude, addressPublicLabel })
+          ? buildDirectionsUrl({
+              latitude,
+              longitude,
+              exactAddressPublicLabel,
+            })
           : null,
         notice: String(row.notice || "").trim() || null,
         status,
@@ -572,7 +579,7 @@ const normalizeRestaurantIds = (restaurantIds: string[]) =>
  */
 export async function loadTruckOperatingPlanRowsByRestaurantIds(
   restaurantIds: string[],
-  options?: { now?: Date },
+  options?: { now?: Date; database?: any },
 ): Promise<Map<string, TruckOperatingPlanRow[]>> {
   const normalizedIds = normalizeRestaurantIds(restaurantIds);
   const rowsByRestaurantId = new Map<string, TruckOperatingPlanRow[]>(
@@ -581,6 +588,7 @@ export async function loadTruckOperatingPlanRowsByRestaurantIds(
   if (normalizedIds.length === 0) return rowsByRestaurantId;
 
   const now = options?.now || new Date();
+  const database = options?.database || db;
   const restaurantId = normalizedIds.length === 1 ? normalizedIds[0] : null;
   const bookingRestaurantScope = restaurantId
     ? eq(eventBookings.truckId, restaurantId)
@@ -597,7 +605,7 @@ export async function loadTruckOperatingPlanRowsByRestaurantIds(
     .endOf("day")
     .toJSDate();
 
-  const bookingRows = (await db
+  const bookingRows = (await database
     .select({
       restaurantId: eventBookings.truckId,
       sourceKind: sql<"booking">`'booking'`,
@@ -642,6 +650,16 @@ export async function loadTruckOperatingPlanRowsByRestaurantIds(
       and(
         bookingRestaurantScope,
         eq(eventBookings.status, "confirmed"),
+        eq(users.isDisabled, false),
+        sql`exists (
+          select 1
+          from restaurants operating_truck
+          inner join users operating_truck_owner
+            on operating_truck_owner.id = operating_truck.owner_id
+          where operating_truck.id = ${eventBookings.truckId}
+            and operating_truck.is_active = true
+            and operating_truck_owner.is_disabled = false
+        )`,
         inArray(events.status, ["open", "booked", "filled"]),
         or(isNull(events.requiresPayment), eq(events.requiresPayment, false)),
         gte(events.date, queryStart),
@@ -668,7 +686,7 @@ export async function loadTruckOperatingPlanRowsByRestaurantIds(
         isPublicDiscoveryEligibleEntity({ name: row.hostName, isActive: true }),
     );
 
-  const manualRows = await db
+  const manualRows = await database
     .select({
       restaurantId: truckManualSchedules.truckId,
       sourceKind: sql<"manual">`'manual'`,
@@ -708,6 +726,15 @@ export async function loadTruckOperatingPlanRowsByRestaurantIds(
       and(
         manualRestaurantScope,
         eq(truckManualSchedules.isPublic, true),
+        sql`exists (
+          select 1
+          from restaurants operating_truck
+          inner join users operating_truck_owner
+            on operating_truck_owner.id = operating_truck.owner_id
+          where operating_truck.id = ${truckManualSchedules.truckId}
+            and operating_truck.is_active = true
+            and operating_truck_owner.is_disabled = false
+        )`,
         gte(truckManualSchedules.date, queryStart),
         lte(truckManualSchedules.date, queryEnd),
       ),
@@ -724,13 +751,13 @@ export async function loadTruckOperatingPlanRowsByRestaurantIds(
 
 export async function buildPublicTruckOperatingPlans(
   restaurantIds: string[],
-  options?: { now?: Date },
+  options?: { now?: Date; database?: any },
 ): Promise<Map<string, TruckOperatingProfileData>> {
   const normalizedIds = normalizeRestaurantIds(restaurantIds);
   const now = options?.now || new Date();
   const rowsByRestaurantId = await loadTruckOperatingPlanRowsByRestaurantIds(
     normalizedIds,
-    { now },
+    { now, database: options?.database },
   );
   return new Map(
     normalizedIds.map((restaurantId) => [
@@ -745,14 +772,17 @@ export async function buildPublicTruckOperatingPlans(
 
 export async function buildPublicTruckOperatingPlan(
   restaurantId: string,
-  options?: { now?: Date },
+  options?: { now?: Date; database?: any },
 ): Promise<TruckOperatingProfileData> {
   const normalizedId = String(restaurantId || "").trim();
   const now = options?.now || new Date();
   if (!normalizedId) {
     return assembleTruckOperatingProfileData({ rows: [], now });
   }
-  const plans = await buildPublicTruckOperatingPlans([normalizedId], { now });
+  const plans = await buildPublicTruckOperatingPlans([normalizedId], {
+    now,
+    database: options?.database,
+  });
   return (
     plans.get(normalizedId) ||
     assembleTruckOperatingProfileData({ rows: [], now })

@@ -7,6 +7,8 @@ import { isPublicBusinessVisible } from "../utils/publicBusinessVisibility";
 
 export type ActionApiPublicBusinessEligibilityCandidate = {
   id?: unknown;
+  ownerId?: unknown;
+  ownerDisabled?: unknown;
   name?: string | null;
   address?: string | null;
   phone?: string | null;
@@ -27,6 +29,8 @@ export type ActionApiPublicBusinessEligibilityCandidate = {
 export function isActionApiPublicBusinessEligible(
   candidate: ActionApiPublicBusinessEligibilityCandidate,
 ): boolean {
+  if (!String(candidate.ownerId || "").trim()) return false;
+  if (candidate.ownerDisabled !== false) return false;
   if (
     !isPublicDiscoveryEligibleEntity({
       name: candidate.name,

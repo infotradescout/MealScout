@@ -62,6 +62,7 @@ import { registerStripeWebhookRoutes } from "./routes/stripeWebhookRoutes";
 import { registerTruckClaimRoutes } from "./routes/truckClaimRoutes";
 import { registerMenuRoutes } from "./routes/menuRoutes";
 import { registerPickupOrderRoutes } from "./routes/pickupOrderRoutes";
+import { registerRestaurantPaymentRoutes } from "./routes/restaurantPaymentRoutes";
 import { registerMerchantPromotionRoutes } from "./routes/merchantPromotionRoutes";
 import { registerMerchantDeliveryRoutes } from "./routes/merchantDeliveryRoutes";
 import { registerNotificationRoutes } from "./routes/notificationRoutes";
@@ -198,6 +199,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerStripeWebhookRoutes(app, { notifyHostCapacityWarning });
 
   // Online menus + pickup ordering
+  registerRestaurantPaymentRoutes(app, { stripe });
   registerMenuRoutes(app);
   registerPickupOrderRoutes(app);
   registerHiringRoutes(app, { hasCompleteProfileAccess });

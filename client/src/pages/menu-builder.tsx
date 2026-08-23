@@ -73,6 +73,7 @@ interface Menu {
   isActive: boolean;
   acceptsCash: boolean;
   hidePlatformFee: boolean;
+  pricesIncludeTax: boolean;
   availableFrom: string | null;
   availableTo: string | null;
 }
@@ -127,6 +128,10 @@ interface FullMenu extends Menu {
 interface OrderingReadiness {
   orderingEnabled: boolean;
   blockingReasons: string[];
+  paymentMethods?: {
+    card: boolean;
+    cash: boolean;
+  };
   checks: Array<{
     id: string;
     label: string;
@@ -1070,6 +1075,7 @@ function MenuEditor({
   const [menuSettings, setMenuSettings] = useState({
     acceptsCash: menu.acceptsCash,
     hidePlatformFee: menu.hidePlatformFee,
+    pricesIncludeTax: menu.pricesIncludeTax,
     isActive: menu.isActive,
   });
   const [savingSettings, setSavingSettings] = useState(false);
@@ -1089,6 +1095,53 @@ function MenuEditor({
     enabled: !!restaurantId,
   });
   const readiness = readinessQuery.data;
+  const startStripeOnboarding = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(
+        `/api/owner/restaurants/${encodeURIComponent(restaurantId)}/stripe/onboard`,
+        { method: "POST", credentials: "include" },
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.onboardingUrl) {
+        throw new Error(data?.message || "Stripe payout setup could not be started");
+      }
+      return data as { onboardingUrl: string };
+    },
+    onSuccess: ({ onboardingUrl }) => {
+      window.location.assign(onboardingUrl);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Payout setup unavailable",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+  const refreshStripeStatus = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(
+        `/api/owner/restaurants/${encodeURIComponent(restaurantId)}/stripe/status`,
+        { method: "POST", credentials: "include" },
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data?.message || "Stripe payout status could not be refreshed");
+      }
+      return data as { connectStatus?: string };
+    },
+    onSuccess: async () => {
+      await readinessQuery.refetch();
+      toast({ title: "Payout status refreshed" });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Status refresh failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
   const uncategorizedItems = toArray<MenuItem>(menu.uncategorizedItems);
   const sections = [
     ...menu.categories.map((category) => ({
@@ -1480,10 +1533,45 @@ function MenuEditor({
               ))}
             </div>
             {readiness.payout?.message ? (
-              <p className="rounded-lg bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-                <span className="font-semibold text-foreground">Payouts: </span>
-                {readiness.payout.message}
-              </p>
+              <div className="rounded-lg bg-muted/40 px-3 py-3 text-xs text-muted-foreground">
+                <p>
+                  <span className="font-semibold text-foreground">Payouts: </span>
+                  {readiness.payout.message}
+                </p>
+                {!readiness.paymentMethods?.card ? (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => startStripeOnboarding.mutate()}
+                      disabled={startStripeOnboarding.isPending}
+                    >
+                      {startStripeOnboarding.isPending ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : null}
+                      {readiness.payout.status === "revoked"
+                        ? "Reconnect Stripe payouts"
+                        : readiness.payout.connected
+                          ? "Finish Stripe setup"
+                          : "Connect Stripe payouts"}
+                    </Button>
+                    {readiness.payout.connected ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => refreshStripeStatus.mutate()}
+                        disabled={refreshStripeStatus.isPending}
+                      >
+                        {refreshStripeStatus.isPending ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : null}
+                        Refresh status
+                      </Button>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
             ) : null}
           </div>
         </details>
@@ -1525,17 +1613,18 @@ function MenuEditor({
           </div>
           <div className="flex items-center justify-between gap-4">
             <div>
-              <Label>Accept cash for pickup</Label>
+              <Label>Prices include applicable tax</Label>
               <p className="text-xs text-muted-foreground">
-                Offer pay-at-pickup when online ordering is available.
+                Enable only after every displayed item price includes the tax
+                your business is responsible for. This is required for checkout.
               </p>
             </div>
             <Switch
-              checked={menuSettings.acceptsCash}
+              checked={menuSettings.pricesIncludeTax}
               onCheckedChange={(value) =>
                 setMenuSettings((settings) => ({
                   ...settings,
-                  acceptsCash: value,
+                  pricesIncludeTax: value,
                 }))
               }
             />

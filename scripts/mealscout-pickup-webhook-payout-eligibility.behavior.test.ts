@@ -10,24 +10,24 @@ type Case = {
 const base = {
   stripeTransferGroupId: "group_fixture",
   payoutStatus: "pending",
+  paymentSucceeded: true,
 };
 
 const cases: Case[] = [
   {
-    name: "pending order may transfer only after this handler confirms it",
+    name: "a succeeded payment may settle while the order is pending",
     input: {
       ...base,
       statusBeforeWebhook: "pending",
-      transitionedToConfirmed: true,
     },
     expected: true,
   },
   {
-    name: "pending order without a confirmed transition cannot transfer",
+    name: "a pending order cannot settle before payment succeeds",
     input: {
       ...base,
       statusBeforeWebhook: "pending",
-      transitionedToConfirmed: false,
+      paymentSucceeded: false,
     },
     expected: false,
   },
@@ -36,7 +36,6 @@ const cases: Case[] = [
     input: {
       ...base,
       statusBeforeWebhook: "confirmed",
-      transitionedToConfirmed: false,
     },
     expected: true,
   },
@@ -45,16 +44,14 @@ const cases: Case[] = [
     input: {
       ...base,
       statusBeforeWebhook: "cancelled",
-      transitionedToConfirmed: false,
     },
     expected: false,
   },
   {
-    name: "cancelled order remains ineligible even with an impossible transition flag",
+    name: "cancelled order remains ineligible after a succeeded payment event",
     input: {
       ...base,
       statusBeforeWebhook: "cancelled",
-      transitionedToConfirmed: true,
     },
     expected: false,
   },
@@ -63,7 +60,6 @@ const cases: Case[] = [
     input: {
       ...base,
       statusBeforeWebhook: "preparing",
-      transitionedToConfirmed: false,
     },
     expected: false,
   },
@@ -72,7 +68,6 @@ const cases: Case[] = [
     input: {
       ...base,
       statusBeforeWebhook: "ready",
-      transitionedToConfirmed: false,
     },
     expected: false,
   },
@@ -81,7 +76,6 @@ const cases: Case[] = [
     input: {
       ...base,
       statusBeforeWebhook: "completed",
-      transitionedToConfirmed: false,
     },
     expected: false,
   },
@@ -90,7 +84,6 @@ const cases: Case[] = [
     input: {
       ...base,
       statusBeforeWebhook: "confirmed",
-      transitionedToConfirmed: false,
       stripeTransferGroupId: null,
     },
     expected: false,
@@ -100,7 +93,6 @@ const cases: Case[] = [
     input: {
       ...base,
       statusBeforeWebhook: "confirmed",
-      transitionedToConfirmed: false,
       payoutStatus: "transferred",
     },
     expected: false,

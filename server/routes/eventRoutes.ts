@@ -91,6 +91,66 @@ const unavailableParkingStatuses = new Set([
   "unavailable",
 ]);
 
+type PublicHostOwnerAuthority = {
+  showAddress: boolean;
+  showContact: boolean;
+};
+
+const enforcePublicHostOwnerAuthority = async (
+  rows: any[] | null | undefined,
+): Promise<any[]> => {
+  const candidates = Array.isArray(rows) ? rows : [];
+  const ownerIds = Array.from(
+    new Set(
+      candidates
+        .map((row: any) =>
+          String(
+            row?.host?.userId || row?.hostUserId || row?.userId || "",
+          ).trim(),
+        )
+        .filter(Boolean),
+    ),
+  );
+  const ownerRows = await Promise.all(
+    ownerIds.map(async (ownerId) => {
+      const owner = await storage.getUser(ownerId);
+      if (!owner || owner.isDisabled !== false) return null;
+      return [
+        ownerId,
+        resolvePublicProfileVisibility(owner.publicProfileSettings),
+      ] as const;
+    }),
+  );
+  const authorityByOwnerId = new Map<string, PublicHostOwnerAuthority>(
+    ownerRows.filter(
+      (row): row is readonly [string, PublicHostOwnerAuthority] => Boolean(row),
+    ),
+  );
+
+  return candidates.flatMap((row: any) => {
+    const host = row?.host && typeof row.host === "object" ? row.host : row;
+    const ownerId = String(
+      host?.userId || row?.hostUserId || row?.userId || "",
+    ).trim();
+    const authority = ownerId ? authorityByOwnerId.get(ownerId) : null;
+    if (!authority) return [];
+    const publicHost = {
+      ...host,
+      address: authority.showAddress ? host?.address ?? null : null,
+      latitude: authority.showAddress ? host?.latitude ?? null : null,
+      longitude: authority.showAddress ? host?.longitude ?? null : null,
+      contactEmail: authority.showContact ? host?.contactEmail ?? null : null,
+      contactPhone: authority.showContact ? host?.contactPhone ?? null : null,
+      businessWebsite: authority.showContact
+        ? host?.businessWebsite ?? null
+        : null,
+    };
+    return row?.host && typeof row.host === "object"
+      ? [{ ...row, host: publicHost, __hostPublicAuthority: authority }]
+      : [{ ...publicHost, __hostPublicAuthority: authority }];
+  });
+};
+
 const attachConfirmedPublicEventTrucks = async (rows: any[]) => {
   const confirmedByEvent = await loadConfirmedEventTrucks(
     rows.map((row) => String(row?.id || "")),
@@ -117,25 +177,9 @@ const attachConfirmedPublicEventTrucks = async (rows: any[]) => {
 };
 
 export const buildAnonymousPublicEventFeed = async (rows: unknown, now: Date) => {
-  const attached = await attachConfirmedPublicEventTrucks(
-    Array.isArray(rows) ? rows : [],
-  );
-  const hostOwnerIds = Array.from(
-    new Set(
-      attached
-        .map((event: any) => String(event?.host?.userId || "").trim())
-        .filter(Boolean),
-    ),
-  );
-  const hostVisibilityByOwnerId = new Map(
-    await Promise.all(
-      hostOwnerIds.map(async (ownerId) => {
-        const owner = await storage.getUser(ownerId);
-        return [
-          ownerId,
-          resolvePublicProfileVisibility(owner?.publicProfileSettings),
-        ] as const;
-      }),
+  const attached = await enforcePublicHostOwnerAuthority(
+    await attachConfirmedPublicEventTrucks(
+      Array.isArray(rows) ? rows : [],
     ),
   );
   const evaluated = await Promise.all(
@@ -186,21 +230,7 @@ export const buildAnonymousPublicEventFeed = async (rows: unknown, now: Date) =>
       })) {
         return null;
       }
-      const hostOwnerId = String(event?.host?.userId || "").trim();
-      const showHostAddress =
-        hostVisibilityByOwnerId.get(hostOwnerId)?.showAddress !== false;
-      return {
-        ...event,
-        host:
-          event?.host && typeof event.host === "object"
-            ? {
-                ...event.host,
-                address: showHostAddress ? event.host.address : null,
-                latitude: showHostAddress ? event.host.latitude : null,
-                longitude: showHostAddress ? event.host.longitude : null,
-              }
-            : event?.host,
-      };
+      return event;
     }),
   );
   return evaluated.filter((event): event is any => Boolean(event));
@@ -356,9 +386,6 @@ export function registerEventRoutes(
     windowMs: 60 * 1000,
   });
 
-  let parkingPassPublicFeedCache: { expiresAt: number; payload: any[] } | null =
-    null;
-  let parkingPassPublicFeedLastGood: { payload: any[] } | null = null;
   let parkingPassPublicFeedBuildInFlight: Promise<any[]> | null = null;
   let parkingPassHostDefaultsLastSyncedAt = 0;
   let parkingPassHostDefaultsSyncInFlight: Promise<number> | null = null;
@@ -619,7 +646,6 @@ export function registerEventRoutes(
           try {
             await storage.updateHostCoordinates(hostId, coords.lat, coords.lng);
             updated += 1;
-            parkingPassPublicFeedCache = null;
           } catch {
             // Ignore persistence errors; this is a background warmup.
           }
@@ -715,7 +741,9 @@ export function registerEventRoutes(
     for (const item of [...virtualEvents, ...legacyEvents]) {
       dedupedById.set(item.id, item);
     }
-    const parkingEvents = Array.from(dedupedById.values());
+    const parkingEvents = await enforcePublicHostOwnerAuthority(
+      Array.from(dedupedById.values()),
+    );
 
     // Do not drop listings just because coordinates are missing.
     // Host locations can still render via /api/map/locations coords or client geocode fallback.
@@ -731,10 +759,8 @@ export function registerEventRoutes(
                 bookingConfirmedAt: eventBookings.bookingConfirmedAt,
                 slotType: eventBookings.slotType,
                 truckId: eventBookings.truckId,
-                truckName: restaurants.name,
               })
               .from(eventBookings)
-              .innerJoin(restaurants, eq(eventBookings.truckId, restaurants.id))
               .where(
                 and(
                   inArray(eventBookings.eventId, eventIds),
@@ -759,6 +785,8 @@ export function registerEventRoutes(
         : [[], []];
     mark("bookings");
 
+    const publicTrucksByEvent = await loadConfirmedEventTrucks(eventIds);
+
     const pendingByEvent = new Map<string, number>();
     for (const row of pendingCounts) {
       pendingByEvent.set(row.eventId, Number(row.count || 0));
@@ -766,6 +794,10 @@ export function registerEventRoutes(
 
     const bookingsByEvent = new Map<string, typeof bookingRows>();
     for (const row of bookingRows) {
+      const isPublicTruck = (
+        publicTrucksByEvent.get(String(row.eventId || "")) || []
+      ).some((truck) => truck.truckId === String(row.truckId || ""));
+      if (!isPublicTruck) continue;
       const list = bookingsByEvent.get(row.eventId) ?? [];
       list.push(row);
       bookingsByEvent.set(row.eventId, list);
@@ -824,7 +856,11 @@ export function registerEventRoutes(
         availableSpotNumbers: trimmedAvailable,
         bookings: rows.map((row: (typeof rows)[number]) => ({
           truckId: row.truckId,
-          truckName: row.truckName,
+          truckName:
+            (
+              publicTrucksByEvent.get(String(row.eventId || "")) || []
+            ).find((truck) => truck.truckId === String(row.truckId || ""))
+              ?.name || "Food truck",
           slotType: row.slotType,
           spotNumber: row.spotNumber,
           bookingConfirmedAt: row.bookingConfirmedAt,
@@ -832,14 +868,6 @@ export function registerEventRoutes(
       };
     }).filter(hasParkingPassAvailability);
     mark("shape");
-
-    scheduleParkingPassCoordinateWarmup(parkingEvents);
-
-    parkingPassPublicFeedCache = {
-      payload: enhancedEvents,
-      expiresAt: Date.now() + 60_000,
-    };
-    parkingPassPublicFeedLastGood = { payload: enhancedEvents };
 
     const summaryUniqueHostIds = new Set<string>();
     const summaryUniqueParkingPassIds = new Set<string>();
@@ -895,12 +923,6 @@ export function registerEventRoutes(
   };
 
   const getParkingPassPublicFeed = async (feedBuilder: () => Promise<any[]>) => {
-    if (
-      parkingPassPublicFeedCache &&
-      parkingPassPublicFeedCache.expiresAt > Date.now()
-    ) {
-      return parkingPassPublicFeedCache.payload;
-    }
     if (parkingPassPublicFeedBuildInFlight) {
       return parkingPassPublicFeedBuildInFlight;
     }
@@ -1023,83 +1045,33 @@ export function registerEventRoutes(
     parkingPassFeedLimiter,
     async (req: any, res) => {
       try {
-        res.setHeader("Cache-Control", "public, max-age=60");
-        const isAuthed = Boolean(req.isAuthenticated?.() && req.user?.id);
-        const synced = await syncPublicReadyParkingPassHostDefaults();
-        if (synced > 0) {
-          parkingPassPublicFeedCache = null;
-          parkingPassPublicFeedLastGood = null;
-          parkingPassPublicFeedBuildInFlight = null;
-          parkingPassHostIdsCache = null;
-          parkingPassHostIdsLastGood = null;
-          parkingPassHostStatusCacheByDate = new Map();
-        }
-        if (
-          parkingPassPublicFeedCache &&
-          parkingPassPublicFeedCache.expiresAt > Date.now()
-        ) {
-          const payload = sanitizeParkingPassPublicFeedRows(
-            parkingPassPublicFeedCache.payload,
-          );
-          const publicPayload = toPublicParkingPassListingArray(payload);
-          return res.json(
-            isAuthed
-              ? publicPayload
-              : publicPayload.map(redactParkingPassEventForGuest),
-          );
-        }
+        res.setHeader("Cache-Control", "no-store");
         const feedBuilder =
           dependencies.parkingPassFeedBuilder ?? buildParkingPassPublicFeed;
         const enhancedEvents = sanitizeParkingPassPublicFeedRows(
-          await getParkingPassPublicFeed(feedBuilder),
+          await enforcePublicHostOwnerAuthority(
+            await getParkingPassPublicFeed(feedBuilder),
+          ),
         );
         const publicEvents = toPublicParkingPassListingArray(enhancedEvents);
-        res.json(
-          isAuthed
-            ? publicEvents
-            : publicEvents.map(redactParkingPassEventForGuest),
-        );
+        res.json(publicEvents.map(redactParkingPassEventForGuest));
       } catch (error: any) {
         console.error("Error fetching parking pass listings:", error);
-        if (parkingPassPublicFeedLastGood?.payload) {
-          res.setHeader("X-MealScout-Stale", "1");
-          const isAuthed = Boolean(req.isAuthenticated?.() && req.user?.id);
-          const payload = sanitizeParkingPassPublicFeedRows(
-            parkingPassPublicFeedLastGood.payload,
-          );
-          const publicPayload = toPublicParkingPassListingArray(payload);
-          return res.json(
-            isAuthed
-              ? publicPayload
-              : publicPayload.map(redactParkingPassEventForGuest),
-          );
-        }
-        res.status(200).json([]);
+        res.status(503).json({ message: "Parking Pass listings unavailable" });
       }
     },
   );
 
-  // Lead-magnet feed (Pensacola): redact exact host details unless logged in.
+  // Lead-magnet feed (Pensacola): a login is not authority to reveal a host.
   app.get("/api/public/pensacola/parking-pass-leads", async (req: any, res) => {
     try {
-      res.setHeader("Cache-Control", "public, max-age=60");
-      const isAuthed = Boolean(req.isAuthenticated?.() && req.user?.id);
-      const synced = await syncPublicReadyParkingPassHostDefaults();
-      if (synced > 0) {
-        parkingPassPublicFeedCache = null;
-        parkingPassPublicFeedLastGood = null;
-        parkingPassPublicFeedBuildInFlight = null;
-        parkingPassHostIdsCache = null;
-        parkingPassHostIdsLastGood = null;
-        parkingPassHostStatusCacheByDate = new Map();
-      }
+      res.setHeader("Cache-Control", "no-store");
 
       const feed = toPublicParkingPassListingArray(
         sanitizeParkingPassPublicFeedRows(
-          parkingPassPublicFeedCache &&
-          parkingPassPublicFeedCache.expiresAt > Date.now()
-            ? parkingPassPublicFeedCache.payload
-            : await getParkingPassPublicFeed(buildParkingPassPublicFeed),
+          await enforcePublicHostOwnerAuthority(
+            await getParkingPassPublicFeed(buildParkingPassPublicFeed),
+          ),
         ),
       );
 
@@ -1108,10 +1080,9 @@ export function registerEventRoutes(
           const host = row?.host || {};
           const city = host.city ?? row?.hostCity ?? row?.city;
           const state = host.state ?? row?.hostState ?? row?.state;
-          const address = host.address ?? row?.hostAddress ?? row?.address;
           return (
-            (isPensacola(city) || isPensacola(address)) &&
-            (isFlorida(state) || isFloridaLoose(address))
+            isPensacola(city) &&
+            isFlorida(state)
           );
         },
       );
@@ -1168,36 +1139,13 @@ export function registerEventRoutes(
           const lat = host.latitude ?? row?.hostLatitude ?? row?.latitude;
           const lng = host.longitude ?? row?.hostLongitude ?? row?.longitude;
 
-          if (!isAuthed) {
-            return {
-              teaserId,
-              locked: true,
-              city,
-              state,
-              latitude: roundCoord(lat, 2),
-              longitude: roundCoord(lng, 2),
-              startingAtCents,
-              nextDate,
-            };
-          }
-
           return {
             teaserId,
-            locked: false,
-            passId: String(row?.id || ""),
-            hostName: String(
-              host.businessName ||
-                row?.hostBusinessName ||
-                row?.businessName ||
-                "Host",
-            ),
-            address: String(
-              host.address || row?.hostAddress || row?.address || "",
-            ),
+            locked: true,
             city,
             state,
-            latitude: roundCoord(lat, 6),
-            longitude: roundCoord(lng, 6),
+            latitude: roundCoord(lat, 2),
+            longitude: roundCoord(lng, 2),
             startingAtCents,
             nextDate,
           };
@@ -1207,7 +1155,7 @@ export function registerEventRoutes(
         city: "Pensacola",
         state: "FL",
         totalLocations: byHost.size,
-        locked: !isAuthed,
+        locked: true,
         listings,
       });
     } catch (error) {
@@ -1232,6 +1180,13 @@ export function registerEventRoutes(
       const row = await loadPublicEventDetail(eventId);
 
       if (!row) return res.status(404).json({ message: "Event not found" });
+      const hostOwner = await storage.getUser(row.hostUserId);
+      if (!hostOwner || hostOwner.isDisabled !== false) {
+        return res.status(404).json({ message: "Event not found" });
+      }
+      const { showAddress: showHostAddress } = resolvePublicProfileVisibility(
+        hostOwner.publicProfileSettings,
+      );
       const confirmedTrucks = filterPublicConfirmedEventTrucks(
         (await loadConfirmedEventTrucks([eventId])).get(eventId) || [],
       );
@@ -1351,11 +1306,6 @@ export function registerEventRoutes(
 
       const hostSlug = `${toSlug(row.hostName) || row.hostId}--${row.hostId}`;
       const hostPath = `/location/${encodeURIComponent(hostSlug)}`;
-      const hostOwner = await storage.getUser(row.hostUserId);
-      const { showAddress: showHostAddress } = resolvePublicProfileVisibility(
-        hostOwner?.publicProfileSettings,
-      );
-
       const publicTrucks = confirmedTrucks.map((truck) => ({
         id: truck.truckId,
         name: truck.name,
@@ -1367,10 +1317,7 @@ export function registerEventRoutes(
         )}`,
       }));
 
-      res.setHeader(
-        "Cache-Control",
-        authorizedPaidDetail ? "private, no-store" : "public, max-age=60",
-      );
+      res.setHeader("Cache-Control", "no-store");
       res.json({
         id: row.id,
         title,
@@ -1505,39 +1452,20 @@ export function registerEventRoutes(
 
   // Lightweight helper for map gating: which hosts have public-ready (priced) parking pass listings?
   // This endpoint intentionally avoids booking lookups/geocoding so maps can load quickly.
-  let parkingPassHostIdsCache: {
-    expiresAt: number;
-    payload: { generatedAt: string; hostIds: string[] };
-  } | null = null;
-  let parkingPassHostIdsLastGood: {
-    payload: { generatedAt: string; hostIds: string[] };
-  } | null = null;
   app.get(
     "/api/parking-pass/host-ids",
     parkingPassBookabilityLimiter,
     async (_req: any, res) => {
       try {
-        res.setHeader("Cache-Control", "public, max-age=60");
-        const synced = await syncPublicReadyParkingPassHostDefaults();
-        if (synced > 0) {
-          parkingPassPublicFeedCache = null;
-          parkingPassPublicFeedLastGood = null;
-          parkingPassHostIdsCache = null;
-          parkingPassHostIdsLastGood = null;
-          parkingPassHostStatusCacheByDate = new Map();
-        }
-        if (
-          parkingPassHostIdsCache &&
-          parkingPassHostIdsCache.expiresAt > Date.now()
-        ) {
-          return res.json(parkingPassHostIdsCache.payload);
-        }
+        res.setHeader("Cache-Control", "no-store");
 
         // Prefer the simple model: host pricing fields are the source of truth.
         // If host pricing columns are not present (older DB) this will naturally return [] and we'll fall back below.
         const hostPricingIds = new Set<string>();
         try {
-          const allHosts = await storage.getAllHosts();
+          const allHosts = await enforcePublicHostOwnerAuthority(
+            await storage.getAllHosts(),
+          );
           const publishedSeriesHostIds = new Set(
             (await storage.getParkingPassSeriesSafe().catch(() => []))
               .filter(
@@ -1598,11 +1526,6 @@ export function registerEventRoutes(
             generatedAt: new Date().toISOString(),
             hostIds: Array.from(hostPricingIds),
           };
-          parkingPassHostIdsCache = {
-            payload,
-            expiresAt: Date.now() + 60_000,
-          };
-          parkingPassHostIdsLastGood = { payload };
           return res.json(payload);
         }
 
@@ -1613,17 +1536,29 @@ export function registerEventRoutes(
             host: hosts,
             series: eventSeries,
             isDisabled: users.isDisabled,
+            publicProfileSettings: users.publicProfileSettings,
           })
           .from(eventSeries)
           .innerJoin(hosts, eq(hosts.id, eventSeries.hostId))
-          .leftJoin(users, eq(hosts.userId, users.id))
-          .where(eq(eventSeries.seriesType, "parking_pass"));
+          .innerJoin(users, eq(hosts.userId, users.id))
+          .where(
+            and(
+              eq(eventSeries.seriesType, "parking_pass"),
+              eq(users.isDisabled, false),
+            ),
+          );
 
         const hostIds = new Set<string>();
         rows.forEach((row: any) => {
           const hostId = String(row?.host?.id || "").trim();
           if (!hostId) return;
-          if (row?.isDisabled === true) return;
+          if (
+            row?.isDisabled !== false ||
+            !resolvePublicProfileVisibility(row?.publicProfileSettings)
+              .showAddress
+          ) {
+            return;
+          }
           const seriesStatus = normalizeParkingStatus(row?.series?.status || "");
           const hostStatus = normalizeParkingStatus(row?.host?.status || "");
           if (seriesStatus !== "published") return;
@@ -1661,42 +1596,15 @@ export function registerEventRoutes(
           generatedAt: new Date().toISOString(),
           hostIds: Array.from(hostIds),
         };
-        parkingPassHostIdsCache = {
-          payload,
-          expiresAt: Date.now() + 60_000,
-        };
-        parkingPassHostIdsLastGood = { payload };
         res.json(payload);
       } catch (error: any) {
         console.error("Error fetching parking pass host ids:", error);
-        if (parkingPassHostIdsLastGood?.payload) {
-          res.setHeader("X-MealScout-Stale", "1");
-          return res.json(parkingPassHostIdsLastGood.payload);
-        }
         res
           .status(200)
           .json({ generatedAt: new Date().toISOString(), hostIds: [] });
       }
     },
   );
-
-  let parkingPassHostStatusCacheByDate = new Map<
-    string,
-    {
-      expiresAt: number;
-      payload: {
-        generatedAt: string;
-        date: string;
-        hosts: Array<{
-          hostId: string;
-          availableCount: number;
-          spotCount: number;
-          reservedCount: number;
-          isFull: boolean;
-        }>;
-      };
-    }
-  >();
 
   const normalizeDateKey = (value: unknown) =>
     dateKeyFromUnknown(value, "America/Chicago") ||
@@ -1717,10 +1625,11 @@ export function registerEventRoutes(
         city: host?.city || event?.hostCity || event?.city,
         state: host?.state || event?.hostState || event?.state,
       });
-    const { occurrences } = await listParkingPassOccurrences({
+    const { occurrences: rawOccurrences } = await listParkingPassOccurrences({
       horizonDays: 30,
       includeDraft: false,
     });
+    const occurrences = await enforcePublicHostOwnerAuthority(rawOccurrences);
     const virtualEvents = occurrences.filter((event: any) => {
       if (!isParkingPassPublicReady(event)) return false;
       if (!isPublicHostProfile(event?.host, event)) return false;
@@ -1737,7 +1646,9 @@ export function registerEventRoutes(
         .map((series: any) => String(series?.id || "").trim())
         .filter(Boolean),
     );
-    const legacyUpcoming = await storage.getAllUpcomingEvents();
+    const legacyUpcoming = await enforcePublicHostOwnerAuthority(
+      await storage.getAllUpcomingEvents(),
+    );
     const legacyEvents = legacyUpcoming.filter((event: any) => {
       if (event?.eventType !== "parking_pass") return false;
       if (
@@ -1842,39 +1753,21 @@ export function registerEventRoutes(
     parkingPassBookabilityLimiter,
     async (req: any, res) => {
       try {
-        res.setHeader("Cache-Control", "public, max-age=60");
+        res.setHeader("Cache-Control", "no-store");
         const dateKey = normalizeDateKey(req.query?.date);
-        const synced = await syncPublicReadyParkingPassHostDefaults();
-        if (synced > 0) {
-          parkingPassPublicFeedCache = null;
-          parkingPassPublicFeedLastGood = null;
-          parkingPassHostIdsCache = null;
-          parkingPassHostIdsLastGood = null;
-          parkingPassHostStatusCacheByDate = new Map();
-        }
-        const cached = parkingPassHostStatusCacheByDate.get(dateKey);
-        if (cached && cached.expiresAt > Date.now()) {
-          return res.json(cached.payload);
-        }
 
         const payload = await buildParkingPassHostStatusPayload(dateKey);
-        parkingPassHostStatusCacheByDate.set(dateKey, {
-          payload,
-          expiresAt: Date.now() + 60_000,
-        });
         res.json(payload);
       } catch (error: any) {
         console.error("Error fetching parking pass host status:", error);
         const dateKey = normalizeDateKey(req.query?.date);
-        const stale = parkingPassHostStatusCacheByDate.get(dateKey);
-        if (stale?.payload) {
-          res.setHeader("X-MealScout-Stale", "1");
-          return res.json(stale.payload);
-        }
-        res.status(200).json({
+        res.setHeader("Cache-Control", "no-store");
+        res.setHeader("Retry-After", "60");
+        res.status(503).json({
           generatedAt: new Date().toISOString(),
           date: dateKey,
           hosts: [],
+          message: "Parking Pass availability is temporarily unavailable",
         });
       }
     },
@@ -1949,12 +1842,7 @@ export function registerEventRoutes(
     isAuthenticated,
     isStaffOrAdmin,
     async (_req: any, res) => {
-      parkingPassHostIdsCache = null;
-      parkingPassHostIdsLastGood = null;
-      parkingPassHostStatusCacheByDate = new Map();
-      parkingPassPublicFeedCache = null;
-      parkingPassPublicFeedLastGood = null;
-      res.json({ success: true });
+      res.json({ success: true, cache: "disabled" });
     },
   );
 

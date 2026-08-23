@@ -14,7 +14,7 @@ export const PUBLIC_RESTAURANT_INDEXABLE_ROBOTS =
 export const PUBLIC_RESTAURANT_NOINDEX_ROBOTS = "noindex,follow";
 
 /** Bump when sitemap membership rules change so CDN/browser caches cannot keep excluded URLs. */
-export const SITEMAP_MEMBERSHIP_VERSION = "pd-v1-indexability-2";
+export const SITEMAP_MEMBERSHIP_VERSION = "pd-v1-indexability-3";
 
 export const IMPORT_SYSTEM_EMAIL = (
   process.env.IMPORT_SYSTEM_EMAIL || "system-import@mealscout.us"
@@ -147,10 +147,8 @@ export function publicRestaurantRobotsDirective(
 export function applySitemapMembershipCacheHeaders(res: {
   setHeader: (name: string, value: string) => void;
 }): void {
-  // Short TTL + must-revalidate: eligibility changes must not linger via SWR.
-  res.setHeader(
-    "Cache-Control",
-    "public, max-age=60, s-maxage=300, must-revalidate",
-  );
+  // Membership contains merchant identity. Owner disable/quarantine changes
+  // must take effect on the next request instead of lingering in shared caches.
+  res.setHeader("Cache-Control", "no-store");
   res.setHeader("X-MealScout-Sitemap-Membership", SITEMAP_MEMBERSHIP_VERSION);
 }

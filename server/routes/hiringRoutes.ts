@@ -17,6 +17,9 @@ import {
   users,
   workerProfiles,
 } from "@shared/schema";
+import { toPublicRestaurantListingArrayWithVisibility } from "../publicProfiles/toPublicRestaurantListingWithVisibility";
+import { normalizePublicUrl } from "../publicProfiles/publicProfileUtils";
+import { isPublicBusinessVisible } from "../utils/publicBusinessVisibility";
 
 type HiringRouteDependencies = {
   hasCompleteProfileAccess: (userId: string) => Promise<boolean>;
@@ -34,6 +37,45 @@ const parseLimit = (value: unknown, fallback = 40, max = 100) => {
   if (!Number.isFinite(numeric)) return fallback;
   return Math.max(1, Math.min(max, Math.floor(numeric)));
 };
+
+const publicJob = (job: any) => ({
+  id: String(job.id || ""),
+  title: String(job.title || ""),
+  description: String(job.description || "").trim() || null,
+  role: String(job.role || ""),
+  jobType: String(job.jobType || "part_time"),
+  locationType: String(job.locationType || "onsite"),
+  city: String(job.city || "").trim() || null,
+  state: String(job.state || "").trim() || null,
+  scheduleDescription: String(job.scheduleDescription || "").trim() || null,
+  rateMinCents: Number.isSafeInteger(Number(job.rateMinCents))
+    ? Math.max(0, Number(job.rateMinCents))
+    : null,
+  rateMaxCents: Number.isSafeInteger(Number(job.rateMaxCents))
+    ? Math.max(0, Number(job.rateMaxCents))
+    : null,
+  status: "open",
+  positionsAvailable: Math.max(1, Number(job.positionsAvailable || 1)),
+  startsAt: job.startsAt || null,
+  expiresAt: job.expiresAt || null,
+  createdAt: job.createdAt || null,
+});
+
+const publicWorkerProfile = (profile: any) => ({
+  id: String(profile.id || ""),
+  displayName: String(profile.displayName || "Community worker"),
+  headline: String(profile.headline || "").trim() || null,
+  bio: String(profile.bio || "").trim() || null,
+  roles: Array.isArray(profile.roles) ? profile.roles.map(String).slice(0, 12) : [],
+  serviceCities: Array.isArray(profile.serviceCities)
+    ? profile.serviceCities.map(String).slice(0, 12)
+    : [],
+  desiredRateCents: Number.isSafeInteger(Number(profile.desiredRateCents))
+    ? Math.max(0, Number(profile.desiredRateCents))
+    : null,
+  portfolioUrl: normalizePublicUrl(profile.portfolioUrl),
+  updatedAt: profile.updatedAt || null,
+});
 
 const splitCsv = (value: unknown) =>
   String(value || "")
@@ -155,22 +197,39 @@ export function registerHiringRoutes(
       const rows = await db
         .select({
           job: jobPosts,
-          restaurant: {
-            id: restaurants.id,
-            name: restaurants.name,
-            businessType: restaurants.businessType,
-            city: restaurants.city,
-            state: restaurants.state,
-            logoUrl: restaurants.logoUrl,
-          },
+          restaurant: restaurants,
         })
         .from(jobPosts)
         .innerJoin(restaurants, eq(jobPosts.restaurantId, restaurants.id))
         .where(and(...filters))
         .orderBy(desc(jobPosts.createdAt))
         .limit(limit);
-
-      res.json(rows);
+      const publicRestaurants =
+        await toPublicRestaurantListingArrayWithVisibility(
+          rows
+            .map((row: any) => row.restaurant)
+            .filter(
+              (restaurant: any) =>
+                restaurant?.isActive === true &&
+                isPublicBusinessVisible(restaurant),
+            ),
+        );
+      const publicRestaurantById = new Map(
+        publicRestaurants.map((restaurant: any) => [
+          String(restaurant.id),
+          restaurant,
+        ]),
+      );
+      res.json(
+        rows.flatMap((row: any) => {
+          const restaurant = publicRestaurantById.get(
+            String(row.restaurant.id),
+          );
+          return restaurant
+            ? [{ job: publicJob(row.job), restaurant }]
+            : [];
+        }),
+      );
     } catch (error) {
       console.error("Error listing hiring jobs:", error);
       res.status(500).json({ message: "Failed to load jobs" });
@@ -199,12 +258,21 @@ export function registerHiringRoutes(
           },
         })
         .from(workerProfiles)
-        .leftJoin(users, eq(workerProfiles.userId, users.id))
-        .where(and(...filters))
+        .innerJoin(users, eq(workerProfiles.userId, users.id))
+        .where(and(...filters, eq(users.isDisabled, false)))
         .orderBy(desc(workerProfiles.updatedAt), desc(workerProfiles.createdAt))
         .limit(limit);
 
-      res.json(rows);
+      res.json(
+        rows.map((row: any) => ({
+          profile: publicWorkerProfile(row.profile),
+          user: {
+            profileImageUrl: normalizePublicUrl(row.user?.profileImageUrl, {
+              allowInternalPath: true,
+            }),
+          },
+        })),
+      );
     } catch (error) {
       console.error("Error listing worker resumes:", error);
       res.status(500).json({ message: "Failed to load open resumes" });
@@ -214,37 +282,46 @@ export function registerHiringRoutes(
   app.get("/api/private-chefs", async (req, res) => {
     try {
       const city = String(req.query.city || "").trim();
-      const filters = [eq(restaurants.businessType, "private_chef")];
+      const filters = [
+        eq(restaurants.businessType, "private_chef"),
+        eq(restaurants.isActive, true),
+      ];
       if (city) filters.push(ilike(restaurants.city, `%${city}%`));
 
       const rows = await db
-        .select({
-          id: restaurants.id,
-          ownerId: restaurants.ownerId,
-          name: restaurants.name,
-          description: restaurants.description,
-          city: restaurants.city,
-          state: restaurants.state,
-          logoUrl: restaurants.logoUrl,
-          coverImageUrl: restaurants.coverImageUrl,
-          websiteUrl: restaurants.websiteUrl,
-          instagramUrl: restaurants.instagramUrl,
-          isVerified: restaurants.isVerified,
-        })
+        .select()
         .from(restaurants)
         .where(and(...filters))
         .orderBy(desc(restaurants.isVerified), desc(restaurants.createdAt))
         .limit(parseLimit(req.query.limit));
 
-      const visibleRows = [];
+      const accessEligibleRows = [];
       for (const row of rows) {
-        if (await hasCompleteProfileAccess(String(row.ownerId || ""))) {
-          const { ownerId: _ownerId, ...publicRow } = row;
-          visibleRows.push(publicRow);
+        try {
+          if (
+            isPublicBusinessVisible(row) &&
+            (await hasCompleteProfileAccess(String(row.ownerId || "")))
+          ) {
+            accessEligibleRows.push(row);
+          }
+        } catch {
+          // Fail this listing closed when access evidence is unavailable.
         }
       }
-
-      res.json(visibleRows);
+      const publicRows =
+        await toPublicRestaurantListingArrayWithVisibility(accessEligibleRows);
+      res.json(
+        publicRows.map((row: any) => ({
+          id: row.id,
+          name: row.name,
+          description: row.description,
+          city: row.city,
+          state: row.state,
+          logoUrl: row.logoUrl,
+          coverImageUrl: row.coverImageUrl,
+          isVerified: row.isVerified === true,
+        })),
+      );
     } catch (error) {
       console.error("Error listing private chefs:", error);
       res.status(500).json({ message: "Failed to load private chefs" });
@@ -567,19 +644,26 @@ export function registerHiringRoutes(
         normalizeLeadInput(req.body, req.params.chefId),
       );
       const [chef] = await db
-        .select({ id: restaurants.id, ownerId: restaurants.ownerId })
+        .select()
         .from(restaurants)
         .where(
           and(
             eq(restaurants.id, payload.chefRestaurantId),
             eq(restaurants.businessType, "private_chef"),
+            eq(restaurants.isActive, true),
           ),
         )
         .limit(1);
-      if (!chef) return res.status(404).json({ message: "Private chef not found" });
-      const hasAccess = await hasCompleteProfileAccess(
-        String(chef.ownerId || ""),
-      );
+      if (!chef || !isPublicBusinessVisible(chef)) {
+        return res.status(404).json({ message: "Private chef not found" });
+      }
+      const [publicChef] =
+        await toPublicRestaurantListingArrayWithVisibility([chef]);
+      const hasAccess = publicChef
+        ? await hasCompleteProfileAccess(String(chef.ownerId || "")).catch(
+            () => false,
+          )
+        : false;
       if (!hasAccess) {
         return res.status(402).json({
           message:
@@ -597,7 +681,11 @@ export function registerHiringRoutes(
         })
         .returning();
 
-      res.status(201).json(lead);
+      res.status(201).json({
+        id: lead.id,
+        status: lead.status || "new",
+        createdAt: lead.createdAt || null,
+      });
     } catch (error: any) {
       console.error("Error creating private chef lead:", error);
       res.status(error?.name === "ZodError" ? 400 : 500).json({

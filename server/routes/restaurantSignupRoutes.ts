@@ -22,7 +22,7 @@ import {
 import {
   users,
   telemetryEvents,
-  insertRestaurantSchema,
+  publicInsertRestaurantSchema,
   type User,
 } from "@shared/schema";
 import { isStaffOrAdminUserType } from "@shared/profileAccessPolicy";
@@ -260,9 +260,9 @@ export function registerRestaurantSignupRoutes(
         });
       }
 
-      const restaurantParseResult = insertRestaurantSchema
-        .omit({ ownerId: true })
-        .safeParse(restaurantData || {});
+      const restaurantParseResult = publicInsertRestaurantSchema.safeParse(
+        restaurantData || {},
+      );
       if (!restaurantParseResult.success) {
         return res.status(400).json({
           message: "Please complete the required fields.",
@@ -371,7 +371,7 @@ export function registerRestaurantSignupRoutes(
         try {
           const enabled =
             String(
-              process.env.VAC_AUTO_VERIFY_ENABLED || "true",
+              process.env.VAC_AUTO_VERIFY_ENABLED || "false",
             ).toLowerCase() !== "false";
           if (enabled) {
             const vac = await vacEvaluateRestaurantSignup({

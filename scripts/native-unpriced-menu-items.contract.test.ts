@@ -33,7 +33,7 @@ requireIncludes(
 );
 requireIncludes(
   publicMenu,
-  "orderingEnabled && item.priceCents !== null",
+  "orderingEnabled && hasOrderablePrice",
   "The public menu must not expose Add for an unpriced item.",
 );
 requireIncludes(

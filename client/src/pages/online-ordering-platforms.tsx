@@ -8,17 +8,17 @@ const sections = [
   {
     icon: Store,
     title: "Restaurants",
-    body: "Show your profile, menus, and active deals in a discovery-first local feed.",
+    body: "Show a profile, menus, and active deals. Separately reviewed businesses can unlock ASAP pickup only after every checkout-readiness check passes.",
   },
   {
     icon: Truck,
     title: "Food Trucks",
-    body: "Combine live truck discovery, profile trust signals, and ordering intent.",
+    body: "Combine live truck discovery with pickup only while a verified current stop, menu, item availability, and card settlement are ready.",
   },
   {
     icon: UtensilsCrossed,
     title: "Bars & Local Spots",
-    body: "Stay visible through follows, favorites, recommendations, and real local demand.",
+    body: "Stay discoverable through a local profile; ordering is not implied unless the pickup checkout is visibly enabled.",
   },
 ];
 
@@ -26,22 +26,24 @@ export default function OnlineOrderingPlatformsPage() {
   return (
     <div className="page">
       <SEOHead
-        title="Online Ordering Platform for Restaurants, Trucks, and Bars | MealScout"
-        description="MealScout is a local-first online ordering and food discovery platform for restaurants, food trucks, and bars."
+        title="Local Food Discovery and Eligible Pickup Ordering | MealScout"
+        description="MealScout provides local profiles and menus, with ASAP card pickup only for businesses that pass current eligibility checks."
         canonicalUrl="https://www.mealscout.us/online-ordering-platforms"
       />
 
       <section className="section section--full border-b border-[color:var(--border-subtle)] py-6">
         <div className="content max-w-4xl">
           <p className="text-xs font-semibold uppercase tracking-wide text-[color:var(--accent-text)]">
-            Online Ordering Platform
+            Discovery with limited pickup ordering
           </p>
           <h1 className="mt-2 text-2xl font-bold text-foreground">
-            Local online ordering built for real food businesses
+            Local profiles first, verified pickup checkout where eligible
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            MealScout is an online ordering and food discovery platform focused
-            on local trust, not pay-to-rank placement.
+            MealScout is not a delivery network. It supports discovery broadly
+            and exposes ASAP card pickup only when a business is claimed,
+            verified, open, showing priced available items, locatable, and ready
+            for Stripe payouts.
           </p>
         </div>
       </section>
@@ -70,16 +72,16 @@ export default function OnlineOrderingPlatformsPage() {
       <section className="section section--full border-y border-[color:var(--border-subtle)] py-5">
         <div className="content max-w-4xl">
           <h2 className="text-lg font-semibold text-foreground">
-            Common food-intent searches this supports
+            What this product surface supports
           </h2>
           <div className="mt-3 grid gap-2 sm:grid-cols-2">
             {[
-              "online ordering platform for restaurants",
-              "food ordering app for small business",
-              "restaurant online ordering software alternatives",
-              "food truck ordering platform",
-              "best food apps near me",
-              "local food delivery and pickup apps",
+              "Public local business profiles",
+              "Published menus with priced available items",
+              "Discovery for restaurants, trucks, and bars",
+              "Eligibility-gated ASAP pickup by card",
+              "No native courier-delivery promise",
+              "No cash, dine-in, or scheduled checkout promise",
             ].map((term) => (
               <p
                 key={term}
@@ -92,7 +94,7 @@ export default function OnlineOrderingPlatformsPage() {
           <div className="mt-4 flex flex-wrap gap-2">
             <Link href="/delivery-app-alternatives">
               <Button size="sm" variant="outline">
-                Delivery alternatives <ArrowRight className="ml-1 h-3.5 w-3.5" />
+                Understand the scope <ArrowRight className="ml-1 h-3.5 w-3.5" />
               </Button>
             </Link>
             <Link href="/compare">

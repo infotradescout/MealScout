@@ -1,5 +1,5 @@
 import type { Express } from "express";
-import { and, desc, eq, like, isNotNull, sql } from "drizzle-orm";
+import { and, desc, eq, or, sql } from "drizzle-orm";
 
 import { db } from "../db";
 import { storage } from "../storage";
@@ -10,8 +10,8 @@ import {
   calculateRestaurantRankingScore,
   calculateUserInfluenceScore,
   checkGoldenForkEligibility,
-  getAreaLeaderboard,
   getUserRecommendationCount,
+  getUserPublishedVideoRecommendations,
   getUserWeightedRecommendationScore,
 } from "../awardCalculations";
 import {
@@ -26,8 +26,10 @@ import {
   restaurantFollows,
   restaurantUserRecommendations,
   users,
-  videoStories,
 } from "@shared/schema";
+import { toPublicRestaurantListingArrayWithVisibility } from "../publicProfiles/toPublicRestaurantListingWithVisibility";
+import { isPublicBusinessVisible } from "../utils/publicBusinessVisibility";
+import { deriveProfileEvidenceQuarantineVisibility } from "../services/profileEvidenceQuarantine";
 
 const SCOUT_SCORE_ACTION_POINTS = {
   recommendRestaurant: 40,
@@ -140,12 +142,7 @@ export function registerAwardsRoutes(app: Express) {
           .select({ recommendedAt: restaurantUserRecommendations.recommendedAt })
           .from(restaurantUserRecommendations)
           .where(eq(restaurantUserRecommendations.userId, userId)),
-        db
-          .select({ createdAt: videoStories.createdAt })
-          .from(videoStories)
-          .where(
-            and(eq(videoStories.userId, userId), isNotNull(videoStories.restaurantId)),
-          ),
+        getUserPublishedVideoRecommendations(userId),
         db
           .select({ count: sql<number>`count(*)::int` })
           .from(restaurantFavorites)
@@ -319,7 +316,7 @@ export function registerAwardsRoutes(app: Express) {
           goldenForkEarnedAt: users.goldenForkEarnedAt,
         })
         .from(users)
-        .where(eq(users.hasGoldenFork, true));
+        .where(and(eq(users.hasGoldenFork, true), eq(users.isDisabled, false)));
 
       const holdersWithRecommendations = await Promise.all(
         holders.map(async (holder: (typeof holders)[number]) => ({
@@ -338,11 +335,17 @@ export function registerAwardsRoutes(app: Express) {
     }
   });
 
-  app.get("/api/user/:userId/influence-stats", async (req, res) => {
+  app.get("/api/user/:userId/influence-stats", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.params.userId;
+      const privileged = ["admin", "duper_admin", "super_admin", "staff"].includes(
+        String(req.user?.userType || ""),
+      );
+      if (String(req.user?.id || "") !== String(userId) && !privileged) {
+        return res.status(403).json({ message: "Access denied" });
+      }
       const user = await storage.getUser(userId);
-      if (!user) {
+      if (!user || user.isDisabled !== false) {
         return res.status(404).json({ message: "User not found" });
       }
 
@@ -368,11 +371,31 @@ export function registerAwardsRoutes(app: Express) {
 
   app.get("/api/awards/golden-plate/winners", async (_req, res) => {
     try {
-      const winners = await db
+      const winnerRows = await db
         .select()
         .from(restaurants)
-        .where(eq(restaurants.hasGoldenPlate, true));
-      res.json(winners);
+        .where(
+          and(
+            eq(restaurants.hasGoldenPlate, true),
+            eq(restaurants.isActive, true),
+          ),
+        );
+      const publicWinners = await toPublicRestaurantListingArrayWithVisibility(
+        winnerRows.filter(
+          (row: any) =>
+            isPublicBusinessVisible(row) &&
+            !deriveProfileEvidenceQuarantineVisibility(row).isQuarantined,
+        ),
+      );
+      const rankingById = new Map(
+        winnerRows.map((row: any) => [String(row.id), Number(row.rankingScore || 0)]),
+      );
+      res.json(
+        publicWinners.map((winner: any) => ({
+          ...winner,
+          rankingScore: rankingById.get(String(winner.id)) || 0,
+        })),
+      );
     } catch (error) {
       console.error("Error fetching Golden Plate winners:", error);
       res.status(500).json({ message: "Failed to fetch winners" });
@@ -381,16 +404,46 @@ export function registerAwardsRoutes(app: Express) {
 
   app.get("/api/awards/golden-plate/winners/:area", async (req, res) => {
     try {
-      const winners = await db
+      const areaTokens = String(req.params.area || "")
+        .toLowerCase()
+        .split(/[,\-]/)
+        .map((value) => value.trim())
+        .filter(Boolean)
+        .slice(0, 3);
+      if (!areaTokens.length) {
+        return res.status(400).json({ message: "Area is required" });
+      }
+      const winnerRows = await db
         .select()
         .from(restaurants)
         .where(
           and(
             eq(restaurants.hasGoldenPlate, true),
-            like(restaurants.address, `%${req.params.area}%`),
+            eq(restaurants.isActive, true),
+            or(
+              ...areaTokens.flatMap((area) => [
+                eq(sql`lower(coalesce(${restaurants.city}, ''))`, area),
+                eq(sql`lower(coalesce(${restaurants.state}, ''))`, area),
+              ]),
+            ),
           ),
         );
-      res.json(winners);
+      const publicWinners = await toPublicRestaurantListingArrayWithVisibility(
+        winnerRows.filter(
+          (row: any) =>
+            isPublicBusinessVisible(row) &&
+            !deriveProfileEvidenceQuarantineVisibility(row).isQuarantined,
+        ),
+      );
+      const rankingById = new Map(
+        winnerRows.map((row: any) => [String(row.id), Number(row.rankingScore || 0)]),
+      );
+      res.json(
+        publicWinners.map((winner: any) => ({
+          ...winner,
+          rankingScore: rankingById.get(String(winner.id)) || 0,
+        })),
+      );
     } catch (error) {
       console.error("Error fetching area Golden Plate winners:", error);
       res.status(500).json({ message: "Failed to fetch winners" });
@@ -399,16 +452,62 @@ export function registerAwardsRoutes(app: Express) {
 
   app.get("/api/awards/golden-plate/leaderboard/:area", async (req, res) => {
     try {
-      const limit = parseInt(req.query.limit as string) || 50;
-      const leaderboard = await getAreaLeaderboard(req.params.area, limit);
-      res.json(leaderboard);
+      const limit = Math.max(
+        1,
+        Math.min(50, parseInt(req.query.limit as string, 10) || 50),
+      );
+      const areaTokens = String(req.params.area || "")
+        .toLowerCase()
+        .split(/[,\-]/)
+        .map((value) => value.trim())
+        .filter(Boolean)
+        .slice(0, 3);
+      if (!areaTokens.length) {
+        return res.status(400).json({ message: "Area is required" });
+      }
+      const candidateRows = await db
+        .select()
+        .from(restaurants)
+        .where(
+          and(
+            eq(restaurants.isActive, true),
+            or(
+              ...areaTokens.flatMap((area) => [
+                eq(sql`lower(coalesce(${restaurants.city}, ''))`, area),
+                eq(sql`lower(coalesce(${restaurants.state}, ''))`, area),
+              ]),
+            ),
+          ),
+        )
+        .limit(250);
+      const publicCandidates =
+        await toPublicRestaurantListingArrayWithVisibility(
+          candidateRows.filter(
+            (row: any) =>
+              isPublicBusinessVisible(row) &&
+              !deriveProfileEvidenceQuarantineVisibility(row).isQuarantined,
+          ),
+        );
+      const leaderboard = await Promise.all(
+        publicCandidates.map(async (restaurant: any) => ({
+          restaurant,
+          rankingScore: await calculateRestaurantRankingScore(
+            String(restaurant.id),
+          ),
+        })),
+      );
+      res.json(
+        leaderboard
+          .sort((a, b) => b.rankingScore - a.rankingScore)
+          .slice(0, limit),
+      );
     } catch (error) {
       console.error("Error fetching leaderboard:", error);
       res.status(500).json({ message: "Failed to fetch leaderboard" });
     }
   });
 
-  app.get("/api/restaurants/:restaurantId/ranking-stats", async (req, res) => {
+  app.get("/api/restaurants/:restaurantId/ranking-stats", isAdmin, async (req, res) => {
     try {
       const restaurant = await storage.getRestaurant(req.params.restaurantId);
       if (!restaurant) {
@@ -1063,7 +1162,7 @@ export function registerAwardsRoutes(app: Express) {
     },
   );
 
-  app.get("/api/awards/history", async (req, res) => {
+  app.get("/api/awards/history", isAdmin, async (req, res) => {
     try {
       const query = await db
         .select()

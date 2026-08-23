@@ -6,6 +6,18 @@ import { insertDealSchema, insertDealViewSchema } from "@shared/schema";
 import {
   hasBusinessPermissionForRestaurant,
 } from "../services/businessTeamAccess";
+import { distributedRateLimit } from "../middleware/distributedRateLimit";
+import { projectPublicDealRows } from "../services/publicDealProjection";
+
+const publicDealViewLimiter = distributedRateLimit({
+  scope: "public-deal-view",
+  limit: 1,
+  windowMs: 5 * 60 * 1000,
+  key: (req) =>
+    `${String(req.params.dealId || "")}:${String(
+      (req as any).user?.id || (req as any).sessionID || req.ip || "anonymous",
+    )}`,
+});
 
 type DealManagementRouteDependencies = {
   logAudit: (
@@ -160,21 +172,16 @@ export function registerDealManagementRoutes(
     },
   );
 
-  app.post("/api/deals/:dealId/view", async (req: any, res) => {
+  app.post("/api/deals/:dealId/view", publicDealViewLimiter, async (req: any, res) => {
     try {
       const { dealId } = req.params;
       const userId = req.user?.id;
       const sessionId = req.sessionID;
 
       const deal = await storage.getDeal(dealId);
-      if (!deal) {
-        console.warn(
-          `[deals:view] deal not found for id ${dealId} - skipping view tracking`,
-        );
-        return res.json({
-          success: true,
-          message: "Deal not found; view skipped",
-        });
+      const [publicDeal] = deal ? await projectPublicDealRows([deal]) : [];
+      if (!publicDeal) {
+        return res.status(404).json({ message: "Deal not found" });
       }
 
       const hasRecentView = await storage.hasRecentDealView(
@@ -196,8 +203,8 @@ export function registerDealManagementRoutes(
         sessionId,
       });
 
-      const view = await storage.recordDealView(viewData);
-      res.json({ success: true, view });
+      await storage.recordDealView(viewData);
+      res.json({ success: true });
     } catch (error) {
       console.error("Error recording deal view:", error);
       res.status(500).json({ message: "Failed to record view" });

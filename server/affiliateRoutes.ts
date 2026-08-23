@@ -565,31 +565,16 @@ router.post('/submit-restaurant', async (req, res) => {
  * Check if a county has content (no affiliate auth needed)
  */
 router.get('/county/empty-check', async (req, res) => {
-  try {
-    const { county, state } = req.query;
-
-    if (!county || !state) {
-      return res.status(400).json({ error: 'County and state required' });
-    }
-
-    const isEmpty = await emptyCountyService.isCountyEmpty(
-      county as string,
-      state as string,
-    );
-
-    const metrics = await emptyCountyService.getCountyEngagementMetrics(
-      county as string,
-      state as string,
-    );
-
-    res.json({
-      isEmpty,
-      metrics,
-    });
-  } catch (error) {
-    console.error('Failed to check county:', error);
-    res.status(500).json({ error: 'Failed to check county' });
-  }
+  const county = encodeURIComponent(String(req.query.county || '').trim());
+  const state = encodeURIComponent(String(req.query.state || '').trim());
+  res.setHeader('Cache-Control', 'no-store');
+  return res.status(410).json({
+    error: 'This legacy county endpoint has been retired.',
+    replacementPath:
+      county && state
+        ? `/api/counties/${state}/${county}/empty-experience`
+        : '/api/counties/:state/:county/empty-experience',
+  });
 });
 
 /**
@@ -597,24 +582,16 @@ router.get('/county/empty-check', async (req, res) => {
  * Get content fallback chain for empty county
  */
 router.get('/county/fallback', async (req, res) => {
-  try {
-    const { county, state, category } = req.query;
-
-    if (!county || !state) {
-      return res.status(400).json({ error: 'County and state required' });
-    }
-
-    const content = await emptyCountyService.getCountyContentFallback(
-      county as string,
-      state as string,
-      category as string,
-    );
-
-    res.json(content);
-  } catch (error) {
-    console.error('Failed to fetch fallback content:', error);
-    res.status(500).json({ error: 'Failed to fetch content' });
-  }
+  const county = encodeURIComponent(String(req.query.county || '').trim());
+  const state = encodeURIComponent(String(req.query.state || '').trim());
+  res.setHeader('Cache-Control', 'no-store');
+  return res.status(410).json({
+    error: 'This legacy county endpoint has been retired.',
+    replacementPath:
+      county && state
+        ? `/api/counties/${state}/${county}/fallback`
+        : '/api/counties/:state/:county/fallback',
+  });
 });
 
 export default router;

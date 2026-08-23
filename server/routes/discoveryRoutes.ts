@@ -1,6 +1,6 @@
 import type { Express } from "express";
 import { db } from "../db";
-import { cities, eventBookings, events, hosts, restaurants, truckManualSchedules } from "@shared/schema";
+import { cities, eventBookings, events, hosts, restaurants, truckManualSchedules, users } from "@shared/schema";
 import { and, eq, gte, ilike, inArray, isNotNull, lte, or, sql } from "drizzle-orm";
 import { buildSlotDateTimes, intervalOverlaps, resolveTimeIntent, type TimeIntent } from "../services/timeIntent";
 import { getPublicSlotGateConfigFromEnv, isSlotPublic, type PublicSlot } from "../services/publicSlotGate";
@@ -8,6 +8,10 @@ import { resolveCityTimeZone, usStateToTimeZone } from "../services/cityTimeZone
 import { dateKeyInZone } from "../services/dateKeys";
 import { assertPublicResponseSafe } from "../publicProfiles";
 import { isTruckOperatingPlanRowPublic } from "../services/truckOperatingPlan";
+import { resolvePublicProfileVisibility } from "../publicProfiles/publicProfileUtils";
+import { resolvePublicHostProximityCoordinates } from "../services/publicHostProximityProjection";
+import { deriveProfileEvidenceQuarantineVisibility } from "../services/profileEvidenceQuarantine";
+import { isPublicBusinessVisible } from "../utils/publicBusinessVisibility";
 
 type TimeKey = "now" | "breakfast" | "lunch" | "dinner" | "tonight" | "this-weekend";
 
@@ -80,6 +84,7 @@ export function registerDiscoveryRoutes(app: Express) {
         1,
         Math.min(30, Number.parseInt(String(req.query.days || "14"), 10) || 14),
       );
+      const cuisineContributionLimit = Math.max(200, limit * 50);
       const since = new Date(Date.now() - windowDays * 24 * 60 * 60 * 1000);
 
       const [itemResult, cuisineResult, placeResult, signalResult] =
@@ -105,9 +110,15 @@ export function registerDiscoveryRoutes(app: Express) {
               m.image_url as "imageUrl",
               m.restaurant_id as "restaurantId",
               r.name as "restaurantName",
+              r.address as "restaurantAddress",
               r.city as "restaurantCity",
               r.state as "restaurantState",
               r.cuisine_type as "cuisineType",
+              r.description as "restaurantDescription",
+              r.phone as "restaurantPhone",
+              restaurant_owner.email as "restaurantEmail",
+              r.website_url as "restaurantWebsiteUrl",
+              r.raw_data as "restaurantRawData",
               r.logo_url as "restaurantLogoUrl",
               r.cover_image_url as "restaurantCoverImageUrl",
               mi.clicks,
@@ -123,9 +134,12 @@ export function registerDiscoveryRoutes(app: Express) {
             inner join menu_items m on m.id = mi.item_id
             inner join menus menu on menu.id = m.menu_id
             inner join restaurants r on r.id = m.restaurant_id
+            inner join users restaurant_owner on restaurant_owner.id = r.owner_id
             where m.is_available = true
               and menu.is_active = true
+              and m.price_cents > 0
               and r.is_active = true
+              and restaurant_owner.is_disabled = false
               and m.name !~* '^(extra|add[-\s]?on|side of|upgrade|substitut)'
             order by "trendScore" desc, mi.last_seen_at desc
             limit ${limit}
@@ -133,47 +147,65 @@ export function registerDiscoveryRoutes(app: Express) {
           db.execute(sql`
             with cuisine_items as (
               select
+                r.id as restaurant_id,
                 coalesce(nullif(trim(r.cuisine_type), ''), 'Local food') as cuisine,
                 count(distinct m.id)::int as menu_items,
-                count(distinct r.id)::int as places,
                 max(m.updated_at) as last_menu_update
               from menu_items m
               inner join menus menu on menu.id = m.menu_id
               inner join restaurants r on r.id = m.restaurant_id
+              inner join users restaurant_owner on restaurant_owner.id = r.owner_id
               where m.is_available = true
                 and menu.is_active = true
+                and m.price_cents > 0
                 and r.is_active = true
-              group by coalesce(nullif(trim(r.cuisine_type), ''), 'Local food')
+                and restaurant_owner.is_disabled = false
+              group by r.id, coalesce(nullif(trim(r.cuisine_type), ''), 'Local food')
             ),
             cuisine_interest as (
               select
+                r.id as restaurant_id,
                 coalesce(nullif(trim(r.cuisine_type), ''), 'Local food') as cuisine,
                 count(*) filter (where te.event_name = 'menu_item_click')::int as clicks,
                 count(*) filter (where te.event_name = 'menu_item_impression')::int as impressions
               from telemetry_events te
               inner join menu_items m on m.id = nullif(te.properties->>'itemId', '')
+              inner join menus menu on menu.id = m.menu_id
               inner join restaurants r on r.id = m.restaurant_id
+              inner join users restaurant_owner on restaurant_owner.id = r.owner_id
               where te.created_at >= ${since}
                 and te.event_name in ('menu_item_click', 'menu_item_impression')
-              group by coalesce(nullif(trim(r.cuisine_type), ''), 'Local food')
+                and m.is_available = true
+                and menu.is_active = true
+                and m.price_cents > 0
+                and r.is_active = true
+                and restaurant_owner.is_disabled = false
+              group by r.id, coalesce(nullif(trim(r.cuisine_type), ''), 'Local food')
             )
             select
+              ci.restaurant_id as "restaurantId",
               ci.cuisine,
               ci.menu_items as "menuItems",
-              ci.places,
+              ci.last_menu_update as "lastMenuUpdate",
               coalesce(cx.clicks, 0) as clicks,
               coalesce(cx.impressions, 0) as impressions,
-              (
-                coalesce(cx.clicks, 0) * 10
-                + least(coalesce(cx.impressions, 0), 100)
-                + least(ci.menu_items, 40)
-                + least(ci.places, 20) * 2
-                + case when ci.last_menu_update >= ${since} then 10 else 0 end
-              )::int as "trendScore"
+              r.name as "restaurantName",
+              r.address as "restaurantAddress",
+              r.city as "restaurantCity",
+              r.state as "restaurantState",
+              r.cuisine_type as "restaurantCuisineType",
+              r.description as "restaurantDescription",
+              r.phone as "restaurantPhone",
+              restaurant_owner.email as "restaurantEmail",
+              r.website_url as "restaurantWebsiteUrl",
+              r.raw_data as "restaurantRawData"
             from cuisine_items ci
-            left join cuisine_interest cx on cx.cuisine = ci.cuisine
-            order by "trendScore" desc, ci.places desc
-            limit ${limit}
+            inner join restaurants r on r.id = ci.restaurant_id
+            inner join users restaurant_owner on restaurant_owner.id = r.owner_id
+            left join cuisine_interest cx
+              on cx.restaurant_id = ci.restaurant_id and cx.cuisine = ci.cuisine
+            order by coalesce(cx.clicks, 0) desc, ci.menu_items desc
+            limit ${cuisineContributionLimit}
           `),
           db.execute(sql`
             with restaurant_interest as (
@@ -188,18 +220,22 @@ export function registerDiscoveryRoutes(app: Express) {
               group by nullif(properties->>'restaurantId', '')
             ),
             video_counts as (
-              select restaurant_id, count(*)::int as video_recommendations
-              from video_stories
-              where created_at >= ${since}
-                and restaurant_id is not null
-                and status = 'ready'
-                and is_approved = true
-                and deleted_at is null
-              group by restaurant_id
+              select story.restaurant_id, count(*)::int as video_recommendations
+              from video_stories story
+              inner join users story_owner on story_owner.id = story.user_id
+              where story.created_at >= ${since}
+                and story.restaurant_id is not null
+                and story.status = 'ready'
+                and story.is_approved = true
+                and story.deleted_at is null
+                and story.expires_at >= now()
+                and story_owner.is_disabled = false
+              group by story.restaurant_id
             )
             select
               r.id,
               r.name,
+              r.address as "profileAddress",
               r.city,
               r.state,
               r.cuisine_type as "cuisineType",
@@ -207,6 +243,11 @@ export function registerDiscoveryRoutes(app: Express) {
               r.cover_image_url as "coverImageUrl",
               r.business_type as "businessType",
               r.is_food_truck as "isFoodTruck",
+              r.description,
+              r.phone as "profilePhone",
+              restaurant_owner.email as "profileEmail",
+              r.website_url as "profileWebsiteUrl",
+              r.raw_data as "rawData",
               coalesce(ri.clicks, 0) as clicks,
               coalesce(ri.events, 0) as events,
               coalesce(vc.video_recommendations, 0) as "videoRecommendations",
@@ -217,9 +258,11 @@ export function registerDiscoveryRoutes(app: Express) {
                 + least(coalesce(r.ranking_score, 0), 200) / 10
               )::int as "trendScore"
             from restaurants r
+            inner join users restaurant_owner on restaurant_owner.id = r.owner_id
             left join restaurant_interest ri on ri.restaurant_id = r.id
             left join video_counts vc on vc.restaurant_id = r.id
             where r.is_active = true
+              and restaurant_owner.is_disabled = false
               and (
                 coalesce(ri.events, 0) > 0
                 or coalesce(vc.video_recommendations, 0) > 0
@@ -241,12 +284,145 @@ export function registerDiscoveryRoutes(app: Express) {
           `),
         ]);
 
+      const publicTrendingItems = rowsOf(itemResult).flatMap((row: any) => {
+        if (
+          !isPublicBusinessVisible({
+            name: row.restaurantName,
+            city: row.restaurantCity,
+            state: row.restaurantState,
+            cuisineType: row.cuisineType,
+            description: row.restaurantDescription,
+            address: row.restaurantAddress,
+          }) ||
+          deriveProfileEvidenceQuarantineVisibility({
+            name: row.restaurantName,
+            address: row.restaurantAddress,
+            city: row.restaurantCity,
+            state: row.restaurantState,
+            cuisineType: row.cuisineType,
+            description: row.restaurantDescription,
+            phone: row.restaurantPhone,
+            email: row.restaurantEmail,
+            websiteUrl: row.restaurantWebsiteUrl,
+            rawData: row.restaurantRawData,
+          }).isQuarantined
+        ) {
+          return [];
+        }
+        const {
+          restaurantDescription: _restaurantDescription,
+          restaurantAddress: _restaurantAddress,
+          restaurantPhone: _restaurantPhone,
+          restaurantEmail: _restaurantEmail,
+          restaurantWebsiteUrl: _restaurantWebsiteUrl,
+          restaurantRawData: _restaurantRawData,
+          ...publicRow
+        } = row;
+        return [publicRow];
+      });
+      const cuisineTotals = new Map<
+        string,
+        {
+          cuisine: string;
+          menuItems: number;
+          places: number;
+          clicks: number;
+          impressions: number;
+          hasRecentMenuUpdate: boolean;
+        }
+      >();
+      rowsOf(cuisineResult).forEach((row: any) => {
+        if (
+          !isPublicBusinessVisible({
+            name: row.restaurantName,
+            address: row.restaurantAddress,
+            city: row.restaurantCity,
+            state: row.restaurantState,
+            cuisineType: row.restaurantCuisineType,
+            description: row.restaurantDescription,
+          }) ||
+          deriveProfileEvidenceQuarantineVisibility({
+            name: row.restaurantName,
+            address: row.restaurantAddress,
+            city: row.restaurantCity,
+            state: row.restaurantState,
+            cuisineType: row.restaurantCuisineType,
+            description: row.restaurantDescription,
+            phone: row.restaurantPhone,
+            email: row.restaurantEmail,
+            websiteUrl: row.restaurantWebsiteUrl,
+            rawData: row.restaurantRawData,
+          }).isQuarantined
+        ) {
+          return;
+        }
+        const cuisine = String(row.cuisine || "Local food").trim() || "Local food";
+        const current = cuisineTotals.get(cuisine) || {
+          cuisine,
+          menuItems: 0,
+          places: 0,
+          clicks: 0,
+          impressions: 0,
+          hasRecentMenuUpdate: false,
+        };
+        current.menuItems += Math.max(0, Number(row.menuItems) || 0);
+        current.places += 1;
+        current.clicks += Math.max(0, Number(row.clicks) || 0);
+        current.impressions += Math.max(0, Number(row.impressions) || 0);
+        const lastMenuUpdate = new Date(row.lastMenuUpdate || 0).getTime();
+        current.hasRecentMenuUpdate ||=
+          Number.isFinite(lastMenuUpdate) && lastMenuUpdate >= since.getTime();
+        cuisineTotals.set(cuisine, current);
+      });
+      const publicTrendingCuisines = Array.from(cuisineTotals.values())
+        .map(({ hasRecentMenuUpdate, ...row }) => ({
+          ...row,
+          trendScore:
+            row.clicks * 10 +
+            Math.min(row.impressions, 100) +
+            Math.min(row.menuItems, 40) +
+            Math.min(row.places, 20) * 2 +
+            (hasRecentMenuUpdate ? 10 : 0),
+        }))
+        .sort(
+          (left, right) =>
+            right.trendScore - left.trendScore || right.places - left.places,
+        )
+        .slice(0, limit);
+      const publicTrendingPlaces = rowsOf(placeResult).flatMap((row: any) => {
+        if (
+          !isPublicBusinessVisible({
+            ...row,
+            address: row.profileAddress,
+          }) ||
+          deriveProfileEvidenceQuarantineVisibility({
+            ...row,
+            address: row.profileAddress,
+            phone: row.profilePhone,
+            email: row.profileEmail,
+            websiteUrl: row.profileWebsiteUrl,
+          }).isQuarantined
+        ) {
+          return [];
+        }
+        const {
+          rawData: _rawData,
+          description: _description,
+          profileAddress: _profileAddress,
+          profilePhone: _profilePhone,
+          profileEmail: _profileEmail,
+          profileWebsiteUrl: _profileWebsiteUrl,
+          ...publicRow
+        } = row;
+        return [publicRow];
+      });
+
       sendPublicJson(res, {
         generatedAt: new Date().toISOString(),
         windowDays,
-        items: rowsOf(itemResult),
-        cuisines: rowsOf(cuisineResult),
-        places: rowsOf(placeResult),
+        items: publicTrendingItems,
+        cuisines: publicTrendingCuisines,
+        places: publicTrendingPlaces,
         signals: rowsOf(signalResult),
       });
     } catch (error) {
@@ -278,24 +454,36 @@ export function registerDiscoveryRoutes(app: Express) {
       const cityLike = `%${cityName}%`;
       const stateAbbr = String(city.state || "").trim();
 
-      const hostRows = await db
+      const candidateHostRows = await db
         .select({
           id: hosts.id,
           businessName: hosts.businessName,
           city: hosts.city,
           state: hosts.state,
           address: hosts.address,
-          latitude: hosts.latitude,
-          longitude: hosts.longitude,
+          publicProfileSettings: users.publicProfileSettings,
         })
         .from(hosts)
+        .innerJoin(users, eq(hosts.userId, users.id))
         .where(
           and(
-            or(ilike(hosts.city, cityLike), ilike(hosts.address, cityLike)),
+            ilike(hosts.city, cityLike),
             stateAbbr ? ilike(hosts.state, stateAbbr.toUpperCase()) : undefined,
+            eq(users.isDisabled, false),
           ),
         )
         .limit(2000);
+
+      const hostRows = candidateHostRows.filter(
+        (host: any) =>
+          resolvePublicProfileVisibility(host.publicProfileSettings)
+            .showAddress &&
+          isPublicBusinessVisible({
+            name: host.businessName,
+            city: host.city,
+            state: host.state,
+          }),
+      );
 
       const hostIds = hostRows.map((h: any) => String(h.id));
 
@@ -315,15 +503,22 @@ export function registerDiscoveryRoutes(app: Express) {
                 updatedAt: eventBookings.updatedAt,
                 truckId: restaurants.id,
                 truckName: restaurants.name,
+                truckAddress: restaurants.address,
                 cuisineType: restaurants.cuisineType,
                 truckCity: restaurants.city,
                 truckState: restaurants.state,
+                truckDescription: restaurants.description,
+                truckPhone: restaurants.phone,
+                truckEmail: users.email,
+                truckWebsiteUrl: restaurants.websiteUrl,
+                truckRawData: restaurants.rawData,
                 logoUrl: restaurants.logoUrl,
                 coverImageUrl: restaurants.coverImageUrl,
               })
               .from(eventBookings)
               .innerJoin(events, eq(eventBookings.eventId, events.id))
               .innerJoin(restaurants, eq(eventBookings.truckId, restaurants.id))
+              .innerJoin(users, eq(restaurants.ownerId, users.id))
               .where(
                 and(
                   eq(eventBookings.status, "confirmed"),
@@ -331,6 +526,7 @@ export function registerDiscoveryRoutes(app: Express) {
                   inArray(events.hostId, hostIds),
                   inArray(events.status, ["open", "booked", "filled"]),
                   eq(restaurants.isActive, true),
+                  eq(users.isDisabled, false),
                   or(
                     eq(restaurants.isFoodTruck, true),
                     inArray(restaurants.businessType, [
@@ -371,14 +567,21 @@ export function registerDiscoveryRoutes(app: Express) {
           status: truckManualSchedules.status,
           isPublic: truckManualSchedules.isPublic,
           truckName: restaurants.name,
+          truckAddress: restaurants.address,
           cuisineType: restaurants.cuisineType,
           truckCity: restaurants.city,
           truckState: restaurants.state,
+          truckDescription: restaurants.description,
+          truckPhone: restaurants.phone,
+          truckEmail: users.email,
+          truckWebsiteUrl: restaurants.websiteUrl,
+          truckRawData: restaurants.rawData,
           logoUrl: restaurants.logoUrl,
           coverImageUrl: restaurants.coverImageUrl,
         })
         .from(truckManualSchedules)
         .innerJoin(restaurants, eq(truckManualSchedules.truckId, restaurants.id))
+        .innerJoin(users, eq(restaurants.ownerId, users.id))
         .where(
           and(
             eq(truckManualSchedules.isPublic, true),
@@ -386,6 +589,7 @@ export function registerDiscoveryRoutes(app: Express) {
             gte(truckManualSchedules.date, windowStart),
             lte(truckManualSchedules.date, windowEnd),
             eq(restaurants.isActive, true),
+            eq(users.isDisabled, false),
             or(
               eq(restaurants.isFoodTruck, true),
               inArray(restaurants.businessType, [
@@ -416,6 +620,29 @@ export function registerDiscoveryRoutes(app: Express) {
       }> = [];
 
       for (const row of eventRows as any[]) {
+        if (
+          !isPublicBusinessVisible({
+            name: row.truckName,
+            city: row.truckCity,
+            state: row.truckState,
+            cuisineType: row.cuisineType,
+            description: row.truckDescription,
+          }) ||
+          deriveProfileEvidenceQuarantineVisibility({
+            name: row.truckName,
+            address: row.truckAddress,
+            city: row.truckCity,
+            state: row.truckState,
+            cuisineType: row.cuisineType,
+            description: row.truckDescription,
+            phone: row.truckPhone,
+            email: row.truckEmail,
+            websiteUrl: row.truckWebsiteUrl,
+            rawData: row.truckRawData,
+          }).isQuarantined
+        ) {
+          continue;
+        }
         const host = hostById.get(String(row.hostId));
         items.push({
           kind: "booking",
@@ -433,6 +660,29 @@ export function registerDiscoveryRoutes(app: Express) {
       }
 
       for (const row of manualRows as any[]) {
+        if (
+          !isPublicBusinessVisible({
+            name: row.truckName,
+            city: row.truckCity,
+            state: row.truckState,
+            cuisineType: row.cuisineType,
+            description: row.truckDescription,
+          }) ||
+          deriveProfileEvidenceQuarantineVisibility({
+            name: row.truckName,
+            address: row.truckAddress,
+            city: row.truckCity,
+            state: row.truckState,
+            cuisineType: row.cuisineType,
+            description: row.truckDescription,
+            phone: row.truckPhone,
+            email: row.truckEmail,
+            websiteUrl: row.truckWebsiteUrl,
+            rawData: row.truckRawData,
+          }).isQuarantined
+        ) {
+          continue;
+        }
         if (
           !isTruckOperatingPlanRowPublic(
             {
@@ -574,7 +824,7 @@ export function registerDiscoveryRoutes(app: Express) {
 
       const trucks = Array.from(byTruck.values()).sort((a, b) => a.name.localeCompare(b.name));
 
-      res.setHeader("Cache-Control", "public, max-age=60");
+      res.setHeader("Cache-Control", "no-store");
       sendPublicJson(res, {
         city: { name: city.name, slug: city.slug, state: city.state || null },
         timeKey,
@@ -610,9 +860,11 @@ export function registerDiscoveryRoutes(app: Express) {
           latitude: hosts.latitude,
           longitude: hosts.longitude,
           updatedAt: hosts.updatedAt,
+          publicProfileSettings: users.publicProfileSettings,
         })
         .from(hosts)
-        .where(eq(hosts.id, hostId))
+        .innerJoin(users, eq(hosts.userId, users.id))
+        .where(and(eq(hosts.id, hostId), eq(users.isDisabled, false)))
         .limit(1);
 
       if (!host) return res.status(404).json({ message: "Location not found" });
@@ -638,11 +890,20 @@ export function registerDiscoveryRoutes(app: Express) {
           updatedAt: eventBookings.updatedAt,
           truckId: restaurants.id,
           truckName: restaurants.name,
+          truckAddress: restaurants.address,
           cuisineType: restaurants.cuisineType,
+          truckCity: restaurants.city,
+          truckState: restaurants.state,
+          truckDescription: restaurants.description,
+          truckPhone: restaurants.phone,
+          truckEmail: users.email,
+          truckWebsiteUrl: restaurants.websiteUrl,
+          truckRawData: restaurants.rawData,
         })
         .from(eventBookings)
         .innerJoin(events, eq(eventBookings.eventId, events.id))
         .innerJoin(restaurants, eq(eventBookings.truckId, restaurants.id))
+        .innerJoin(users, eq(restaurants.ownerId, users.id))
         .where(
           and(
             eq(eventBookings.status, "confirmed"),
@@ -650,6 +911,7 @@ export function registerDiscoveryRoutes(app: Express) {
             eq(events.hostId, hostId),
             inArray(events.status, ["open", "booked", "filled"]),
             eq(restaurants.isActive, true),
+            eq(users.isDisabled, false),
             or(
               eq(restaurants.isFoodTruck, true),
               inArray(restaurants.businessType, [
@@ -685,6 +947,29 @@ export function registerDiscoveryRoutes(app: Express) {
       >();
 
       for (const row of rows as any[]) {
+        if (
+          !isPublicBusinessVisible({
+            name: row.truckName,
+            city: row.truckCity,
+            state: row.truckState,
+            cuisineType: row.cuisineType,
+            description: row.truckDescription,
+          }) ||
+          deriveProfileEvidenceQuarantineVisibility({
+            name: row.truckName,
+            address: row.truckAddress,
+            city: row.truckCity,
+            state: row.truckState,
+            cuisineType: row.cuisineType,
+            description: row.truckDescription,
+            phone: row.truckPhone,
+            email: row.truckEmail,
+            websiteUrl: row.truckWebsiteUrl,
+            rawData: row.truckRawData,
+          }).isQuarantined
+        ) {
+          continue;
+        }
         const dt = buildSlotDateTimes({
           timeZone,
           date: new Date(row.date),
@@ -750,17 +1035,25 @@ export function registerDiscoveryRoutes(app: Express) {
       }
 
       const trucks = Array.from(byTruck.values()).sort((a, b) => a.name.localeCompare(b.name));
+      const hostVisibility = resolvePublicProfileVisibility(
+        host.publicProfileSettings,
+      );
+      const publicHostCoordinates = resolvePublicHostProximityCoordinates({
+        latitude: host.latitude,
+        longitude: host.longitude,
+        publicProfileSettings: host.publicProfileSettings,
+      });
 
-      res.setHeader("Cache-Control", "public, max-age=60");
+      res.setHeader("Cache-Control", "no-store");
       sendPublicJson(res, {
         location: {
           id: host.id,
           name: host.businessName,
-          address: host.address,
+          address: hostVisibility.showAddress ? host.address : null,
           city: host.city,
           state: host.state,
-          latitude: host.latitude ?? null,
-          longitude: host.longitude ?? null,
+          latitude: publicHostCoordinates?.latitude ?? null,
+          longitude: publicHostCoordinates?.longitude ?? null,
           locationPath: `/location/${encodeURIComponent(makeEntitySlug(host.businessName, host.id))}`,
         },
         timeKey,
@@ -799,12 +1092,16 @@ export function registerDiscoveryRoutes(app: Express) {
           cuisineType: restaurants.cuisineType,
           city: restaurants.city,
           state: restaurants.state,
+          description: restaurants.description,
+          rawData: restaurants.rawData,
           updatedAt: restaurants.updatedAt,
         })
         .from(restaurants)
+        .innerJoin(users, eq(restaurants.ownerId, users.id))
         .where(
           and(
             eq(restaurants.isActive, true),
+            eq(users.isDisabled, false),
             or(
               eq(restaurants.isFoodTruck, true),
               inArray(restaurants.businessType, [
@@ -815,14 +1112,21 @@ export function registerDiscoveryRoutes(app: Express) {
                 "mobile_food_vendor",
               ]),
             ),
-            or(ilike(restaurants.city, cityLike), ilike(restaurants.address, cityLike)),
+            ilike(restaurants.city, cityLike),
             or(ilike(restaurants.cuisineType, cuisineLike), ilike(restaurants.name, cuisineLike)),
           ),
         )
         .limit(2000);
 
       const trucks = rows
-        .map((row: any) => ({
+        .flatMap((row: any) => {
+          if (
+            !isPublicBusinessVisible(row) ||
+            deriveProfileEvidenceQuarantineVisibility(row).isQuarantined
+          ) {
+            return [];
+          }
+          return [{
           id: row.id,
           name: row.name,
           cuisineType: row.cuisineType || null,
@@ -830,10 +1134,11 @@ export function registerDiscoveryRoutes(app: Express) {
           state: row.state || null,
           truckPath: `/truck/${encodeURIComponent(makeEntitySlug(row.name, row.id))}`,
           updatedAt: row.updatedAt ? new Date(row.updatedAt).toISOString() : null,
-        }))
+          }];
+        })
         .sort((a: any, b: any) => a.name.localeCompare(b.name));
 
-      res.setHeader("Cache-Control", "public, max-age=300");
+      res.setHeader("Cache-Control", "no-store");
       sendPublicJson(res, {
         city: { name: city.name, slug: city.slug, state: city.state || null },
         cuisine: { slug: cuisineSlug, label: cuisineSlug.replace(/-/g, " ") },

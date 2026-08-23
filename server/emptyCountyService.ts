@@ -127,7 +127,10 @@ export async function submitRestaurant(
     return {
       success: false,
       message: "This restaurant has already been submitted",
-      submission: existing,
+      submission: {
+        id: existing.id,
+        status: existing.status || "pending",
+      },
     };
   }
 
@@ -153,7 +156,10 @@ export async function submitRestaurant(
     success: true,
     message:
       "Restaurant submitted! Our team will review and contact the owner.",
-    submission: submission[0],
+    submission: {
+      id: submission[0].id,
+      status: submission[0].status || "pending",
+    },
   };
 }
 
