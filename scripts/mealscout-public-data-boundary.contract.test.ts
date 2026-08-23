@@ -29,6 +29,10 @@ import {
 } from "../server/publicProfiles/publicProfileUtils";
 import { extractIdFromSlug } from "../client/src/lib/seo-slug";
 import { assessParkingPassTruckEligibility } from "../server/services/parkingPassTruckEligibility";
+import {
+  loadEligiblePage,
+  publicStoryFeedRateLimitKey,
+} from "../server/utils/eligiblePagination";
 
 // --- Runtime: forbidden fields must never survive the DTO ---------------
 
@@ -328,6 +332,77 @@ for (const key of forbiddenRestaurantKeys) {
     `toPublicRestaurantListingArray must strip "${key}"`,
   );
 }
+
+const revocableListingNow = Date.now();
+const revocableListing = {
+  id: "rest-revocable",
+  ownerId: "owner-revocable",
+  name: "Revocable Truck",
+  address: "456 Current Stop",
+  phone: "555-0111",
+  websiteUrl: "https://revocable.example.invalid",
+  businessType: "food_truck",
+  isFoodTruck: true,
+  latitude: "30.41",
+  longitude: "-87.21",
+  mobileOnline: true,
+  liveBroadcasting: true,
+  currentLatitude: "30.42",
+  currentLongitude: "-87.22",
+  lastBroadcastAt: new Date(revocableListingNow).toISOString(),
+  liveUntilAt: new Date(revocableListingNow + 60_000).toISOString(),
+  locationSource: "owner_gps",
+  rawData: {
+    profileLocations: { addressKind: "operating_location" },
+  },
+};
+const visibleListing = toPublicRestaurantListingArray(
+  [revocableListing],
+  new Map([
+    [
+      "owner-revocable",
+      { showAddress: true, showContact: true, ownerEnabled: true },
+    ],
+  ]),
+)[0] as any;
+assert.equal(visibleListing.address, "456 Current Stop");
+assert.equal(visibleListing.phone, "555-0111");
+assert.equal(visibleListing.currentLatitude, 30.42);
+assert.equal(visibleListing.currentLongitude, -87.22);
+
+const hiddenListing = toPublicRestaurantListingArray(
+  [
+    {
+      ...revocableListing,
+      mobileOnline: false,
+      liveBroadcasting: false,
+    },
+  ],
+  new Map([
+    [
+      "owner-revocable",
+      { showAddress: false, showContact: false, ownerEnabled: true },
+    ],
+  ]),
+)[0] as any;
+assert.equal(hiddenListing.address, null);
+assert.equal(hiddenListing.phone, null);
+assert.equal(hiddenListing.websiteUrl, null);
+assert.equal(hiddenListing.currentLatitude, null);
+assert.equal(hiddenListing.currentLongitude, null);
+assert.deepEqual(
+  toPublicRestaurantListingArray(
+    [revocableListing],
+    new Map([
+      [
+        "owner-revocable",
+        { showAddress: true, showContact: true, ownerEnabled: false },
+      ],
+    ]),
+  ),
+  [],
+  "a second projection must drop the listing immediately after owner authority is revoked",
+);
 
 const forbiddenEventKeys = [
   "coordinatorUserId",
@@ -845,10 +920,64 @@ const sliceAfter = (source: string, marker: string, span = 400): string => {
   return source.slice(index, index + span);
 };
 
+const menuRoutesSource = readSource("server/routes/menuRoutes.ts");
+const publicMenuParent = sliceAfter(
+  menuRoutesSource,
+  "async function loadPublicMenuParent",
+  1300,
+);
 assert.match(
-  sliceAfter(restaurantRoutesSource, 'app.get("/api/restaurants/:id"'),
-  /res\.json\(toPublicRestaurantListing\(restaurant\)\)/,
-  "GET /api/restaurants/:id must return the sanitized restaurant DTO",
+  publicMenuParent,
+  /restaurant\.isActive !== true[\s\S]*isPublicBusinessVisible\(restaurant\)[\s\S]*deriveProfileEvidenceQuarantineVisibility\(restaurant\)\.isQuarantined[\s\S]*toPublicRestaurantListingWithVisibility\(restaurant\)[\s\S]*publicRestaurant as any\)\?\.id/,
+  "Every public menu sibling must share active, enabled-owner, visible, evidence-safe parent authority",
+);
+const publicMenuStart = menuRoutesSource.indexOf('"/api/menus/:restaurantId"');
+const publicMenuEnd = menuRoutesSource.indexOf(
+  '"/api/owner/restaurants/:restaurantId/ordering-readiness"',
+  publicMenuStart,
+);
+assert.ok(publicMenuStart >= 0 && publicMenuEnd > publicMenuStart);
+const publicMenuRoute = menuRoutesSource.slice(publicMenuStart, publicMenuEnd);
+assert.match(
+  publicMenuRoute,
+  /Cache-Control", "no-store"[\s\S]*loadPublicMenuParent\(restaurantId\)[\s\S]*toPublicOrderingReadiness\(/,
+  "Public menus must re-check parent authority and expose only customer readiness",
+);
+assert.match(publicMenuRoute, /toPublicMenuItem\(/);
+assert.doesNotMatch(
+  publicMenuRoute,
+  /\.\.\.(?:menu|item|cat)\b/,
+  "Public menu responses must not spread raw menu, item, category, inventory, or import rows",
+);
+const featuredMenuItemRoute = sliceAfter(
+  menuRoutesSource,
+  '"/api/restaurants/:restaurantId/featured-item"',
+  6200,
+);
+assert.match(
+  featuredMenuItemRoute,
+  /Cache-Control", "no-store"[\s\S]*loadPublicMenuParent\(restaurantId\)[\s\S]*gt\(menuItems\.priceCents, 0\)[\s\S]*eq\(menus\.isActive, true\)/,
+  "Featured menu items must be current, priced children of a public parent",
+);
+const publicMenuPhotosRoute = sliceAfter(
+  menuRoutesSource,
+  '"/api/menu-items/:menuItemId/photos/public"',
+  2600,
+);
+assert.match(
+  publicMenuPhotosRoute,
+  /Cache-Control", "no-store"[\s\S]*itemParent\.menuActive !== true[\s\S]*loadPublicMenuParent\([\s\S]*eq\(users\.isDisabled, false\)/,
+  "Public menu photos must inherit menu, restaurant, owner, and evidence authority",
+);
+
+assert.match(
+  sliceAfter(
+    restaurantRoutesSource,
+    'app.get("/api/restaurants/:id"',
+    1000,
+  ),
+  /publicRestaurant\s*=\s*[\s\S]*await toPublicRestaurantListingWithVisibility\(restaurant\)[\s\S]*!\(publicRestaurant as any\)\?\.id[\s\S]*status\(404\)[\s\S]*res\.json\(publicRestaurant\)/,
+  "GET /api/restaurants/:id must fail closed and return only the sanitized restaurant DTO",
 );
 {
   const searchHandler = sliceAfter(
@@ -858,7 +987,7 @@ assert.match(
   );
   assert.match(
     searchHandler,
-    /toPublicRestaurantListingArray\(\s*filteredRestaurants\.slice\(\s*0\s*,\s*RESTAURANT_SEARCH_RESULT_LIMIT\s*\)\s*,?\s*\)/,
+    /toPublicRestaurantListingArrayWithVisibility\(restaurants\)[\s\S]*filteredRestaurants\.slice\(0, RESTAURANT_SEARCH_RESULT_LIMIT\)/,
     "GET /api/restaurants/search must return sanitized, count-bounded restaurant DTOs",
   );
   assert.match(
@@ -873,13 +1002,17 @@ assert.match(
   );
 }
 assert.match(
-  sliceAfter(restaurantRoutesSource, 'app.get("/api/restaurants/nearby/:lat/:lng"'),
-  /res\.json\(toPublicRestaurantListingArray\(restaurants\)\)/,
+  sliceAfter(
+    restaurantRoutesSource,
+    'app.get("/api/restaurants/nearby/:lat/:lng"',
+    1800,
+  ),
+  /toPublicRestaurantListingArrayWithVisibility\([\s\S]*filterProjectedPublicNearbyRestaurantRows\(/,
   "GET /api/restaurants/nearby must return sanitized restaurant DTOs",
 );
 assert.match(
   sliceAfter(restaurantRoutesSource, 'app.get("/api/restaurants/public"', 14000),
-  /res\.json\(toPublicRestaurantListingArray\(sorted\.slice/,
+  /toPublicRestaurantListingArrayWithVisibility\(activeRestaurants\)[\s\S]*res\.json\(sorted\.slice/,
   "GET /api/restaurants/public must return sanitized restaurant DTOs",
 );
 assert.doesNotMatch(
@@ -906,7 +1039,7 @@ assert.match(
     'app.get("/api/restaurants/subscribed/:lat/:lng"',
     6500,
   ),
-  /toPublicRestaurantListing\(sanitizeRestaurantMedia\(restaurant\)\)/,
+  /deriveProfileEvidenceQuarantineVisibility\(restaurant\)[\s\S]*toPublicRestaurantListingArrayWithVisibility\(\s*canonicalPublicRows/,
   "GET /api/restaurants/subscribed must return sanitized restaurant DTOs",
 );
 
@@ -1054,8 +1187,8 @@ assert.match(
 );
 assert.match(
   publicEventDetailRoute,
-  /authorizedPaidDetail \? "private, no-store" : "public, max-age=60"/,
-  "authorized paid event detail must never enter a public cache",
+  /res\.setHeader\("Cache-Control", "no-store"\)/,
+  "revocable public and authorized paid event detail must never enter a cache",
 );
 assert.match(
   publicEventDetailRoute,
@@ -1070,7 +1203,7 @@ assert.match(
 const paidEventBookingRoute = sliceAfter(
   eventRoutesSource,
   '"/api/events/:eventId/book"',
-  9000,
+  15000,
 );
 assert.match(
   paidEventBookingRoute,
@@ -1189,6 +1322,266 @@ assert.match(
   /toPublicRestaurantReviewArray/,
   "GET /api/reviews/restaurant/:restaurantId must return public review DTOs",
 );
+
+const storiesRoutesSource = readSource("server/storiesRoutes.ts");
+const eligiblePaginationFixture = [
+  { id: "eligible-a", eligible: true },
+  { id: "hidden-a", eligible: false },
+  { id: "eligible-b", eligible: true },
+  { id: "hidden-b", eligible: false },
+  { id: "hidden-c", eligible: false },
+  { id: "eligible-c", eligible: true },
+  { id: "eligible-d", eligible: true },
+  { id: "hidden-d", eligible: false },
+  { id: "eligible-e", eligible: true },
+  { id: "eligible-f", eligible: true },
+];
+const loadEligiblePaginationFixture = async (offset: number, limit: number) =>
+  eligiblePaginationFixture.slice(offset, offset + limit);
+const firstEligiblePage = await loadEligiblePage({
+  offset: 0,
+  limit: 3,
+  batchSize: 2,
+  maxBatches: 10,
+  loadBatch: loadEligiblePaginationFixture,
+  isEligible: (item) => item.eligible,
+});
+const secondEligiblePage = await loadEligiblePage({
+  offset: 3,
+  limit: 3,
+  batchSize: 2,
+  maxBatches: 10,
+  loadBatch: loadEligiblePaginationFixture,
+  isEligible: (item) => item.eligible,
+});
+assert.deepEqual(
+  firstEligiblePage.items.map((item) => item.id),
+  ["eligible-a", "eligible-b", "eligible-c"],
+  "the first story page must paginate the eligible sequence",
+);
+assert.equal(firstEligiblePage.hasMore, true);
+assert.deepEqual(
+  secondEligiblePage.items.map((item) => item.id),
+  ["eligible-d", "eligible-e", "eligible-f"],
+  "the next story page must neither repeat nor skip eligible rows",
+);
+assert.equal(secondEligiblePage.hasMore, false);
+let adversarialBatchCalls = 0;
+const boundedAdversarialPage = await loadEligiblePage({
+  offset: 1_000_000,
+  limit: 3,
+  batchSize: 2,
+  maxBatches: 4,
+  loadBatch: async () => {
+    adversarialBatchCalls += 1;
+    return [
+      { id: `hidden-${adversarialBatchCalls}-a`, eligible: false },
+      { id: `hidden-${adversarialBatchCalls}-b`, eligible: false },
+    ];
+  },
+  isEligible: (item) => item.eligible,
+});
+assert.equal(
+  adversarialBatchCalls,
+  4,
+  "adversarial eligible offsets must not cause unbounded database batches",
+);
+assert.equal(boundedAdversarialPage.scanLimitReached, true);
+assert.deepEqual(boundedAdversarialPage.items, []);
+assert.equal(
+  publicStoryFeedRateLimitKey({
+    ip: "203.0.113.10",
+    sessionId: "anonymous-session-a",
+  }),
+  publicStoryFeedRateLimitKey({
+    ip: "203.0.113.10",
+    sessionId: "anonymous-session-b",
+  }),
+  "cookie-less sessions from the same IP must share the story feed limiter identity",
+);
+assert.notEqual(
+  publicStoryFeedRateLimitKey({
+    userId: "user-a",
+    ip: "203.0.113.10",
+  }),
+  publicStoryFeedRateLimitKey({
+    userId: "user-b",
+    ip: "203.0.113.10",
+  }),
+  "authenticated story feed traffic must remain attributable per user",
+);
+assert.match(
+  storiesRoutesSource,
+  /const loadPublicEngageableStory[\s\S]*publicStoryPublicationWhere\(sql`NOW\(\)`\)[\s\S]*isPublicStoryAssociationEligible\(story\)/,
+  "every public story engagement mutation must share current publication and association authority",
+);
+for (const storyMutationRoute of [
+  "app.post('/api/stories/:storyId/like'",
+  "'/api/stories/:storyId/comments'",
+  "app.post('/api/stories/:storyId/view'",
+  "app.post('/api/stories/:storyId/share'",
+]) {
+  assert.match(
+    sliceAfter(storiesRoutesSource, storyMutationRoute, 3000),
+    /loadPublicEngageableStory\(storyId\)/,
+    `story mutation must fail closed through public authority: ${storyMutationRoute}`,
+  );
+}
+assert.match(
+  sliceAfter(storiesRoutesSource, "app.post('/api/stories/:storyId/view'", 3000),
+  /storyViewLimiter[\s\S]*Number\.isFinite\(watchDuration\)[\s\S]*watchDuration < 3/,
+  "story views must be rate-limited and require a real three-second watch",
+);
+const publicStoryDetailRoute = sliceAfter(
+  storiesRoutesSource,
+  "app.get('/api/stories/:storyId'",
+  9500,
+);
+for (const requiredStoryBoundary of [
+  "publicStoryPublicationWhere(publicStoryNow)",
+  "eq(users.isDisabled, false)",
+  "isPublicBusinessVisible(restaurant[0])",
+  "toPublicRestaurantListingWithVisibility(restaurant[0], db)",
+  "projectPublicStoryRow(story[0]",
+]) {
+  assert.ok(
+    publicStoryDetailRoute.includes(requiredStoryBoundary),
+    `anonymous story detail boundary missing: ${requiredStoryBoundary}`,
+  );
+}
+const publicStoryFeedRoute = sliceAfter(
+  storiesRoutesSource,
+  "app.get('/api/stories/feed'",
+  14000,
+);
+assert.match(
+  publicStoryFeedRoute,
+  /publicStoryPublicationWhere\(sql`NOW\(\)`\)[\s\S]*eq\(users\.isDisabled, false\)[\s\S]*isPublicStoryAssociationEligible\(row\)[\s\S]*projectPublicStoryRow\(story\)/,
+  "anonymous story feed must gate moderation state and return only the public story DTO",
+);
+assert.match(
+  publicStoryFeedRoute,
+  /communityOffset = page \* communityPageSize[\s\S]*loadEligiblePage<any>\([\s\S]*offset: communityOffset[\s\S]*hasMore: communityPage\.hasMore/,
+  "story feed pagination must offset and report continuation after association eligibility",
+);
+assert.match(
+  publicStoryFeedRoute,
+  /storyFeedLimiter[\s\S]*STORY_FEED_MAX_PAGE[\s\S]*STORY_FEED_MAX_SCAN_BATCHES[\s\S]*scanLimitReached/,
+  "anonymous story feed work must be rate-limited and bounded by page and scan budgets",
+);
+assert.match(
+  publicStoryFeedRoute,
+  /featuredStoryIds[\s\S]*!featuredStoryIds\.has\(String\(row\.id\)\)/,
+  "featured stories must not repeat in the community page",
+);
+const videoDetailSource = readSource("client/src/pages/video-detail.tsx");
+assert.match(
+  videoDetailSource,
+  /onTimeUpdate[\s\S]*currentTarget\.played[\s\S]*recordQualifiedView\(watchDuration\)/,
+  "story detail must wait for three seconds of played media before claiming the view limiter key",
+);
+assert.match(
+  videoDetailSource,
+  /body: JSON\.stringify\(\{ watchDuration: Math\.floor\(watchDuration\) \}\)/,
+  "story detail must send the qualified watch duration to the view endpoint",
+);
+const publicUserStoriesRoute = sliceAfter(
+  storiesRoutesSource,
+  "app.get('/api/stories/user/:userId'",
+  3000,
+);
+assert.match(
+  publicUserStoriesRoute,
+  /publicStoryPublicationWhere\(sql`NOW\(\)`\)[\s\S]*eq\(users\.isDisabled, false\)[\s\S]*isPublicStoryAssociationEligible\(row\)[\s\S]*projectPublicStoryRow/,
+  "anonymous per-user story feed must gate public eligibility and return only the public story DTO",
+);
+const serverIndexSource = readSource("server/index.ts");
+assert.match(
+  serverIndexSource,
+  /req\.path\.startsWith\("\/api\/"\)[\s\S]*Cache-Control", "no-store, max-age=0"/,
+  "revocable API projections must be no-store by default",
+);
+const publicVideoSsrRoute = sliceAfter(
+  serverIndexSource,
+  'app.get("/video/:storyId"',
+  12000,
+);
+for (const requiredVideoSsrBoundary of [
+  "encodeURIComponent(storyId)",
+  "publicStoryPublicationWhere(new Date())",
+  "projectPublicStoryRow(storyRows[0])",
+  "isPublicBusinessVisible(restaurantRows[0])",
+  "toPublicRestaurantListingWithVisibility(restaurantRows[0], db)",
+  'set("X-Robots-Tag", "noindex, nofollow")',
+  "escapeHtml(canonical)",
+]) {
+  assert.ok(
+    publicVideoSsrRoute.includes(requiredVideoSsrBoundary),
+    `public video SSR boundary missing: ${requiredVideoSsrBoundary}`,
+  );
+}
+assert.doesNotMatch(
+  publicVideoSsrRoute,
+  /href="\$\{canonicalBaseUrl\}\/video\/\$\{storyId\}"/,
+  "public video SSR must not interpolate a raw path parameter into HTML",
+);
+assert.doesNotMatch(
+  publicStoryDetailRoute,
+  /story:\s*story\[0\]|restaurant:\s*restaurant\?\.\[0\]/,
+  "anonymous story detail must never return raw story or restaurant rows",
+);
+
+const dealManagementRoutesSource = readSource(
+  "server/routes/dealManagementRoutes.ts",
+);
+const publicDealViewRoute = sliceAfter(
+  dealManagementRoutesSource,
+  'app.post("/api/deals/:dealId/view"',
+  2500,
+);
+assert.match(
+  publicDealViewRoute,
+  /publicDealViewLimiter[\s\S]*projectPublicDealRows\(\[deal\]\)[\s\S]*if \(!publicDeal\)[\s\S]*status\(404\)/,
+  "deal views must require a current canonically public deal and abuse control",
+);
+assert.doesNotMatch(
+  publicDealViewRoute,
+  /res\.json\(\{ success: true, view \}\)/,
+  "public deal view tracking must not return its stored analytics row",
+);
+
+const awardCalculationsSource = readSource("server/awardCalculations.ts");
+for (const requiredAwardInputGate of [
+  "getUserPublishedVideoRecommendations",
+  "publicStoryPublicationWhere(sql`NOW()`)",
+  "isPublicStoryAssociationEligible(row)",
+  "currentPublicDeals",
+  "vs.is_approved = true",
+  "vs.expires_at >= now()",
+  "story_creator.is_disabled = false",
+]) {
+  assert.ok(
+    awardCalculationsSource.includes(requiredAwardInputGate),
+    `award calculation input gate missing: ${requiredAwardInputGate}`,
+  );
+}
+for (const forbiddenStoryDetailField of [
+  "passwordHash",
+  "AccessToken",
+  "stripeCustomerId",
+  "stripeSubscriptionId",
+  "accountSettings",
+  "publicProfileSettings: users.publicProfileSettings",
+  "rawData",
+  "ownerId",
+  "contactPhone",
+]) {
+  assert.equal(
+    publicStoryDetailRoute.includes(forbiddenStoryDetailField),
+    false,
+    `anonymous story detail must not select or serialize ${forbiddenStoryDetailField}`,
+  );
+}
 
 const publicMapRoutesSource = readSource("server/routes/publicMapRoutes.ts");
 assert.match(

@@ -1,7 +1,37 @@
 import type { Express } from "express";
 import { db } from "../../db";
-import { supplierProducts, suppliers } from "@shared/schema";
+import { supplierProducts, suppliers, users } from "@shared/schema";
 import { and, desc, eq } from "drizzle-orm";
+import {
+  toPublicSupplierListing,
+  toPublicSupplierListingArray,
+} from "../../publicProfiles/toPublicSupplierListing";
+
+const publicSupplierSelect = {
+  id: suppliers.id,
+  businessName: suppliers.businessName,
+  address: suppliers.address,
+  city: suppliers.city,
+  state: suppliers.state,
+  latitude: suppliers.latitude,
+  longitude: suppliers.longitude,
+  contactPhone: suppliers.contactPhone,
+  contactEmail: suppliers.contactEmail,
+  isActive: suppliers.isActive,
+  onlinePaymentsEnabled: suppliers.onlinePaymentsEnabled,
+  onlinePaymentsAllowAch: suppliers.onlinePaymentsAllowAch,
+  onlinePaymentsAllowCard: suppliers.onlinePaymentsAllowCard,
+  onlinePaymentsMinOrderCents: suppliers.onlinePaymentsMinOrderCents,
+  onlinePaymentsNotes: suppliers.onlinePaymentsNotes,
+  offersDelivery: suppliers.offersDelivery,
+  deliveryRadiusMiles: suppliers.deliveryRadiusMiles,
+  deliveryFeeCents: suppliers.deliveryFeeCents,
+  deliveryMinOrderCents: suppliers.deliveryMinOrderCents,
+  deliveryNotes: suppliers.deliveryNotes,
+  updatedAt: suppliers.updatedAt,
+  ownerDisabled: users.isDisabled,
+  publicProfileSettings: users.publicProfileSettings,
+};
 
 export function registerSupplierCatalogRoutes(app: Express) {
   // Public listing (used by the Supply Marketplace).
@@ -9,39 +39,14 @@ export function registerSupplierCatalogRoutes(app: Express) {
   app.get("/api/suppliers", async (_req: any, res) => {
     try {
       const rows = await db
-        .select({
-          id: suppliers.id,
-          businessName: suppliers.businessName,
-          address: suppliers.address,
-          city: suppliers.city,
-          state: suppliers.state,
-          latitude: suppliers.latitude,
-          longitude: suppliers.longitude,
-          contactPhone: suppliers.contactPhone,
-          contactEmail: suppliers.contactEmail,
-          isActive: suppliers.isActive,
-          onlinePaymentsEnabled: suppliers.onlinePaymentsEnabled,
-          onlinePaymentsAllowAch: suppliers.onlinePaymentsAllowAch,
-          onlinePaymentsAllowCard: suppliers.onlinePaymentsAllowCard,
-          onlinePaymentsMinOrderCents: suppliers.onlinePaymentsMinOrderCents,
-          onlinePaymentsNotes: suppliers.onlinePaymentsNotes,
-          offersDelivery: suppliers.offersDelivery,
-          deliveryRadiusMiles: suppliers.deliveryRadiusMiles,
-          deliveryFeeCents: suppliers.deliveryFeeCents,
-          deliveryMinOrderCents: suppliers.deliveryMinOrderCents,
-          deliveryNotes: suppliers.deliveryNotes,
-          createdAt: suppliers.createdAt,
-          updatedAt: suppliers.updatedAt,
-        })
+        .select(publicSupplierSelect)
         .from(suppliers)
-        .where(eq(suppliers.isActive, true))
+        .innerJoin(users, eq(suppliers.userId, users.id))
+        .where(and(eq(suppliers.isActive, true), eq(users.isDisabled, false)))
         .orderBy(desc(suppliers.updatedAt))
         .limit(200);
-      res.setHeader(
-        "Cache-Control",
-        "public, max-age=60, s-maxage=300, stale-while-revalidate=600",
-      );
-      res.json(rows);
+      res.setHeader("Cache-Control", "no-store");
+      res.json(toPublicSupplierListingArray(rows));
     } catch (error) {
       console.error("Error listing suppliers:", error);
       res.status(500).json({ message: "Failed to load suppliers" });
@@ -54,39 +59,21 @@ export function registerSupplierCatalogRoutes(app: Express) {
       if (!supplierId) return res.status(400).json({ message: "Supplier ID required" });
 
       const [row] = await db
-        .select({
-          id: suppliers.id,
-          businessName: suppliers.businessName,
-          address: suppliers.address,
-          city: suppliers.city,
-          state: suppliers.state,
-          latitude: suppliers.latitude,
-          longitude: suppliers.longitude,
-          contactPhone: suppliers.contactPhone,
-          contactEmail: suppliers.contactEmail,
-          isActive: suppliers.isActive,
-          onlinePaymentsEnabled: suppliers.onlinePaymentsEnabled,
-          onlinePaymentsAllowAch: suppliers.onlinePaymentsAllowAch,
-          onlinePaymentsAllowCard: suppliers.onlinePaymentsAllowCard,
-          onlinePaymentsMinOrderCents: suppliers.onlinePaymentsMinOrderCents,
-          onlinePaymentsNotes: suppliers.onlinePaymentsNotes,
-          offersDelivery: suppliers.offersDelivery,
-          deliveryRadiusMiles: suppliers.deliveryRadiusMiles,
-          deliveryFeeCents: suppliers.deliveryFeeCents,
-          deliveryMinOrderCents: suppliers.deliveryMinOrderCents,
-          deliveryNotes: suppliers.deliveryNotes,
-          createdAt: suppliers.createdAt,
-          updatedAt: suppliers.updatedAt,
-        })
+        .select(publicSupplierSelect)
         .from(suppliers)
-        .where(and(eq(suppliers.id, supplierId), eq(suppliers.isActive, true)))
+        .innerJoin(users, eq(suppliers.userId, users.id))
+        .where(
+          and(
+            eq(suppliers.id, supplierId),
+            eq(suppliers.isActive, true),
+            eq(users.isDisabled, false),
+          ),
+        )
         .limit(1);
-      if (!row) return res.status(404).json({ message: "Supplier not found" });
-      res.setHeader(
-        "Cache-Control",
-        "public, max-age=60, s-maxage=300, stale-while-revalidate=600",
-      );
-      res.json(row);
+      const publicRow = toPublicSupplierListing(row);
+      if (!publicRow) return res.status(404).json({ message: "Supplier not found" });
+      res.setHeader("Cache-Control", "no-store");
+      res.json(publicRow);
     } catch (error) {
       console.error("Error loading supplier:", error);
       res.status(500).json({ message: "Failed to load supplier" });
@@ -97,6 +84,22 @@ export function registerSupplierCatalogRoutes(app: Express) {
     try {
       const supplierId = String(req.params.supplierId || "").trim();
       if (!supplierId) return res.status(400).json({ message: "Supplier ID required" });
+
+      const [supplier] = await db
+        .select(publicSupplierSelect)
+        .from(suppliers)
+        .innerJoin(users, eq(suppliers.userId, users.id))
+        .where(
+          and(
+            eq(suppliers.id, supplierId),
+            eq(suppliers.isActive, true),
+            eq(users.isDisabled, false),
+          ),
+        )
+        .limit(1);
+      if (!toPublicSupplierListing(supplier)) {
+        return res.status(404).json({ message: "Supplier not found" });
+      }
 
       const rows = await db
         .select({
@@ -117,10 +120,7 @@ export function registerSupplierCatalogRoutes(app: Express) {
         .where(and(eq(supplierProducts.supplierId, supplierId), eq(supplierProducts.isActive, true)))
         .orderBy(desc(supplierProducts.updatedAt))
         .limit(500);
-      res.setHeader(
-        "Cache-Control",
-        "public, max-age=60, s-maxage=300, stale-while-revalidate=600",
-      );
+      res.setHeader("Cache-Control", "no-store");
       res.json(rows);
     } catch (error) {
       console.error("Error listing supplier products:", error);

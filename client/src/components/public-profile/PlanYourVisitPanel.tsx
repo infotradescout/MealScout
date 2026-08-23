@@ -28,13 +28,8 @@ export function PlanYourVisitPanel({ profile }: PlanYourVisitPanelProps) {
   const facebook = String(profile.socialLinks?.facebookPageUrl || "").trim();
   const xUrl = String(profile.socialLinks?.xUrl || "").trim();
 
-  const hasCoords =
-    typeof profile.latitude === "number" && typeof profile.longitude === "number";
-  const directionsHref = hasCoords
-    ? `https://maps.google.com/?q=${profile.latitude},${profile.longitude}`
-    : address
-      ? `https://maps.google.com/?q=${encodeURIComponent(address)}`
-      : null;
+  const directionsHref =
+    profile.cta.find((action) => action.type === "map")?.href || null;
 
   const hasAnyData = Boolean(address || phone || website || directionsHref);
   if (!hasAnyData) return null;

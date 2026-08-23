@@ -5,24 +5,24 @@ import { Card, CardContent } from "@/components/ui/card";
 
 const rows = [
   {
-    label: "Marketplace philosophy",
-    mealscout: "Fair community-driven ranking for public local profiles.",
-    legacy: "Traditional listing economics can prioritize paid marketplace positioning.",
+    label: "Current scope",
+    mealscout: "Local profiles, menus, discovery, and limited eligibility-gated ASAP pickup by card.",
+    legacy: "A mature restaurant marketplace with pickup and courier delivery.",
   },
   {
-    label: "Signals that matter",
-    mealscout: "Recommendations, follows, favorites, active deals, location relevance.",
-    legacy: "Ranking mix may include variables less visible to local operators.",
+    label: "Delivery",
+    mealscout: "No native courier-delivery network is promised today.",
+    legacy: "Courier delivery is a core customer capability.",
   },
   {
-    label: "Small business outcomes",
-    mealscout: "Encourages growth via reputation and consistency.",
-    legacy: "Visibility may require more budget pressure for sustained placement.",
+    label: "Pickup checkout",
+    mealscout: "Available only for a claimed, verified, open, locatable merchant with priced available items and card-payout readiness.",
+    legacy: "Ordering availability follows Grubhub marketplace coverage.",
   },
   {
-    label: "Discovery + ordering fit",
-    mealscout: "Unified surface for profile trust, deal activity, and menu intent.",
-    legacy: "Ordering-driven experience with less local trust transparency.",
+    label: "Honest comparison",
+    mealscout: "An early local discovery product with a narrow pickup transaction path.",
+    legacy: "MealScout does not currently match its marketplace breadth or delivery operations.",
   },
 ];
 
@@ -30,8 +30,8 @@ export default function CompareGrubhubPage() {
   return (
     <div className="page">
       <SEOHead
-        title="MealScout vs Grubhub | Transparent Local Food Ranking"
-        description="Compare MealScout and Grubhub. See how MealScout promotes local operators with trust signals instead of pay-to-top placement."
+        title="MealScout vs Grubhub | Discovery and Pickup Scope"
+        description="MealScout is a local discovery product with limited verified pickup checkout, not a Grubhub-scale delivery marketplace."
         canonicalUrl="https://www.mealscout.us/compare/grubhub"
       />
       <section className="section section--full border-b border-[color:var(--border-subtle)] py-6">
@@ -43,8 +43,9 @@ export default function CompareGrubhubPage() {
             MealScout vs Grubhub
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            MealScout ranks based on community trust and local fit, so small
-            businesses are not forced into pay-to-play placement.
+            This is a scope comparison, not a parity claim. MealScout does not
+            currently match Grubhub&apos;s merchant coverage, ordering breadth,
+            or courier-delivery operations.
           </p>
         </div>
       </section>

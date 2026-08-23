@@ -1,0 +1,3 @@
+ALTER TABLE pickup_orders
+  ADD COLUMN IF NOT EXISTS mealscout_fee_cents INTEGER NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS processing_fee_cents INTEGER NOT NULL DEFAULT 0;

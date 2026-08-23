@@ -67,5 +67,16 @@ export function isLikelyTestBusiness(listing: BusinessListingLike): boolean {
 }
 
 export function isPublicBusinessVisible(listing: BusinessListingLike): boolean {
-  return !isLikelyTestBusiness(listing);
+  // Public membership must not be decided by a hidden street address. Owners
+  // may legitimately keep that field private, and address text such as
+  // "Sample Road" or "Testing Street" is not evidence that the business
+  // identity itself is synthetic. Address evidence remains available to
+  // explicit internal hygiene/reporting callers through isLikelyTestBusiness.
+  return !isLikelyTestBusiness({
+    name: listing.name,
+    cuisineType: listing.cuisineType,
+    description: listing.description,
+    city: listing.city,
+    state: listing.state,
+  });
 }

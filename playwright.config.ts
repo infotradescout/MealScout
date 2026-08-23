@@ -14,6 +14,11 @@ export default defineConfig({
         url: frontendUrl,
         reuseExistingServer: true,
         timeout: 120_000,
+        env: {
+          VITE_STRIPE_PUBLIC_KEY:
+            process.env.VITE_STRIPE_PUBLIC_KEY ||
+            "pk_test_ordering_truth_fixture",
+        },
       },
   use: {
     baseURL: frontendUrl,

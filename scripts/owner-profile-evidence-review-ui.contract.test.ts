@@ -46,7 +46,7 @@ for (const snippet of [
   'button-correct-evidence-phone\")).toBeDisabled()',
   'button-decline-evidence-phone\")).toBeEnabled()',
   'proposalId: PHONE_ID,\n    action: "decline"',
-  'getByLabel("About your business")',
+  'getByRole("textbox", { name: /^About your business/ })',
   '"Owner-corrected public description."',
   "profileWrites: () => profileWrites",
   'description: "Owner-corrected public description."',

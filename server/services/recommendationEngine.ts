@@ -14,12 +14,17 @@ import {
 import { db } from "../db";
 import { storage } from "../storage";
 import { getPrivateBehaviorScoresForRestaurants } from "./privateBehaviorScoreService";
-import { events, hosts, restaurants } from "@shared/schema";
+import { events, hosts, restaurants, users } from "@shared/schema";
 import { loadConfirmedEventTrucks } from "./confirmedEventTrucks";
 import { resolveCityTimeZoneSync } from "./cityTimeZone";
 import { buildSlotDateTimes } from "./timeIntent";
 import { dateKeyInZone } from "./dateKeys";
 import { isSlotPublic } from "./publicSlotGate";
+import { toPublicRestaurantListingArrayWithVisibility } from "../publicProfiles/toPublicRestaurantListingWithVisibility";
+import { filterProjectedPublicNearbyRestaurantRows } from "./publicRestaurantSearchProjection";
+import { resolvePublicHostProximityCoordinates } from "./publicHostProximityProjection";
+import { deriveProfileEvidenceQuarantineVisibility } from "./profileEvidenceQuarantine";
+import { isPublicBusinessVisible } from "../utils/publicBusinessVisibility";
 
 export type RecommendationEntityType =
   | "truck"
@@ -173,9 +178,13 @@ async function getRestaurantSignals(): Promise<
         coalesce(sum(vs.comment_count), 0)::int as story_comment_count,
         coalesce(sum(vs.share_count), 0)::int as story_share_count
       from video_stories vs
+      inner join users story_creator on story_creator.id = vs.user_id
       where vs.restaurant_id is not null
         and vs.status = 'ready'
+        and vs.is_approved = true
         and vs.deleted_at is null
+        and vs.expires_at >= now()
+        and story_creator.is_disabled = false
       group by vs.restaurant_id
     )
     select
@@ -190,6 +199,7 @@ async function getRestaurantSignals(): Promise<
       coalesce(story_engagement.story_comment_count, 0) as "storyCommentCount",
       coalesce(story_engagement.story_share_count, 0) as "storyShareCount"
     from restaurants r
+    inner join users restaurant_owner on restaurant_owner.id = r.owner_id
     left join recs on recs.restaurant_id = r.id
     left join reacts on reacts.restaurant_id = r.id
     left join shares on shares.restaurant_id = r.id
@@ -197,6 +207,7 @@ async function getRestaurantSignals(): Promise<
     left join follows on follows.restaurant_id = r.id
     left join story_engagement on story_engagement.restaurant_id = r.id
     where r.is_active = true
+      and restaurant_owner.is_disabled = false
   `);
 
   const map = new Map<string, RestaurantSignalRow>();
@@ -310,14 +321,17 @@ export async function buildLocalRecommendations(
   const limit = clamp(input.limit, 1, 80);
 
   const [
-    nearbyRestaurants,
+    activeRestaurantRows,
     activeDeals,
     liveTrucks,
     publicEvents,
     restaurantSignals,
     userSets,
   ] = await Promise.all([
-    storage.getNearbyRestaurants(lat, lng, radiusKm),
+    db
+      .select()
+      .from(restaurants)
+      .where(eq(restaurants.isActive, true)),
     storage.getActiveDeals(),
     storage.getLiveTrucksNearby(lat, lng, radiusKm),
     db
@@ -336,9 +350,12 @@ export async function buildLocalRecommendations(
         hostState: hosts.state,
         hostLat: hosts.latitude,
         hostLng: hosts.longitude,
+        hostUserId: hosts.userId,
+        hostPublicProfileSettings: users.publicProfileSettings,
       })
       .from(events)
       .innerJoin(hosts, eq(events.hostId, hosts.id))
+      .innerJoin(users, eq(hosts.userId, users.id))
       .where(
         and(
           isNotNull(events.hostId),
@@ -346,6 +363,7 @@ export async function buildLocalRecommendations(
           or(eq(events.requiresPayment, false), isNull(events.requiresPayment)),
           gte(events.date, new Date(Date.now() - 24 * 60 * 60 * 1000)),
           lte(events.date, new Date(Date.now() + 24 * 60 * 60 * 1000)),
+          eq(users.isDisabled, false),
         ),
       )
       .orderBy(desc(events.updatedAt))
@@ -353,6 +371,28 @@ export async function buildLocalRecommendations(
     getRestaurantSignals(),
     getUserRestaurantSets(input.userId),
   ]);
+  const publicRestaurantCandidates = (activeRestaurantRows as any[]).filter(
+    (restaurant) =>
+      isPublicBusinessVisible(restaurant) &&
+      !deriveProfileEvidenceQuarantineVisibility(restaurant).isQuarantined,
+  );
+  const nearbyRestaurants = filterProjectedPublicNearbyRestaurantRows(
+    await toPublicRestaurantListingArrayWithVisibility(
+      publicRestaurantCandidates,
+    ),
+    { userLat: lat, userLng: lng, radiusKm },
+  );
+  const publicLiveTrucks = (
+    await toPublicRestaurantListingArrayWithVisibility(
+      (liveTrucks as any[]).filter(
+        (truck) =>
+          !deriveProfileEvidenceQuarantineVisibility(truck).isQuarantined,
+      ),
+    )
+  ).filter(
+    (truck: any) =>
+      truck?.mobileOnline === true && isPublicBusinessVisible(truck),
+  );
   const confirmedTrucksByEvent = await loadConfirmedEventTrucks(
     (publicEvents as any[]).map((event) => String(event.id || "")),
   );
@@ -363,7 +403,7 @@ export async function buildLocalRecommendations(
         ...(nearbyRestaurants as any[]).map((restaurant: any) =>
           String(restaurant?.id || "").trim(),
         ),
-        ...(liveTrucks as any[]).map((truck: any) =>
+        ...(publicLiveTrucks as any[]).map((truck: any) =>
           String(truck?.id || "").trim(),
         ),
         ...(activeDeals as any[]).map((deal: any) =>
@@ -486,10 +526,17 @@ export async function buildLocalRecommendations(
     });
   }
 
-  for (const truck of liveTrucks as any[]) {
+  for (const truck of publicLiveTrucks as any[]) {
     const truckId = String(truck.id);
-    const latValue = toFiniteNumber(truck.latitude ?? truck.lat);
-    const lngValue = toFiniteNumber(truck.longitude ?? truck.lng);
+    const latValue = toFiniteNumber(
+      truck.currentLatitude ?? truck.current_latitude ?? truck.latitude ?? truck.lat,
+    );
+    const lngValue = toFiniteNumber(
+      truck.currentLongitude ??
+        truck.current_longitude ??
+        truck.longitude ??
+        truck.lng,
+    );
     if (latValue === null || lngValue === null) continue;
 
     const distanceMiles = milesBetween(lat, lng, latValue, lngValue);
@@ -546,7 +593,11 @@ export async function buildLocalRecommendations(
     const restaurantId = String(deal.restaurantId || "");
     if (!restaurantId || !nearbyRestaurantSet.has(restaurantId)) continue;
 
-    const reasons = dedupeReasons(["Deal today", "Open now"]);
+    const parentRestaurant = (nearbyRestaurants as any[]).find(
+      (restaurant: any) => String(restaurant?.id || "") === restaurantId,
+    );
+    const openNow = isRestaurantOpenNow(parentRestaurant);
+    const reasons = dedupeReasons(["Deal today", openNow ? "Open now" : ""]);
     const signals = restaurantSignals.get(restaurantId);
     const viewerFavorited = userSets.favorites.has(restaurantId);
     const viewerFollows = userSets.follows.has(restaurantId);
@@ -590,11 +641,28 @@ export async function buildLocalRecommendations(
   }
 
   for (const eventRow of publicEvents as any[]) {
+    if (
+      !isPublicBusinessVisible({
+        name: eventRow.hostName,
+        city: eventRow.hostCity,
+        state: eventRow.hostState,
+      })
+    ) {
+      continue;
+    }
     const eventId = String(eventRow.id);
-    const hostLat = toFiniteNumber(eventRow.hostLat);
-    const hostLng = toFiniteNumber(eventRow.hostLng);
-    if (hostLat === null || hostLng === null) continue;
-    const distanceMiles = milesBetween(lat, lng, hostLat, hostLng);
+    const hostCoordinates = resolvePublicHostProximityCoordinates({
+      latitude: eventRow.hostLat,
+      longitude: eventRow.hostLng,
+      publicProfileSettings: eventRow.hostPublicProfileSettings,
+    });
+    if (!hostCoordinates) continue;
+    const distanceMiles = milesBetween(
+      lat,
+      lng,
+      hostCoordinates.latitude,
+      hostCoordinates.longitude,
+    );
     if (!Number.isFinite(distanceMiles) || distanceMiles > radiusKm * 0.621371)
       continue;
     const timeZone = resolveCityTimeZoneSync({

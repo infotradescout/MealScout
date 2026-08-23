@@ -44,6 +44,8 @@ import {
   revokeRefreshTokensForAccessKey,
 } from "../services/ownerAiOAuth";
 import { handleOwnerAiMcpRequest } from "../services/ownerAiMcp";
+import { toPublicRestaurantListingWithVisibility } from "../publicProfiles/toPublicRestaurantListingWithVisibility";
+import { deriveProfileEvidenceQuarantineVisibility } from "../services/profileEvidenceQuarantine";
 
 type ConnectorRequest = Request & {
   ownerAiConnector?: OwnerAiConnectorPrincipal;
@@ -581,19 +583,26 @@ export function registerOwnerAiActionRoutes(app: Express) {
       }
       const restaurantId = parsedId.data.toLowerCase();
       const [profile] = await db
-        .select({ id: restaurants.id })
+        .select()
         .from(restaurants)
         .where(
           and(eq(restaurants.id, restaurantId), eq(restaurants.isActive, true)),
         )
         .limit(1);
-      if (!profile) {
+      const publicProfile = profile
+        ? await toPublicRestaurantListingWithVisibility(profile)
+        : null;
+      if (
+        !profile ||
+        !(publicProfile as any)?.id ||
+        deriveProfileEvidenceQuarantineVisibility(profile).isQuarantined
+      ) {
         return res
           .status(404)
           .json({ error: "MealScout profile target not found" });
       }
       const mcpUrl = ownerAiProfileMcpResourceUrl(restaurantId);
-      res.setHeader("Cache-Control", "public, max-age=300, s-maxage=900");
+      res.setHeader("Cache-Control", "no-store");
       res.setHeader(
         "Content-Security-Policy",
         "default-src 'none'; frame-ancestors 'none'; base-uri 'none'",

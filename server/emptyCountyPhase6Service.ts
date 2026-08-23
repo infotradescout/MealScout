@@ -10,16 +10,52 @@
 
 import { db } from './db';
 import { restaurants } from '@shared/schema';
-import { eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
+import { toPublicRestaurantListingArrayWithVisibility } from './publicProfiles/toPublicRestaurantListingWithVisibility';
+import { isPublicBusinessVisible } from './utils/publicBusinessVisibility';
+
+const normalizedArea = (value: unknown) =>
+  String(value || '').trim().toLowerCase().slice(0, 100);
+
+async function loadPublicRestaurantsForArea(input: {
+  state: string;
+  county?: string;
+  limit: number;
+}) {
+  const state = normalizedArea(input.state);
+  const county = normalizedArea(input.county);
+  if (!state) return [];
+  const rows = await db
+    .select()
+    .from(restaurants)
+    .where(
+      and(
+        eq(restaurants.isActive, true),
+        eq(sql`lower(coalesce(${restaurants.state}, ''))`, state),
+        county
+          ? eq(sql`lower(coalesce(${restaurants.countyName}, ''))`, county)
+          : undefined,
+      ),
+    )
+    .limit(Math.max(input.limit, 100));
+  return (
+    await toPublicRestaurantListingArrayWithVisibility(
+      rows.filter((row: any) => isPublicBusinessVisible(row)),
+    )
+  ).slice(0, input.limit);
+}
 
 /**
  * Check if a county is empty (has no restaurants)
  */
 export async function isCountyEmpty(county: string, state: string): Promise<boolean> {
   try {
-    const result = await db.select().from(restaurants).limit(1);
-
-    return !result;
+    const result = await loadPublicRestaurantsForArea({
+      county,
+      state,
+      limit: 1,
+    });
+    return result.length === 0;
   } catch (error) {
     console.error('[emptyCountyService] Error checking if county is empty:', error);
     return true; // Assume empty if we can't check
@@ -85,12 +121,25 @@ export async function getEmptyCountyExperience(county: string, state: string) {
  */
 export async function getNearbyCountyFallback(county: string, state: string) {
   try {
-    // For MVP, just get any restaurants from the same state as fallback
-    const nearbyRestaurants = await db.select().from(restaurants).limit(10);
+    // This endpoint promises a state-wide fallback. It must never substitute
+    // arbitrary national rows or expose raw restaurant records.
+    const stateRestaurants = await loadPublicRestaurantsForArea({
+      state,
+      limit: 25,
+    });
+    const requestedCounty = normalizedArea(county);
+    const nearbyRestaurants = stateRestaurants
+      .filter(
+        (restaurant: any) =>
+          normalizedArea(restaurant.countyName) !== requestedCounty,
+      )
+      .slice(0, 10);
 
     return {
-      fallbackType: 'state_wide',
-      message: `Showing restaurants from across ${state}`,
+      fallbackType: nearbyRestaurants.length ? 'state_wide' : 'empty',
+      message: nearbyRestaurants.length
+        ? `Showing restaurants from across ${state}`
+        : `No public restaurants are available elsewhere in ${state} yet.`,
       restaurants: nearbyRestaurants,
     };
   } catch (error) {

@@ -1,6 +1,15 @@
 import crypto from "crypto";
 import type { Express } from "express";
-import { and, desc, eq, gte, inArray, isNull, or, sql } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  gte,
+  inArray,
+  isNull,
+  or,
+  sql,
+} from "drizzle-orm";
 import { isAuthenticated, isStaffOrAdmin } from "../../unifiedAuth";
 import { storage } from "../../storage";
 import { registerDealAdminRoutes } from "./dealsRoutes";
@@ -41,6 +50,11 @@ import {
 } from "@shared/schema";
 import { getBusinessAccessContext } from "../../services/businessTeamAccess";
 import { resolveUniqueCleanBusinessPathForEntity } from "../../publicProfiles/publicBusinessSlugResolver";
+import {
+  buildRestaurantOrderingAuthorityRevocation,
+  buildRestaurantOwnerTransferReset,
+} from "../../services/restaurantOrderingAuthorityReset";
+import { lockRestaurantForOwnerTransfer } from "../../services/restaurantOwnerTransferSafety";
 
 type DenyStaffEdits = (req: any, res: any) => boolean;
 type RequireAdminUser = (req: any, res: any) => boolean;
@@ -140,13 +154,48 @@ export function registerUserAdminRoutes(
           });
         }
 
-        await db
-          .update(restaurants)
-          .set({
-            ownerId: userId,
-            updatedAt: new Date(),
-          })
-          .where(eq(restaurants.id, restaurantId));
+        const transfer = await db.transaction(async (tx: any) => {
+          const safety = await lockRestaurantForOwnerTransfer(tx, {
+            restaurantId,
+            nextOwnerId: userId,
+          });
+          if (safety.outcome !== "ready") return safety;
+
+          const [attachedRestaurant] = await tx
+            .update(restaurants)
+            .set({
+              ownerId: userId,
+              ...(safety.ownerChanged
+                ? buildRestaurantOwnerTransferReset()
+                : {}),
+              updatedAt: new Date(),
+            })
+            .where(eq(restaurants.id, restaurantId))
+            .returning();
+          return {
+            outcome: "attached",
+            restaurant: attachedRestaurant,
+            previousOwnerId: safety.restaurant.ownerId || null,
+          } as const;
+        });
+        if (transfer.outcome === "missing") {
+          return res.status(404).json({ message: "Restaurant not found" });
+        }
+        if (transfer.outcome === "active_order") {
+          return res.status(409).json({
+            code: "ACTIVE_ORDER_HANDOFF_REQUIRED",
+            message:
+              "Finish or cancel every active customer order before transferring this business.",
+            orderId: transfer.orderId,
+            orderStatus: transfer.orderStatus,
+          });
+        }
+        if (!transfer.restaurant) {
+          return res.status(409).json({
+            message:
+              "Business ownership changed before this attachment could be saved. Refresh and retry.",
+          });
+        }
 
         const accessContext = await getBusinessAccessContext(userId);
         await logAudit(
@@ -158,7 +207,7 @@ export function registerUserAdminRoutes(
           String(req.get("user-agent") || ""),
           {
             attachedUserId: userId,
-            previousOwnerId: restaurant.ownerId || null,
+            previousOwnerId: transfer.previousOwnerId,
             restaurantId,
           },
         );
@@ -167,7 +216,7 @@ export function registerUserAdminRoutes(
           success: true,
           userId,
           restaurantId,
-          previousOwnerId: restaurant.ownerId || null,
+          previousOwnerId: transfer.previousOwnerId,
           accessContext,
         });
       } catch (error: any) {
@@ -2243,6 +2292,13 @@ export function registerUserAdminRoutes(
             delete updates[key];
           }
         });
+
+        if (updates.isVerified === false) {
+          Object.assign(
+            updates,
+            buildRestaurantOrderingAuthorityRevocation(),
+          );
+        }
 
         const updated = await storage.updateRestaurant(
           req.params.id,

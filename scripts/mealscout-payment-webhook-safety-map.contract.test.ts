@@ -188,7 +188,7 @@ for (const retiredRecurringBehavior of [
   '"/api/pickup-orders"',
   "paymentMethod: z.enum([\"card\", \"cash\"])",
   "stripe.paymentIntents.create",
-  "automatic_payment_methods",
+  'payment_method_types: ["card"]',
   "stripeTransferGroupId",
   '"/api/pickup-orders/by-intent/:paymentIntentId"',
 ].forEach((snippet) => requireIncludes(pickupOrderRoutes, snippet, `pickup payment snippet ${snippet}`));

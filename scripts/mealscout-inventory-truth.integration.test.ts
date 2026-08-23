@@ -15,7 +15,9 @@ function requireDisposableDatabase() {
   assert.equal(process.env[OPT_IN], "1", `${OPT_IN}=1 is required`);
   assert.match(String(process.env[BRANCH] || ""), /^br-/);
   const databaseUrl = String(process.env.DATABASE_URL || "").trim();
-  const expectedHost = String(process.env[HOST] || "").trim().toLowerCase();
+  const expectedHost = String(process.env[HOST] || "")
+    .trim()
+    .toLowerCase();
   assert.ok(databaseUrl, "DATABASE_URL is required");
   assert.ok(expectedHost, `${HOST} is required`);
   assert.equal(new URL(databaseUrl).hostname.toLowerCase(), expectedHost);
@@ -35,8 +37,13 @@ async function run() {
       from information_schema.columns
      where (table_name = 'menu_items' and column_name = 'inventory_auto_unavailable')
         or (table_name = 'pickup_orders' and column_name = 'inventory_restored_at')
+        or (table_name = 'pickup_order_items' and column_name = 'inventory_reserved_quantity')
   `);
-  assert.equal(columns.rowCount, 2, "Migrations 119 and 121 must be applied");
+  assert.equal(
+    columns.rowCount,
+    3,
+    "Migrations 119, 121, and 133 must be applied",
+  );
 
   const source = await pool.query(
     `select menu_id, restaurant_id from menu_items order by created_at nulls last limit 1`,
@@ -52,6 +59,7 @@ async function run() {
     quantity: number,
     isAvailable = true,
     inventoryAutoUnavailable = false,
+    trackInventory = true,
   ) {
     const itemId = fixtureId(`item_${label}`);
     itemIds.push(itemId);
@@ -59,12 +67,13 @@ async function run() {
       `insert into menu_items
         (id, menu_id, restaurant_id, name, price_cents, track_inventory,
          inventory_qty, is_available, inventory_auto_unavailable)
-       values ($1, $2, $3, $4, 1200, true, $5, $6, $7)`,
+       values ($1, $2, $3, $4, 1200, $5, $6, $7, $8)`,
       [
         itemId,
         menuId,
         restaurantId,
         `Inventory truth ${label}`,
+        trackInventory,
         quantity,
         isAvailable,
         inventoryAutoUnavailable,
@@ -93,6 +102,7 @@ async function run() {
     itemId: string,
     quantity: number,
     status = "pending",
+    inventoryReservedQuantity = quantity,
   ) {
     const orderId = fixtureId(`order_${label}`);
     orderIds.push(orderId);
@@ -107,10 +117,10 @@ async function run() {
     await tx.execute(sql`
       insert into pickup_order_items
         (order_id, menu_item_id, item_name, base_price_cents, quantity,
-         line_total_cents)
+         inventory_reserved_quantity, line_total_cents)
       values
         (${orderId}, ${itemId}, ${`Inventory ${label}`}, 1200,
-         ${quantity}, ${1200 * quantity})
+         ${quantity}, ${inventoryReservedQuantity}, ${1200 * quantity})
     `);
     return orderId;
   }
@@ -139,6 +149,51 @@ async function run() {
   }
 
   try {
+    const untracked = await insertItem("untracked", 0, true, false, false);
+    await db.transaction((tx: any) =>
+      reserveTrackedInventoryForPickupOrder(tx, [
+        { menuItemId: untracked, quantity: 2 },
+      ]),
+    );
+    assert.deepEqual(await state(untracked), {
+      quantity: 0,
+      isAvailable: true,
+      autoUnavailable: false,
+    });
+
+    const provenanceItem = await insertItem(
+      "untracked_then_tracked",
+      4,
+      true,
+      false,
+      false,
+    );
+    const provenanceOrder = await db.transaction(async (tx: any) => {
+      const orderId = await insertOrderWithLine(
+        tx,
+        "untracked_then_tracked",
+        provenanceItem,
+        2,
+        "pending",
+        0,
+      );
+      const reservations = await reserveTrackedInventoryForPickupOrder(tx, [
+        { menuItemId: provenanceItem, quantity: 2 },
+      ]);
+      assert.deepEqual(reservations, []);
+      return orderId;
+    });
+    await pool.query(
+      `update menu_items set track_inventory = true where id = $1`,
+      [provenanceItem],
+    );
+    assert.equal(await cancelAndRestore(provenanceOrder), true);
+    assert.equal(
+      (await state(provenanceItem)).quantity,
+      4,
+      "An untracked sale must not become restockable after tracking is enabled",
+    );
+
     const reserved = await insertItem("atomic_reservation", 5);
     await db.transaction((tx: any) =>
       reserveTrackedInventoryForPickupOrder(tx, [
@@ -219,8 +274,14 @@ async function run() {
         ]),
       ),
     ]);
-    assert.equal(attempts.filter((result) => result.status === "fulfilled").length, 1);
-    assert.equal(attempts.filter((result) => result.status === "rejected").length, 1);
+    assert.equal(
+      attempts.filter((result) => result.status === "fulfilled").length,
+      1,
+    );
+    assert.equal(
+      attempts.filter((result) => result.status === "rejected").length,
+      1,
+    );
     assert.deepEqual(await state(concurrent), {
       quantity: 1,
       isAvailable: true,
@@ -228,13 +289,23 @@ async function run() {
     });
 
     const setupFailure = await insertItem("setup_failure", 4);
-    const setupFailureOrder = await reserveOrder("setup_failure", setupFailure, 2);
+    const setupFailureOrder = await reserveOrder(
+      "setup_failure",
+      setupFailure,
+      2,
+    );
     assert.equal(
-      await cleanupPendingPickupOrderAfterPaymentSetupFailure(db, setupFailureOrder),
+      await cleanupPendingPickupOrderAfterPaymentSetupFailure(
+        db,
+        setupFailureOrder,
+      ),
       true,
     );
     assert.equal(
-      await cleanupPendingPickupOrderAfterPaymentSetupFailure(db, setupFailureOrder),
+      await cleanupPendingPickupOrderAfterPaymentSetupFailure(
+        db,
+        setupFailureOrder,
+      ),
       false,
     );
     assert.equal((await state(setupFailure)).quantity, 4);
@@ -297,12 +368,61 @@ async function run() {
     );
     assert.equal((await state(pending)).quantity, 2);
 
-    console.log("mealscout-inventory-truth: PASS (9/9)");
+    const preparing = await insertItem("preparation_consumed", 1);
+    const preparingOrder = await reserveOrder(
+      "preparation_consumed",
+      preparing,
+      1,
+    );
+    await pool.query(
+      `update pickup_orders
+          set status = 'cancelled', merchant_acknowledged_at = now(),
+              cancelled_at = now(), updated_at = now()
+        where id = $1`,
+      [preparingOrder],
+    );
+    assert.equal(
+      await db.transaction((tx: any) =>
+        restoreTrackedInventoryForPickupOrderByOrderId(tx, preparingOrder),
+      ),
+      false,
+      "Consumed preparation inventory must not return to sellable stock",
+    );
+    assert.equal((await state(preparing)).quantity, 0);
+
+    const unknownLegacy = await insertItem("legacy_unknown_provenance", 2);
+    const unknownLegacyOrder = await db.transaction(async (tx: any) => {
+      const orderId = await insertOrderWithLine(
+        tx,
+        "legacy_unknown_provenance",
+        unknownLegacy,
+        1,
+        "cancelled",
+        null as unknown as number,
+      );
+      await tx.execute(sql`
+        update pickup_order_items
+           set inventory_reserved_quantity = null
+         where order_id = ${orderId}
+      `);
+      return orderId;
+    });
+    assert.equal(
+      await db.transaction((tx: any) =>
+        restoreTrackedInventoryForPickupOrderByOrderId(tx, unknownLegacyOrder),
+      ),
+      false,
+      "Null legacy provenance requires explicit stock audit",
+    );
+    assert.equal((await state(unknownLegacy)).quantity, 2);
+
+    console.log("mealscout-inventory-truth: PASS (12/12)");
   } finally {
     if (orderIds.length > 0) {
-      await pool.query(`delete from pickup_orders where id = any($1::varchar[])`, [
-        orderIds,
-      ]);
+      await pool.query(
+        `delete from pickup_orders where id = any($1::varchar[])`,
+        [orderIds],
+      );
     }
     if (itemIds.length > 0) {
       await pool.query(`delete from menu_items where id = any($1::varchar[])`, [

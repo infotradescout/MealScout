@@ -5,24 +5,24 @@ import { Card, CardContent } from "@/components/ui/card";
 
 const rows = [
   {
-    label: "Ranking inputs",
-    mealscout: "Recommendations, follows, favorites, active deals, and local distance.",
-    legacy: "Commercial and marketplace dynamics can outweigh local trust signals.",
+    label: "Current scope",
+    mealscout: "Local profiles, menus, discovery, and limited eligibility-gated ASAP pickup by card.",
+    legacy: "A mature restaurant marketplace with pickup and courier delivery.",
   },
   {
-    label: "Operator visibility",
-    mealscout: "Designed so great local operators can rise without paid boosts.",
-    legacy: "Sponsored visibility can shift discoverability toward larger spenders.",
+    label: "Delivery",
+    mealscout: "No native courier-delivery network is promised today.",
+    legacy: "Courier delivery is a core customer capability.",
   },
   {
-    label: "Community-first discovery",
-    mealscout: "Profiles are surfaced based on authentic customer behavior.",
-    legacy: "Discovery is often optimized for platform-level throughput.",
+    label: "Pickup checkout",
+    mealscout: "Available only for a claimed, verified, open, locatable merchant with priced available items and card-payout readiness.",
+    legacy: "Ordering availability follows Uber Eats marketplace coverage.",
   },
   {
-    label: "Product direction",
-    mealscout: "Local profiles + deals + online menus with transparent ranking philosophy.",
-    legacy: "Ordering-first marketplace with broader ad and placement programs.",
+    label: "Honest comparison",
+    mealscout: "An early local discovery product with a narrow pickup transaction path.",
+    legacy: "MealScout does not currently match its marketplace breadth or delivery operations.",
   },
 ];
 
@@ -30,8 +30,8 @@ export default function CompareUberEatsPage() {
   return (
     <div className="page">
       <SEOHead
-        title="MealScout vs Uber Eats | Local Trust-Based Discovery"
-        description="Compare MealScout and Uber Eats. MealScout highlights small businesses through community trust and location relevance."
+        title="MealScout vs Uber Eats | Discovery and Pickup Scope"
+        description="MealScout is a local discovery product with limited verified pickup checkout, not an Uber Eats-scale delivery marketplace."
         canonicalUrl="https://www.mealscout.us/compare/uber-eats"
       />
       <section className="section section--full border-b border-[color:var(--border-subtle)] py-6">
@@ -43,8 +43,9 @@ export default function CompareUberEatsPage() {
             MealScout vs Uber Eats
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            MealScout keeps ranking tied to real local engagement instead of
-            paid placement mechanics.
+            This is a scope comparison, not a parity claim. MealScout does not
+            currently match Uber Eats&apos; merchant coverage, ordering breadth,
+            or courier-delivery operations.
           </p>
         </div>
       </section>

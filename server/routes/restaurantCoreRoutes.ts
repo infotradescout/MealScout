@@ -1,6 +1,6 @@
 import type { Express } from "express";
 import crypto from "crypto";
-import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, isNull, lte, or, sql } from "drizzle-orm";
 
 import { db } from "../db";
 import { storage } from "../storage";
@@ -26,16 +26,17 @@ import {
 import { distributedRateLimit } from "../middleware/distributedRateLimit";
 import { recordFollowJourneyOutcome } from "../services/discoveryObservatory";
 import {
-  toPublicRestaurantListing,
-  toPublicRestaurantListingArray,
-} from "../publicProfiles/toPublicRestaurantListing";
+  toPublicRestaurantListingArrayWithVisibility,
+  toPublicRestaurantListingWithVisibility,
+} from "../publicProfiles/toPublicRestaurantListingWithVisibility";
+import { deriveProfileEvidenceQuarantineVisibility } from "../services/profileEvidenceQuarantine";
 import {
   MAX_SEARCH_RESPONSE_BYTES,
   RESTAURANT_SEARCH_RESULT_LIMIT,
   clampArrayToMaxBytes,
 } from "@shared/searchResponseBounds";
 import {
-  insertRestaurantSchema,
+  publicInsertRestaurantSchema,
   insertRestaurantFavoriteSchema,
   insertRestaurantFollowSchema,
   insertRestaurantUserRecommendationSchema,
@@ -65,6 +66,12 @@ import {
   getHomeRankingReasons,
 } from "@shared/rankingPolicy";
 import { resolveStoredFoodBusinessType } from "@shared/businessTypes";
+import {
+  filterProjectedPublicNearbyRestaurantRows,
+  filterProjectedRestaurantSearchRows,
+  publicRestaurantDistanceKm,
+} from "../services/publicRestaurantSearchProjection";
+import { publicStoryPublicationWhere } from "../services/publicStoryProjection";
 
 const ensureTrialForUser = ensurePremiumTrialForUser;
 
@@ -205,10 +212,11 @@ export function registerRestaurantCoreRoutes(
   app.post("/api/restaurants", isRestaurantOwner, async (req: any, res) => {
     try {
       const userId = req.user.id;
-      const restaurantData = insertRestaurantSchema.parse({
-        ...req.body,
+      const publicRestaurantData = publicInsertRestaurantSchema.parse(req.body);
+      const restaurantData = {
+        ...publicRestaurantData,
         ownerId: userId,
-      });
+      };
 
       let restaurant: any;
       if (resolveStoredFoodBusinessType(restaurantData) === "food_truck") {
@@ -246,7 +254,7 @@ export function registerRestaurantCoreRoutes(
       try {
         const enabled =
           String(
-            process.env.VAC_AUTO_VERIFY_ENABLED || "true",
+            process.env.VAC_AUTO_VERIFY_ENABLED || "false",
           ).toLowerCase() !== "false";
         if (enabled) {
           const vac = await vacEvaluateRestaurantSignup({
@@ -349,46 +357,25 @@ export function registerRestaurantCoreRoutes(
       const restaurants = (await storage.getAllRestaurants()).filter(
         (restaurant: any) => isPublicBusinessVisible(restaurant),
       );
+      const publicRestaurants =
+        await toPublicRestaurantListingArrayWithVisibility(restaurants);
 
-      let filteredRestaurants = restaurants.filter(
-        (restaurant: any) =>
-          restaurant.isActive &&
-          (restaurant.name.toLowerCase().includes(searchTerm) ||
-            restaurant.cuisineType?.toLowerCase().includes(searchTerm) ||
-            restaurant.address?.toLowerCase().includes(searchTerm)),
+      const filteredRestaurants = filterProjectedRestaurantSearchRows(
+        publicRestaurants,
+        {
+          query: searchTerm,
+          userLat:
+            typeof lat === "string" ? Number.parseFloat(lat) : undefined,
+          userLng:
+            typeof lng === "string" ? Number.parseFloat(lng) : undefined,
+          radiusKm: Number.parseFloat(String(radius || "10")),
+        },
       );
-
-      if (lat && lng && typeof lat === "string" && typeof lng === "string") {
-        const userLat = parseFloat(lat);
-        const userLng = parseFloat(lng);
-        const radiusKm = parseFloat(radius as string);
-
-        filteredRestaurants = filteredRestaurants.filter((restaurant: any) => {
-          if (!restaurant.latitude || !restaurant.longitude) return false;
-
-          const earthRadiusKm = 6371;
-          const dLat = ((restaurant.latitude - userLat) * Math.PI) / 180;
-          const dLng = ((restaurant.longitude - userLng) * Math.PI) / 180;
-          const a =
-            Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-            Math.cos((userLat * Math.PI) / 180) *
-              Math.cos((restaurant.latitude * Math.PI) / 180) *
-              Math.sin(dLng / 2) *
-              Math.sin(dLng / 2);
-          const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-          const distance = earthRadiusKm * c;
-
-          return distance <= radiusKm;
-        });
-      }
 
       // Cap results so broad queries cannot dump the full inventory over the wire
       // (Aug 2026 search 502 cluster: large/slow Facebook in-app responses).
-      const listed = toPublicRestaurantListingArray(
-        filteredRestaurants.slice(0, RESTAURANT_SEARCH_RESULT_LIMIT),
-      );
       const bounded = clampArrayToMaxBytes(
-        listed,
+        filteredRestaurants.slice(0, RESTAURANT_SEARCH_RESULT_LIMIT),
         RESTAURANT_SEARCH_RESULT_LIMIT,
         MAX_SEARCH_RESPONSE_BYTES,
         (items) => items,
@@ -430,7 +417,12 @@ export function registerRestaurantCoreRoutes(
       const activeRestaurants = allRestaurants.filter(
         (restaurant: any) => restaurant?.isActive,
       );
-      const restaurantIds = activeRestaurants
+      // Visibility is an input to membership and distance, not just a final
+      // response mask. Hidden/quarantined coordinates therefore cannot make a
+      // restaurant appear in a proximity result.
+      const publicActiveRestaurants =
+        await toPublicRestaurantListingArrayWithVisibility(activeRestaurants);
+      const restaurantIds = publicActiveRestaurants
         .map((restaurant: any) => String(restaurant?.id || "").trim())
         .filter(Boolean);
 
@@ -520,6 +512,8 @@ export function registerRestaurantCoreRoutes(
                       and(
                         eq(deals.isActive, true),
                         inArray(deals.restaurantId, restaurantIds),
+                        or(isNull(deals.startDate), lte(deals.startDate, sql`NOW()`)),
+                        or(isNull(deals.endDate), gte(deals.endDate, sql`NOW()`)),
                       ),
                     )
                     .groupBy(deals.restaurantId),
@@ -534,11 +528,12 @@ export function registerRestaurantCoreRoutes(
                       count: sql<number>`cast(count(*) as integer)`,
                     })
                     .from(videoStories)
+                    .innerJoin(users, eq(videoStories.userId, users.id))
                     .where(
                       and(
                         inArray(videoStories.restaurantId, restaurantIds),
-                        eq(videoStories.status, "ready"),
-                        isNull(videoStories.deletedAt),
+                        publicStoryPublicationWhere(sql`NOW()`),
+                        eq(users.isDisabled, false),
                       ),
                     )
                     .groupBy(videoStories.restaurantId),
@@ -589,10 +584,14 @@ export function registerRestaurantCoreRoutes(
                       vs.restaurant_id,
                       cast(sum(coalesce(vs.like_count, 0) + coalesce(vs.comment_count, 0) + coalesce(vs.share_count, 0)) as integer) as score
                     from video_stories vs
+                    inner join users vu on vu.id = vs.user_id
                     where
                       vs.restaurant_id = any(${restaurantIds}::text[])
                       and vs.status = 'ready'
+                      and vs.is_approved = true
                       and vs.deleted_at is null
+                      and vs.expires_at >= now()
+                      and vu.is_disabled = false
                     group by vs.restaurant_id
                   `),
                 { rows: [] } as any,
@@ -699,40 +698,22 @@ export function registerRestaurantCoreRoutes(
         };
       };
 
-      const withDistance = activeRestaurants
+      const withDistance = publicActiveRestaurants
         .map((restaurant: any) => {
           if (!hasLocation || Number.isNaN(userLat) || Number.isNaN(userLng)) {
             return attachTrustSignals(restaurant, null);
           }
 
-          const latRaw =
-            restaurant.currentLatitude ?? restaurant.latitude ?? null;
-          const lngRaw =
-            restaurant.currentLongitude ?? restaurant.longitude ?? null;
-          const targetLat =
-            typeof latRaw === "number"
-              ? latRaw
-              : Number.parseFloat(String(latRaw));
-          const targetLng =
-            typeof lngRaw === "number"
-              ? lngRaw
-              : Number.parseFloat(String(lngRaw));
-          if (!Number.isFinite(targetLat) || !Number.isFinite(targetLng)) {
-            return null;
-          }
-
-          const earthRadiusKm = 6371;
-          const dLat = ((targetLat - userLat) * Math.PI) / 180;
-          const dLng = ((targetLng - userLng) * Math.PI) / 180;
-          const a =
-            Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-            Math.cos((userLat * Math.PI) / 180) *
-              Math.cos((targetLat * Math.PI) / 180) *
-              Math.sin(dLng / 2) *
-              Math.sin(dLng / 2);
-          const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-          const distanceKm = earthRadiusKm * c;
-          if (!Number.isFinite(distanceKm) || distanceKm > radiusKm)
+          const distanceKm = publicRestaurantDistanceKm(
+            restaurant,
+            userLat,
+            userLng,
+          );
+          if (
+            distanceKm === null ||
+            !Number.isFinite(distanceKm) ||
+            distanceKm > radiusKm
+          )
             return null;
 
           return attachTrustSignals(restaurant, distanceKm * 0.621371);
@@ -767,7 +748,7 @@ export function registerRestaurantCoreRoutes(
         return bUpdated - aUpdated;
       });
 
-      res.json(toPublicRestaurantListingArray(sorted.slice(0, parsedLimit)));
+      res.json(sorted.slice(0, parsedLimit));
     } catch (error) {
       console.error("Error fetching public restaurants:", error);
       res.status(500).json({ message: "Failed to fetch public restaurants" });
@@ -777,10 +758,22 @@ export function registerRestaurantCoreRoutes(
   app.get("/api/restaurants/:id", async (req, res) => {
     try {
       const restaurant = await storage.getRestaurant(req.params.id);
-      if (!restaurant) {
+      if (
+        !restaurant ||
+        restaurant.isActive !== true ||
+        !isPublicBusinessVisible(restaurant)
+      ) {
         return res.status(404).json({ message: "Restaurant not found" });
       }
-      res.json(toPublicRestaurantListing(restaurant));
+      const publicRestaurant =
+        await toPublicRestaurantListingWithVisibility(restaurant);
+      if (
+        !(publicRestaurant as any)?.id ||
+        deriveProfileEvidenceQuarantineVisibility(restaurant).isQuarantined
+      ) {
+        return res.status(404).json({ message: "Restaurant not found" });
+      }
+      res.json(publicRestaurant);
     } catch (error) {
       console.error("Error fetching restaurant:", error);
       res.status(500).json({ message: "Failed to fetch restaurant" });
@@ -805,12 +798,23 @@ export function registerRestaurantCoreRoutes(
       }
 
       const restaurant = await storage.getRestaurant(restaurantId);
-      if (!restaurant || !isPublicBusinessVisible(restaurant)) {
+      if (
+        !restaurant ||
+        restaurant.isActive !== true ||
+        !isPublicBusinessVisible(restaurant) ||
+        deriveProfileEvidenceQuarantineVisibility(restaurant).isQuarantined
+      ) {
+        return res.status(404).json({ message: "Business not found" });
+      }
+
+      const publicRestaurant =
+        await toPublicRestaurantListingWithVisibility(restaurant);
+      if (!(publicRestaurant as any)?.id) {
         return res.status(404).json({ message: "Business not found" });
       }
 
       const owner = await storage.getUser(restaurant.ownerId);
-      if (!owner?.email) {
+      if (!owner?.email || owner.isDisabled !== false) {
         return res
           .status(400)
           .json({ message: "This business is not accepting messages yet" });
@@ -1002,9 +1006,30 @@ export function registerRestaurantCoreRoutes(
       const lat = parseFloat(req.params.lat);
       const lng = parseFloat(req.params.lng);
       const radius = parseFloat(req.query.radius as string) || 5;
+      if (
+        !Number.isFinite(lat) ||
+        !Number.isFinite(lng) ||
+        lat < -90 ||
+        lat > 90 ||
+        lng < -180 ||
+        lng > 180 ||
+        !Number.isFinite(radius) ||
+        radius <= 0
+      ) {
+        return res.status(400).json({ message: "Invalid coordinates or radius" });
+      }
 
-      const restaurants = await storage.getNearbyRestaurants(lat, lng, radius);
-      res.json(toPublicRestaurantListingArray(restaurants));
+      const projectedRestaurants =
+        await toPublicRestaurantListingArrayWithVisibility(
+          await storage.getAllRestaurants(),
+        );
+      res.json(
+        filterProjectedPublicNearbyRestaurantRows(projectedRestaurants, {
+          userLat: lat,
+          userLng: lng,
+          radiusKm: radius,
+        }),
+      );
     } catch (error) {
       console.error("Error fetching nearby restaurants:", error);
       res.status(500).json({ message: "Failed to fetch nearby restaurants" });
@@ -1669,6 +1694,19 @@ export function registerRestaurantCoreRoutes(
     async (req: any, res) => {
       try {
         const { restaurantId } = req.params;
+        const restaurant = await storage.getRestaurant(restaurantId);
+        const publicRestaurant = restaurant
+          ? await toPublicRestaurantListingWithVisibility(restaurant)
+          : null;
+        if (
+          !restaurant ||
+          restaurant.isActive !== true ||
+          !isPublicBusinessVisible(restaurant) ||
+          !(publicRestaurant as any)?.id ||
+          deriveProfileEvidenceQuarantineVisibility(restaurant).isQuarantined
+        ) {
+          return res.status(404).json({ message: "Restaurant not found" });
+        }
         const viewerId = req.user?.id || null;
         const limit = Math.max(
           1,
@@ -1723,17 +1761,21 @@ export function registerRestaurantCoreRoutes(
             exists(
               select 1
               from video_stories vs
+              inner join users story_user on story_user.id = vs.user_id
               where vs.restaurant_id = rur.restaurant_id
                 and vs.user_id = rur.user_id
                 and vs.status = 'ready'
                 and vs.deleted_at is null
-                and (vs.is_approved is null or vs.is_approved = true)
+                and vs.is_approved = true
+                and vs.expires_at >= now()
+                and story_user.is_disabled = false
             ) as has_video_recommendation
           from restaurant_user_recommendations rur
           inner join users u on u.id = rur.user_id
           left join recommendation_reactions rr on rr.recommendation_id = rur.id
           left join recommendation_shares rs on rs.recommendation_id = rur.id
           where rur.restaurant_id = ${restaurantId}
+            and u.is_disabled = false
           group by rur.id, rur.user_id, rur.created_at, u.first_name, u.last_name
           order by rur.created_at desc
           limit ${limit}

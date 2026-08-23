@@ -25,6 +25,7 @@ export {
   updateRestaurantLocationSchema,
   updateRestaurantOperatingHoursSchema,
   insertRestaurantSchema,
+  publicInsertRestaurantSchema,
   insertFoodTruckSessionSchema,
   insertFoodTruckLocationSchema,
   updateRestaurantMobileSettingsSchema,

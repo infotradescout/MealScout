@@ -10,17 +10,20 @@ import { sql } from "drizzle-orm";
 import { runOpsDataCleanup } from "../opsCleanup";
 import { runMarketplaceHealthAudit } from "../marketplaceHealth";
 import { createIncident } from "../incidentManager";
+import { retryPickupOrderNotifications } from "../services/pickupOrderNotificationService";
+import { reconcileExpiredPickupOrderPayments } from "../services/pickupOrderPaymentExpiryService";
 
 export function registerRecurringJobs(): void {
   const verboseOpsCleanup =
-    String(process.env.OPS_CLEANUP_VERBOSE || "").trim().toLowerCase() === "true";
+    String(process.env.OPS_CLEANUP_VERBOSE || "")
+      .trim()
+      .toLowerCase() === "true";
   const verboseMarketplaceHealth =
     String(process.env.MARKETPLACE_HEALTH_AUDIT_VERBOSE || "")
       .trim()
       .toLowerCase() === "true";
 
-  const enableSessionCleanup =
-    process.env.SESSION_CLEANUP_ENABLED !== "false";
+  const enableSessionCleanup = process.env.SESSION_CLEANUP_ENABLED !== "false";
   if (enableSessionCleanup) {
     const cleanupIntervalMs = 6 * 60 * 60 * 1000; // 6 hours
     const runSessionCleanup = async () => {
@@ -114,8 +117,7 @@ export function registerRecurringJobs(): void {
         try {
           await createIncident({
             ruleId: "marketplace_health_degraded",
-            severity:
-              Number(r.stalePending || 0) > 0 ? "high" : "medium",
+            severity: Number(r.stalePending || 0) > 0 ? "high" : "medium",
             metadata: {
               stuckThreshold: r.stuckThreshold,
               staleCollecting: r.staleCollecting,
@@ -126,7 +128,9 @@ export function registerRecurringJobs(): void {
         } catch (incidentErr) {
           console.warn(
             "[marketplace-health] Failed to create incident (non-blocking):",
-            incidentErr instanceof Error ? incidentErr.message : String(incidentErr),
+            incidentErr instanceof Error
+              ? incidentErr.message
+              : String(incidentErr),
           );
         }
       }
@@ -135,6 +139,61 @@ export function registerRecurringJobs(): void {
     setTimeout(() => {
       void runAudit();
       setInterval(runAudit, intervalMs);
+    }, 60_000);
+  }
+
+  const enablePickupNotificationRetry =
+    process.env.PICKUP_ORDER_NOTIFICATION_RETRY_ENABLED !== "false";
+  if (enablePickupNotificationRetry) {
+    const retryIntervalMs = 5 * 60 * 1000;
+    const runPickupNotificationRetry = async () => {
+      try {
+        const result = await retryPickupOrderNotifications();
+        if (result.attempted > 0 || result.failed > 0) {
+          console.log(
+            `[pickup-order-notifications] retry examined=${result.examined} attempted=${result.attempted} failed=${result.failed}`,
+          );
+        }
+      } catch (error) {
+        console.warn(
+          "[pickup-order-notifications] retry job failed (non-blocking):",
+          error instanceof Error ? error.message : String(error),
+        );
+      }
+    };
+    setTimeout(() => {
+      void runPickupNotificationRetry();
+      setInterval(runPickupNotificationRetry, retryIntervalMs);
+    }, 90_000);
+  }
+
+  const enablePickupPaymentExpiry =
+    process.env.PICKUP_ORDER_PAYMENT_EXPIRY_ENABLED !== "false";
+  if (enablePickupPaymentExpiry) {
+    const expiryIntervalMs = 60 * 1000;
+    let expiryRunActive = false;
+    const runPickupPaymentExpiry = async () => {
+      if (expiryRunActive) return;
+      expiryRunActive = true;
+      try {
+        const result = await reconcileExpiredPickupOrderPayments();
+        if (result.examined > 0 || result.failed > 0 || result.conflicted > 0) {
+          console.log(
+            `[pickup-order-expiry] examined=${result.examined} legacy_pending=${result.legacyPendingExamined} legacy_cancellation_pending=${result.legacyCancellationPendingExamined} legacy_inventory_audit=${result.legacyInventoryAuditRequired} acknowledgement_expired=${result.acknowledgementExpired} cancelled=${result.cancelled} financial=${result.financiallyReconciled} pending=${result.pending} conflicted=${result.conflicted} failed=${result.failed}`,
+          );
+        }
+      } catch (error) {
+        console.warn(
+          "[pickup-order-expiry] reconciliation job failed (non-blocking):",
+          error instanceof Error ? error.message : String(error),
+        );
+      } finally {
+        expiryRunActive = false;
+      }
+    };
+    setTimeout(() => {
+      void runPickupPaymentExpiry();
+      setInterval(runPickupPaymentExpiry, expiryIntervalMs);
     }, 60_000);
   }
 
@@ -148,9 +207,7 @@ export function registerRecurringJobs(): void {
       `);
 
       if (schemaCheck.rows.length === 0) {
-        console.error(
-          "❌ CRITICAL: phone column missing from users table!",
-        );
+        console.error("❌ CRITICAL: phone column missing from users table!");
         console.error(
           "Database URL:",
           process.env.DATABASE_URL?.split("@")[0] + "@...",

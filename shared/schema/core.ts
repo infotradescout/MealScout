@@ -41,6 +41,8 @@ export const ORDER_STATUS = {
   OUT_FOR_DELIVERY: "out_for_delivery",
   DELIVERED: "delivered",
   COMPLETED: "completed",
+  PAYMENT_DISPUTED: "payment_disputed",
+  CANCELLATION_PENDING: "cancellation_pending",
   CANCELLED: "cancelled",
 } as const;
 

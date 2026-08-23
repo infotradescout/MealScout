@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
-import { shouldAttemptPickupWebhookPayoutTransfer } from "../server/utils/pickupWebhookPayout";
+import {
+  resolvePickupPayoutSourceTransaction,
+  shouldAttemptPickupWebhookPayoutTransfer,
+} from "../server/utils/pickupWebhookPayout";
 
 type Case = {
   name: string;
@@ -10,24 +13,24 @@ type Case = {
 const base = {
   stripeTransferGroupId: "group_fixture",
   payoutStatus: "pending",
+  paymentSucceeded: true,
 };
 
 const cases: Case[] = [
   {
-    name: "pending order may transfer only after this handler confirms it",
+    name: "a succeeded payment may settle while the order is pending",
     input: {
       ...base,
       statusBeforeWebhook: "pending",
-      transitionedToConfirmed: true,
     },
     expected: true,
   },
   {
-    name: "pending order without a confirmed transition cannot transfer",
+    name: "a pending order cannot settle before payment succeeds",
     input: {
       ...base,
       statusBeforeWebhook: "pending",
-      transitionedToConfirmed: false,
+      paymentSucceeded: false,
     },
     expected: false,
   },
@@ -36,7 +39,6 @@ const cases: Case[] = [
     input: {
       ...base,
       statusBeforeWebhook: "confirmed",
-      transitionedToConfirmed: false,
     },
     expected: true,
   },
@@ -45,16 +47,14 @@ const cases: Case[] = [
     input: {
       ...base,
       statusBeforeWebhook: "cancelled",
-      transitionedToConfirmed: false,
     },
     expected: false,
   },
   {
-    name: "cancelled order remains ineligible even with an impossible transition flag",
+    name: "cancelled order remains ineligible after a succeeded payment event",
     input: {
       ...base,
       statusBeforeWebhook: "cancelled",
-      transitionedToConfirmed: true,
     },
     expected: false,
   },
@@ -63,7 +63,6 @@ const cases: Case[] = [
     input: {
       ...base,
       statusBeforeWebhook: "preparing",
-      transitionedToConfirmed: false,
     },
     expected: false,
   },
@@ -72,7 +71,6 @@ const cases: Case[] = [
     input: {
       ...base,
       statusBeforeWebhook: "ready",
-      transitionedToConfirmed: false,
     },
     expected: false,
   },
@@ -81,7 +79,6 @@ const cases: Case[] = [
     input: {
       ...base,
       statusBeforeWebhook: "completed",
-      transitionedToConfirmed: false,
     },
     expected: false,
   },
@@ -90,7 +87,6 @@ const cases: Case[] = [
     input: {
       ...base,
       statusBeforeWebhook: "confirmed",
-      transitionedToConfirmed: false,
       stripeTransferGroupId: null,
     },
     expected: false,
@@ -100,7 +96,6 @@ const cases: Case[] = [
     input: {
       ...base,
       statusBeforeWebhook: "confirmed",
-      transitionedToConfirmed: false,
       payoutStatus: "transferred",
     },
     expected: false,
@@ -114,6 +109,22 @@ for (const testCase of cases) {
     testCase.name,
   );
 }
+
+assert.equal(
+  resolvePickupPayoutSourceTransaction("ch_direct_fixture"),
+  "ch_direct_fixture",
+  "a PaymentIntent charge id must bind the transfer to its captured funds",
+);
+assert.equal(
+  resolvePickupPayoutSourceTransaction({ id: "ch_expanded_fixture" }),
+  "ch_expanded_fixture",
+  "an expanded latest_charge object must resolve to its charge id",
+);
+assert.equal(
+  resolvePickupPayoutSourceTransaction(null),
+  null,
+  "a succeeded event without a source charge must fail closed",
+);
 
 console.log(
   `mealscout-pickup-webhook-payout-eligibility: PASS (${cases.length}/${cases.length})`,

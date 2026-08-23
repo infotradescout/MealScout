@@ -9,6 +9,15 @@ const menus = read("server/routes/menuRoutes.ts");
 const orders = read("server/routes/pickupOrderRoutes.ts");
 const webhook = read("server/routes/stripeWebhookRoutes.ts");
 const notifications = read("server/services/pickupOrderNotificationService.ts");
+const cancellation = read(
+  "server/services/pickupOrderCancellationService.ts",
+);
+const transferReversal = read(
+  "server/services/pickupOrderTransferReversalService.ts",
+);
+const orderingEligibility = read(
+  "server/services/restaurantOrderingEligibility.ts",
+);
 
 test("Scout deduplicates one business across restaurant and truck identities", () => {
   assert.match(scout, /const identityKey = \(card: ScoutSurfaceCard\)/);
@@ -21,12 +30,17 @@ test("paid orders notify both sides once and paid cancellation refunds safely", 
   assert.match(notifications, /type: "merchant_new_order"/);
   assert.match(notifications, /type: "confirmation"/);
   assert.match(notifications, /type: "cancelled"/);
-  assert.match(notifications, /if \(existing\) return/);
-  assert.match(webhook, /sendPickupOrderConfirmedNotifications\(updated\)/);
-  assert.match(orders, /stripe\.transfers\.createReversal/);
-  assert.match(orders, /stripe\.refunds\.create/);
-  assert.match(orders, /pickup-order:\$\{order\.id\}:refund/);
-  assert.match(orders, /updates\.payoutStatus = "reversed"/);
+  assert.match(notifications, /if \(!claim\) return/);
+  assert.match(
+    webhook,
+    /await sendPickupOrderConfirmedNotifications\(\s*notificationOrder,\s*\)/,
+  );
+  assert.match(cancellation, /reversePickupOrderTransfers/);
+  assert.match(transferReversal, /stripe\.transfers\.createReversal/);
+  assert.match(cancellation, /stripe\.refunds\.create/);
+  assert.match(cancellation, /pickup-order:\$\{current\.id\}:refund/);
+  assert.match(cancellation, /payoutStatus: "reversed"/);
+  assert.match(cancellation, /status: ORDER_STATUS\.CANCELLATION_PENDING/);
 });
 
 test("Scout never treats a truck profile address as a live map location", () => {
@@ -39,7 +53,9 @@ test("Scout never treats a truck profile address as a live map location", () => 
 
 test("food truck ordering requires a confirmed current stop in both reads and writes", () => {
   assert.match(menus, /id: "current_truck_stop"/);
-  assert.match(menus, /currentTruckStop\?\.status === "here_now"/);
+  assert.match(menus, /isTruckStopOrderableForPickup\(currentTruckStop\)/);
+  assert.match(orderingEligibility, /input\?\.status === "here_now"/);
+  assert.match(orderingEligibility, /input\?\.addressPublicLabel/);
   assert.match(orders, /code: "TRUCK_CURRENT_STOP_REQUIRED"/);
   assert.match(orders, /currentStop\.status !== "here_now"/);
   assert.match(orders, /!currentStop\.addressPublicLabel/);

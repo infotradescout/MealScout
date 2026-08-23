@@ -401,15 +401,18 @@ const mapRoute = between(
 );
 assert.equal(
   (mapRoute.match(/res\.json\(toRequestedMapPayload\(/g) || []).length,
-  3,
-  "Cache, fresh, and recent-stale map responses must all be bounded.",
+  1,
+  "The freshly authorized map response must be viewport bounded.",
 );
 assert.match(mapRoute, /status\(503\)/);
 assert.match(mapRoute, /Cache-Control", "no-store"/);
 assert.match(mapRoute, /X-MealScout-Degraded/);
 assert.match(mapRoute, /MAP_LOCATIONS_UNAVAILABLE/);
-assert.match(publicMapRoutes, /MAP_LOCATIONS_MAX_STALE_MS/);
-assert.match(publicMapRoutes, /capturedAt/);
+assert.doesNotMatch(
+  mapRoute,
+  /mapLocationsLastGood|MAP_LOCATIONS_MAX_STALE_MS|X-MealScout-Stale/,
+  "Public map identity must never be replayed from a stale last-good payload.",
+);
 
 const mapQuery = between(
   scout,

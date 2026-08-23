@@ -33,8 +33,8 @@ export default function ServiceCompareLandingPage() {
   const schemaData = {
     "@context": "https://schema.org",
     "@type": "WebPage",
-    name: `${cuisineName} delivery alternatives in ${cityName}`,
-    description: `Compare MealScout vs ${serviceName} for ${cuisineName} in ${cityName}.`,
+    name: `${cuisineName} discovery options in ${cityName}`,
+    description: `Understand MealScout's early local discovery experience alongside ${serviceName} for ${cuisineName} in ${cityName}.`,
     url: `https://www.mealscout.us${canonicalPath}`,
   };
 
@@ -42,9 +42,10 @@ export default function ServiceCompareLandingPage() {
     <div className="max-w-4xl mx-auto min-h-screen bg-[var(--bg-layered)]">
       <SEOHead
         title={`${cuisineName} In ${cityName}: MealScout vs ${serviceName}`}
-        description={`Compare MealScout with ${serviceName} for ${cuisineName} in ${cityName}. Local ranking based on community favorites, follows, recommendations, deals, and location.`}
+        description={`MealScout is an early local discovery product. It does not match ${serviceName}'s delivery marketplace; limited eligible listings may offer pickup.`}
         canonicalUrl={`https://www.mealscout.us${canonicalPath}`}
         schemaData={schemaData}
+        noIndex
       />
       <BackHeader
         title="Local Comparison"
@@ -57,8 +58,9 @@ export default function ServiceCompareLandingPage() {
           {cuisineName} in {cityName}: MealScout vs {serviceName}
         </h1>
         <p className="text-[color:var(--text-secondary)]">
-          MealScout prioritizes community trust signals first: favorites,
-          recommendations, follows, active deals, and proximity.
+          MealScout is an early local discovery product, not a delivery
+          marketplace replacement. Coverage varies by city, and only a limited
+          set of separately approved businesses may offer native card pickup.
         </p>
 
         <div className="grid gap-3 md:grid-cols-3">
@@ -76,16 +78,18 @@ export default function ServiceCompareLandingPage() {
               <UtensilsCrossed className="w-4 h-4 mb-2 text-[color:var(--accent-text)]" />
               <p className="text-sm font-semibold">Cuisine focus</p>
               <p className="text-xs text-muted-foreground">
-                Better discovery for {cuisineName} with video recommendations.
+                Browse available {cuisineName} profiles and community activity;
+                results depend on the data currently published in MealScout.
               </p>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="p-4">
               <Scale className="w-4 h-4 mb-2 text-[color:var(--accent-text)]" />
-              <p className="text-sm font-semibold">Transparent ranking</p>
+              <p className="text-sm font-semibold">Placement context</p>
               <p className="text-xs text-muted-foreground">
-                No pay-to-top placement for small businesses.
+                MealScout does not promise placement neutrality. Review each
+                profile, source label, and promotion context before deciding.
               </p>
             </CardContent>
           </Card>

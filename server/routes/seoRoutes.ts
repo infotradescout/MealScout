@@ -53,6 +53,10 @@ import {
   isIsolatedDeployment,
   isIsolatedSitemapPath,
 } from "../seo/previewIsolation";
+import {
+  isPublicStoryAssociationEligible,
+  publicStoryPublicationWhere,
+} from "../services/publicStoryProjection";
 
 const normalizedCityFieldEquals = (column: any, value: unknown) =>
   sql`lower(btrim(coalesce(${column}, ''))) = ${String(value ?? "")
@@ -120,6 +124,7 @@ const restaurantSitemapSelect = {
   isActive: restaurants.isActive,
   ownerId: restaurants.ownerId,
   ownerEmail: users.email,
+  ownerDisabled: users.isDisabled,
   rawData: restaurants.rawData,
   phone: restaurants.phone,
   websiteUrl: restaurants.websiteUrl,
@@ -130,6 +135,7 @@ const isIndexableRestaurantRow = (row: {
   isActive?: unknown;
   ownerId?: unknown;
   ownerEmail?: unknown;
+  ownerDisabled?: unknown;
   address?: unknown;
   cuisineType?: unknown;
   description?: unknown;
@@ -141,6 +147,7 @@ const isIndexableRestaurantRow = (row: {
   isFoodTruck?: boolean | null;
   businessType?: string | null;
 }) =>
+  row.ownerDisabled === false &&
   publicSeoBusinessProfileType(row) !== null &&
   isPublicRestaurantIndexable({
     name: row.name,
@@ -293,29 +300,34 @@ export function registerSeoRoutes(
           id: hosts.id,
           name: hosts.businessName,
           updatedAt: hosts.updatedAt,
+          ownerDisabled: users.isDisabled,
         })
         .from(hosts)
+        .innerJoin(users, eq(hosts.userId, users.id))
+        .where(eq(users.isDisabled, false))
         .orderBy(desc(hosts.updatedAt));
       const allSupplierRows = await db
         .select({
           id: suppliers.id,
           name: suppliers.businessName,
           updatedAt: suppliers.updatedAt,
+          ownerDisabled: users.isDisabled,
         })
         .from(suppliers)
-        .where(eq(suppliers.isActive, true))
+        .innerJoin(users, eq(suppliers.userId, users.id))
+        .where(and(eq(suppliers.isActive, true), eq(users.isDisabled, false)))
         .orderBy(desc(suppliers.updatedAt));
       const restaurantRows = allRestaurantRows.filter((row: any) =>
         isIndexableRestaurantRow(row),
       );
       const hostRows = allHostRows.filter((row: any) =>
-        isPublicDiscoveryEligibleEntity({
+        row.ownerDisabled === false && isPublicDiscoveryEligibleEntity({
           name: row.name,
           isActive: true,
         }),
       );
       const supplierRows = allSupplierRows.filter((row: any) =>
-        isPublicDiscoveryEligibleEntity({
+        row.ownerDisabled === false && isPublicDiscoveryEligibleEntity({
           name: row.name,
           isActive: true,
         }),
@@ -851,6 +863,12 @@ export function registerSeoRoutes(
             isNotNull(eventBookings.bookingConfirmedAt),
             inArray(events.status, ["open", "booked", "filled"]),
             eq(restaurants.isActive, true),
+            eq(users.isDisabled, false),
+            sql`exists (
+              select 1 from users host_owner
+              where host_owner.id = ${hosts.userId}
+                and host_owner.is_disabled = false
+            )`,
             publicTruckClassificationWhere(
               restaurants.isFoodTruck,
               restaurants.businessType,
@@ -923,9 +941,16 @@ export function registerSeoRoutes(
                 id: hosts.id,
                 name: hosts.businessName,
                 updatedAt: hosts.updatedAt,
+                ownerDisabled: users.isDisabled,
               })
               .from(hosts)
-              .where(inArray(hosts.id, eligibleHostIds))
+              .innerJoin(users, eq(hosts.userId, users.id))
+              .where(
+                and(
+                  inArray(hosts.id, eligibleHostIds),
+                  eq(users.isDisabled, false),
+                ),
+              )
               .orderBy(desc(hosts.updatedAt))
               .limit(50000);
 
@@ -1099,6 +1124,12 @@ export function registerSeoRoutes(
               eq(events.requiresPayment, false),
             ),
             eq(restaurants.isActive, true),
+            eq(users.isDisabled, false),
+            sql`exists (
+              select 1 from users host_owner
+              where host_owner.id = ${hosts.userId}
+                and host_owner.is_disabled = false
+            )`,
             publicTruckClassificationWhere(
               restaurants.isFoodTruck,
               restaurants.businessType,
@@ -1231,16 +1262,18 @@ export function registerSeoRoutes(
           id: suppliers.id,
           name: suppliers.businessName,
           updatedAt: suppliers.updatedAt,
+          ownerDisabled: users.isDisabled,
         })
         .from(suppliers)
-        .where(eq(suppliers.isActive, true))
+        .innerJoin(users, eq(suppliers.userId, users.id))
+        .where(and(eq(suppliers.isActive, true), eq(users.isDisabled, false)))
         .orderBy(desc(suppliers.updatedAt))
         .limit(50000);
 
       sendUrlsetXml(res, {
         entries: rows
           .filter((row: any) =>
-            isPublicDiscoveryEligibleEntity({
+            row.ownerDisabled === false && isPublicDiscoveryEligibleEntity({
               name: row.name,
               isActive: true,
             }),
@@ -1260,24 +1293,45 @@ export function registerSeoRoutes(
     try {
       const baseUrl = resolveSitemapSiteUrl();
       const now = new Date();
-      const rows = await db
+      const candidates = await db
         .select({
           id: videoStories.id,
           title: videoStories.title,
           createdAt: videoStories.createdAt,
+          restaurantId: videoStories.restaurantId,
+          creatorDisabled: users.isDisabled,
+          restaurantActive: restaurants.isActive,
+          restaurantName: restaurants.name,
+          restaurantAddress: restaurants.address,
+          restaurantCity: restaurants.city,
+          restaurantState: restaurants.state,
+          restaurantCuisineType: restaurants.cuisineType,
+          restaurantDescription: restaurants.description,
+          restaurantOwnerDisabled: sql<boolean | null>`(
+            select linked_owner.is_disabled from users linked_owner
+            where linked_owner.id = ${restaurants.ownerId} limit 1
+          )`,
+          restaurantRawData: restaurants.rawData,
         })
         .from(videoStories)
+        .innerJoin(users, eq(videoStories.userId, users.id))
+        .leftJoin(restaurants, eq(videoStories.restaurantId, restaurants.id))
         .where(
           and(
-            eq(videoStories.status, "ready"),
-            eq(videoStories.isApproved, true),
-            isNull(videoStories.deletedAt),
-            gte(videoStories.expiresAt, now),
+            publicStoryPublicationWhere(now),
+            eq(users.isDisabled, false),
+            or(
+              isNull(videoStories.restaurantId),
+              eq(restaurants.isActive, true),
+            ),
             isNotNull(videoStories.transcriptSource),
           ),
         )
         .orderBy(desc(videoStories.createdAt))
-        .limit(50000);
+        .limit(200000);
+      const rows = candidates
+        .filter((row: any) => isPublicStoryAssociationEligible(row))
+        .slice(0, 50000);
 
       sendUrlsetXml(res, {
         entries: rows.map((row: any) => ({

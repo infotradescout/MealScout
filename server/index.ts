@@ -40,6 +40,12 @@ import { resolvePublicBusinessSlug } from "./publicProfiles/publicBusinessSlugRe
 import { mirrorInfinityTouch } from "./integrations/infinityShadow";
 import { customProfileDomainRootRedirect } from "./services/customProfileDomain";
 import { isIsolatedDeployment } from "./seo/previewIsolation";
+import {
+  projectPublicStoryRow,
+  publicStoryPublicationWhere,
+} from "./services/publicStoryProjection";
+import { toPublicRestaurantListingWithVisibility } from "./publicProfiles/toPublicRestaurantListingWithVisibility";
+import { isPublicBusinessVisible } from "./utils/publicBusinessVisibility";
 
 validateEnv();
 
@@ -140,6 +146,20 @@ app.use((req, res, next) => {
     return res.redirect(308, dest);
   }
 
+  return next();
+});
+
+// API projections can contain fields whose public visibility is revocable by
+// an owner or moderator. Keep browsers and shared intermediaries from
+// replaying a pre-revocation representation. Individual routes may still use
+// server-side request deduplication, but public responses must be revalidated
+// against current authority on every request.
+app.use((req, res, next) => {
+  if (["GET", "HEAD"].includes(req.method) && req.path.startsWith("/api/")) {
+    res.setHeader("Cache-Control", "no-store, max-age=0");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+  }
   return next();
 });
 
@@ -998,22 +1018,21 @@ app.use((req, res, next) => {
           .replace(/'/g, "&#39;");
 
       const { storyId } = req.params as { storyId: string };
-
-      const storyRows = await db
-        .select()
-        .from(videoStories)
-        .where(eq(videoStories.id, storyId))
-        .limit(1);
-
-      if (!storyRows.length) {
-        res.status(404).set("Content-Type", "text/html; charset=utf-8").send(`
+      const canonical = `${canonicalBaseUrl}/video/${encodeURIComponent(storyId)}`;
+      const sendVideoNotFound = () => {
+        res
+          .status(404)
+          .set("Content-Type", "text/html; charset=utf-8")
+          .set("X-Robots-Tag", "noindex, nofollow")
+          .send(`
           <!DOCTYPE html>
           <html lang="en">
             <head>
               <meta charset="UTF-8">
               <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <meta name="robots" content="noindex,nofollow">
               <title>Video Not Found | MealScout</title>
-              <link rel="canonical" href="${canonicalBaseUrl}/video/${storyId}">
+              <link rel="canonical" href="${escapeHtml(canonical)}">
             </head>
             <body>
               <h1>Video Not Found</h1>
@@ -1021,25 +1040,74 @@ app.use((req, res, next) => {
             </body>
           </html>
         `);
-        return;
+      };
+
+      const storyRows = await db
+        .select({
+          id: videoStories.id,
+          restaurantId: videoStories.restaurantId,
+          title: videoStories.title,
+          description: videoStories.description,
+          duration: videoStories.duration,
+          videoUrl: videoStories.videoUrl,
+          thumbnailUrl: videoStories.thumbnailUrl,
+          status: videoStories.status,
+          viewCount: videoStories.viewCount,
+          likeCount: videoStories.likeCount,
+          commentCount: videoStories.commentCount,
+          shareCount: videoStories.shareCount,
+          hashtags: videoStories.hashtags,
+          cuisine: videoStories.cuisine,
+          transcript: videoStories.transcript,
+          transcriptLanguage: videoStories.transcriptLanguage,
+          transcriptSource: videoStories.transcriptSource,
+          createdAt: videoStories.createdAt,
+          expiresAt: videoStories.expiresAt,
+          isFeatured: videoStories.isFeatured,
+          isApproved: videoStories.isApproved,
+        })
+        .from(videoStories)
+        .where(
+          and(
+            eq(videoStories.id, storyId),
+            publicStoryPublicationWhere(new Date()),
+          ),
+        )
+        .limit(1);
+
+      if (!storyRows.length) {
+        return sendVideoNotFound();
       }
 
-      const story = storyRows[0] as any;
+      const story = projectPublicStoryRow(storyRows[0]) as any;
+      if (!story) return sendVideoNotFound();
 
       const restaurantRows = story.restaurantId
         ? await db
             .select()
             .from(restaurants)
-            .where(eq(restaurants.id, story.restaurantId))
+            .where(
+              and(
+                eq(restaurants.id, String(story.restaurantId)),
+                eq(restaurants.isActive, true),
+              ),
+            )
             .limit(1)
         : [];
-      const restaurant = restaurantRows[0] as any;
+      if (
+        story.restaurantId &&
+        (!restaurantRows[0] || !isPublicBusinessVisible(restaurantRows[0]))
+      ) {
+        return sendVideoNotFound();
+      }
+      const restaurant: any = restaurantRows[0]
+        ? await toPublicRestaurantListingWithVisibility(restaurantRows[0], db)
+        : null;
 
       const title = story.title || "Food Recommendation";
       const description =
         story.description ||
         `Watch ${title} - a local food recommendation on MealScout`;
-      const canonical = `${canonicalBaseUrl}/video/${storyId}`;
 
       const schema = {
         "@context": "https://schema.org",
@@ -1063,17 +1131,25 @@ app.use((req, res, next) => {
         : "";
 
       res.setHeader("Content-Type", "text/html; charset=utf-8");
+      if (!story.transcript || !story.transcriptSource) {
+        res.setHeader("X-Robots-Tag", "noindex, follow");
+      }
       res.send(`
         <!DOCTYPE html>
         <html lang="en">
           <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <meta name="robots" content="${
+              story.transcript && story.transcriptSource
+                ? "index,follow,max-video-preview:-1"
+                : "noindex,follow"
+            }">
             <title>${escapeHtml(title)} ${
         restaurant?.name ? `at ${escapeHtml(restaurant.name)}` : ""
       } - Video | MealScout</title>
             <meta name="description" content="${escapeHtml(description)}">
-            <link rel="canonical" href="${canonical}">
+            <link rel="canonical" href="${escapeHtml(canonical)}">
             ${buildJsonLdScript(schema)}
             <style>
               body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 800px; margin: 0 auto; padding: 16px; }

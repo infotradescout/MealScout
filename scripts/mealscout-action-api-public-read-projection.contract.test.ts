@@ -468,6 +468,8 @@ for (const [label, schema, success] of [
 
 const eligibleBusiness = {
   id: "restaurant-eligible",
+  ownerId: "owner-enabled",
+  ownerDisabled: false,
   name: "Riverbend Cafe",
   address: "100 Main St",
   phone: "8505550100",
@@ -479,6 +481,22 @@ const eligibleBusiness = {
   isActive: true,
 };
 assert.equal(isActionApiPublicBusinessEligible(eligibleBusiness), true);
+assert.equal(
+  isActionApiPublicBusinessEligible({
+    ...eligibleBusiness,
+    ownerDisabled: true,
+  }),
+  false,
+  "a disabled owner must make the public business nonexistent",
+);
+assert.equal(
+  isActionApiPublicBusinessEligible({
+    ...eligibleBusiness,
+    ownerId: null,
+  }),
+  false,
+  "an orphan business must be absent from public Action discovery",
+);
 assert.equal(
   isActionApiPublicBusinessEligible({
     ...eligibleBusiness,
@@ -599,6 +617,11 @@ assert.match(
   "deal and truck candidates must be filtered through public-business eligibility",
 );
 assert.doesNotMatch(actionSource, /storage\.getLiveTrucksNearby/);
+assert.doesNotMatch(
+  actionSource,
+  /ilike\(restaurants\.address/,
+  "public Action API membership must never search a raw restaurant address",
+);
 assert.match(
   actionSource,
   /listParkingPassOccurrences\(\{[\s\S]*?includeDraft: false,[\s\S]*?\}\)/,
@@ -859,6 +882,7 @@ async function verifyRouterPublicReadsAndContainment() {
     paymentsEnabled: true,
     host: withPrivateSentinels({
       id: "host-public",
+      userId: "owner-host-public",
       businessName: "City Market",
       address: "100 Main St",
       city: "Pensacola",
@@ -867,8 +891,20 @@ async function verifyRouterPublicReadsAndContainment() {
       longitude: "-87.2100",
     }),
   });
+  const privateParkingOccurrence = {
+    ...parkingOccurrence,
+    id: "parking-private",
+    host: {
+      ...(parkingOccurrence as any).host,
+      id: "host-private",
+      userId: "owner-host-private",
+      address: "999 Hidden Host Lane",
+      latitude: "30.4213",
+      longitude: "-87.2169",
+    },
+  };
   const parkingProviderResult = {
-    occurrences: [parkingOccurrence],
+    occurrences: [parkingOccurrence, privateParkingOccurrence],
     start: fixedNow,
     end: new Date("2026-08-31T18:00:00.000Z"),
   };
@@ -890,6 +926,17 @@ async function verifyRouterPublicReadsAndContainment() {
   const actionRouter = createActionApiRouter({
     database: database as any,
     listParkingPassOccurrences: parkingProvider as any,
+    loadPublicProfileVisibilityByUserIds: async () =>
+      new Map([
+        [
+          "owner-host-public",
+          { showAddress: true, showContact: false, ownerEnabled: true },
+        ],
+        [
+          "owner-host-private",
+          { showAddress: false, showContact: false, ownerEnabled: true },
+        ],
+      ]),
     now: () => new Date(fixedNow),
   });
   const app = express();

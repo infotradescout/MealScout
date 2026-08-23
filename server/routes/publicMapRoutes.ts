@@ -45,6 +45,9 @@ import {
   toBoundedPublicMapLocationsPayload,
   toPublicMapLocationsPayload,
 } from "../publicProfiles/toPublicMapLocations";
+import { resolvePublicProfileVisibility } from "../publicProfiles/publicProfileUtils";
+import { toPublicSupplierListingArray } from "../publicProfiles/toPublicSupplierListing";
+import { toPublicRestaurantListingArrayWithVisibility } from "../publicProfiles/toPublicRestaurantListingWithVisibility";
 import {
   dealClaims,
   deals,
@@ -68,29 +71,10 @@ let mapLocationsCache: {
   payload: { hostLocations: any[]; eventLocations: any[]; supplierLocations: any[] };
 } | null = null;
 
-let mapLocationsLastGood: {
-  capturedAt: number;
-  payload: { hostLocations: any[]; eventLocations: any[]; supplierLocations: any[] };
-} | null = null;
-
-const MAP_LOCATIONS_MAX_STALE_MS = Math.max(
-  60_000,
-  Number(process.env.MAP_LOCATIONS_MAX_STALE_MS || 15 * 60_000) || 15 * 60_000,
-);
-
-const getRecentMapLocationsLastGoodSnapshot = () => {
-  if (!mapLocationsLastGood) return null;
-  if (
-    Date.now() - mapLocationsLastGood.capturedAt >
-    MAP_LOCATIONS_MAX_STALE_MS
-  ) {
-    return null;
-  }
-  return mapLocationsLastGood;
+export const clearPublicMapLocationsCache = () => {
+  mapLocationsCache = null;
+  mapFootTrafficCache.clear();
 };
-
-const getRecentMapLocationsLastGood = () =>
-  getRecentMapLocationsLastGoodSnapshot()?.payload || null;
 
 const truckSightingRateLimits = new Map<string, number[]>();
 const COMMUNITY_TRUCK_SIGHTING_EVENT = "truck_community_sighting";
@@ -164,7 +148,7 @@ const serializeCommunityTruckSighting = (params: {
     seenAt,
     expiresAt,
     createdAt,
-    status: "open",
+    status: "approved",
     ...(typeof params.distanceKm === "number"
       ? { distanceKm: Number(params.distanceKm.toFixed(2)) }
       : {}),
@@ -293,7 +277,9 @@ const cellId = (
   lng: number,
 ) => `${source}:${lat.toFixed(3)}:${lng.toFixed(3)}`;
 
-const roundCell = (value: number) => Math.round(value * 1000) / 1000;
+// Public activity cells are approximately one-kilometre buckets. Exact or
+// street-level movement is never part of this aggregate product.
+const roundCell = (value: number) => Math.round(value * 100) / 100;
 
 const normalizeBoundForKey = (value: number) => Number(value.toFixed(3));
 
@@ -1026,14 +1012,10 @@ export function registerPublicMapRoutes(app: Express) {
 
   app.get("/api/parking-pass/intelligence-status", async (_req, res) => {
     try {
-      const payload =
-        (mapLocationsCache && mapLocationsCache.expiresAt > Date.now()
-          ? mapLocationsCache.payload
-          : null) || getRecentMapLocationsLastGood();
-      const hostLocations = Array.isArray(payload?.hostLocations) ? payload.hostLocations : [];
-      const supplierLocations = Array.isArray(payload?.supplierLocations)
-        ? payload.supplierLocations
-        : [];
+      // Capability status must not inherit entity membership from a stale
+      // public-map snapshot. Exact public entities are loaded by the map feed.
+      const hostLocations: any[] = [];
+      const supplierLocations: any[] = [];
 
       const gasHosts = hostLocations.filter((host: any) => {
         const prices = host?.fuelPrices || null;
@@ -1194,13 +1176,7 @@ export function registerPublicMapRoutes(app: Express) {
     const toRequestedMapPayload = (payload: unknown) =>
       toBoundedPublicMapLocationsPayload(payload, requestedBounds);
     try {
-      res.setHeader(
-        "Cache-Control",
-        "public, max-age=120, stale-while-revalidate=240",
-      );
-      if (mapLocationsCache && mapLocationsCache.expiresAt > Date.now()) {
-        return res.json(toRequestedMapPayload(mapLocationsCache.payload));
-      }
+      res.setHeader("Cache-Control", "no-store");
 
       const VALID_US_STATE_ABBRS = new Set([
         "AL",
@@ -1413,14 +1389,12 @@ export function registerPublicMapRoutes(app: Express) {
       );
 
       const [
-        openLocations,
         upcomingEvents,
         allHosts,
         publicManualSchedules,
         activeSuppliers,
         activeSupplierProducts,
       ] = await Promise.all([
-        storage.getOpenLocationRequests(),
         storage.getAllUpcomingEvents(),
         storage.getAllHosts(),
         db
@@ -1455,12 +1429,14 @@ export function registerPublicMapRoutes(app: Express) {
           })
           .from(truckManualSchedules)
           .innerJoin(restaurants, eq(truckManualSchedules.truckId, restaurants.id))
+          .innerJoin(users, eq(restaurants.ownerId, users.id))
           .where(
             and(
               eq(truckManualSchedules.isPublic, true),
               gte(truckManualSchedules.date, manualScheduleWindowStart),
               lte(truckManualSchedules.date, manualScheduleWindowEnd),
               eq(restaurants.isActive, true),
+              eq(users.isDisabled, false),
               or(
                 eq(restaurants.isFoodTruck, true),
                 inArray(restaurants.businessType, [
@@ -1486,12 +1462,26 @@ export function registerPublicMapRoutes(app: Express) {
             longitude: suppliers.longitude,
             contactPhone: suppliers.contactPhone,
             contactEmail: suppliers.contactEmail,
+            isActive: suppliers.isActive,
+            onlinePaymentsEnabled: suppliers.onlinePaymentsEnabled,
+            onlinePaymentsAllowAch: suppliers.onlinePaymentsAllowAch,
+            onlinePaymentsAllowCard: suppliers.onlinePaymentsAllowCard,
+            onlinePaymentsMinOrderCents: suppliers.onlinePaymentsMinOrderCents,
+            onlinePaymentsNotes: suppliers.onlinePaymentsNotes,
             offersDelivery: suppliers.offersDelivery,
             deliveryRadiusMiles: suppliers.deliveryRadiusMiles,
+            deliveryFeeCents: suppliers.deliveryFeeCents,
+            deliveryMinOrderCents: suppliers.deliveryMinOrderCents,
+            deliveryNotes: suppliers.deliveryNotes,
             updatedAt: suppliers.updatedAt,
+            ownerDisabled: users.isDisabled,
+            publicProfileSettings: users.publicProfileSettings,
           })
           .from(suppliers)
-          .where(eq(suppliers.isActive, true))
+          .innerJoin(users, eq(suppliers.userId, users.id))
+          .where(
+            and(eq(suppliers.isActive, true), eq(users.isDisabled, false)),
+          )
           .limit(250)
           .catch(() => []),
         db
@@ -1536,26 +1526,44 @@ export function registerPublicMapRoutes(app: Express) {
         ),
       );
 
-      const activeHostUserIds =
+      const hostOwnerRows =
         hostUserIds.length > 0
-          ? new Set(
-              (
-                await db
-                  .select({ id: users.id })
-                  .from(users)
-                  .where(
-                    and(
-                      inArray(users.id, hostUserIds),
-                      or(eq(users.isDisabled, false), isNull(users.isDisabled)),
-                    ),
-                  )
-              ).map((row: { id: string }) => row.id),
-            )
-          : null;
+          ? await db
+              .select({
+                id: users.id,
+                isDisabled: users.isDisabled,
+                publicProfileSettings: users.publicProfileSettings,
+              })
+              .from(users)
+              .where(inArray(users.id, hostUserIds))
+          : [];
+      const hostOwnerById = new Map<
+        string,
+        { isDisabled: boolean | null; publicProfileSettings: unknown }
+      >(
+        hostOwnerRows.map((row: any) => [String(row.id), row]),
+      );
+      const hostVisibilityByHostId = new Map<
+        string,
+        { showAddress: boolean; showContact: boolean }
+      >();
 
       const hostProfiles = typedAllHosts.filter((host) => {
+        const userId = String(host.userId || "").trim();
+        const owner = userId ? hostOwnerById.get(userId) : null;
+        if (!owner || owner.isDisabled !== false) return false;
+        const visibility = resolvePublicProfileVisibility(
+          owner.publicProfileSettings,
+        );
+        if (!visibility.showAddress) return false;
         const address = String(host.address || "").trim();
         if (!address) return false;
+        if (
+          parseCoord(host.latitude) === null ||
+          parseCoord(host.longitude) === null
+        ) {
+          return false;
+        }
         if (
           !isHostProfileMapEligible({
             businessName: host.businessName,
@@ -1566,9 +1574,8 @@ export function registerPublicMapRoutes(app: Express) {
         ) {
           return false;
         }
-        if (!activeHostUserIds) return true;
-        const userId = String(host.userId || "").trim();
-        return userId ? activeHostUserIds.has(userId) : true;
+        hostVisibilityByHostId.set(String(host.id), visibility);
+        return true;
       });
 
       const hostProfileById = new Map<string, (typeof hostProfiles)[number]>();
@@ -1579,15 +1586,7 @@ export function registerPublicMapRoutes(app: Express) {
       const publicEvents = upcomingEvents.filter((event) => {
         if (event.requiresPayment) return false;
         const hostId = String(event.hostId || event.host?.id || "").trim();
-        if (!hostId) return true;
-        const fromProfile = hostProfileById.get(hostId);
-        if (fromProfile) return true;
-        return isHostProfileMapEligible({
-          businessName: event.host?.businessName,
-          address: event.host?.address,
-          city: event.host?.city,
-          state: event.host?.state,
-        });
+        return Boolean(hostId && hostProfileById.has(hostId));
       });
       const confirmedTrucksByEvent = await loadConfirmedEventTrucks(
         publicEvents.map((event) => String(event.id || "")),
@@ -1632,9 +1631,14 @@ export function registerPublicMapRoutes(app: Express) {
         googleBusinessStatus: (host as any).googleBusinessStatus ?? null,
         googlePhotos: (host as any).googlePhotos ?? null,
         googleCategories: (host as any).googleCategories ?? null,
-        googleFormattedPhone: (host as any).googleFormattedPhone ?? null,
+        googleFormattedPhone: hostVisibilityByHostId.get(String(host.id))
+          ?.showContact
+          ? (host as any).googleFormattedPhone ?? null
+          : null,
         businessHours: (host as any).businessHours ?? null,
-        businessWebsite: (host as any).businessWebsite ?? null,
+        businessWebsite: hostVisibilityByHostId.get(String(host.id))?.showContact
+          ? (host as any).businessWebsite ?? null
+          : null,
         showFuelPrices: Boolean((host as any).showFuelPrices),
         fuelPrices: (host as any).showFuelPrices
           ? {
@@ -1648,33 +1652,8 @@ export function registerPublicMapRoutes(app: Express) {
           : null,
       }));
 
-      const hostLocations = [
-        ...openLocations
-          .filter((loc) =>
-            isHostProfileMapEligible({
-              businessName: loc.businessName,
-              address: loc.address,
-            }),
-          )
-          .map((loc) => ({
-            id: loc.id,
-            type: "host_location" as const,
-            hostId: null,
-            name: loc.businessName,
-            address: loc.address,
-            city: null,
-            state: null,
-            locationType: loc.locationType,
-            expectedFootTraffic: loc.expectedFootTraffic,
-            notes: loc.notes,
-            preferredDates: loc.preferredDates,
-            status: loc.status,
-            latitude: loc.latitude,
-            longitude: loc.longitude,
-            locationRequestId: loc.id,
-          })),
-        ...primaryHostLocations,
-      ];
+      // Open location-demand submissions are private signals, not public pins.
+      const hostLocations = primaryHostLocations;
 
       const manualScheduleIds = (publicManualSchedules as any[])
         .map((schedule) => String(schedule.id || "").trim())
@@ -1774,6 +1753,8 @@ export function registerPublicMapRoutes(app: Express) {
 
       const eventLocations = [
         ...trustedPublicEvents.map((event) => {
+          const publicHost = hostProfileById.get(String(event.hostId || ""));
+          if (!publicHost) return null;
           const confirmedTrucks =
             confirmedTrucksByEvent.get(String(event.id || "")) || [];
           const primaryTruck = confirmedTrucks[0] || null;
@@ -1788,12 +1769,12 @@ export function registerPublicMapRoutes(app: Express) {
             maxTrucks: event.maxTrucks,
             status: event.status,
             hostId: event.hostId,
-            hostName: event.host?.businessName,
-            hostAddress: event.host?.address,
-            hostCity: event.host?.city ?? null,
-            hostState: event.host?.state ?? null,
-            hostLatitude: event.host?.latitude,
-            hostLongitude: event.host?.longitude,
+            hostName: publicHost.businessName,
+            hostAddress: publicHost.address,
+            hostCity: publicHost.city ?? null,
+            hostState: publicHost.state ?? null,
+            hostLatitude: publicHost.latitude,
+            hostLongitude: publicHost.longitude,
             hardCapEnabled: event.hardCapEnabled,
             seriesId: event.seriesId,
             bookedRestaurantId: primaryTruck?.truckId || null,
@@ -1805,7 +1786,7 @@ export function registerPublicMapRoutes(app: Express) {
               cuisineType: truck.cuisineType,
             })),
           };
-        }),
+        }).filter(Boolean),
         ...manualScheduleLocations,
       ];
 
@@ -1862,11 +1843,17 @@ export function registerPublicMapRoutes(app: Express) {
         };
       };
 
-      const supplierLocations = (activeSuppliers as any[])
+      const supplierLocations = toPublicSupplierListingArray(
+        activeSuppliers as any[],
+      )
         .filter((supplier) => {
           const hasAddress = String(supplier.address || "").trim();
-          const lat = parseCoord(supplier.latitude);
-          const lng = parseCoord(supplier.longitude);
+          const lat = parseCoord(
+            supplier.latitude as string | number | null | undefined,
+          );
+          const lng = parseCoord(
+            supplier.longitude as string | number | null | undefined,
+          );
           return hasAddress || (lat !== null && lng !== null);
         })
         .map((supplier) => {
@@ -1881,8 +1868,6 @@ export function registerPublicMapRoutes(app: Express) {
             state: supplier.state ?? null,
             latitude: supplier.latitude ?? null,
             longitude: supplier.longitude ?? null,
-            contactPhone: supplier.contactPhone ?? null,
-            contactEmail: supplier.contactEmail ?? null,
             offersDelivery: Boolean(supplier.offersDelivery),
             deliveryRadiusMiles: supplier.deliveryRadiusMiles ?? null,
             productHighlights: (
@@ -1895,231 +1880,8 @@ export function registerPublicMapRoutes(app: Express) {
           };
         });
 
-      const applyCoords = (
-        target: { latitude?: string | null; longitude?: string | null },
-        coords: { lat: number; lng: number },
-      ) => {
-        target.latitude = coords.lat.toString();
-        target.longitude = coords.lng.toString();
-      };
-
-      const MAX_COORD_MISMATCH_FIXES =
-        Math.max(
-          0,
-          Number(process.env.MAP_LOCATIONS_MAX_COORD_MISMATCH_FIXES || 0) || 0,
-        ) || (process.env.NODE_ENV === "production" ? 0 : 10);
-      let mismatchFixes = 0;
-      let reverseGeocodeChecks = 0;
-      let coordCalibrations = 0;
-      const deadline = Date.now() + GEOCODE_BUDGET_MS;
-
-      for (const host of hostLocations) {
-        const lat = parseCoord(host.latitude);
-        const lng = parseCoord(host.longitude);
-        const expectedState = expectedStateAbbrFor(host);
-        const address = buildFullAddress(host.address, host.city, host.state);
-        if (
-          lat !== null &&
-          lng !== null &&
-          address &&
-          Date.now() <= deadline &&
-          coordCalibrations < MAX_COORD_CALIBRATIONS_PER_REQUEST
-        ) {
-          coordCalibrations += 1;
-          const calibrated = await withTimeout(
-            (useGoogleCalibration ? forwardGeocodeGoogle : forwardGeocode)(
-              address,
-            ),
-            GEOCODE_TIMEOUT_MS,
-          ).catch(() => null);
-          if (calibrated) {
-            const driftMeters = haversineMeters(
-              lat,
-              lng,
-              calibrated.lat,
-              calibrated.lng,
-            );
-            if (driftMeters > COORD_CALIBRATION_THRESHOLD_METERS) {
-              applyCoords(host, calibrated);
-              if (host.hostId) {
-                await storage
-                  .updateHostCoordinates(
-                    host.hostId,
-                    calibrated.lat,
-                    calibrated.lng,
-                  )
-                  .catch(() => undefined);
-              } else if (host.locationRequestId) {
-                await db
-                  .update(locationRequests)
-                  .set({
-                    latitude: calibrated.lat.toString(),
-                    longitude: calibrated.lng.toString(),
-                  })
-                  .where(eq(locationRequests.id, host.locationRequestId))
-                  .catch(() => undefined);
-              }
-            }
-          }
-        }
-        if (
-          lat !== null &&
-          lng !== null &&
-          expectedState &&
-          Date.now() <= deadline &&
-          reverseGeocodeChecks < MAX_REVERSE_GEOCODE_PER_REQUEST &&
-          mismatchFixes < MAX_COORD_MISMATCH_FIXES
-        ) {
-          reverseGeocodeChecks += 1;
-          const reversed = await withTimeout(
-            reverseGeocode(lat, lng),
-            GEOCODE_TIMEOUT_MS,
-          ).catch(() => null);
-          const reversedState = normalizeUsStateAbbr(
-            String(reversed?.state || "").trim(),
-          );
-          if (reversedState && reversedState !== expectedState) {
-            mismatchFixes += 1;
-            if (Date.now() > deadline) {
-              continue;
-            }
-
-            host.latitude = null;
-            host.longitude = null;
-            if (address) {
-              const coords = await withTimeout(
-                forwardGeocode(address, {
-                  force: true,
-                }),
-                GEOCODE_TIMEOUT_MS,
-              ).catch(() => null);
-              if (coords) {
-                if (Date.now() > deadline) {
-                  continue;
-                }
-                const verify = await withTimeout(
-                  reverseGeocode(coords.lat, coords.lng),
-                  GEOCODE_TIMEOUT_MS,
-                ).catch(() => null);
-                const verifyState = normalizeUsStateAbbr(
-                  String(verify?.state || "").trim(),
-                );
-                if (!verifyState || verifyState === expectedState) {
-                  applyCoords(host, coords);
-                  if (host.hostId) {
-                    await storage
-                      .updateHostCoordinates(
-                        host.hostId,
-                        coords.lat,
-                        coords.lng,
-                      )
-                      .catch(() => undefined);
-                  } else if (host.locationRequestId) {
-                    await db
-                      .update(locationRequests)
-                      .set({
-                        latitude: coords.lat.toString(),
-                        longitude: coords.lng.toString(),
-                      })
-                      .where(eq(locationRequests.id, host.locationRequestId))
-                      .catch(() => undefined);
-                  }
-                }
-              }
-            }
-          }
-        }
-
-        if (
-          parseCoord(host.latitude) !== null &&
-          parseCoord(host.longitude) !== null
-        ) {
-          continue;
-        }
-        if (!address) continue;
-        queueGeocode(
-          address,
-          (coords) => applyCoords(host, coords),
-          host.hostId
-            ? async (coords) => {
-                await storage.updateHostCoordinates(
-                  host.hostId,
-                  coords.lat,
-                  coords.lng,
-                );
-              }
-            : host.locationRequestId
-              ? async (coords) => {
-                  await db
-                    .update(locationRequests)
-                    .set({
-                      latitude: coords.lat.toString(),
-                      longitude: coords.lng.toString(),
-                    })
-                    .where(eq(locationRequests.id, host.locationRequestId));
-                }
-              : undefined,
-        );
-      }
-
-      for (const event of eventLocations) {
-        const lat = parseCoord(event.hostLatitude);
-        const lng = parseCoord(event.hostLongitude);
-        if (lat !== null && lng !== null) continue;
-        const address = buildFullAddress(
-          event.hostAddress,
-          event.hostCity,
-          event.hostState,
-        );
-        if (!address) continue;
-        queueGeocode(address, (coords) => {
-          event.hostLatitude = coords.lat.toString();
-          event.hostLongitude = coords.lng.toString();
-        });
-      }
-
-      for (const supplier of supplierLocations) {
-        const lat = parseCoord(supplier.latitude);
-        const lng = parseCoord(supplier.longitude);
-        if (lat !== null && lng !== null) continue;
-        const address = buildFullAddress(
-          supplier.address,
-          supplier.city,
-          supplier.state,
-        );
-        if (!address) continue;
-        queueGeocode(
-          address,
-          (coords) => applyCoords(supplier, coords),
-          async (coords) => {
-            await db
-              .update(suppliers)
-              .set({
-                latitude: coords.lat.toString(),
-                longitude: coords.lng.toString(),
-                updatedAt: new Date(),
-              })
-              .where(eq(suppliers.id, supplier.supplierId));
-          },
-        );
-      }
-
-      const pendingTasks = Array.from(pendingByAddress.values()).slice(
-        0,
-        MAX_GEOCODE_PER_REQUEST,
-      );
-      for (const task of pendingTasks) {
-        if (Date.now() > deadline) break;
-        const coords = await withTimeout(
-          forwardGeocode(task.address),
-          GEOCODE_TIMEOUT_MS,
-        ).catch(() => null);
-        if (!coords) continue;
-        task.onResolved.forEach((handler) => handler(coords));
-        await Promise.all(
-          task.persist.map((handler) => handler(coords).catch(() => undefined)),
-        );
-      }
+      // Anonymous map reads are strictly read-only. Coordinate enrichment and
+      // persistence belong in an explicit owner/admin background workflow.
 
       const payload = toPublicMapLocationsPayload({
         hostLocations,
@@ -2130,22 +1892,13 @@ export function registerPublicMapRoutes(app: Express) {
       mapLocationsCache = {
         payload,
         capturedAt,
-        expiresAt:
-          capturedAt +
-          (Math.max(
-            0,
-            Number(process.env.MAP_LOCATIONS_CACHE_TTL_MS || 0) || 0,
-          ) || 300_000),
+        // Overlay requests may reuse only the just-built response. Entity
+        // authority is otherwise reloaded for every anonymous map request.
+        expiresAt: capturedAt + 1_000,
       };
-      mapLocationsLastGood = { payload, capturedAt };
       res.json(toRequestedMapPayload(payload));
     } catch (error) {
       console.error("Error building map locations feed:", error);
-      const recentLastGood = getRecentMapLocationsLastGood();
-      if (recentLastGood) {
-        res.setHeader("X-MealScout-Stale", "1");
-        return res.json(toRequestedMapPayload(recentLastGood));
-      }
       res.setHeader("Cache-Control", "no-store");
       res.setHeader("X-MealScout-Degraded", "1");
       res.setHeader("Retry-After", "30");
@@ -2234,21 +1987,8 @@ export function registerPublicMapRoutes(app: Express) {
         });
 
       return res.status(201).json({
-        ...serializeCommunityTruckSighting({
-          id: created?.id,
-          metadata: {
-            truckName,
-            photoUrl,
-            latitude,
-            longitude,
-            notes: notes || null,
-            locationLabel: locationLabel || null,
-            source,
-            seenAt: seenAt.toISOString(),
-          },
-          description: notes || `Community sighting for ${truckName}`,
-          createdAt: created?.createdAt || new Date(),
-        }),
+        id: created?.id,
+        status: "under_review",
       });
     } catch (error) {
       console.error("Error submitting community truck sighting:", error);
@@ -2284,7 +2024,7 @@ export function registerPublicMapRoutes(app: Express) {
         .where(
           and(
             eq(moderationEvents.eventType, COMMUNITY_TRUCK_SIGHTING_EVENT),
-            eq(moderationEvents.status, "open"),
+            eq(moderationEvents.status, "approved"),
             gte(moderationEvents.createdAt, since),
           ),
         )
@@ -2321,7 +2061,7 @@ export function registerPublicMapRoutes(app: Express) {
         })
         .filter(Boolean);
 
-      res.setHeader("Cache-Control", "public, max-age=10");
+      res.setHeader("Cache-Control", "no-store");
       return res.json(sightings);
     } catch (error) {
       console.error("Error loading community truck sightings:", error);
@@ -2347,7 +2087,7 @@ export function registerPublicMapRoutes(app: Express) {
       const snapshot =
         mapLocationsCache && mapLocationsCache.expiresAt > Date.now()
           ? mapLocationsCache
-          : getRecentMapLocationsLastGoodSnapshot();
+          : null;
       if (!snapshot) {
         res.setHeader("Cache-Control", "no-store");
         res.setHeader("X-MealScout-Degraded", "1");
@@ -2373,7 +2113,7 @@ export function registerPublicMapRoutes(app: Express) {
 
       const version = String(snapshot.capturedAt);
 
-      res.setHeader("Cache-Control", "public, max-age=20");
+      res.setHeader("Cache-Control", "no-store");
       res.json({
         version,
         zoom,
@@ -2440,7 +2180,7 @@ export function registerPublicMapRoutes(app: Express) {
     ].join(":");
     const cached = mapRouteSummaryCache.get(cacheKey);
     if (cached && cached.expiresAt > Date.now()) {
-      res.setHeader("Cache-Control", "public, max-age=60");
+      res.setHeader("Cache-Control", "no-store");
       return res.json(cached.payload);
     }
 
@@ -2473,7 +2213,7 @@ export function registerPublicMapRoutes(app: Express) {
         expiresAt: Date.now() + 10 * 60_000, // 10-minute TTL
         payload,
       });
-      res.setHeader("Cache-Control", "public, max-age=600");
+      res.setHeader("Cache-Control", "no-store");
       return res.json(payload);
     } catch (error) {
       console.error("[map.route-summary] failed", error);
@@ -2514,12 +2254,6 @@ export function registerPublicMapRoutes(app: Express) {
       destLng.toFixed(3),
       "drive-v1",
     ].join(":");
-    const cached = await getCached<any>("route_corridor", cacheKey);
-    if (cached) {
-      res.setHeader("Cache-Control", "public, max-age=900");
-      return res.status(200).json(cached);
-    }
-
     try {
       const route = await computeGoogleRoute({
         apiKey,
@@ -2542,13 +2276,6 @@ export function registerPublicMapRoutes(app: Express) {
         });
       }
 
-      const mapSnapshot =
-        mapLocationsCache && mapLocationsCache.expiresAt > Date.now()
-          ? mapLocationsCache
-          : getRecentMapLocationsLastGoodSnapshot();
-      const snapshotHostRows = Array.isArray(mapSnapshot?.payload?.hostLocations)
-        ? mapSnapshot!.payload.hostLocations
-        : [];
       const storedHosts = (await storage.getAllHosts().catch(() => [])) as any[];
       const storedHostUserIds = Array.from(
         new Set(
@@ -2560,21 +2287,31 @@ export function registerPublicMapRoutes(app: Express) {
       const activeStoredHostRows =
         storedHostUserIds.length > 0
           ? await db
-              .select({ id: users.id })
+              .select({
+                id: users.id,
+                isDisabled: users.isDisabled,
+                publicProfileSettings: users.publicProfileSettings,
+              })
               .from(users)
-              .where(
-                and(
-                  inArray(users.id, storedHostUserIds),
-                  or(eq(users.isDisabled, false), isNull(users.isDisabled)),
-                ),
-              )
+              .where(inArray(users.id, storedHostUserIds))
               .catch(() => null)
           : null;
-      const activeStoredHostUserIds = Array.isArray(activeStoredHostRows)
-        ? new Set(activeStoredHostRows.map((row: { id: string }) => row.id))
-        : null;
+      const activeStoredHostByUserId = new Map(
+        (Array.isArray(activeStoredHostRows) ? activeStoredHostRows : []).map(
+          (row: any) => [String(row.id), row],
+        ),
+      );
       const storedHostRows = storedHosts
         .filter((host) => {
+          const userId = String(host?.userId || "").trim();
+          const owner = userId ? activeStoredHostByUserId.get(userId) : null;
+          if (!owner || owner.isDisabled !== false) return false;
+          if (
+            !resolvePublicProfileVisibility(owner.publicProfileSettings)
+              .showAddress
+          ) {
+            return false;
+          }
           if (
             !isHostProfileMapEligible({
               businessName: host?.businessName,
@@ -2585,9 +2322,10 @@ export function registerPublicMapRoutes(app: Express) {
           ) {
             return false;
           }
-          if (!activeStoredHostUserIds) return true;
-          const userId = String(host?.userId || "").trim();
-          return userId ? activeStoredHostUserIds.has(userId) : true;
+          return (
+            toFiniteNumber(host?.latitude) !== null &&
+            toFiniteNumber(host?.longitude) !== null
+          );
         })
         .map((host) => ({
           id: host.id,
@@ -2601,7 +2339,7 @@ export function registerPublicMapRoutes(app: Express) {
           spotImageUrl: host.spotImageUrl ?? null,
         }));
       const hostRowsById = new Map<string, any>();
-      [...snapshotHostRows, ...storedHostRows].forEach((row: any) => {
+      storedHostRows.forEach((row: any) => {
         const rowId =
           String(row?.id || "").trim() ||
           `${String(row?.hostId || "")}:${String(row?.latitude || "")}:${String(
@@ -2945,13 +2683,7 @@ export function registerPublicMapRoutes(app: Express) {
           mapHostLocationsReady: hostRows.length > 0,
         },
       };
-      await setCached(
-        "route_corridor",
-        cacheKey,
-        payload,
-        hostRows.length > 0 ? ROUTE_CORRIDOR_TTL_MS : 5 * 60_000,
-      );
-      res.setHeader("Cache-Control", "public, max-age=900");
+      res.setHeader("Cache-Control", "no-store");
       return res.status(200).json(payload);
     } catch (error) {
       console.warn("[map.route-corridor] failed", error);
@@ -2993,7 +2725,7 @@ export function registerPublicMapRoutes(app: Express) {
     ].join(":");
     const acCached = placeAutocompleteCache.get(autocompleteCacheKey);
     if (acCached && acCached.expiresAt > Date.now()) {
-      res.setHeader("Cache-Control", "public, max-age=300");
+      res.setHeader("Cache-Control", "no-store");
       return res.json({ suggestions: acCached.suggestions });
     }
 
@@ -3085,7 +2817,7 @@ export function registerPublicMapRoutes(app: Express) {
 
     try {
       const suggestions = await inflightPromise;
-      res.setHeader("Cache-Control", "public, max-age=300");
+      res.setHeader("Cache-Control", "no-store");
       res.json({ suggestions });
     } catch (error) {
       console.warn("[map.place-autocomplete] failed", error);
@@ -3112,7 +2844,7 @@ export function registerPublicMapRoutes(app: Express) {
     // placeId is a permanent identifier — the address it points to never changes.
     const pdCached = placeDetailsCache.get(placeId);
     if (pdCached && pdCached.expiresAt > Date.now()) {
-      res.setHeader("Cache-Control", "public, max-age=86400");
+      res.setHeader("Cache-Control", "no-store");
       return res.json({ place: pdCached.place });
     }
 
@@ -3161,7 +2893,7 @@ export function registerPublicMapRoutes(app: Express) {
 
     try {
       const place = await pdInflight;
-      res.setHeader("Cache-Control", "public, max-age=86400");
+      res.setHeader("Cache-Control", "no-store");
       res.json({ place });
     } catch (error) {
       console.error("[map.place-details] failed", error);
@@ -3210,7 +2942,7 @@ export function registerPublicMapRoutes(app: Express) {
       cacheKey,
     );
     if (cached) {
-      res.setHeader("Cache-Control", "public, max-age=900");
+      res.setHeader("Cache-Control", "no-store");
       return res.status(200).json(cached);
     }
 
@@ -3303,7 +3035,7 @@ export function registerPublicMapRoutes(app: Express) {
         payload,
         PLACE_INTELLIGENCE_TTL_MS,
       );
-      res.setHeader("Cache-Control", "public, max-age=900");
+      res.setHeader("Cache-Control", "no-store");
       return res.status(200).json(payload);
     } catch (error) {
       console.warn("[map.place-intelligence] failed", error);
@@ -3337,7 +3069,7 @@ export function registerPublicMapRoutes(app: Express) {
     const cacheKey = `${lat.toFixed(3)}:${lng.toFixed(3)}`;
     const cached = await getCached<any>("operator_support", cacheKey);
     if (cached) {
-      res.setHeader("Cache-Control", "public, max-age=900");
+      res.setHeader("Cache-Control", "no-store");
       return res.status(200).json(cached);
     }
 
@@ -3478,7 +3210,7 @@ export function registerPublicMapRoutes(app: Express) {
         payload,
         OPERATOR_SUPPORT_TTL_MS,
       );
-      res.setHeader("Cache-Control", "public, max-age=900");
+      res.setHeader("Cache-Control", "no-store");
       return res.status(200).json(payload);
     } catch (error) {
       console.warn("[map.operator-support] failed", error);
@@ -3502,14 +3234,33 @@ export function registerPublicMapRoutes(app: Express) {
       const [hostRow] = await db
         .select({
           id: hosts.id,
+          userId: hosts.userId,
+          businessName: hosts.businessName,
+          address: hosts.address,
           city: hosts.city,
           state: hosts.state,
+          ownerDisabled: users.isDisabled,
+          publicProfileSettings: users.publicProfileSettings,
         })
         .from(hosts)
-        .where(eq(hosts.id, hostId))
+        .innerJoin(users, eq(hosts.userId, users.id))
+        .where(and(eq(hosts.id, hostId), eq(users.isDisabled, false)))
         .limit(1);
 
-      if (!hostRow) {
+      const hostVisibility = hostRow
+        ? resolvePublicProfileVisibility(hostRow.publicProfileSettings)
+        : null;
+      if (
+        !hostRow ||
+        hostRow.ownerDisabled !== false ||
+        !hostVisibility?.showAddress ||
+        !isHostProfileMapEligible({
+          businessName: hostRow.businessName,
+          address: hostRow.address,
+          city: hostRow.city,
+          state: hostRow.state,
+        })
+      ) {
         return res.status(404).json({ message: "Host not found" });
       }
 
@@ -3557,12 +3308,19 @@ export function registerPublicMapRoutes(app: Express) {
         .orderBy(asc(events.date), asc(events.startTime))
         .limit(250);
 
+      const publicTrucksByEvent = await loadConfirmedEventTrucks(
+        rows.map((row: (typeof rows)[number]) => String(row.eventId || "")),
+      );
+
       const timeZone = resolveCityTimeZoneSync({
         city: hostRow.city || null,
         state: hostRow.state || null,
       });
       const bookings = rows
         .flatMap((row: (typeof rows)[number]) => {
+          const publicTruck = (
+            publicTrucksByEvent.get(String(row.eventId || "")) || []
+          ).find((truck) => truck.truckId === String(row.truckId || ""));
           const interval = buildSlotDateTimes({
             timeZone,
             date: row.date,
@@ -3570,6 +3328,7 @@ export function registerPublicMapRoutes(app: Express) {
             endTime: String(row.endTime || ""),
           });
           if (
+            !publicTruck ||
             !interval ||
             !row.bookingConfirmedAt ||
             !isSlotPublic({
@@ -3594,18 +3353,16 @@ export function registerPublicMapRoutes(app: Express) {
               startTime: String(row.startTime || ""),
               endTime: String(row.endTime || ""),
               truck: {
-                id: String(row.truckId),
-                name: String(row.truckName || "Food truck"),
-                cuisineType: row.truckCuisine
-                  ? String(row.truckCuisine)
-                  : null,
+                id: publicTruck.truckId,
+                name: publicTruck.name,
+                cuisineType: publicTruck.cuisineType,
               },
             },
           ];
         })
         .slice(0, 12);
 
-      res.setHeader("Cache-Control", "public, max-age=60");
+      res.setHeader("Cache-Control", "no-store");
       return res.json({
         hostId,
         generatedAt: new Date().toISOString(),
@@ -3621,7 +3378,11 @@ export function registerPublicMapRoutes(app: Express) {
     }
   });
 
-  app.get("/api/map/business-popularity", async (req, res) => {
+  app.get(
+    "/api/map/business-popularity",
+    isAuthenticated,
+    isStaffOrAdmin,
+    async (req, res) => {
     try {
       const rawRestaurantIds = String(req.query.restaurantIds || "")
         .split(",")
@@ -3842,7 +3603,7 @@ export function registerPublicMapRoutes(app: Express) {
         };
       });
 
-      res.setHeader("Cache-Control", "public, max-age=180");
+      res.setHeader("Cache-Control", "no-store");
       return res.json({
         generatedAt: new Date().toISOString(),
         restaurants: byRestaurant,
@@ -3853,7 +3614,8 @@ export function registerPublicMapRoutes(app: Express) {
         .status(500)
         .json({ message: "Failed to load business popularity" });
     }
-  });
+    },
+  );
 
   app.get("/api/map/foot-traffic", async (req, res) => {
     const launchDegradedMode = isLaunchDegradedMode();
@@ -3949,8 +3711,8 @@ export function registerPublicMapRoutes(app: Express) {
         if (!pointInBounds(bounds, lat, lng)) continue;
         const actorKey =
           String(row.userId || "").trim() ||
-          String(row.visitorId || "").trim() ||
-          `${roundCell(lat)}:${roundCell(lng)}`;
+          String(row.visitorId || "").trim();
+        if (!actorKey) continue;
         const seenMs = row.createdAt ? new Date(row.createdAt).getTime() : 0;
         const ageMinutes = seenMs
           ? Math.max(0, (Date.now() - seenMs) / 60_000)
@@ -3997,7 +3759,7 @@ export function registerPublicMapRoutes(app: Express) {
       }
 
       const preCells = Array.from(buckets.values()).filter(
-        (bucket) => bucket.count >= 2 || bucket.uniqueActors.size >= 2,
+        (bucket) => bucket.uniqueActors.size >= 3,
       );
       const weightDenominator = Math.max(
         1,
@@ -4085,13 +3847,19 @@ export function registerPublicMapRoutes(app: Express) {
         hostCount: number;
         truckCount: number;
         bookingCount: number;
+        actorKeys: Set<string>;
       }
     >();
     const countedHostIds = new Set<string>();
     const upsertSupplyBucket = (
       lat: number,
       lng: number,
-      options?: { hostId?: string; truckDelta?: number; bookingDelta?: number },
+      options?: {
+        hostId?: string;
+        actorKey?: string;
+        truckDelta?: number;
+        bookingDelta?: number;
+      },
     ) => {
       if (!pointInBounds(bounds, lat, lng)) return;
       const bucketLat = roundCell(lat);
@@ -4103,6 +3871,7 @@ export function registerPublicMapRoutes(app: Express) {
         hostCount: 0,
         truckCount: 0,
         bookingCount: 0,
+        actorKeys: new Set<string>(),
       };
 
       const hostId = String(options?.hostId || "").trim();
@@ -4112,6 +3881,8 @@ export function registerPublicMapRoutes(app: Express) {
       }
       bucket.truckCount += Math.max(0, Number(options?.truckDelta || 0));
       bucket.bookingCount += Math.max(0, Number(options?.bookingDelta || 0));
+      const actorKey = String(options?.actorKey || "").trim();
+      if (actorKey) bucket.actorKeys.add(actorKey);
       supplyBuckets.set(key, bucket);
     };
 
@@ -4123,17 +3894,22 @@ export function registerPublicMapRoutes(app: Express) {
           2,
           Math.min(120, estimateRadiusMetersFromBounds(bounds) / 1000),
         );
-        const liveTrucks = await storage.getLiveTrucksNearby(
+        const liveTruckRows = await storage.getLiveTrucksNearby(
           centerLat,
           centerLng,
           radiusKm,
         );
+        const liveTrucks =
+          await toPublicRestaurantListingArrayWithVisibility(liveTruckRows);
         for (const truck of liveTrucks) {
           if (!(truck as any)?.isVerified) continue;
           const lat = toFiniteNumber((truck as any).currentLatitude);
           const lng = toFiniteNumber((truck as any).currentLongitude);
           if (lat === null || lng === null) continue;
-          upsertSupplyBucket(lat, lng, { truckDelta: 1 });
+          upsertSupplyBucket(lat, lng, {
+            actorKey: `truck:${String((truck as any).id || "")}`,
+            truckDelta: 1,
+          });
         }
       } catch (error) {
         console.error("Error loading map supply truck signals:", error);
@@ -4158,10 +3934,13 @@ export function registerPublicMapRoutes(app: Express) {
             startTime: events.startTime,
             endTime: events.endTime,
             bookingConfirmedAt: eventBookings.bookingConfirmedAt,
+            ownerDisabled: users.isDisabled,
+            publicProfileSettings: users.publicProfileSettings,
           })
           .from(eventBookings)
           .innerJoin(events, eq(eventBookings.eventId, events.id))
           .innerJoin(hosts, eq(events.hostId, hosts.id))
+          .innerJoin(users, eq(hosts.userId, users.id))
           .where(
             and(
               eq(eventBookings.status, "confirmed"),
@@ -4169,11 +3948,19 @@ export function registerPublicMapRoutes(app: Express) {
               inArray(events.status, ["open", "booked", "filled"]),
               gte(events.date, bookingWindowStart),
               lte(events.date, bookingWindowEnd),
+              eq(users.isDisabled, false),
             ),
           )
           .limit(6000);
 
         for (const row of upcomingHostBookings) {
+          if (
+            row.ownerDisabled !== false ||
+            !resolvePublicProfileVisibility(row.publicProfileSettings)
+              .showAddress
+          ) {
+            continue;
+          }
           const timeZone = resolveCityTimeZoneSync({
             city: row.city || null,
             state: row.state || null,
@@ -4207,6 +3994,7 @@ export function registerPublicMapRoutes(app: Express) {
           if (lat === null || lng === null) continue;
           upsertSupplyBucket(lat, lng, {
             hostId: String(row.hostId || ""),
+            actorKey: `host:${String(row.hostId || "")}`,
             bookingDelta: 1,
           });
         }
@@ -4223,7 +4011,7 @@ export function registerPublicMapRoutes(app: Express) {
         const rawWeight = hostScore + truckScore + bookingScore;
         return { ...bucket, rawWeight };
       })
-      .filter((bucket) => bucket.rawWeight > 0);
+      .filter((bucket) => bucket.rawWeight > 0 && bucket.actorKeys.size >= 3);
 
     const supplyWeightDenominator = Math.max(
       1,
@@ -4242,7 +4030,7 @@ export function registerPublicMapRoutes(app: Express) {
           weight,
           source: "supply_signal" as const,
           count: bucket.bookingCount + bucket.truckCount,
-          uniqueActors: bucket.hostCount + bucket.truckCount,
+          uniqueActors: bucket.actorKeys.size,
         };
       })
       .sort((a, b) => (b.weight || 0) - (a.weight || 0))
@@ -4364,6 +4152,14 @@ export function registerPublicMapRoutes(app: Express) {
       ...googlePlaces.cells,
     ].sort((a, b) => (b.weight || 0) - (a.weight || 0));
 
+    const publicFirstPartyPings = firstPartyCells.reduce(
+      (sum, cell) => sum + Math.max(0, Number(cell.count || 0)),
+      0,
+    );
+    const publicFirstPartyActors = firstPartyCells.reduce(
+      (sum, cell) => sum + Math.max(0, Number(cell.uniqueActors || 0)),
+      0,
+    );
     const payload: FootTrafficPayload = {
       generatedAt: new Date().toISOString(),
       windowMinutes: effectiveWindowMinutes,
@@ -4373,7 +4169,7 @@ export function registerPublicMapRoutes(app: Express) {
       degradedMode: launchDegradedMode,
       interpretation: {
         label: "area_activity",
-        measuredFootTraffic: totalPings > 0,
+        measuredFootTraffic: publicFirstPartyPings > 0,
         description:
           "First-party MealScout movement, scheduled host/truck activity, and Google food-destination density are separate opportunity signals.",
       },
@@ -4382,8 +4178,8 @@ export function registerPublicMapRoutes(app: Express) {
         isLowDensity: signalTier === "sparse",
       },
       firstParty: {
-        totalPings,
-        totalUniqueActors,
+        totalPings: publicFirstPartyPings,
+        totalUniqueActors: publicFirstPartyActors,
         cells: firstPartyCells,
       },
       supplySignals: {
@@ -4409,7 +4205,6 @@ export function registerPublicMapRoutes(app: Express) {
     isStaffOrAdmin,
     async (_req: any, res) => {
       mapLocationsCache = null;
-      mapLocationsLastGood = null;
       mapFootTrafficCache.clear();
       res.json({ success: true });
     },

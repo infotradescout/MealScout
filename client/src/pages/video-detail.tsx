@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useParams, Link } from "wouter";
-import { useEffect } from "react";
+import { useRef } from "react";
 import Navigation from "@/components/navigation";
 import { BackHeader } from "@/components/back-header";
 import { VideoTranscript } from "@/components/video-transcript";
@@ -17,6 +17,7 @@ export default function VideoDetailPage() {
   const params = useParams() as Record<string, string | undefined>;
   const videoParam = params.id || params.slug || "";
   const videoId = extractUuidFromSlug(videoParam) || videoParam;
+  const recordedViewIdRef = useRef<string | null>(null);
 
   const { data: video, isLoading } = useQuery({
     queryKey: ["/api/stories", videoId],
@@ -31,17 +32,24 @@ export default function VideoDetailPage() {
     enabled: !!restaurantId,
   });
 
-  // Track video view
-  useEffect(() => {
-    if (videoId && video && !isLoading) {
-      fetch(`/api/stories/${videoId}/view`, {
-        method: "POST",
-        credentials: "include",
-      }).catch(() => {
-        // Silent fail - view tracking shouldn't interrupt UX
-      });
+  const recordQualifiedView = (watchDuration: number) => {
+    if (
+      !videoId ||
+      watchDuration < 3 ||
+      recordedViewIdRef.current === videoId
+    ) {
+      return;
     }
-  }, [videoId, video, isLoading]);
+    recordedViewIdRef.current = videoId;
+    fetch(`/api/stories/${videoId}/view`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ watchDuration: Math.floor(watchDuration) }),
+    }).catch(() => {
+      // Silent fail - view tracking shouldn't interrupt UX.
+    });
+  };
 
   if (isLoading) {
     return (
@@ -168,6 +176,14 @@ export default function VideoDetailPage() {
             controls
             className="w-full h-full object-contain"
             playsInline
+            onTimeUpdate={(event) => {
+              const played = event.currentTarget.played;
+              let watchDuration = 0;
+              for (let index = 0; index < played.length; index += 1) {
+                watchDuration += played.end(index) - played.start(index);
+              }
+              recordQualifiedView(watchDuration);
+            }}
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-white">

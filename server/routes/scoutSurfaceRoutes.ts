@@ -42,7 +42,7 @@ export function registerScoutSurfaceRoutes(app: Express) {
         userId,
       });
 
-      res.setHeader("Cache-Control", "public, max-age=60");
+      res.setHeader("Cache-Control", "no-store");
       res.json(payload);
     } catch (error) {
       console.error("Error building scout surface:", error);

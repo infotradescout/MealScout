@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
-import {
-  useInfiniteQuery,
-  useMutation,
-  useQuery,
-} from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query";
 import { format, formatDistanceToNow } from "date-fns";
 import { Link, useLocation, useSearch } from "wouter";
 import { io, type Socket } from "socket.io-client";
 import type { Restaurant } from "@shared/schema";
+import {
+  isPickupOrderFullyRefunded,
+  pickupOrderSucceededRefundAmountCents,
+} from "@shared/pickupOrderFinancialTruth";
 import {
   AlertCircle,
   Bell,
@@ -84,8 +84,19 @@ export type OwnerOrder = {
   totalCents: number;
   paymentMethod: "card" | "cash" | string;
   payoutStatus?: string | null;
+  stripeRefundStatus?: string | null;
+  stripeRefundAmountCents?: number | null;
+  refundFailureReason?: string | null;
+  payoutReversalFailureReason?: string | null;
+  stripeDisputeStatus?: string | null;
+  stripeDisputeAmountCents?: number | null;
+  stripeDisputeReason?: string | null;
+  disputeFailureReason?: string | null;
   scheduledFor?: string | null;
   confirmedAt?: string | null;
+  merchantAcknowledgementMinutesSnapshot?: number | null;
+  merchantAcknowledgementDueAt?: string | null;
+  merchantAcknowledgedAt?: string | null;
   readyAt?: string | null;
   completedAt?: string | null;
   cancelledAt?: string | null;
@@ -106,20 +117,34 @@ type OwnerOrdersWorkspaceProps = {
   view: OwnerOrdersView;
 };
 
-const ACTIVE_STATUSES = ["pending", "confirmed", "preparing", "ready", "out_for_delivery", "delivered"];
-const CANCELLABLE_STATUSES = ["pending", "confirmed", "preparing"];
+const ACTIVE_STATUSES = [
+  "pending",
+  "confirmed",
+  "preparing",
+  "ready",
+  "out_for_delivery",
+  "delivered",
+  "payment_disputed",
+  "cancellation_pending",
+];
+const CANCELLABLE_STATUSES = [
+  "pending",
+  "confirmed",
+  "preparing",
+  "cancellation_pending",
+];
 
 const STATUS_DETAILS: Record<
   string,
   { label: string; className: string; icon: typeof Clock3 }
 > = {
   pending: {
-    label: "New",
+    label: "Awaiting payment",
     className: "border-amber-200 bg-amber-50 text-amber-900",
     icon: Bell,
   },
   confirmed: {
-    label: "Confirmed",
+    label: "Start required",
     className: "border-blue-200 bg-blue-50 text-blue-800",
     icon: CheckCircle2,
   },
@@ -148,6 +173,16 @@ const STATUS_DETAILS: Record<
     className: "border-stone-200 bg-stone-100 text-stone-700",
     icon: CheckCircle2,
   },
+  payment_disputed: {
+    label: "Payment disputed",
+    className: "border-red-200 bg-red-50 text-red-900",
+    icon: AlertCircle,
+  },
+  cancellation_pending: {
+    label: "Refund pending",
+    className: "border-amber-200 bg-amber-50 text-amber-900",
+    icon: Clock3,
+  },
   cancelled: {
     label: "Cancelled",
     className: "border-red-200 bg-red-50 text-red-800",
@@ -156,13 +191,18 @@ const STATUS_DETAILS: Record<
 };
 
 const NEXT_STATUS: Record<string, { status: string; label: string }> = {
-  pending: { status: "confirmed", label: "Confirm order" },
   confirmed: { status: "preparing", label: "Start preparing" },
   preparing: { status: "ready", label: "Mark ready" },
   ready: { status: "completed", label: "Complete order" },
   out_for_delivery: { status: "delivered", label: "Mark delivered" },
   delivered: { status: "completed", label: "Complete order" },
 };
+
+function nextOrderStatus(order: OwnerOrder) {
+  return order.status === "ready" && order.orderType === "delivery"
+    ? { status: "out_for_delivery", label: "Send out for delivery" }
+    : NEXT_STATUS[order.status];
+}
 
 export function isBusinessOrderOperator(userType: unknown) {
   return [
@@ -195,11 +235,95 @@ function getModifierLabels(item: OwnerOrderItem) {
   return Array.isArray(item.modifierLabels) ? item.modifierLabels : [];
 }
 
+function describeDisputeFinancialState(order: OwnerOrder) {
+  const disputeStatus = String(order.stripeDisputeStatus || "")
+    .trim()
+    .toLowerCase();
+  const payoutStatus = String(order.payoutStatus || "")
+    .trim()
+    .toLowerCase();
+  const hasDispute =
+    order.status === "payment_disputed" ||
+    Boolean(disputeStatus) ||
+    [
+      "dispute_reversal_pending",
+      "dispute_reinstatement_pending",
+      "disputed",
+    ].includes(payoutStatus);
+  if (!hasDispute) return null;
+
+  const fulfillmentTruth =
+    order.status === "completed"
+      ? "The completed fulfillment history is unchanged."
+      : "Do not fulfill this order while the payment state is under review.";
+
+  if (payoutStatus === "failed") {
+    return {
+      needsSupport: true,
+      title: "Dispute reconciliation needs support",
+      body:
+        fulfillmentTruth +
+        " MealScout could not finish the related transfer reconciliation" +
+        (order.disputeFailureReason ? ": " + order.disputeFailureReason : "."),
+    };
+  }
+  if (payoutStatus === "dispute_reversal_pending") {
+    return {
+      needsSupport: false,
+      title: "Dispute transfer reversal pending",
+      body:
+        fulfillmentTruth +
+        " The customer dispute is recorded, but the merchant transfer reversal has not finished yet.",
+    };
+  }
+  if (payoutStatus === "dispute_reinstatement_pending") {
+    return {
+      needsSupport: false,
+      title: "Dispute payout reinstatement pending",
+      body:
+        fulfillmentTruth +
+        " The dispute was resolved for the merchant, but the earlier transfer reversal has not been reinstated yet.",
+    };
+  }
+  if (["won", "prevented", "warning_closed"].includes(disputeStatus)) {
+    return {
+      needsSupport: false,
+      title: "Card dispute resolved for merchant",
+      body:
+        fulfillmentTruth +
+        " Stripe reports the dispute resolved for the merchant" +
+        (payoutStatus === "transferred"
+          ? ", and the merchant payout is reinstated."
+          : "."),
+    };
+  }
+  if (disputeStatus === "lost") {
+    return {
+      needsSupport: false,
+      title: "Card dispute resolved through issuer",
+      body:
+        fulfillmentTruth +
+        " The issuer decided the dispute and the merchant transfer is shown as " +
+        (payoutStatus || "unavailable") +
+        ".",
+    };
+  }
+  return {
+    needsSupport: false,
+    title: "Card payment disputed",
+    body:
+      fulfillmentTruth +
+      " MealScout is reconciling the merchant transfer while the issuer reviews the card dispute.",
+  };
+}
+
 async function fetchOrders(url: string): Promise<OrdersResponse> {
   const response = await fetch(url, { credentials: "include" });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(payload?.message || payload?.error || "Orders could not be loaded");
+    throw new Error(
+      payload?.message || payload?.error || "Orders could not be loaded",
+    );
   }
   return {
     orders: Array.isArray(payload?.orders) ? payload.orders : [],
@@ -248,27 +372,45 @@ function OwnerOrderCard({
   compact = false,
 }: {
   order: OwnerOrder;
-  onAdvance: (order: OwnerOrder) => void;
+  onAdvance: (order: OwnerOrder, prepTimeMinutes?: number) => void;
   onCancel: (order: OwnerOrder) => void;
   isUpdating: boolean;
   compact?: boolean;
 }) {
-  const next =
-    order.status === "ready" && order.orderType === "delivery"
-      ? { status: "out_for_delivery", label: "Send out for delivery" }
-      : NEXT_STATUS[order.status];
+  const [selectedPrepMinutes, setSelectedPrepMinutes] = useState<number | "">(
+    order.prepTimeMinutes || "",
+  );
+  const next = nextOrderStatus(order);
   const createdAt = new Date(order.createdAt);
   const createdLabel = Number.isNaN(createdAt.getTime())
     ? "Time unavailable"
     : formatDistanceToNow(createdAt, { addSuffix: true });
-  const scheduledAt = order.scheduledFor
-    ? new Date(order.scheduledFor)
+  const scheduledAt = order.scheduledFor ? new Date(order.scheduledFor) : null;
+  const cardSettlementBlocked =
+    order.paymentMethod === "card" && order.payoutStatus !== "transferred";
+  const cancellationPending = order.status === "cancellation_pending";
+  const disputeFinancialState = describeDisputeFinancialState(order);
+  const fullRefundSucceeded = isPickupOrderFullyRefunded(order);
+  const payoutRecoveryPending =
+    fullRefundSucceeded && order.payoutStatus !== "reversed";
+  const partialRefundAmountCents = fullRefundSucceeded
+    ? 0
+    : pickupOrderSucceededRefundAmountCents(order);
+  const refundNeedsSupport = ["failed", "canceled"].includes(
+    String(order.stripeRefundStatus || ""),
+  );
+  const acknowledgementDueAt = order.merchantAcknowledgementDueAt
+    ? new Date(order.merchantAcknowledgementDueAt)
     : null;
+  const acknowledgementDeadlineLabel =
+    acknowledgementDueAt && !Number.isNaN(acknowledgementDueAt.getTime())
+      ? format(acknowledgementDueAt, "h:mm a")
+      : null;
 
   return (
     <Card
       className={`overflow-hidden border-[color:var(--border-subtle)] bg-[var(--bg-surface)] shadow-clean ${
-        order.status === "pending" ? "ring-2 ring-amber-200" : ""
+        order.status === "confirmed" ? "ring-2 ring-amber-200" : ""
       }`}
       data-testid={`owner-order-${order.id}`}
     >
@@ -339,6 +481,69 @@ function OwnerOrderCard({
           )}
         </div>
 
+        {cardSettlementBlocked ||
+        disputeFinancialState ||
+        fullRefundSucceeded ||
+        partialRefundAmountCents > 0 ||
+        refundNeedsSupport ? (
+          <div
+            className={`mt-4 rounded-xl border p-3 text-sm ${
+              order.payoutStatus === "failed" ||
+              disputeFinancialState?.needsSupport
+                ? "border-red-200 bg-red-50 text-red-950"
+                : "border-amber-200 bg-amber-50 text-amber-950"
+            }`}
+          >
+            <p className="font-black">
+              {disputeFinancialState
+                ? disputeFinancialState.title
+                : payoutRecoveryPending
+                  ? "Customer refunded; payout recovery pending"
+                  : fullRefundSucceeded
+                    ? "Customer payment refunded"
+                    : partialRefundAmountCents > 0
+                      ? "Customer payment partially refunded"
+                      : refundNeedsSupport
+                        ? "Refund attempt needs support"
+                        : cancellationPending
+                          ? "Cancellation needs reconciliation"
+                          : order.payoutStatus === "failed"
+                            ? "Merchant payout needs attention"
+                            : "Card settlement is still processing"}
+            </p>
+            <p className="mt-1 text-xs leading-5">
+              {disputeFinancialState
+                ? disputeFinancialState.body
+                : payoutRecoveryPending
+                  ? `Stripe reports a full customer refund. Merchant transfer recovery is separate and will retry${order.payoutReversalFailureReason ? `: ${order.payoutReversalFailureReason}` : "."}`
+                  : fullRefundSucceeded
+                    ? "Stripe reports a full refund, and the merchant transfer is reconciled."
+                    : partialRefundAmountCents > 0
+                      ? `${formatMoney(partialRefundAmountCents)} was refunded. MealScout reconciles the merchant transfer proportionally and keeps the order history visible.`
+                      : refundNeedsSupport
+                        ? `Stripe reports that the refund did not complete${order.refundFailureReason ? `: ${order.refundFailureReason}` : "."} The merchant transfer remains visible and support review is required.`
+                        : cancellationPending
+                          ? order.stripeRefundStatus === "failed" ||
+                            order.stripeRefundStatus === "canceled" ||
+                            order.stripeRefundStatus ===
+                              "reconciliation_required"
+                            ? `The customer refund needs manual reconciliation${order.refundFailureReason ? `: ${order.refundFailureReason}` : "."} Retry only after reviewing the Stripe payment.`
+                            : "MealScout blocked any new merchant transfer. Retry to finish the Stripe reversal or refund before the order becomes cancelled."
+                          : order.payoutStatus === "failed"
+                            ? "The customer payment was received, but settlement did not finish. Reconcile the payout or cancel and refund before starting preparation."
+                            : "Wait until payment and merchant settlement are confirmed before starting preparation."}
+            </p>
+            {order.payoutStatus === "failed" ? (
+              <Link
+                href={`/menu-builder?restaurantId=${encodeURIComponent(order.restaurantId)}`}
+                className="mt-2 inline-flex text-xs font-black underline underline-offset-2"
+              >
+                Review payout setup
+              </Link>
+            ) : null}
+          </div>
+        ) : null}
+
         {order.specialInstructions ? (
           <div className="mt-4 rounded-xl border border-orange-200 bg-orange-50 p-3 text-sm text-orange-950">
             <span className="font-black">Order note:</span>{" "}
@@ -349,8 +554,19 @@ function OwnerOrderCard({
         {order.orderType === "delivery" ? (
           <div className="mt-4 rounded-xl border border-violet-200 bg-violet-50 p-3 text-sm text-violet-950">
             <p className="font-black">Deliver to</p>
-            <p>{[order.deliveryAddress, order.deliveryCity, order.deliveryState, order.deliveryPostalCode].filter(Boolean).join(", ")}</p>
-            {order.deliveryInstructions ? <p className="mt-1 text-xs">{order.deliveryInstructions}</p> : null}
+            <p>
+              {[
+                order.deliveryAddress,
+                order.deliveryCity,
+                order.deliveryState,
+                order.deliveryPostalCode,
+              ]
+                .filter(Boolean)
+                .join(", ")}
+            </p>
+            {order.deliveryInstructions ? (
+              <p className="mt-1 text-xs">{order.deliveryInstructions}</p>
+            ) : null}
           </div>
         ) : null}
 
@@ -360,6 +576,45 @@ function OwnerOrderCard({
           </p>
         ) : null}
 
+        {order.status === "confirmed" ? (
+          <div className="mt-4 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
+            <p className="font-black">
+              Start preparation
+              {acknowledgementDeadlineLabel
+                ? ` by ${acknowledgementDeadlineLabel}`
+                : " now"}
+            </p>
+            <p className="mt-1 text-xs leading-5">
+              Choose a real preparation estimate. If the response deadline
+              passes first, MealScout cancels the order and starts transfer and
+              refund reconciliation automatically.
+            </p>
+            <label
+              className="mt-3 block text-xs font-black"
+              htmlFor={`prep-estimate-${order.id}`}
+            >
+              Preparation estimate
+            </label>
+            <select
+              id={`prep-estimate-${order.id}`}
+              value={selectedPrepMinutes}
+              onChange={(event) =>
+                setSelectedPrepMinutes(
+                  event.target.value ? Number(event.target.value) : "",
+                )
+              }
+              className="mt-1 min-h-11 w-full rounded-lg border border-amber-300 bg-white px-3 text-sm font-bold"
+            >
+              <option value="">Choose minutes</option>
+              {[5, 10, 15, 20, 25, 30, 40, 45, 60, 90].map((minutes) => (
+                <option key={minutes} value={minutes}>
+                  {minutes} minutes
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : null}
+
         {next || CANCELLABLE_STATUSES.includes(order.status) ? (
           <div className="mt-4 flex flex-col gap-2 border-t border-[color:var(--border-subtle)] pt-4 sm:flex-row">
             {next ? (
@@ -367,8 +622,20 @@ function OwnerOrderCard({
                 type="button"
                 size="sm"
                 className="min-h-11 flex-1"
-                onClick={() => onAdvance(order)}
-                disabled={isUpdating}
+                onClick={() =>
+                  onAdvance(
+                    order,
+                    typeof selectedPrepMinutes === "number"
+                      ? selectedPrepMinutes
+                      : undefined,
+                  )
+                }
+                disabled={
+                  isUpdating ||
+                  cardSettlementBlocked ||
+                  (next.status === "preparing" &&
+                    typeof selectedPrepMinutes !== "number")
+                }
                 data-testid={`button-advance-order-${order.id}`}
               >
                 {isUpdating ? (
@@ -387,7 +654,7 @@ function OwnerOrderCard({
                 onClick={() => onCancel(order)}
                 disabled={isUpdating}
               >
-                Cancel order
+                {cancellationPending ? "Retry refund" : "Cancel order"}
               </Button>
             ) : null}
           </div>
@@ -397,7 +664,9 @@ function OwnerOrderCard({
   );
 }
 
-export default function OwnerOrdersWorkspace({ view }: OwnerOrdersWorkspaceProps) {
+export default function OwnerOrdersWorkspace({
+  view,
+}: OwnerOrdersWorkspaceProps) {
   const { user } = useAuth();
   const search = useSearch();
   const [, setLocation] = useLocation();
@@ -416,7 +685,9 @@ export default function OwnerOrdersWorkspace({ view }: OwnerOrdersWorkspaceProps
   const requestedRestaurantId = new URLSearchParams(search).get("restaurantId");
   const selectedBusiness =
     businesses.find((business) => business.id === requestedRestaurantId) ||
-    businesses.find((business) => business.id === (user as any)?.restaurantId) ||
+    businesses.find(
+      (business) => business.id === (user as any)?.restaurantId,
+    ) ||
     businesses[0] ||
     null;
   const restaurantId = selectedBusiness?.id || "";
@@ -491,11 +762,22 @@ export default function OwnerOrdersWorkspace({ view }: OwnerOrdersWorkspaceProps
   }, [historyQueryKey, queueQueryKey, restaurantId, view]);
 
   const statusMutation = useMutation({
-    mutationFn: async ({ order, status }: { order: OwnerOrder; status: string }) => {
+    mutationFn: async ({
+      order,
+      status,
+      prepTimeMinutes,
+    }: {
+      order: OwnerOrder;
+      status: string;
+      prepTimeMinutes?: number;
+    }) => {
       const response = await apiRequest(
         "PATCH",
         `/api/owner/orders/${encodeURIComponent(order.id)}/status`,
-        { status },
+        {
+          status,
+          ...(status === "preparing" ? { prepTimeMinutes } : {}),
+        },
       );
       const payload = await response.json();
       return (payload?.order || payload) as OwnerOrder;
@@ -527,8 +809,9 @@ export default function OwnerOrdersWorkspace({ view }: OwnerOrdersWorkspaceProps
   const orders = view === "kitchen" ? queueOrders : historyOrders;
   const counts = useMemo(
     () => ({
-      active: orders.filter((order) => ACTIVE_STATUSES.includes(order.status)).length,
-      new: orders.filter((order) => order.status === "pending").length,
+      active: orders.filter((order) => ACTIVE_STATUSES.includes(order.status))
+        .length,
+      new: orders.filter((order) => order.status === "confirmed").length,
       ready: orders.filter((order) => order.status === "ready").length,
       completed: orders.filter((order) => order.status === "completed").length,
       cancelled: orders.filter((order) => order.status === "cancelled").length,
@@ -546,21 +829,23 @@ export default function OwnerOrdersWorkspace({ view }: OwnerOrdersWorkspaceProps
       id: "pending",
       title: "New",
       icon: Bell,
-      orders: orders.filter((order) => order.status === "pending"),
+      orders: orders.filter((order) => order.status === "confirmed"),
     },
     {
       id: "progress",
       title: "In progress",
       icon: ChefHat,
       orders: orders.filter((order) =>
-        ["confirmed", "preparing"].includes(order.status),
+        ["preparing", "cancellation_pending"].includes(order.status),
       ),
     },
     {
       id: "ready",
       title: "Ready",
       icon: PackageCheck,
-      orders: orders.filter((order) => ["ready", "out_for_delivery", "delivered"].includes(order.status)),
+      orders: orders.filter((order) =>
+        ["ready", "out_for_delivery", "delivered"].includes(order.status),
+      ),
     },
   ];
 
@@ -583,7 +868,7 @@ export default function OwnerOrdersWorkspace({ view }: OwnerOrdersWorkspaceProps
             <ShoppingBag className="mx-auto h-10 w-10 text-orange-600" />
             <h1 className="mt-4 text-2xl font-black">Orders need a business</h1>
             <p className="mt-2 text-sm text-[color:var(--text-muted)]">
-              Create or claim your business before accepting MealScout orders.
+              Create or claim your business before receiving MealScout orders.
             </p>
             <Button asChild className="mt-6">
               <Link href="/claim-business">Claim a business</Link>
@@ -595,7 +880,8 @@ export default function OwnerOrdersWorkspace({ view }: OwnerOrdersWorkspaceProps
   }
 
   const isFoodTruck =
-    selectedBusiness.isFoodTruck || selectedBusiness.businessType === "food_truck";
+    selectedBusiness.isFoodTruck ||
+    selectedBusiness.businessType === "food_truck";
   const entityType = isFoodTruck
     ? "truck"
     : selectedBusiness.businessType === "bar"
@@ -620,10 +906,10 @@ export default function OwnerOrdersWorkspace({ view }: OwnerOrdersWorkspaceProps
     String((error as Error | null)?.message || ""),
   );
 
-  const advanceOrder = (order: OwnerOrder) => {
-    const next = NEXT_STATUS[order.status];
+  const advanceOrder = (order: OwnerOrder, prepTimeMinutes?: number) => {
+    const next = nextOrderStatus(order);
     if (!next) return;
-    statusMutation.mutate({ order, status: next.status });
+    statusMutation.mutate({ order, status: next.status, prepTimeMinutes });
   };
 
   return (
@@ -713,7 +999,10 @@ export default function OwnerOrdersWorkspace({ view }: OwnerOrdersWorkspaceProps
               ["Ready", counts.ready],
               ["Completed", counts.completed],
             ].map(([label, value]) => (
-              <div key={String(label)} className="rounded-2xl border border-orange-100 bg-white/90 p-3">
+              <div
+                key={String(label)}
+                className="rounded-2xl border border-orange-100 bg-white/90 p-3"
+              >
                 <p className="text-xs font-semibold text-[color:var(--text-muted)]">
                   {label}
                 </p>
@@ -730,7 +1019,9 @@ export default function OwnerOrdersWorkspace({ view }: OwnerOrdersWorkspaceProps
             <CardContent className="flex items-start gap-3 p-5">
               <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-700" />
               <div>
-                <h3 className="font-black text-red-950">Order access is unavailable</h3>
+                <h3 className="font-black text-red-950">
+                  Order access is unavailable
+                </h3>
                 <p className="mt-1 text-sm text-red-800">
                   Your account does not have access to orders for this business.
                 </p>
@@ -743,9 +1034,12 @@ export default function OwnerOrdersWorkspace({ view }: OwnerOrdersWorkspaceProps
               <div className="flex items-start gap-3">
                 <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-700" />
                 <div>
-                  <h3 className="font-black text-red-950">Orders could not be loaded</h3>
+                  <h3 className="font-black text-red-950">
+                    Orders could not be loaded
+                  </h3>
                   <p className="mt-1 text-sm text-red-800">
-                    {(error as Error).message || "Check your connection and try again."}
+                    {(error as Error).message ||
+                      "Check your connection and try again."}
                   </p>
                 </div>
               </div>
@@ -765,12 +1059,14 @@ export default function OwnerOrdersWorkspace({ view }: OwnerOrdersWorkspaceProps
 
         {!error && view === "orders" ? (
           <div className="mt-5 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {([
-              ["all", "All", orders.length],
-              ["active", "Needs attention", counts.active],
-              ["completed", "Completed", counts.completed],
-              ["cancelled", "Cancelled", counts.cancelled],
-            ] as const).map(([value, label, count]) => (
+            {(
+              [
+                ["all", "All", orders.length],
+                ["active", "Needs attention", counts.active],
+                ["completed", "Completed", counts.completed],
+                ["cancelled", "Cancelled", counts.cancelled],
+              ] as const
+            ).map(([value, label, count]) => (
               <Button
                 key={value}
                 type="button"
@@ -809,7 +1105,9 @@ export default function OwnerOrdersWorkspace({ view }: OwnerOrdersWorkspaceProps
                   : "When customers place an order from your published menu, it will appear here."}
               </p>
               <Button asChild variant="outline" className="mt-6">
-                <Link href={`/menu-builder?restaurantId=${encodeURIComponent(restaurantId)}`}>
+                <Link
+                  href={`/menu-builder?restaurantId=${encodeURIComponent(restaurantId)}`}
+                >
                   Review ordering setup
                 </Link>
               </Button>
@@ -838,14 +1136,19 @@ export default function OwnerOrdersWorkspace({ view }: OwnerOrdersWorkspaceProps
           </div>
         ) : null}
 
-        {!error && !isLoading && view === "orders" && historyQuery.hasNextPage ? (
+        {!error &&
+        !isLoading &&
+        view === "orders" &&
+        historyQuery.hasNextPage ? (
           <div className="mt-6 text-center">
             <Button
               variant="outline"
               onClick={() => historyQuery.fetchNextPage()}
               disabled={historyQuery.isFetchingNextPage}
             >
-              {historyQuery.isFetchingNextPage ? "Loading…" : "Load older orders"}
+              {historyQuery.isFetchingNextPage
+                ? "Loading…"
+                : "Load older orders"}
             </Button>
           </div>
         ) : null}
@@ -855,10 +1158,16 @@ export default function OwnerOrdersWorkspace({ view }: OwnerOrdersWorkspaceProps
             {kitchenColumns.map((column) => {
               const Icon = column.icon;
               return (
-                <section key={column.id} aria-labelledby={`kitchen-${column.id}`}>
+                <section
+                  key={column.id}
+                  aria-labelledby={`kitchen-${column.id}`}
+                >
                   <div className="mb-3 flex items-center gap-2 px-1">
                     <Icon className="h-4 w-4 text-orange-700" />
-                    <h3 id={`kitchen-${column.id}`} className="font-black text-[color:var(--text-primary)]">
+                    <h3
+                      id={`kitchen-${column.id}`}
+                      className="font-black text-[color:var(--text-primary)]"
+                    >
                       {column.title}
                     </h3>
                     <Badge variant="secondary">{column.orders.length}</Badge>
@@ -896,9 +1205,15 @@ export default function OwnerOrdersWorkspace({ view }: OwnerOrdersWorkspaceProps
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Cancel this order?</AlertDialogTitle>
+            <AlertDialogTitle>
+              {orderToCancel?.status === "cancellation_pending"
+                ? "Retry this refund?"
+                : "Cancel this order?"}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              The customer will see that order #{orderToCancel ? orderNumber(orderToCancel) : ""} was cancelled. This cannot be undone from the order queue.
+              {orderToCancel?.status === "cancellation_pending"
+                ? `MealScout will resume Stripe reconciliation for order #${orderNumber(orderToCancel)}. The order remains blocked from preparation and merchant transfer until this finishes.`
+                : `MealScout will block fulfillment and merchant transfer for order #${orderToCancel ? orderNumber(orderToCancel) : ""}, then finalize any required refund before showing it as cancelled.`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -915,7 +1230,9 @@ export default function OwnerOrdersWorkspace({ view }: OwnerOrdersWorkspaceProps
                 setOrderToCancel(null);
               }}
             >
-              Cancel order
+              {orderToCancel?.status === "cancellation_pending"
+                ? "Retry refund"
+                : "Cancel order"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

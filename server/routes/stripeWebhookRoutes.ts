@@ -23,11 +23,39 @@ import {
   utcDateFromDateKey,
 } from "../services/dateKeys";
 import { storage } from "../storage";
-import { shouldAttemptPickupWebhookPayoutTransfer } from "../utils/pickupWebhookPayout";
+import {
+  resolvePickupPayoutSourceTransaction,
+  shouldAttemptPickupWebhookPayoutTransfer,
+} from "../utils/pickupWebhookPayout";
+import { pickupOrderFinancialLockKey } from "../utils/pickupOrderFinancialLock";
+import { isRestaurantOrderingAuthorityVersionCurrent } from "../services/restaurantOrderingAuthorityVersion";
 import { shouldRevokeUserSubscriptionEntitlements } from "../utils/stripeSubscriptionEntitlements";
 import { decideStripeWebhookVerificationMode } from "../utils/stripeWebhookVerification";
 import { restoreTrackedInventoryForPickupOrderByOrderId } from "../services/pickupInventoryService";
-const stripe = process.env.STRIPE_SECRET_KEY
+import {
+  PICKUP_ORDER_PAYOUT_REVERSAL_PENDING,
+  requestAndFinalizeCardPickupOrderCancellation,
+} from "../services/pickupOrderCancellationService";
+import { reconcileCompletedPickupOrderRefund } from "../services/pickupOrderCompletedRefundService";
+import { reconcilePickupOrderDispute } from "../services/pickupOrderDisputeService";
+import {
+  pickupDisputePaymentIntentId,
+  retrieveAuthoritativePickupOrderDispute,
+} from "../services/pickupOrderDisputeTruth";
+import {
+  PICKUP_ORDER_PAYMENT_EVENT_OUTSIDE_WINDOW_REASON,
+  PICKUP_ORDER_SETTLEMENT_GRACE_EXPIRED_REASON,
+  derivePickupOrderAggregateRefundStatus,
+  isPickupPaymentIntentAmountBound,
+  isPickupPaymentIntentOrderIdentityBound,
+  isPickupPaymentIntentSettlementBound,
+  isPickupPaymentSettlementWithinGrace,
+  isPickupPaymentSuccessEventWithinWindow,
+  isPickupRefundFromOrder,
+  shouldPickupRefundEnterCancellation,
+  summarizePickupOrderRefunds,
+} from "../services/pickupOrderPaymentReconciliation";
+const configuredStripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY)
   : null;
 type NotifyHostCapacityWarningParams = {
@@ -41,6 +69,7 @@ type StripeWebhookRouteDependencies = {
   notifyHostCapacityWarning: (
     params: NotifyHostCapacityWarningParams,
   ) => Promise<void>;
+  stripeClient?: Stripe | null;
 };
 
 function getSubscriptionCustomerId(
@@ -195,8 +224,15 @@ async function recordLegacyProfileSubscriptionEvent(params: {
 
 export function registerStripeWebhookRoutes(
   app: Express,
-  { notifyHostCapacityWarning }: StripeWebhookRouteDependencies,
+  dependencies: StripeWebhookRouteDependencies,
 ) {
+  const { notifyHostCapacityWarning } = dependencies;
+  const stripe = Object.prototype.hasOwnProperty.call(
+    dependencies,
+    "stripeClient",
+  )
+    ? dependencies.stripeClient || null
+    : configuredStripe;
   // Stripe Webhook Handler
   app.post("/api/stripe/webhook", async (req, res) => {
     const sig = req.headers["stripe-signature"] as string;
@@ -284,117 +320,654 @@ export function registerStripeWebhookRoutes(
             const pickupOrderId = metadata.pickupOrderId || metadata.orderId;
             if (pickupOrderId) {
               try {
-                const { pickupOrders } = await import("@shared/schema");
+                const {
+                  pickupOrders,
+                  pickupOrderItems,
+                  menuCategories,
+                  menuItems,
+                } = await import("@shared/schema");
                 const { getWebSocketServer } = await import("../websocket");
-                const { sendPickupOrderConfirmedNotifications } =
-                  await import("../services/pickupOrderNotificationService");
-                const [order] = await db
-                  .select()
-                  .from(pickupOrders)
-                  .where(
-                    eq(pickupOrders.stripePaymentIntentId, paymentIntent.id),
-                  )
-                  .limit(1);
-                if (!order) {
-                  throw new Error(
-                    `Pickup order not found for PaymentIntent ${paymentIntent.id}`,
-                  );
-                }
-
-                let updated: typeof order | undefined;
-                if (order.status === "pending") {
-                  [updated] = await db
-                    .update(pickupOrders)
-                    .set({
-                      status: "confirmed",
-                      confirmedAt: new Date(),
-                      updatedAt: new Date(),
-                    })
+                const {
+                  sendPickupOrderCancelledNotification,
+                  sendPickupOrderConfirmedNotifications,
+                } = await import("../services/pickupOrderNotificationService");
+                const { buildOrderingReadiness } = await import("./menuRoutes");
+                const {
+                  isMenuItemCategoryOrderable,
+                  isPickupOrderItemAvailableForExistingReservation,
+                } = await import("../services/restaurantOrderingEligibility");
+                const payoutResult = await db.transaction(async (tx: any) => {
+                  const [candidate] = await tx
+                    .select({ id: pickupOrders.id })
+                    .from(pickupOrders)
                     .where(
-                      and(
-                        eq(pickupOrders.id, order.id),
-                        eq(pickupOrders.status, "pending"),
+                      or(
+                        eq(
+                          pickupOrders.stripePaymentIntentId,
+                          paymentIntent.id,
+                        ),
+                        and(
+                          eq(pickupOrders.id, String(pickupOrderId)),
+                          isNull(pickupOrders.stripePaymentIntentId),
+                        ),
                       ),
                     )
-                    .returning();
-                }
-
-                // A Stripe transfer can succeed while the following database
-                // update fails. Retry confirmed orders whose payout is still
-                // pending, and give Stripe a stable idempotency key so replaying
-                // the webhook cannot create a second transfer.
-                const transferGroupId = String(
-                  order.stripeTransferGroupId || "",
-                ).trim();
-                const shouldTransferPayout =
-                  shouldAttemptPickupWebhookPayoutTransfer({
-                    statusBeforeWebhook: order.status,
-                    transitionedToConfirmed: Boolean(updated),
-                    stripeTransferGroupId: transferGroupId,
-                    payoutStatus: order.payoutStatus,
-                  });
-                if (shouldTransferPayout) {
-                  if (!stripe) {
-                    throw new Error(
-                      "Stripe client unavailable for pickup order transfer",
-                    );
-                  }
-                  const [restaurant] = await db
-                    .select()
-                    .from(restaurants)
-                    .where(eq(restaurants.id, order.restaurantId))
                     .limit(1);
-                  const connectAccountId = (restaurant as any)
-                    ?.stripeConnectAccountId;
-                  if (!connectAccountId) {
+                  if (!candidate) {
                     throw new Error(
-                      `Stripe Connect account missing for pickup order ${order.id}`,
+                      `Pickup order not found for PaymentIntent ${paymentIntent.id}`,
                     );
                   }
-
-                  const merchantGrossCents =
-                    order.subtotalCents +
-                    Math.max(0, Number(order.deliveryFeeCents || 0) || 0);
-                  const transferAmount = order.feePaidByBusiness
-                    ? merchantGrossCents -
-                      Math.max(0, Number(order.platformFeeCents || 0) || 0)
-                    : merchantGrossCents;
-                  if (transferAmount > 0) {
-                    await stripe.transfers.create(
-                      {
-                        amount: transferAmount,
-                        currency: "usd",
-                        destination: connectAccountId,
-                        transfer_group: transferGroupId,
-                        metadata: { pickupOrderId: order.id },
-                      },
-                      {
-                        idempotencyKey: `pickup-order:${order.id}:transfer`,
-                      },
+                  await tx.execute(
+                    sql`select pg_advisory_xact_lock(hashtext(${pickupOrderFinancialLockKey(candidate.id)}))`,
+                  );
+                  let [order] = await tx
+                    .select()
+                    .from(pickupOrders)
+                    .where(eq(pickupOrders.id, candidate.id))
+                    .limit(1);
+                  if (!order) {
+                    throw new Error(
+                      `Pickup order disappeared for PaymentIntent ${paymentIntent.id}`,
                     );
-                    await db
+                  }
+                  if (!order.stripePaymentIntentId) {
+                    const metadataRestaurantId = String(
+                      paymentIntent.metadata?.restaurantId || "",
+                    ).trim();
+                    const mayAttachLegacyCancelledPayment = Boolean(
+                      order.status === "cancelled" &&
+                      isPickupPaymentIntentOrderIdentityBound(
+                        paymentIntent,
+                        order,
+                      ),
+                    );
+                    if (
+                      !metadataRestaurantId ||
+                      metadataRestaurantId !== order.restaurantId ||
+                      (!isPickupPaymentIntentSettlementBound(
+                        paymentIntent,
+                        order,
+                      ) &&
+                        !mayAttachLegacyCancelledPayment)
+                    ) {
+                      throw new Error(
+                        `Pickup order ${order.id} cannot bind PaymentIntent ${paymentIntent.id}`,
+                      );
+                    }
+                    const [attached] = await tx
                       .update(pickupOrders)
                       .set({
-                        payoutStatus: "transferred",
+                        stripePaymentIntentId: paymentIntent.id,
+                        stripeTransferGroupId:
+                          String(paymentIntent.transfer_group || "").trim() ||
+                          order.stripeTransferGroupId,
                         updatedAt: new Date(),
                       })
-                      .where(eq(pickupOrders.id, order.id));
+                      .where(
+                        and(
+                          eq(pickupOrders.id, order.id),
+                          isNull(pickupOrders.stripePaymentIntentId),
+                        ),
+                      )
+                      .returning();
+                    if (!attached) {
+                      throw new Error(
+                        `Pickup order ${order.id} PaymentIntent attachment raced`,
+                      );
+                    }
+                    order = attached;
                   }
-                }
 
-                // Emit a kitchen update only for the state transition. A replay
-                // that is reconciling a payout must not duplicate the message.
+                  const paymentAmountMatches = isPickupPaymentIntentAmountBound(
+                    paymentIntent,
+                    order.totalCents,
+                  );
+                  const paymentSettlementMatches =
+                    isPickupPaymentIntentSettlementBound(paymentIntent, order);
+                  const terminalCancellationBindingMatches = Boolean(
+                    isPickupPaymentIntentOrderIdentityBound(
+                      paymentIntent,
+                      order,
+                    ),
+                  );
+
+                  const statusBeforeWebhook = String(order.status || "")
+                    .trim()
+                    .toLowerCase();
+                  if (statusBeforeWebhook === "cancellation_pending") {
+                    if (
+                      !paymentAmountMatches ||
+                      !terminalCancellationBindingMatches
+                    ) {
+                      return {
+                        orderId: order.id,
+                        restaurantId: order.restaurantId,
+                        notificationOrder: null,
+                        cancellationRequired: false,
+                        cancellationOrder: null,
+                        cancellationReason: null,
+                        error: new Error(
+                          `Succeeded PaymentIntent ${paymentIntent.id} does not match cancelling pickup order ${order.id}`,
+                        ),
+                      };
+                    }
+                    return {
+                      orderId: order.id,
+                      restaurantId: order.restaurantId,
+                      notificationOrder: null,
+                      cancellationRequired: true,
+                      cancellationOrder: null,
+                      cancellationReason:
+                        order.cancellationReason ||
+                        "Ordering eligibility changed before payment completed",
+                      error: null,
+                    };
+                  }
+                  if (statusBeforeWebhook === "cancelled") {
+                    if (
+                      !paymentAmountMatches ||
+                      !terminalCancellationBindingMatches
+                    ) {
+                      return {
+                        orderId: order.id,
+                        restaurantId: order.restaurantId,
+                        notificationOrder: null,
+                        cancellationRequired: false,
+                        cancellationOrder: null,
+                        cancellationReason: null,
+                        error: new Error(
+                          `Succeeded PaymentIntent ${paymentIntent.id} does not match cancelled pickup order ${order.id}`,
+                        ),
+                      };
+                    }
+                    return {
+                      orderId: order.id,
+                      restaurantId: order.restaurantId,
+                      notificationOrder: null,
+                      cancellationRequired: true,
+                      cancellationOrder: null,
+                      cancellationReason:
+                        order.cancellationReason ||
+                        "A card payment completed after the order was cancelled",
+                      error: null,
+                    };
+                  }
+
+                  const payoutMayNeedFirstSettlement = Boolean(
+                    order.payoutStatus !== "transferred" &&
+                      ["pending", "confirmed"].includes(statusBeforeWebhook),
+                  );
+                  let lockedOrderingRestaurant:
+                    | {
+                        ownerId: string;
+                        stripeConnectAccountId: string | null;
+                        orderingAuthorityVersion: number;
+                      }
+                    | undefined;
+                  if (
+                    statusBeforeWebhook === "pending" ||
+                    payoutMayNeedFirstSettlement
+                  ) {
+                    [lockedOrderingRestaurant] = await tx
+                      .select({
+                        ownerId: restaurants.ownerId,
+                        stripeConnectAccountId:
+                          restaurants.stripeConnectAccountId,
+                        orderingAuthorityVersion:
+                          restaurants.orderingAuthorityVersion,
+                      })
+                      .from(restaurants)
+                      .where(eq(restaurants.id, order.restaurantId))
+                      .limit(1)
+                      .for("update", { of: restaurants });
+                  }
+
+                  // A client secret can outlive the page that issued it. Before
+                  // the first confirmation, re-check the exact menu, every ordered
+                  // item, current pickup location, hours, verification, payment
+                  // readiness, and a bounded payment window. A failed check commits
+                  // cancellation_pending before any Stripe refund side effect.
+                  if (
+                    statusBeforeWebhook === "pending" ||
+                    payoutMayNeedFirstSettlement
+                  ) {
+                    const orderLines = await tx
+                      .select({
+                        menuItemId: menuItems.id,
+                        menuId: menuItems.menuId,
+                        categoryId: menuItems.categoryId,
+                        categoryActive: menuCategories.isActive,
+                        isAvailable: menuItems.isAvailable,
+                        trackInventory: menuItems.trackInventory,
+                        inventoryQty: menuItems.inventoryQty,
+                        inventoryAutoUnavailable:
+                          menuItems.inventoryAutoUnavailable,
+                        inventoryReservedQuantity:
+                          pickupOrderItems.inventoryReservedQuantity,
+                        priceCents: menuItems.priceCents,
+                        availableFrom: menuItems.availableFrom,
+                        availableTo: menuItems.availableTo,
+                      })
+                      .from(pickupOrderItems)
+                      .leftJoin(
+                        menuItems,
+                        eq(menuItems.id, pickupOrderItems.menuItemId),
+                      )
+                      .leftJoin(
+                        menuCategories,
+                        and(
+                          eq(menuCategories.id, menuItems.categoryId),
+                          eq(menuCategories.menuId, menuItems.menuId),
+                          eq(
+                            menuCategories.restaurantId,
+                            menuItems.restaurantId,
+                          ),
+                        ),
+                      )
+                      .where(eq(pickupOrderItems.orderId, order.id));
+                    const menuIds = new Set<string>(
+                      orderLines.map((line: any) => String(line.menuId || "")),
+                    );
+                    const exactMenuId: string | null =
+                      menuIds.size === 1 ? [...menuIds][0] : null;
+                    const allItemsStillAvailable = Boolean(
+                      orderLines.length > 0 &&
+                      orderLines.every(
+                        (line: any) =>
+                          isPickupOrderItemAvailableForExistingReservation(
+                            line,
+                          ) &&
+                          Number.isInteger(line.priceCents) &&
+                          line.priceCents >= 0 &&
+                          !String(line.availableFrom || "").trim() &&
+                          !String(line.availableTo || "").trim() &&
+                          isMenuItemCategoryOrderable(line),
+                      ),
+                    );
+                    // Webhook delivery/replay can be delayed. Eligibility is
+                    // bound to Stripe's signed success-event time, not the time
+                    // this process happened to receive the event.
+                    const paymentEventWithinWindow =
+                      isPickupPaymentSuccessEventWithinWindow({
+                        orderCreatedAt: order.createdAt,
+                        eventCreatedSeconds: event.created,
+                      });
+                    const paymentSettlementWithinGrace =
+                      isPickupPaymentSettlementWithinGrace({
+                        orderCreatedAt: order.createdAt,
+                      });
+                    let readinessStillValid = false;
+                    if (exactMenuId && allItemsStillAvailable) {
+                      try {
+                        const readiness = await buildOrderingReadiness(
+                          order.restaurantId,
+                          exactMenuId,
+                          {
+                            includeSettlementIdentity: true,
+                            existingReservedMenuItemIds: orderLines
+                              .filter(
+                                (line: any) =>
+                                  Number.isInteger(
+                                    Number(line.inventoryReservedQuantity),
+                                  ) &&
+                                  Number(line.inventoryReservedQuantity) > 0,
+                              )
+                              .map((line: any) =>
+                                String(line.menuItemId || "").trim(),
+                              )
+                              .filter(Boolean),
+                            database: tx,
+                          },
+                        );
+                        readinessStillValid = Boolean(
+                          lockedOrderingRestaurant &&
+                          readiness.orderingEnabled &&
+                          readiness.paymentMethods.card &&
+                          isRestaurantOrderingAuthorityVersionCurrent({
+                            preflightVersion:
+                              lockedOrderingRestaurant.orderingAuthorityVersion,
+                            lockedVersion: readiness.orderingAuthorityVersion,
+                          }) &&
+                          order.pricesIncludeTax === true &&
+                          String(readiness.restaurantName || "").trim() ===
+                            String(order.merchantNameSnapshot || "").trim() &&
+                          String(
+                            readiness.settlementIdentity?.merchantOwnerId || "",
+                          ).trim() ===
+                            String(
+                              order.merchantOwnerIdSnapshot || "",
+                            ).trim() &&
+                          String(
+                            readiness.settlementIdentity
+                              ?.stripeConnectAccountId || "",
+                          ).trim() ===
+                            String(
+                              order.stripeConnectAccountIdSnapshot || "",
+                            ).trim() &&
+                          String(readiness.pickupAddressLabel || "").trim() ===
+                            String(order.pickupAddressSnapshot || "").trim() &&
+                          String(readiness.pickupDirectionsUrl || "").trim() ===
+                            String(
+                              order.pickupDirectionsUrlSnapshot || "",
+                            ).trim() &&
+                          Number(readiness.merchantAcknowledgementMinutes) ===
+                            Number(
+                              order.merchantAcknowledgementMinutesSnapshot,
+                            ),
+                        );
+                      } catch (readinessError) {
+                        console.error(
+                          `[WEBHOOK] Pickup order ${order.id} eligibility recheck failed closed`,
+                          readinessError,
+                        );
+                      }
+                    }
+                    if (
+                      !paymentEventWithinWindow ||
+                      !paymentSettlementWithinGrace ||
+                      !paymentAmountMatches ||
+                      !paymentSettlementMatches ||
+                      !readinessStillValid
+                    ) {
+                      const cancellationReason = !paymentEventWithinWindow
+                        ? PICKUP_ORDER_PAYMENT_EVENT_OUTSIDE_WINDOW_REASON
+                        : !paymentSettlementWithinGrace
+                          ? PICKUP_ORDER_SETTLEMENT_GRACE_EXPIRED_REASON
+                          : !paymentAmountMatches
+                            ? "Card payment did not match the authoritative order total"
+                            : !paymentSettlementMatches
+                              ? "Card payment did not match the authorized merchant payout identity"
+                              : "Ordering eligibility changed before payment completed";
+                      if (statusBeforeWebhook !== "pending") {
+                        await tx
+                          .update(pickupOrders)
+                          .set({
+                            payoutStatus: "failed",
+                            updatedAt: new Date(),
+                          })
+                          .where(eq(pickupOrders.id, order.id));
+                        return {
+                          orderId: order.id,
+                          restaurantId: order.restaurantId,
+                          notificationOrder: null,
+                          cancellationRequired: false,
+                          cancellationOrder: null,
+                          cancellationReason: null,
+                          error: new Error(
+                            `Ordering eligibility changed before first payout for confirmed pickup order ${order.id}`,
+                          ),
+                        };
+                      }
+                      const [cancellationPending] = await tx
+                        .update(pickupOrders)
+                        .set({
+                          status: "cancellation_pending",
+                          payoutStatus: PICKUP_ORDER_PAYOUT_REVERSAL_PENDING,
+                          cancellationReason,
+                          updatedAt: new Date(),
+                        })
+                        .where(
+                          and(
+                            eq(pickupOrders.id, order.id),
+                            eq(pickupOrders.status, "pending"),
+                          ),
+                        )
+                        .returning();
+                      if (!cancellationPending) {
+                        throw new Error(
+                          `Pickup order ${order.id} changed during eligibility cancellation`,
+                        );
+                      }
+                      return {
+                        orderId: order.id,
+                        restaurantId: order.restaurantId,
+                        notificationOrder: null,
+                        cancellationRequired: true,
+                        cancellationOrder: null,
+                        cancellationReason,
+                        error: null,
+                      };
+                    }
+                  }
+
+                  const acknowledgementMinutes = Number(
+                    order.merchantAcknowledgementMinutesSnapshot,
+                  );
+                  const failPayout = async (error: unknown) => {
+                    await tx
+                      .update(pickupOrders)
+                      .set({ payoutStatus: "failed", updatedAt: new Date() })
+                      .where(eq(pickupOrders.id, order.id));
+                    return {
+                      orderId: order.id,
+                      restaurantId: order.restaurantId,
+                      notificationOrder: null,
+                      cancellationRequired: false,
+                      cancellationOrder: null,
+                      cancellationReason: null,
+                      error,
+                    };
+                  };
+
+                  if (!paymentAmountMatches) {
+                    return {
+                      orderId: order.id,
+                      restaurantId: order.restaurantId,
+                      notificationOrder: null,
+                      cancellationRequired: false,
+                      cancellationOrder: null,
+                      cancellationReason: null,
+                      error: new Error(
+                        `PaymentIntent ${paymentIntent.id} amount or currency does not match pickup order ${order.id}`,
+                      ),
+                    };
+                  }
+
+                  // A Stripe transfer can succeed while the following database
+                  // update fails. Settle before confirming the order, and give
+                  // Stripe a stable idempotency key so a webhook replay can safely
+                  // reconcile either side of that boundary.
+                  const transferGroupId = String(
+                    order.stripeTransferGroupId || "",
+                  ).trim();
+                  const payoutNeedsSettlement =
+                    order.payoutStatus !== "transferred" &&
+                    ["pending", "confirmed"].includes(statusBeforeWebhook);
+                  if (payoutNeedsSettlement && !transferGroupId) {
+                    return failPayout(
+                      new Error(
+                        `Stripe transfer group missing for pickup order ${order.id}`,
+                      ),
+                    );
+                  }
+                  const shouldTransferPayout =
+                    shouldAttemptPickupWebhookPayoutTransfer({
+                      statusBeforeWebhook: order.status,
+                      paymentSucceeded: paymentIntent.status === "succeeded",
+                      stripeTransferGroupId: transferGroupId,
+                      payoutStatus: order.payoutStatus,
+                    });
+                  let payoutReconciledThisAttempt = false;
+                  if (shouldTransferPayout) {
+                    if (!stripe) {
+                      return failPayout(
+                        new Error(
+                          "Stripe client unavailable for pickup order transfer",
+                        ),
+                      );
+                    }
+                    const restaurant = lockedOrderingRestaurant;
+                    const connectAccountId = String(
+                      order.stripeConnectAccountIdSnapshot || "",
+                    ).trim();
+                    if (
+                      !restaurant ||
+                      !connectAccountId ||
+                      String(restaurant.ownerId || "").trim() !==
+                        String(order.merchantOwnerIdSnapshot || "").trim() ||
+                      String(restaurant.stripeConnectAccountId || "").trim() !==
+                        connectAccountId ||
+                      !paymentSettlementMatches
+                    ) {
+                      return failPayout(
+                        new Error(
+                          `Merchant payout identity changed for pickup order ${order.id}`,
+                        ),
+                      );
+                    }
+
+                    const merchantGrossCents =
+                      order.subtotalCents +
+                      Math.max(0, Number(order.deliveryFeeCents || 0) || 0);
+                    const transferAmount = Math.max(
+                      0,
+                      order.feePaidByBusiness
+                        ? merchantGrossCents -
+                            Math.max(
+                              0,
+                              Number(order.platformFeeCents || 0) || 0,
+                            )
+                        : merchantGrossCents,
+                    );
+                    const sourceTransactionId =
+                      resolvePickupPayoutSourceTransaction(
+                        paymentIntent.latest_charge,
+                      );
+                    if (transferAmount > 0 && !sourceTransactionId) {
+                      return failPayout(
+                        new Error(
+                          `Stripe source charge missing for pickup order ${order.id}`,
+                        ),
+                      );
+                    }
+                    try {
+                      if (transferAmount > 0) {
+                        await stripe.transfers.create(
+                          {
+                            amount: transferAmount,
+                            currency: "usd",
+                            destination: connectAccountId,
+                            source_transaction: sourceTransactionId!,
+                            transfer_group: transferGroupId,
+                            metadata: { pickupOrderId: order.id },
+                          },
+                          {
+                            idempotencyKey: `pickup-order:${order.id}:transfer`,
+                          },
+                        );
+                      }
+                      await tx
+                        .update(pickupOrders)
+                        .set({
+                          payoutStatus: "transferred",
+                          updatedAt: new Date(),
+                        })
+                        .where(eq(pickupOrders.id, order.id));
+                      payoutReconciledThisAttempt = true;
+                    } catch (error) {
+                      return failPayout(error);
+                    }
+                  }
+
+                  const payoutReady = Boolean(
+                    order.payoutStatus === "transferred" ||
+                    payoutReconciledThisAttempt,
+                  );
+                  let updated: typeof order | undefined;
+                  if (order.status === "pending" && payoutReady) {
+                    const confirmedAt = new Date();
+                    [updated] = await tx
+                      .update(pickupOrders)
+                      .set({
+                        status: "confirmed",
+                        confirmedAt,
+                        merchantAcknowledgementDueAt: new Date(
+                          confirmedAt.getTime() +
+                            acknowledgementMinutes * 60 * 1000,
+                        ),
+                        updatedAt: confirmedAt,
+                      })
+                      .where(
+                        and(
+                          eq(pickupOrders.id, order.id),
+                          eq(pickupOrders.status, "pending"),
+                        ),
+                      )
+                      .returning();
+                  }
+
+                  // Re-fetch every confirmed + settled replay, including a process
+                  // crash after the transaction commit but before notifications.
+                  // Notification claims are deduped and failed/stale claims can be
+                  // reclaimed, so replay closes that crash window without duplicates.
+                  let reconciledConfirmedOrder: typeof order | undefined;
+                  if (!updated && order.status === "confirmed" && payoutReady) {
+                    [reconciledConfirmedOrder] = await tx
+                      .select()
+                      .from(pickupOrders)
+                      .where(eq(pickupOrders.id, order.id))
+                      .limit(1);
+                  }
+                  return {
+                    orderId: order.id,
+                    restaurantId: order.restaurantId,
+                    notificationOrder:
+                      updated || reconciledConfirmedOrder || null,
+                    cancellationRequired: false,
+                    cancellationOrder: null,
+                    cancellationReason: null,
+                    error: null,
+                  };
+                });
+                if (payoutResult.error) throw payoutResult.error;
+                if (payoutResult.cancellationRequired) {
+                  const cancellationResult =
+                    await requestAndFinalizeCardPickupOrderCancellation({
+                      orderId: payoutResult.orderId,
+                      expectedStatuses: ["cancellation_pending", "cancelled"],
+                      cancellationReason:
+                        payoutResult.cancellationReason ||
+                        "Ordering eligibility changed before payment completed",
+                      stripe,
+                    });
+                  if (cancellationResult.outcome === "conflict") {
+                    throw new Error(
+                      `Pickup order ${pickupOrderId} cancellation reconciliation conflicted`,
+                    );
+                  }
+                  const cancelledOrder = cancellationResult.order;
+                  const wsIo = getWebSocketServer();
+                  if (wsIo) {
+                    wsIo
+                      .to(`kitchen:${cancelledOrder.restaurantId}`)
+                      .emit("kitchen:order_update", {
+                        order: cancelledOrder as Record<string, unknown>,
+                      });
+                  }
+                  if (cancellationResult.outcome === "cancelled") {
+                    await sendPickupOrderCancelledNotification(cancelledOrder);
+                  }
+                  break;
+                }
+                if (payoutResult.cancellationOrder) {
+                  await sendPickupOrderCancelledNotification(
+                    payoutResult.cancellationOrder,
+                  );
+                  break;
+                }
+                const notificationOrder = payoutResult.notificationOrder;
                 const wsIo = getWebSocketServer();
-                if (wsIo && updated) {
+                if (wsIo && notificationOrder) {
                   wsIo
-                    .to(`kitchen:${order.restaurantId}`)
+                    .to(`kitchen:${payoutResult.restaurantId}`)
                     .emit("kitchen:order_update", {
-                      order: updated as Record<string, unknown>,
+                      order: notificationOrder as Record<string, unknown>,
                     });
                 }
-                if (updated) {
-                  sendPickupOrderConfirmedNotifications(updated).catch(
-                    console.error,
+                if (notificationOrder) {
+                  await sendPickupOrderConfirmedNotifications(
+                    notificationOrder,
                   );
                 }
               } catch (pickupError) {
@@ -1594,12 +2167,275 @@ export function registerStripeWebhookRoutes(
           }
           break;
 
+        case "charge.dispute.created":
+        case "charge.dispute.updated":
+        case "charge.dispute.closed": {
+          const webhookDispute = event.data.object as Stripe.Dispute;
+          if (!stripe) {
+            throw new Error(
+              `Stripe client unavailable for dispute ${webhookDispute.id}`,
+            );
+          }
+          const dispute = await retrieveAuthoritativePickupOrderDispute({
+            stripe,
+            webhookDispute,
+          });
+          const disputedPaymentIntentId = pickupDisputePaymentIntentId(dispute);
+          if (!disputedPaymentIntentId) {
+            throw new Error(
+              `Stripe dispute ${dispute.id} has no PaymentIntent binding`,
+            );
+          }
+          const { pickupOrders } = await import("@shared/schema");
+          const [candidate] = await db
+            .select({ id: pickupOrders.id })
+            .from(pickupOrders)
+            .where(
+              or(
+                eq(pickupOrders.stripeDisputeId, dispute.id),
+                eq(pickupOrders.stripePaymentIntentId, disputedPaymentIntentId),
+              ),
+            )
+            .limit(1);
+          if (!candidate) {
+            console.warn(
+              `[WEBHOOK] No pickup order matches Stripe dispute ${dispute.id}`,
+            );
+            break;
+          }
+          let reconciled = await reconcilePickupOrderDispute({
+            orderId: candidate.id,
+            dispute,
+            stripe,
+          });
+          let shouldNotifyCancellation = reconciled.status === "cancelled";
+          if (reconciled.status === "cancellation_pending") {
+            const cancellation =
+              await requestAndFinalizeCardPickupOrderCancellation({
+                orderId: reconciled.id,
+                expectedStatuses: ["cancellation_pending"],
+                cancellationReason:
+                  reconciled.cancellationReason ||
+                  "Payment dispute resolution requires cancellation",
+                stripe,
+              });
+            if (cancellation.outcome === "conflict") {
+              throw new Error(
+                `Pickup order ${reconciled.id} changed during post-dispute cancellation`,
+              );
+            }
+            reconciled = cancellation.order;
+            shouldNotifyCancellation = cancellation.outcome === "cancelled";
+          }
+          if (shouldNotifyCancellation) {
+            const { sendPickupOrderCancelledNotification } =
+              await import("../services/pickupOrderNotificationService");
+            await sendPickupOrderCancelledNotification(reconciled);
+          }
+          const { getWebSocketServer } = await import("../websocket");
+          getWebSocketServer()
+            ?.to(`kitchen:${reconciled.restaurantId}`)
+            .emit("kitchen:order_update", {
+              order: reconciled as Record<string, unknown>,
+            });
+          break;
+        }
+
+        case "refund.created":
+        case "refund.updated":
+        case "refund.failed":
+        case "charge.refund.updated": {
+          const refund = event.data.object as Stripe.Refund;
+          const pickupOrderId = String(
+            refund.metadata?.pickupOrderId || "",
+          ).trim();
+          const refundPaymentIntent = refund.payment_intent;
+          const refundPaymentIntentId =
+            typeof refundPaymentIntent === "string"
+              ? refundPaymentIntent
+              : String(refundPaymentIntent?.id || "").trim();
+          if (!stripe) {
+            throw new Error(
+              `Stripe client unavailable for refund ${refund.id}`,
+            );
+          }
+          const { pickupOrders } = await import("@shared/schema");
+          const trackedOrder = await db.transaction(async (tx: any) => {
+            let [candidate] = await tx
+              .select({ id: pickupOrders.id })
+              .from(pickupOrders)
+              .where(eq(pickupOrders.stripeRefundId, refund.id))
+              .limit(1);
+            if (!candidate && pickupOrderId) {
+              [candidate] = await tx
+                .select({ id: pickupOrders.id })
+                .from(pickupOrders)
+                .where(eq(pickupOrders.id, pickupOrderId))
+                .limit(1);
+            }
+            if (!candidate && refundPaymentIntentId) {
+              [candidate] = await tx
+                .select({ id: pickupOrders.id })
+                .from(pickupOrders)
+                .where(
+                  and(
+                    eq(
+                      pickupOrders.stripePaymentIntentId,
+                      refundPaymentIntentId,
+                    ),
+                    inArray(pickupOrders.status, [
+                      "pending",
+                      "confirmed",
+                      "preparing",
+                      "ready",
+                      "cancellation_pending",
+                      "cancelled",
+                      "completed",
+                    ]),
+                  ),
+                )
+                .limit(1);
+            }
+            if (!candidate) return null;
+            await tx.execute(
+              sql`select pg_advisory_xact_lock(hashtext(${pickupOrderFinancialLockKey(candidate.id)}))`,
+            );
+            const [current] = await tx
+              .select()
+              .from(pickupOrders)
+              .where(eq(pickupOrders.id, candidate.id))
+              .limit(1);
+            if (!current) return null;
+            if (
+              ![
+                "pending",
+                "confirmed",
+                "preparing",
+                "ready",
+                "cancellation_pending",
+                "cancelled",
+                "completed",
+              ].includes(String(current.status || "")) ||
+              !isPickupRefundFromOrder(
+                refund,
+                current.stripePaymentIntentId,
+                current.totalCents,
+              )
+            ) {
+              console.warn(
+                `[WEBHOOK] Pickup order ${current.id} ignored unbound refund ${refund.id}`,
+              );
+              return null;
+            }
+            const refundSummary = await summarizePickupOrderRefunds({
+              stripe,
+              paymentIntentId: current.stripePaymentIntentId,
+              totalCents: current.totalCents,
+            });
+            if (
+              !refundSummary.refunds.some(
+                (listedRefund) => listedRefund.id === refund.id,
+              )
+            ) {
+              throw new Error(
+                `Stripe refund ${refund.id} was not present in the authoritative PaymentIntent refund list.`,
+              );
+            }
+            const latestRefund = refundSummary.latestRefund || refund;
+            const latestRefundStatus = String(latestRefund.status || "unknown");
+            const aggregateRefundStatus =
+              derivePickupOrderAggregateRefundStatus({
+                totalCents: current.totalCents,
+                succeededAmountCents: refundSummary.succeededAmountCents,
+                pendingAmountCents: refundSummary.pendingAmountCents,
+                latestRefundStatus,
+              });
+            const aggregateRefundFailed = [
+              "failed",
+              "canceled",
+              "reconciliation_required",
+            ].includes(aggregateRefundStatus);
+            const shouldEnterCancellation = shouldPickupRefundEnterCancellation(
+              current.status,
+              aggregateRefundStatus,
+            );
+            const [updated] = await tx
+              .update(pickupOrders)
+              .set({
+                status: shouldEnterCancellation
+                  ? "cancellation_pending"
+                  : current.status,
+                cancellationReason: shouldEnterCancellation
+                  ? current.cancellationReason ||
+                    "Card payment was refunded in Stripe"
+                  : current.cancellationReason,
+                stripeRefundId: latestRefund.id,
+                stripeRefundStatus: aggregateRefundStatus,
+                stripeRefundAmountCents: refundSummary.succeededAmountCents,
+                refundFailureReason:
+                  String(
+                    (
+                      latestRefund as Stripe.Refund & {
+                        failure_reason?: string | null;
+                      }
+                    ).failure_reason || "",
+                  ).trim() || null,
+                refundUpdatedAt: new Date(),
+                payoutStatus:
+                  current.status === "cancelled"
+                    ? current.payoutStatus
+                    : current.status === "completed" && aggregateRefundFailed
+                      ? current.payoutStatus
+                      : aggregateRefundFailed
+                        ? "failed"
+                        : PICKUP_ORDER_PAYOUT_REVERSAL_PENDING,
+                updatedAt: new Date(),
+              })
+              .where(eq(pickupOrders.id, current.id))
+              .returning();
+            return updated || current;
+          });
+
+          if (!trackedOrder) break;
+          if (trackedOrder.status === "cancellation_pending") {
+            const result = await requestAndFinalizeCardPickupOrderCancellation({
+              orderId: trackedOrder.id,
+              expectedStatuses: ["cancellation_pending"],
+              cancellationReason:
+                trackedOrder.cancellationReason || "Order cancelled",
+              stripe,
+            });
+            if (result.outcome === "cancelled") {
+              const { sendPickupOrderCancelledNotification } =
+                await import("../services/pickupOrderNotificationService");
+              await sendPickupOrderCancelledNotification(result.order);
+              const { getWebSocketServer } = await import("../websocket");
+              getWebSocketServer()
+                ?.to(`kitchen:${result.order.restaurantId}`)
+                .emit("kitchen:order_update", {
+                  order: result.order as Record<string, unknown>,
+                });
+            }
+          } else if (trackedOrder.status === "completed") {
+            await reconcileCompletedPickupOrderRefund({
+              orderId: trackedOrder.id,
+              stripe,
+            });
+          } else if (["failed", "canceled"].includes(String(refund.status))) {
+            console.error(
+              `[WEBHOOK] Refund ${refund.id} failed for pickup order ${trackedOrder.id}; owner reconciliation is required`,
+            );
+          }
+          break;
+        }
+
         case "payment_intent.payment_failed":
           const failedIntent = event.data.object;
           console.log(`[WEBHOOK] PaymentIntent ${failedIntent.id} failed`);
 
           try {
-            const { eventBookings, pickupOrders } = await import("@shared/schema");
+            const { eventBookings, pickupOrders } =
+              await import("@shared/schema");
             const metadata = (failedIntent as any).metadata || {};
 
             // Pickup order payment failure
@@ -1608,53 +2444,58 @@ export function registerStripeWebhookRoutes(
             ).trim();
             if (pickupOrderId) {
               try {
-                const [order] = await db
-                  .select()
-                  .from(pickupOrders)
-                  .where(eq(pickupOrders.id, pickupOrderId))
-                  .limit(1);
-                if (!order) {
-                  throw new Error(
-                    `Pickup order ${pickupOrderId} not found for failed PaymentIntent ${failedIntent.id}`,
-                  );
-                }
-
-                const storedIntentId = String(
-                  (order as any).stripePaymentIntentId || "",
-                ).trim();
-                if (storedIntentId && storedIntentId !== failedIntent.id) {
-                  console.warn(
-                    `[WEBHOOK] Pickup order ${pickupOrderId} ignored failed PaymentIntent ${failedIntent.id}; expected ${storedIntentId}`,
-                  );
-                  break;
-                }
-
                 await db.transaction(async (tx: any) => {
-                  const [updated] = await tx
-                    .update(pickupOrders)
-                    .set({
-                      status: "cancelled",
-                      cancelledAt: new Date(),
-                      cancellationReason: "Payment failed",
-                      updatedAt: new Date(),
-                    })
-                    .where(
-                      and(
-                        eq(pickupOrders.id, order.id),
-                        eq(pickupOrders.status, "pending"),
-                      ),
-                    )
-                    .returning();
-                  if (!updated) {
-                    console.log(
-                      `[WEBHOOK] Pickup order ${order.id} already left pending state during failure replay`,
+                  await tx.execute(
+                    sql`select pg_advisory_xact_lock(hashtext(${pickupOrderFinancialLockKey(pickupOrderId)}))`,
+                  );
+                  const [order] = await tx
+                    .select()
+                    .from(pickupOrders)
+                    .where(eq(pickupOrders.id, pickupOrderId))
+                    .limit(1);
+                  if (!order) {
+                    throw new Error(
+                      `Pickup order ${pickupOrderId} not found for failed PaymentIntent ${failedIntent.id}`,
+                    );
+                  }
+                  const storedIntentId = String(
+                    order.stripePaymentIntentId || "",
+                  ).trim();
+                  if (storedIntentId && storedIntentId !== failedIntent.id) {
+                    console.warn(
+                      `[WEBHOOK] Pickup order ${pickupOrderId} ignored failed PaymentIntent ${failedIntent.id}; expected ${storedIntentId}`,
                     );
                     return;
                   }
-                  await restoreTrackedInventoryForPickupOrderByOrderId(
-                    tx,
-                    order.id,
-                  );
+                  // A PaymentIntent can fail one confirmation attempt and later
+                  // succeed on the same checkout. Keep the order and its
+                  // reservation pending until the bounded expiry saga cancels
+                  // the intent; a delayed succeeded event can then safely use
+                  // the normal settlement path.
+                  if (order.status !== "pending") {
+                    console.log(
+                      `[WEBHOOK] Pickup order ${order.id} ignored payment failure after leaving pending state`,
+                    );
+                    return;
+                  }
+                  if (!storedIntentId) {
+                    await tx
+                      .update(pickupOrders)
+                      .set({
+                        stripePaymentIntentId: failedIntent.id,
+                        stripeTransferGroupId:
+                          String(failedIntent.transfer_group || "").trim() ||
+                          order.stripeTransferGroupId,
+                        updatedAt: new Date(),
+                      })
+                      .where(
+                        and(
+                          eq(pickupOrders.id, order.id),
+                          eq(pickupOrders.status, "pending"),
+                          isNull(pickupOrders.stripePaymentIntentId),
+                        ),
+                      );
+                  }
                 });
               } catch (pickupError) {
                 console.error(
@@ -1780,7 +2621,9 @@ export function registerStripeWebhookRoutes(
           if (!accountId) break;
 
           const status =
-            account.charges_enabled && account.payouts_enabled
+            account.charges_enabled &&
+            account.payouts_enabled &&
+            account.details_submitted
               ? "active"
               : "pending";
           const updateValues = {
@@ -1801,21 +2644,28 @@ export function registerStripeWebhookRoutes(
             .set(updateValues)
             .where(eq(suppliers.stripeConnectAccountId, accountId));
 
+          const restaurantUpdate = await db
+            .update(restaurants)
+            .set(updateValues)
+            .where(eq(restaurants.stripeConnectAccountId, accountId));
+
           const hostRows = Number(
             (hostUpdate as { rowCount?: number })?.rowCount || 0,
           );
           const supplierRows = Number(
             (supplierUpdate as { rowCount?: number })?.rowCount || 0,
           );
+          const restaurantRows = Number(
+            (restaurantUpdate as { rowCount?: number })?.rowCount || 0,
+          );
           console.log(
-            `[WEBHOOK] Synced Stripe account ${accountId} (hosts: ${hostRows}, suppliers: ${supplierRows})`,
+            `[WEBHOOK] Synced Stripe account ${accountId} (hosts: ${hostRows}, suppliers: ${supplierRows}, restaurants: ${restaurantRows})`,
           );
           break;
         }
 
         case "account.application.deauthorized": {
-          const deauth = event.data.object as { account?: string };
-          const accountId = String(deauth?.account || "").trim();
+          const accountId = String(event.account || "").trim();
           if (!accountId) break;
 
           const revokedValues = {
@@ -1836,14 +2686,22 @@ export function registerStripeWebhookRoutes(
             .set(revokedValues)
             .where(eq(suppliers.stripeConnectAccountId, accountId));
 
+          const restaurantUpdate = await db
+            .update(restaurants)
+            .set({ ...revokedValues, stripeConnectAccountId: null })
+            .where(eq(restaurants.stripeConnectAccountId, accountId));
+
           const hostRows = Number(
             (hostUpdate as { rowCount?: number })?.rowCount || 0,
           );
           const supplierRows = Number(
             (supplierUpdate as { rowCount?: number })?.rowCount || 0,
           );
+          const restaurantRows = Number(
+            (restaurantUpdate as { rowCount?: number })?.rowCount || 0,
+          );
           console.log(
-            `[WEBHOOK] Deauthorized Stripe account ${accountId} (hosts: ${hostRows}, suppliers: ${supplierRows})`,
+            `[WEBHOOK] Deauthorized Stripe account ${accountId} (hosts: ${hostRows}, suppliers: ${supplierRows}, restaurants: ${restaurantRows})`,
           );
           break;
         }

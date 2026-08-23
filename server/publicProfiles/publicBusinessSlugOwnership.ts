@@ -5,6 +5,7 @@ import {
   publicBusinessSlugOwnerships,
   restaurants,
   suppliers,
+  users,
 } from "@shared/schema";
 import { normalizeCleanBusinessSlug } from "@shared/cleanAffiliateLinks";
 import {
@@ -14,6 +15,7 @@ import {
 
 import { db } from "../db";
 import { storage } from "../storage";
+import { isPublicBusinessVisible } from "../utils/publicBusinessVisibility";
 
 export type PublicBusinessSlugEntityType =
   | "restaurant"
@@ -187,7 +189,16 @@ export async function ensurePublicBusinessSlugOwnershipForEntity(input: {
     input.entityType === "private_chef"
   ) {
     const row = await storage.getRestaurant(id);
-    if (!row || !row.isActive) return null;
+    const owner = row?.ownerId ? await storage.getUser(row.ownerId) : null;
+    if (
+      !row ||
+      !row.isActive ||
+      !owner ||
+      owner.isDisabled !== false ||
+      !isPublicBusinessVisible(row)
+    ) {
+      return null;
+    }
     const expectedType =
       row.isFoodTruck || isTruckBusinessType(row.businessType)
         ? "truck"
@@ -207,8 +218,23 @@ export async function ensurePublicBusinessSlugOwnershipForEntity(input: {
   }
 
   if (input.entityType === "location") {
-    const [row] = await db.select().from(hosts).where(eq(hosts.id, id)).limit(1);
+    const [result] = await db
+      .select({ host: hosts })
+      .from(hosts)
+      .innerJoin(users, eq(hosts.userId, users.id))
+      .where(and(eq(hosts.id, id), eq(users.isDisabled, false)))
+      .limit(1);
+    const row = result?.host;
     if (!row) return null;
+    if (
+      !isPublicBusinessVisible({
+        name: row.businessName,
+        city: row.city,
+        state: row.state,
+      })
+    ) {
+      return null;
+    }
     return ensurePublicBusinessSlugOwnership({
       entityType: "location",
       id,
@@ -218,12 +244,32 @@ export async function ensurePublicBusinessSlugOwnershipForEntity(input: {
     });
   }
 
-  const [row] = await db
-    .select()
+  const [result] = await db
+    .select({ supplier: suppliers })
     .from(suppliers)
-    .where(and(eq(suppliers.id, id), eq(suppliers.isActive, true)))
+    .innerJoin(users, eq(suppliers.userId, users.id))
+    .where(
+      and(
+        eq(suppliers.id, id),
+        eq(suppliers.isActive, true),
+        eq(users.isDisabled, false),
+      ),
+    )
     .limit(1);
+  const row = result?.supplier;
   if (!row) return null;
+  if (
+    !isPublicBusinessVisible({
+      name: row.businessName,
+      city: row.city,
+      state: row.state,
+      description: [row.onlinePaymentsNotes, row.deliveryNotes]
+        .filter(Boolean)
+        .join(" "),
+    })
+  ) {
+    return null;
+  }
   return ensurePublicBusinessSlugOwnership({
     entityType: "supplier",
     id,
@@ -246,14 +292,25 @@ export async function verifyOwnedSlugTarget(
     const [row] = await db
       .select({
         id: restaurants.id,
+        name: restaurants.name,
+        city: restaurants.city,
+        state: restaurants.state,
+        cuisineType: restaurants.cuisineType,
+        description: restaurants.description,
         isActive: restaurants.isActive,
         isFoodTruck: restaurants.isFoodTruck,
         businessType: restaurants.businessType,
       })
       .from(restaurants)
-      .where(eq(restaurants.id, ownership.entityId))
+      .innerJoin(users, eq(restaurants.ownerId, users.id))
+      .where(
+        and(
+          eq(restaurants.id, ownership.entityId),
+          eq(users.isDisabled, false),
+        ),
+      )
       .limit(1);
-    if (!row || !row.isActive) return false;
+    if (!row || !row.isActive || !isPublicBusinessVisible(row)) return false;
     const expectedType =
       row.isFoodTruck || isTruckBusinessType(row.businessType)
         ? "truck"
@@ -266,14 +323,60 @@ export async function verifyOwnedSlugTarget(
   }
 
   if (ownership.entityType === "location") {
-    const [row] = await db.select({ id: hosts.id }).from(hosts).where(eq(hosts.id, ownership.entityId)).limit(1);
-    return Boolean(row);
+    const [row] = await db
+      .select({
+        id: hosts.id,
+        businessName: hosts.businessName,
+        city: hosts.city,
+        state: hosts.state,
+      })
+      .from(hosts)
+      .innerJoin(users, eq(hosts.userId, users.id))
+      .where(
+        and(
+          eq(hosts.id, ownership.entityId),
+          eq(users.isDisabled, false),
+        ),
+      )
+      .limit(1);
+    return Boolean(
+      row &&
+        isPublicBusinessVisible({
+          name: row.businessName,
+          city: row.city,
+          state: row.state,
+        }),
+    );
   }
 
   const [row] = await db
-    .select({ id: suppliers.id })
+    .select({
+      id: suppliers.id,
+      businessName: suppliers.businessName,
+      city: suppliers.city,
+      state: suppliers.state,
+      onlinePaymentsNotes: suppliers.onlinePaymentsNotes,
+      deliveryNotes: suppliers.deliveryNotes,
+    })
     .from(suppliers)
-    .where(and(eq(suppliers.id, ownership.entityId), eq(suppliers.isActive, true)))
+    .innerJoin(users, eq(suppliers.userId, users.id))
+    .where(
+      and(
+        eq(suppliers.id, ownership.entityId),
+        eq(suppliers.isActive, true),
+        eq(users.isDisabled, false),
+      ),
+    )
     .limit(1);
-  return Boolean(row);
+  return Boolean(
+    row &&
+      isPublicBusinessVisible({
+        name: row.businessName,
+        city: row.city,
+        state: row.state,
+        description: [row.onlinePaymentsNotes, row.deliveryNotes]
+          .filter(Boolean)
+          .join(" "),
+      }),
+  );
 }

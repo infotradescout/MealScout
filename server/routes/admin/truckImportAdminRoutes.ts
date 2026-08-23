@@ -47,6 +47,11 @@ import {
   parseDirectApplyMenuPriceCents,
   type ProfileEvidenceCurrentValues,
 } from "../../services/profileEvidenceReview";
+import { buildRestaurantOwnerTransferReset } from "../../services/restaurantOrderingAuthorityReset";
+import {
+  lockRestaurantForOwnerTransfer,
+  resolveRestaurantOwnershipInviteAction,
+} from "../../services/restaurantOwnerTransferSafety";
 import {
   PROFILE_EVIDENCE_REVIEW_LIMITS,
   PROFILE_EVIDENCE_REVIEW_FIELDS,
@@ -3990,19 +3995,57 @@ export function registerTruckImportAdminRoutes(
           .limit(1);
 
         if (restaurant) {
-          if (
-            restaurant.ownerId !== importSystemUserId &&
-            restaurant.ownerId !== inviteUser.id
-          ) {
+          const transfer = await db.transaction(async (tx: any) => {
+            const safety = await lockRestaurantForOwnerTransfer(tx, {
+              restaurantId: restaurant.id,
+              nextOwnerId: inviteUser.id,
+            });
+            if (safety.outcome !== "ready") return safety;
+            const currentOwnerId = String(safety.restaurant.ownerId || "");
+            const inviteAction = resolveRestaurantOwnershipInviteAction({
+              currentOwnerId,
+              importSystemUserId,
+              inviteUserId: inviteUser.id,
+            });
+            if (inviteAction === "conflict") {
+              return { outcome: "owned" } as const;
+            }
+            if (inviteAction === "idempotent") {
+              return { outcome: "unchanged" } as const;
+            }
+            await tx
+              .update(restaurants)
+              .set({
+                ownerId: inviteUser.id,
+                isActive: false,
+                isVerified: false,
+                ...buildRestaurantOwnerTransferReset(),
+                updatedAt: new Date(),
+              })
+              .where(eq(restaurants.id, restaurant.id));
+            return { outcome: "updated" } as const;
+          });
+          if (transfer.outcome === "active_order") {
+            return res.status(409).json({
+              code: "ACTIVE_ORDER_HANDOFF_REQUIRED",
+              message:
+                "This truck has an unresolved customer order. Finish that order before sending an ownership invite.",
+              orderId: transfer.orderId,
+              orderStatus: transfer.orderStatus,
+            });
+          }
+          if (transfer.outcome === "missing") {
+            return res.status(409).json({
+              message:
+                "This truck profile changed before the invite could be saved. Refresh and retry.",
+            });
+          }
+          if (transfer.outcome === "owned") {
             return res.status(409).json({
               message:
                 "This truck is already owned by another account. Refusing to reassign ownership.",
             });
           }
-          await db
-            .update(restaurants)
-            .set({ ownerId: inviteUser.id, updatedAt: new Date() })
-            .where(eq(restaurants.id, restaurant.id));
         } else {
           await db.insert(restaurants).values({
             ownerId: inviteUser.id,

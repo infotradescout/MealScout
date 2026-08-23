@@ -19,8 +19,10 @@ import {
   normalizedFoodTruckImportIdentityPredicate,
   normalizedFoodTruckRestaurantIdentityPredicate,
 } from "../services/foodTruckIdentity";
+import { buildRestaurantOwnerTransferReset } from "../services/restaurantOrderingAuthorityReset";
+import { lockRestaurantForOwnerTransfer } from "../services/restaurantOwnerTransferSafety";
 import {
-  insertRestaurantSchema,
+  publicInsertRestaurantSchema,
   restaurants,
   truckClaimRequests,
   truckImportListings,
@@ -490,9 +492,7 @@ export function registerTruckClaimRoutes(
     try {
       const payloadSchema = z.object({
         listingId: z.string().min(1),
-        restaurantData: insertRestaurantSchema
-          .omit({ ownerId: true })
-          .partial(),
+        restaurantData: publicInsertRestaurantSchema.partial(),
       });
       if (req.body?.restaurantData?.acceptTerms !== true) {
         return res.status(400).json({
@@ -685,6 +685,40 @@ export function registerTruckClaimRoutes(
           throw error;
         }
 
+        if (existingRestaurant) {
+          const transferSafety = await lockRestaurantForOwnerTransfer(tx, {
+            restaurantId: existingRestaurant.id,
+            nextOwnerId: req.user.id,
+          });
+          if (transferSafety.outcome === "missing") {
+            const error: any = new Error(
+              "The food truck profile changed before it could be claimed.",
+            );
+            error.statusCode = 409;
+            error.code = "food_truck_identity_changed";
+            throw error;
+          }
+          const lockedOwnerId = String(
+            transferSafety.restaurant.ownerId || "",
+          );
+          if (!reusableOwnerIds.has(lockedOwnerId)) {
+            const error: any = new Error(
+              "This food truck profile already belongs to another owner.",
+            );
+            error.statusCode = 409;
+            error.code = "food_truck_identity_owned";
+            throw error;
+          }
+          if (transferSafety.outcome === "active_order") {
+            const error: any = new Error(
+              "This food truck has an unresolved customer order. Support must finish that order before ownership can change.",
+            );
+            error.statusCode = 409;
+            error.code = "active_order_handoff_required";
+            throw error;
+          }
+        }
+
         const restaurantValues = {
           ownerId: req.user.id,
           name: mergedRestaurant.name,
@@ -704,6 +738,7 @@ export function registerTruckClaimRoutes(
           isFoodTruck: true,
           isActive: false,
           isVerified: false,
+          ...buildRestaurantOwnerTransferReset(),
           claimedFromImportId: listing.id,
           updatedAt: new Date(),
         };

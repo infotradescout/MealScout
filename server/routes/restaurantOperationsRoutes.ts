@@ -1,6 +1,6 @@
 import type { Express } from "express";
 import { createHash, randomBytes } from "crypto";
-import { and, eq, gte, inArray, lte, sql } from "drizzle-orm";
+import { and, eq, gt, gte, inArray, isNotNull, lte, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "../db";
@@ -17,8 +17,11 @@ import {
 } from "../services/socialPublishing";
 import {
   insertFoodTruckLocationSchema,
+  eventBookings,
+  events,
   moderationEvents,
   menuItems,
+  menus,
   requestLogs,
   restaurants,
   socialPostQueue,
@@ -47,6 +50,9 @@ import {
   MENU_REVISION_ALGORITHM,
   loadMenuRevisionEvidence,
 } from "../services/menuRevision";
+import { toPublicRestaurantListingArrayWithVisibility } from "../publicProfiles/toPublicRestaurantListingWithVisibility";
+import { isPublicBusinessVisible } from "../utils/publicBusinessVisibility";
+import { deriveProfileEvidenceQuarantineVisibility } from "../services/profileEvidenceQuarantine";
 
 type AnalyticsAccessResult = {
   hasAccess: boolean;
@@ -2469,21 +2475,29 @@ export function registerRestaurantOperationsRoutes(
               trucks.map(async (truck: any) => {
                 const ownerId = String(truck?.ownerId || "").trim();
                 if (!ownerId) return null;
-                const hasAccess = await hasCompleteProfileAccess(ownerId);
-                return hasAccess ? truck : null;
+                try {
+                  const hasAccess = await hasCompleteProfileAccess(ownerId);
+                  return hasAccess ? truck : null;
+                } catch {
+                  // Access lookup failures are terminal for that row. A public
+                  // location endpoint must never fall back to unfiltered data.
+                  return null;
+                }
               }),
             )
           ).filter(Boolean);
+          const publicTrucks = (
+            await toPublicRestaurantListingArrayWithVisibility(visibleTrucks)
+          ).filter(
+            (truck: any) =>
+              isPublicBusinessVisible(truck) &&
+              truck?.isActive === true &&
+              truck?.mobileOnline === true &&
+              Number.isFinite(Number(truck?.currentLatitude)) &&
+              Number.isFinite(Number(truck?.currentLongitude)),
+          );
 
-          const payloadTrucks =
-            visibleTrucks.length > 0 || trucks.length === 0
-              ? visibleTrucks
-              : trucks;
-          if (visibleTrucks.length === 0 && trucks.length > 0) {
-            res.setHeader("X-MealScout-Fallback", "unfiltered-live-trucks");
-          }
-
-          const truckIds = payloadTrucks
+          const truckIds = publicTrucks
             .map((truck: any) => String(truck?.id || "").trim())
             .filter(Boolean);
           const menuEligibleIds = new Set<string>();
@@ -2495,7 +2509,15 @@ export function registerRestaurantOperationsRoutes(
                 count: sql<number>`count(*)::integer`,
               })
               .from(menuItems)
-              .where(inArray(menuItems.restaurantId, truckIds))
+              .innerJoin(menus, eq(menuItems.menuId, menus.id))
+              .where(
+                and(
+                  inArray(menuItems.restaurantId, truckIds),
+                  eq(menus.isActive, true),
+                  eq(menuItems.isAvailable, true),
+                  gt(menuItems.priceCents, 0),
+                ),
+              )
               .groupBy(menuItems.restaurantId);
             for (const row of menuRows) {
               menuCounts.set(String(row.restaurantId), Number(row.count || 0));
@@ -2504,7 +2526,7 @@ export function registerRestaurantOperationsRoutes(
               }
             }
           }
-          const menuEligibleTrucks = payloadTrucks.map((truck: any) => ({
+          const menuEligibleTrucks = publicTrucks.map((truck: any) => ({
             ...truck,
             menuItemCount:
               menuCounts.get(String(truck?.id || "").trim()) || 0,
@@ -2545,6 +2567,7 @@ export function registerRestaurantOperationsRoutes(
         res.setHeader("X-MealScout-Live-Trucks-Truncated", "1");
         res.setHeader("X-MealScout-Live-Trucks-Bytes", String(bounded.bytes));
       }
+      res.setHeader("Cache-Control", "no-store");
       res.json({ trucks: bounded.value });
     } catch (error) {
       if (isDeadlineError(error)) {
@@ -2559,7 +2582,10 @@ export function registerRestaurantOperationsRoutes(
     }
   });
 
-  app.post("/api/trucks/:truckId/location-reports", async (req: any, res) => {
+  app.post(
+    "/api/trucks/:truckId/location-reports",
+    isAuthenticated,
+    async (req: any, res) => {
     try {
       const { truckId } = req.params;
       const rateLimitKey = `truck_missing_${truckId}_${req.user?.id || req.ip || "anon"}`;
@@ -2588,19 +2614,88 @@ export function registerRestaurantOperationsRoutes(
       const parsed = schema.parse(req.body || {});
 
       const [truck] = await db
-        .select({
-          id: restaurants.id,
-          name: restaurants.name,
-          ownerId: restaurants.ownerId,
-          isFoodTruck: restaurants.isFoodTruck,
-          isActive: restaurants.isActive,
-        })
+        .select()
         .from(restaurants)
         .where(eq(restaurants.id, truckId))
         .limit(1);
 
-      if (!truck || !truck.isFoodTruck || !truck.isActive) {
+      const [publicTruck] = truck
+        ? await toPublicRestaurantListingArrayWithVisibility([truck])
+        : [];
+      if (
+        !truck ||
+        truck.isFoodTruck !== true ||
+        truck.isActive !== true ||
+        !isPublicBusinessVisible(truck) ||
+        deriveProfileEvidenceQuarantineVisibility(truck).isQuarantined ||
+        !publicTruck?.id
+      ) {
         return res.status(404).json({ message: "Truck not found" });
+      }
+
+      const hasExpectedLatitude = parsed.expectedLatitude !== undefined;
+      const hasExpectedLongitude = parsed.expectedLongitude !== undefined;
+      const hasReporterLatitude = parsed.reporterLatitude !== undefined;
+      const hasReporterLongitude = parsed.reporterLongitude !== undefined;
+      if (
+        hasExpectedLatitude !== hasExpectedLongitude ||
+        hasReporterLatitude !== hasReporterLongitude ||
+        (parsed.expectedLatitude === 0 && parsed.expectedLongitude === 0) ||
+        (parsed.reporterLatitude === 0 && parsed.reporterLongitude === 0)
+      ) {
+        return res.status(400).json({
+          message: "Latitude and longitude must be a valid coordinate pair",
+        });
+      }
+
+      let reportedResourceId = truckId;
+      if (parsed.targetType === "live_location") {
+        if (parsed.manualScheduleId || parsed.eventId) {
+          return res.status(400).json({
+            message: "A live-location report cannot name a schedule",
+          });
+        }
+      } else if (parsed.targetType === "manual_schedule") {
+        if (!parsed.manualScheduleId || parsed.eventId) {
+          return res.status(400).json({ message: "A valid manual schedule is required" });
+        }
+        const [schedule] = await db
+          .select({ id: truckManualSchedules.id })
+          .from(truckManualSchedules)
+          .where(
+            and(
+              eq(truckManualSchedules.id, parsed.manualScheduleId),
+              eq(truckManualSchedules.truckId, truckId),
+              eq(truckManualSchedules.isPublic, true),
+            ),
+          )
+          .limit(1);
+        if (!schedule) {
+          return res.status(404).json({ message: "Schedule not found" });
+        }
+        reportedResourceId = schedule.id;
+      } else {
+        if (!parsed.eventId || parsed.manualScheduleId) {
+          return res.status(400).json({ message: "A valid event schedule is required" });
+        }
+        const [booking] = await db
+          .select({ eventId: eventBookings.eventId })
+          .from(eventBookings)
+          .innerJoin(events, eq(events.id, eventBookings.eventId))
+          .where(
+            and(
+              eq(eventBookings.eventId, parsed.eventId),
+              eq(eventBookings.truckId, truckId),
+              eq(eventBookings.status, "confirmed"),
+              isNotNull(eventBookings.bookingConfirmedAt),
+              inArray(events.status, ["open", "booked", "filled"]),
+            ),
+          )
+          .limit(1);
+        if (!booking) {
+          return res.status(404).json({ message: "Event schedule not found" });
+        }
+        reportedResourceId = booking.eventId;
       }
 
       const [created] = await db
@@ -2610,8 +2705,7 @@ export function registerRestaurantOperationsRoutes(
           severity: "medium",
           reportedUserId: truck.ownerId || null,
           reportedResourceType: parsed.targetType,
-          reportedResourceId:
-            parsed.manualScheduleId || parsed.eventId || truckId,
+          reportedResourceId,
           reporterUserId: req.user?.id || null,
           reason: "truck_not_at_expected_location",
           description:
@@ -2636,7 +2730,14 @@ export function registerRestaurantOperationsRoutes(
         })
         .returning();
 
-      res.json({ success: true, report: created });
+      res.status(201).json({
+        success: true,
+        report: {
+          id: created?.id || null,
+          status: created?.status || "open",
+          createdAt: created?.createdAt || null,
+        },
+      });
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({
@@ -2647,7 +2748,8 @@ export function registerRestaurantOperationsRoutes(
       console.error("Error creating truck location report:", error);
       res.status(500).json({ message: "Failed to submit location report" });
     }
-  });
+    },
+  );
 
   app.get(
     "/api/restaurants/:restaurantId/locations",

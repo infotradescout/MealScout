@@ -40,6 +40,7 @@ const registerLandingRoute = (
         const label = resolution.reason === "city" ? "City" : "Cuisine";
         return res.status(404).json({ message: `${label} not found` });
       }
+      res.setHeader("Cache-Control", "no-store");
       return res.json(resolution.payload);
     } catch (error) {
       console.error(`[public-seo] ${path} failed`, error);

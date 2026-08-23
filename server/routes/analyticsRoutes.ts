@@ -6,6 +6,7 @@ import { db } from "../db";
 import { emailService } from "../emailService";
 import { storage } from "../storage";
 import { insertDealFeedbackSchema, requestLogs, searchQueryEvents, type User } from "@shared/schema";
+import { isStaffOrAdmin } from "../unifiedAuth";
 
 function normalizeSearchQuery(input: string) {
   return String(input || "")
@@ -120,24 +121,30 @@ export function registerAnalyticsRoutes(app: Express) {
       const result: any = await db.execute(sql`
         select
           lower(trim(query)) as normalized_query,
-          (array_agg(query order by created_at desc))[1] as display_query,
           count(*)::int as count,
+          count(distinct user_id)::int as actor_count,
           max(created_at) as last_seen
         from search_query_events
         where created_at >= (now() - make_interval(days => ${windowDays}))
           and length(trim(query)) between 2 and 80
         group by 1
+        having count(distinct user_id) >= 3
         order by count desc, last_seen desc
         limit ${limit}
       `);
 
       const rows = Array.isArray(result?.rows) ? result.rows : result;
       const payload = (Array.isArray(rows) ? rows : []).map((row: any) => ({
-        query: String(row.display_query || row.normalized_query || "").trim(),
+        query: normalizeSearchQuery(row.normalized_query || ""),
         count: Number(row.count || 0),
-        lastSeen: row.last_seen ? new Date(row.last_seen).toISOString() : null,
       }));
-      res.json(payload.filter((item: any) => item.query));
+      res.json(
+        payload.filter(
+          (item: any) =>
+            item.query &&
+            !shouldDropSearchQuery(item.query),
+        ),
+      );
     } catch (error) {
       console.error("Error fetching trending searches:", error);
       res.status(500).json({ message: "Failed to fetch trending searches" });
@@ -158,22 +165,28 @@ export function registerAnalyticsRoutes(app: Express) {
       const result: any = await db.execute(sql`
         select
           lower(trim(query)) as normalized_query,
-          (array_agg(query order by created_at desc))[1] as display_query,
+          count(distinct user_id)::int as actor_count,
           max(created_at) as last_seen
         from search_query_events
         where created_at >= (now() - make_interval(days => ${windowDays}))
           and length(trim(query)) between 2 and 80
         group by 1
+        having count(distinct user_id) >= 3
         order by last_seen desc
         limit ${limit}
       `);
 
       const rows = Array.isArray(result?.rows) ? result.rows : result;
       const payload = (Array.isArray(rows) ? rows : []).map((row: any) => ({
-        query: String(row.display_query || row.normalized_query || "").trim(),
-        lastSeen: row.last_seen ? new Date(row.last_seen).toISOString() : null,
+        query: normalizeSearchQuery(row.normalized_query || ""),
       }));
-      res.json(payload.filter((item: any) => item.query));
+      res.json(
+        payload.filter(
+          (item: any) =>
+            item.query &&
+            !shouldDropSearchQuery(item.query),
+        ),
+      );
     } catch (error) {
       console.error("Error fetching latest searches:", error);
       res.status(500).json({ message: "Failed to fetch latest searches" });
@@ -275,7 +288,10 @@ export function registerAnalyticsRoutes(app: Express) {
       });
 
       const feedback = await storage.createDealFeedback(validatedData);
-      res.json(feedback);
+      res.status(201).json({
+        id: feedback.id,
+        status: "received",
+      });
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res
@@ -287,7 +303,7 @@ export function registerAnalyticsRoutes(app: Express) {
     }
   });
 
-  app.get("/api/deals/:dealId/feedback", async (req, res) => {
+  app.get("/api/deals/:dealId/feedback", isStaffOrAdmin, async (req, res) => {
     try {
       const { dealId } = req.params;
       const feedback = await storage.getDealFeedback(dealId);

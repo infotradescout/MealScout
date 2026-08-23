@@ -237,6 +237,44 @@ export const restaurants = pgTable("restaurants", {
   // Overrides the automatic top-recommended-dish ranking when set; null
   // falls through to that ranking, then to the first available menu item.
   featuredMenuItemId: varchar("featured_menu_item_id"),
+  // Stripe Connect settlement for native restaurant ordering. Card checkout
+  // remains unavailable until the owner finishes onboarding and Stripe marks
+  // both charges and payouts ready.
+  stripeConnectAccountId: varchar("stripe_connect_account_id"),
+  stripeConnectStatus: varchar("stripe_connect_status")
+    .notNull()
+    .default("pending"),
+  stripeOnboardingCompleted: boolean("stripe_onboarding_completed")
+    .notNull()
+    .default(false),
+  stripeChargesEnabled: boolean("stripe_charges_enabled")
+    .notNull()
+    .default(false),
+  stripePayoutsEnabled: boolean("stripe_payouts_enabled")
+    .notNull()
+    .default(false),
+  // Durable generation for Connect account creation. It advances on owner
+  // transfer and deauthorization so Stripe retries cannot reattach an account
+  // from an earlier owner or connection lifecycle.
+  stripeConnectGeneration: integer("stripe_connect_generation")
+    .notNull()
+    .default(0),
+  // Native ordering requires a separate evidence-backed approval. Generic
+  // profile verification (including VAC-lite) must never unlock checkout.
+  orderingApprovedAt: timestamp("ordering_approved_at"),
+  orderingApprovedByUserId: varchar("ordering_approved_by_user_id").references(
+    () => users.id,
+    { onDelete: "set null" },
+  ),
+  orderingApprovalEvidenceUrl: text("ordering_approval_evidence_url"),
+  orderingApprovalReviewNote: text("ordering_approval_review_note"),
+  pickupAcknowledgementMinutes: integer("pickup_acknowledgement_minutes"),
+  // Monotonic database-triggered revision for every row that can change
+  // ordering eligibility. Checkout and webhook payout lock this row before
+  // re-reading readiness so a stale preflight cannot authorize a write.
+  orderingAuthorityVersion: integer("ordering_authority_version")
+    .notNull()
+    .default(0),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -2419,6 +2457,48 @@ export const insertRestaurantSchema = createInsertSchema(restaurants)
     state: z.string().min(2, "State is required"),
   });
 
+// Public owner/signup/claim writes may describe the business, but they may not
+// mint ownership, verification, moderation, import provenance, awards, live
+// state, pricing locks, or Stripe settlement authority.
+export const publicInsertRestaurantSchema = insertRestaurantSchema.omit({
+  ownerId: true,
+  claimedFromImportId: true,
+  countyFips: true,
+  countyName: true,
+  geoEnrichedAt: true,
+  isFoodTruck: true,
+  mobileOnline: true,
+  currentLatitude: true,
+  currentLongitude: true,
+  lastBroadcastAt: true,
+  liveUntilAt: true,
+  isActive: true,
+  isVerified: true,
+  insuranceVerified: true,
+  insuranceVerifiedAt: true,
+  insuranceExpiresAt: true,
+  insuranceVerifiedByUserId: true,
+  rawData: true,
+  hasGoldenPlate: true,
+  goldenPlateEarnedAt: true,
+  goldenPlateCount: true,
+  rankingScore: true,
+  lockedPriceCents: true,
+  priceLockDate: true,
+  priceLockReason: true,
+  stripeConnectAccountId: true,
+  stripeConnectStatus: true,
+  stripeOnboardingCompleted: true,
+  stripeChargesEnabled: true,
+  stripePayoutsEnabled: true,
+  orderingApprovedAt: true,
+  orderingApprovedByUserId: true,
+  orderingApprovalEvidenceUrl: true,
+  orderingApprovalReviewNote: true,
+  pickupAcknowledgementMinutes: true,
+  orderingAuthorityVersion: true,
+});
+
 export const insertDealSchema = createInsertSchema(deals)
   .omit({
     id: true,
@@ -3851,12 +3931,8 @@ export const affiliateCommissionLedger = pgTable(
 export const creditLedger = pgTable(
   "credit_ledger",
   {
-    id: varchar("id")
-      .primaryKey()
-      .default(sql`gen_random_uuid()`),
-    userId: varchar("user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
     amount: decimal("amount", { precision: 10, scale: 2 }).notNull(), // Positive or negative
     sourceType: varchar("source_type").notNull(), // 'commission' | 'redemption' | 'adjustment' etc
     sourceId: varchar("source_id"), // ID of the commission, redemption, etc
@@ -5021,8 +5097,12 @@ export type InsertTelemetryEvent = typeof telemetryEvents.$inferInsert;
 export const parkingRoutePlans = pgTable(
   "parking_route_plans",
   {
-    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-    userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    userId: varchar("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
     name: varchar("name").notNull(),
     originLabel: varchar("origin_label").notNull(),
     destinationLabel: varchar("destination_label").notNull(),
@@ -5049,9 +5129,7 @@ export type InsertParkingRoutePlan = typeof parkingRoutePlans.$inferInsert;
 export const requestLogs = pgTable(
   "request_logs",
   {
-    id: varchar("id")
-      .primaryKey()
-      .default(sql`gen_random_uuid()`),
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
     method: varchar("method").notNull(),
     path: text("path").notNull(),
     statusCode: integer("status_code").notNull(),
@@ -5427,7 +5505,9 @@ export type InsertReportLeadSequenceSend =
 export const ownerAiActionDrafts = pgTable(
   "owner_ai_action_drafts",
   {
-    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
     restaurantId: varchar("restaurant_id")
       .notNull()
       .references(() => restaurants.id, { onDelete: "cascade" }),
@@ -5831,6 +5911,9 @@ export const menus = pgTable(
     // When true customers see a "Pay in-store" option at checkout
     hidePlatformFee: boolean("hide_platform_fee").notNull().default(false),
     // If true the $1 fee is absorbed by the business (not shown to customer)
+    pricesIncludeTax: boolean("prices_include_tax").notNull().default(false),
+    // Merchant attestation required for native checkout; MealScout does not
+    // calculate tax independently in this contract.
     importSource: varchar("import_source"),
     // 'manual' | 'csv' | 'ubereats' | 'doordash' | 'clover' | 'toast' | 'square' | 'gmb' | 'pdf'
     importedAt: timestamp("imported_at"),
@@ -6305,9 +6388,8 @@ export const promotedOrderCommissions = pgTable(
 // ── PICKUP ORDERS ────────────────────────────────────────────────────────────
 
 /**
- * pickupOrders – every order placed through MealScout (pickup or dine-in).
- * Payment is always collected by MealScout; business receives payout via
- * Stripe Connect minus the $1 platform fee.
+ * pickupOrders – durable order records. The current public contract only
+ * creates pickup orders paid by card; legacy order types remain readable.
  */
 export const pickupOrders = pgTable(
   "pickup_orders",
@@ -6321,32 +6403,66 @@ export const pickupOrders = pgTable(
     customerId: varchar("customer_id").references(() => users.id, {
       onDelete: "set null",
     }),
-    // Guest checkout: customerName / customerEmail / customerPhone are required
+    // Guest checkout: customerName and at least one contact method are required
     customerName: varchar("customer_name").notNull(),
     customerEmail: varchar("customer_email"),
     customerPhone: varchar("customer_phone"),
     orderType: varchar("order_type").notNull().default("pickup"),
     // 'pickup' | 'dine_in' | 'delivery'
+    orderingContractVersion: varchar("ordering_contract_version"),
     status: varchar("status").notNull().default("pending"),
-    // 'pending' | 'confirmed' | 'preparing' | 'ready' | 'completed' | 'cancelled'
+    // 'pending' | 'confirmed' | 'preparing' | 'ready' | 'completed' | 'payment_disputed' | 'cancellation_pending' | 'cancelled'
     // Pricing (all in cents)
     subtotalCents: integer("subtotal_cents").notNull(),
-    platformFeeCents: integer("platform_fee_cents").notNull().default(100), // fixed $1.00
+    mealscoutFeeCents: integer("mealscout_fee_cents").notNull().default(0),
+    processingFeeCents: integer("processing_fee_cents").notNull().default(0),
+    platformFeeCents: integer("platform_fee_cents").notNull().default(0),
     feePaidByBusiness: boolean("fee_paid_by_business").notNull().default(false),
     // true if business absorbed the fee (hidePlatformFee = true on menu)
+    pricesIncludeTax: boolean("prices_include_tax").notNull().default(false),
     totalCents: integer("total_cents").notNull(),
     // Payment
     paymentMethod: varchar("payment_method").notNull().default("card"),
     // 'card' | 'cash'
     stripePaymentIntentId: varchar("stripe_payment_intent_id"),
     stripeTransferGroupId: varchar("stripe_transfer_group_id"),
+    stripeRefundId: varchar("stripe_refund_id"),
+    stripeRefundStatus: varchar("stripe_refund_status"),
+    stripeRefundAmountCents: integer("stripe_refund_amount_cents"),
+    refundAttemptCount: integer("refund_attempt_count").notNull().default(0),
+    refundFailureReason: text("refund_failure_reason"),
+    refundUpdatedAt: timestamp("refund_updated_at"),
+    stripeDisputeId: varchar("stripe_dispute_id"),
+    stripeDisputeStatus: varchar("stripe_dispute_status"),
+    stripeDisputeAmountCents: integer("stripe_dispute_amount_cents"),
+    stripeDisputeReason: varchar("stripe_dispute_reason"),
+    disputeFailureReason: text("dispute_failure_reason"),
+    disputeUpdatedAt: timestamp("dispute_updated_at"),
     checkoutRequestId: varchar("checkout_request_id").unique(),
     customerAccessTokenHash: varchar("customer_access_token_hash"),
     payoutStatus: varchar("payout_status").notNull().default("pending"),
-    // 'pending' | 'transferred' | 'failed'
+    // 'pending' | 'transferred' | 'failed' | 'reversal_pending' | 'partially_reversed' | 'reversed' | 'dispute_reversal_pending' | 'dispute_reinstatement_pending' | 'disputed'
+    payoutReversalAttemptCount: integer("payout_reversal_attempt_count")
+      .notNull()
+      .default(0),
+    payoutReversalFailureReason: text("payout_reversal_failure_reason"),
+    payoutReversalUpdatedAt: timestamp("payout_reversal_updated_at"),
     // Fulfillment
+    merchantNameSnapshot: varchar("merchant_name_snapshot"),
+    merchantOwnerIdSnapshot: varchar("merchant_owner_id_snapshot"),
+    stripeConnectAccountIdSnapshot: varchar(
+      "stripe_connect_account_id_snapshot",
+    ),
+    merchantAcknowledgementMinutesSnapshot: integer(
+      "merchant_acknowledgement_minutes_snapshot",
+    ),
+    merchantAcknowledgementDueAt: timestamp("merchant_acknowledgement_due_at"),
+    merchantAcknowledgedAt: timestamp("merchant_acknowledged_at"),
+    pickupAddressSnapshot: text("pickup_address_snapshot"),
+    pickupDirectionsUrlSnapshot: text("pickup_directions_url_snapshot"),
     specialInstructions: text("special_instructions"),
-    prepTimeMinutes: integer("prep_time_minutes").default(20),
+    // Null until the business supplies a preparation estimate.
+    prepTimeMinutes: integer("prep_time_minutes"),
     scheduledFor: timestamp("scheduled_for"),
     deliveryAddress: text("delivery_address"),
     deliveryCity: varchar("delivery_city"),
@@ -6409,6 +6525,9 @@ export const pickupOrderItems = pgTable(
     selectedModifiers: jsonb("selected_modifiers").default(sql`'[]'::jsonb`),
     // [{ id, groupName, label, additionalCents }]
     quantity: integer("quantity").notNull().default(1),
+    // Quantity actually decremented from tracked inventory for this line.
+    // Null identifies a legacy row with no safe restoration provenance.
+    inventoryReservedQuantity: integer("inventory_reserved_quantity"),
     lineTotalCents: integer("line_total_cents").notNull(),
     specialInstructions: text("special_instructions"),
     createdAt: timestamp("created_at").defaultNow(),
@@ -6438,6 +6557,7 @@ export const orderNotifications = pgTable(
     status: varchar("status").notNull().default("sent"), // 'sent' | 'failed'
     errorMessage: text("error_message"),
     dedupeKey: varchar("dedupe_key").unique(),
+    attemptCount: integer("attempt_count").notNull().default(0),
   },
   (table) => [
     index("idx_order_notifications_order").on(table.orderId),
@@ -7011,6 +7131,9 @@ export const insertPickupOrderSchema = createInsertSchema(pickupOrders, {
   stripePaymentIntentId: true,
   stripeTransferGroupId: true,
   payoutStatus: true,
+  merchantAcknowledgementMinutesSnapshot: true,
+  merchantAcknowledgementDueAt: true,
+  merchantAcknowledgedAt: true,
   confirmedAt: true,
   readyAt: true,
   completedAt: true,

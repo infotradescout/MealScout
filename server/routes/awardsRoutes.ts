@@ -1,5 +1,5 @@
 import type { Express } from "express";
-import { and, desc, eq, like, isNotNull, sql } from "drizzle-orm";
+import { and, desc, eq, or, sql } from "drizzle-orm";
 
 import { db } from "../db";
 import { storage } from "../storage";
@@ -8,10 +8,11 @@ import {
   awardGoldenFork,
   awardGoldenPlatesForArea,
   calculateRestaurantRankingScore,
+  calculateRestaurantRankingScores,
   calculateUserInfluenceScore,
   checkGoldenForkEligibility,
-  getAreaLeaderboard,
   getUserRecommendationCount,
+  getUserPublishedVideoRecommendations,
   getUserWeightedRecommendationScore,
 } from "../awardCalculations";
 import {
@@ -26,8 +27,36 @@ import {
   restaurantFollows,
   restaurantUserRecommendations,
   users,
-  videoStories,
 } from "@shared/schema";
+import { toPublicRestaurantListingArrayWithVisibility } from "../publicProfiles/toPublicRestaurantListingWithVisibility";
+import { isPublicBusinessVisible } from "../utils/publicBusinessVisibility";
+import { deriveProfileEvidenceQuarantineVisibility } from "../services/profileEvidenceQuarantine";
+import { parseGoldenPlateAreaSelection } from "../utils/goldenPlateArea";
+import { distributedRateLimit } from "../middleware/distributedRateLimit";
+
+const GOLDEN_PLATE_LEADERBOARD_MAX_CANDIDATES = 1000;
+const goldenPlateLeaderboardLimiter = distributedRateLimit({
+  scope: "public-golden-plate-leaderboard",
+  limit: 20,
+  windowMs: 60 * 1000,
+  key: (req) => String(req.ip || "unknown"),
+});
+
+const goldenPlateAreaWhere = (
+  selection: ReturnType<typeof parseGoldenPlateAreaSelection>,
+) => {
+  if (!selection) return null;
+  if (selection.kind === "city_state") {
+    return and(
+      eq(sql`lower(coalesce(${restaurants.city}, ''))`, selection.city),
+      eq(sql`lower(coalesce(${restaurants.state}, ''))`, selection.state),
+    );
+  }
+  return or(
+    eq(sql`lower(coalesce(${restaurants.city}, ''))`, selection.value),
+    eq(sql`lower(coalesce(${restaurants.state}, ''))`, selection.value),
+  );
+};
 
 const SCOUT_SCORE_ACTION_POINTS = {
   recommendRestaurant: 40,
@@ -140,12 +169,7 @@ export function registerAwardsRoutes(app: Express) {
           .select({ recommendedAt: restaurantUserRecommendations.recommendedAt })
           .from(restaurantUserRecommendations)
           .where(eq(restaurantUserRecommendations.userId, userId)),
-        db
-          .select({ createdAt: videoStories.createdAt })
-          .from(videoStories)
-          .where(
-            and(eq(videoStories.userId, userId), isNotNull(videoStories.restaurantId)),
-          ),
+        getUserPublishedVideoRecommendations(userId),
         db
           .select({ count: sql<number>`count(*)::int` })
           .from(restaurantFavorites)
@@ -319,7 +343,7 @@ export function registerAwardsRoutes(app: Express) {
           goldenForkEarnedAt: users.goldenForkEarnedAt,
         })
         .from(users)
-        .where(eq(users.hasGoldenFork, true));
+        .where(and(eq(users.hasGoldenFork, true), eq(users.isDisabled, false)));
 
       const holdersWithRecommendations = await Promise.all(
         holders.map(async (holder: (typeof holders)[number]) => ({
@@ -338,11 +362,17 @@ export function registerAwardsRoutes(app: Express) {
     }
   });
 
-  app.get("/api/user/:userId/influence-stats", async (req, res) => {
+  app.get("/api/user/:userId/influence-stats", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.params.userId;
+      const privileged = ["admin", "duper_admin", "super_admin", "staff"].includes(
+        String(req.user?.userType || ""),
+      );
+      if (String(req.user?.id || "") !== String(userId) && !privileged) {
+        return res.status(403).json({ message: "Access denied" });
+      }
       const user = await storage.getUser(userId);
-      if (!user) {
+      if (!user || user.isDisabled !== false) {
         return res.status(404).json({ message: "User not found" });
       }
 
@@ -368,11 +398,31 @@ export function registerAwardsRoutes(app: Express) {
 
   app.get("/api/awards/golden-plate/winners", async (_req, res) => {
     try {
-      const winners = await db
+      const winnerRows = await db
         .select()
         .from(restaurants)
-        .where(eq(restaurants.hasGoldenPlate, true));
-      res.json(winners);
+        .where(
+          and(
+            eq(restaurants.hasGoldenPlate, true),
+            eq(restaurants.isActive, true),
+          ),
+        );
+      const publicWinners = await toPublicRestaurantListingArrayWithVisibility(
+        winnerRows.filter(
+          (row: any) =>
+            isPublicBusinessVisible(row) &&
+            !deriveProfileEvidenceQuarantineVisibility(row).isQuarantined,
+        ),
+      );
+      const rankingById = new Map(
+        winnerRows.map((row: any) => [String(row.id), Number(row.rankingScore || 0)]),
+      );
+      res.json(
+        publicWinners.map((winner: any) => ({
+          ...winner,
+          rankingScore: rankingById.get(String(winner.id)) || 0,
+        })),
+      );
     } catch (error) {
       console.error("Error fetching Golden Plate winners:", error);
       res.status(500).json({ message: "Failed to fetch winners" });
@@ -381,34 +431,109 @@ export function registerAwardsRoutes(app: Express) {
 
   app.get("/api/awards/golden-plate/winners/:area", async (req, res) => {
     try {
-      const winners = await db
+      const areaSelection = parseGoldenPlateAreaSelection(req.params.area);
+      const areaWhere = goldenPlateAreaWhere(areaSelection);
+      if (!areaWhere) {
+        return res.status(400).json({ message: "Area is required" });
+      }
+      const winnerRows = await db
         .select()
         .from(restaurants)
         .where(
           and(
             eq(restaurants.hasGoldenPlate, true),
-            like(restaurants.address, `%${req.params.area}%`),
+            eq(restaurants.isActive, true),
+            areaWhere,
           ),
         );
-      res.json(winners);
+      const publicWinners = await toPublicRestaurantListingArrayWithVisibility(
+        winnerRows.filter(
+          (row: any) =>
+            isPublicBusinessVisible(row) &&
+            !deriveProfileEvidenceQuarantineVisibility(row).isQuarantined,
+        ),
+      );
+      const rankingById = new Map(
+        winnerRows.map((row: any) => [String(row.id), Number(row.rankingScore || 0)]),
+      );
+      res.json(
+        publicWinners.map((winner: any) => ({
+          ...winner,
+          rankingScore: rankingById.get(String(winner.id)) || 0,
+        })),
+      );
     } catch (error) {
       console.error("Error fetching area Golden Plate winners:", error);
       res.status(500).json({ message: "Failed to fetch winners" });
     }
   });
 
-  app.get("/api/awards/golden-plate/leaderboard/:area", async (req, res) => {
-    try {
-      const limit = parseInt(req.query.limit as string) || 50;
-      const leaderboard = await getAreaLeaderboard(req.params.area, limit);
-      res.json(leaderboard);
-    } catch (error) {
-      console.error("Error fetching leaderboard:", error);
-      res.status(500).json({ message: "Failed to fetch leaderboard" });
-    }
-  });
+  app.get(
+    "/api/awards/golden-plate/leaderboard/:area",
+    goldenPlateLeaderboardLimiter,
+    async (req, res) => {
+      try {
+        const limit = Math.max(
+          1,
+          Math.min(50, parseInt(req.query.limit as string, 10) || 50),
+        );
+        const areaSelection = parseGoldenPlateAreaSelection(req.params.area);
+        const areaWhere = goldenPlateAreaWhere(areaSelection);
+        if (!areaWhere) {
+          return res.status(400).json({ message: "Area is required" });
+        }
+        const candidateRows = await db
+          .select()
+          .from(restaurants)
+          .where(and(eq(restaurants.isActive, true), areaWhere))
+          .limit(GOLDEN_PLATE_LEADERBOARD_MAX_CANDIDATES + 1);
+        if (candidateRows.length > GOLDEN_PLATE_LEADERBOARD_MAX_CANDIDATES) {
+          res.setHeader("Retry-After", "60");
+          return res.status(503).json({
+            code: "LEADERBOARD_AREA_TOO_BROAD",
+            message:
+              "This area is too broad to rank safely right now. Use a city and state.",
+          });
+        }
+        const publicCandidates =
+          await toPublicRestaurantListingArrayWithVisibility(
+            candidateRows.filter(
+              (row: any) =>
+                isPublicBusinessVisible(row) &&
+                !deriveProfileEvidenceQuarantineVisibility(row).isQuarantined,
+            ),
+          );
+        const scores = await calculateRestaurantRankingScores(
+          publicCandidates.map((restaurant: any) => String(restaurant.id)),
+        );
+        const leaderboard = publicCandidates.map((restaurant: any) => ({
+          restaurant,
+          rankingScore: scores.get(String(restaurant.id)) || 0,
+        }));
+        // Rankings are public, but the projected restaurant fields are
+        // revocable by the owner or a moderator. Never let a browser or
+        // shared intermediary replay contact or live-location data after
+        // current visibility/authority has changed.
+        res.setHeader("Cache-Control", "no-store, max-age=0");
+        res.json(
+          leaderboard
+            .sort(
+              (a, b) =>
+                b.rankingScore - a.rankingScore ||
+                String(a.restaurant.id).localeCompare(
+                  String(b.restaurant.id),
+                ),
+            )
+            .slice(0, limit),
+        );
+      } catch (error) {
+        console.error("Error fetching leaderboard:", error);
+        res.status(500).json({ message: "Failed to fetch leaderboard" });
+      }
+    },
+  );
 
-  app.get("/api/restaurants/:restaurantId/ranking-stats", async (req, res) => {
+  app.get("/api/restaurants/:restaurantId/ranking-stats", isAdmin, async (req, res) => {
     try {
       const restaurant = await storage.getRestaurant(req.params.restaurantId);
       if (!restaurant) {
@@ -1063,7 +1188,7 @@ export function registerAwardsRoutes(app: Express) {
     },
   );
 
-  app.get("/api/awards/history", async (req, res) => {
+  app.get("/api/awards/history", isAdmin, async (req, res) => {
     try {
       const query = await db
         .select()

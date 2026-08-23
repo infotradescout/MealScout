@@ -53,19 +53,38 @@ import {
   and,
   asc,
   desc,
+  getTableColumns,
+  gte,
+  gt,
   inArray,
   isNotNull,
   isNull,
+  or,
   sql,
 } from "drizzle-orm";
 import { isAuthenticated, isStaffOrAdmin } from "../unifiedAuth";
 import { distributedRateLimit } from "../middleware/distributedRateLimit";
 import { storage } from "../storage";
 import { buildPublicTruckOperatingPlan } from "../services/truckOperatingPlan";
+import { resolveCityTimeZoneStrict } from "../services/cityTimeZone";
 import {
-  isValidIanaTimeZone,
-  resolveCityTimeZoneStrict,
-} from "../services/cityTimeZone";
+  isRestaurantOpenNow,
+  isRestaurantMenuAvailableNow,
+  isRestaurantOrderingAuthorityReady,
+  isTruckStopOrderableForPickup,
+  resolveFixedRestaurantPickupAddress,
+  resolveRestaurantPaymentMethods,
+} from "../services/restaurantOrderingEligibility";
+import { buildPublicDirectionsUrl } from "../publicProfiles/publicProfileUtils";
+import {
+  loadPublicRestaurantListingVisibility,
+  toPublicRestaurantListingWithVisibility,
+} from "../publicProfiles/toPublicRestaurantListingWithVisibility";
+import { projectPublicLocalMenuItemRow } from "../services/publicLocalMenuItemProjection";
+import { publicRestaurantDistanceKm } from "../services/publicRestaurantSearchProjection";
+import { isPublicBusinessVisible } from "../utils/publicBusinessVisibility";
+import { deriveProfileEvidenceQuarantineVisibility } from "../services/profileEvidenceQuarantine";
+export { isRestaurantOpenNow } from "../services/restaurantOrderingEligibility";
 import { parseMenuCsv } from "../utils/menuCsvParser";
 import { parsePdfMenuWithAi } from "../utils/menuPdfParser";
 import {
@@ -154,6 +173,88 @@ function wrap(handler: (req: any, res: any) => Promise<void>) {
   };
 }
 
+async function loadPublicMenuParent(restaurantId: string) {
+  const restaurant = await storage.getRestaurant(restaurantId);
+  if (
+    !restaurant ||
+    restaurant.isActive !== true ||
+    !isPublicBusinessVisible(restaurant) ||
+    deriveProfileEvidenceQuarantineVisibility(restaurant).isQuarantined
+  ) {
+    return null;
+  }
+  const publicRestaurant =
+    await toPublicRestaurantListingWithVisibility(restaurant);
+  if (!(publicRestaurant as any)?.id) return null;
+  return { restaurant, publicRestaurant: publicRestaurant as any };
+}
+
+const toPublicMenuVariant = (variant: MenuItemVariant) => ({
+  id: variant.id,
+  label: variant.label,
+  additionalCents: variant.additionalCents,
+  isDefault: variant.isDefault,
+});
+
+const toPublicMenuModifier = (modifier: MenuItemModifier) => ({
+  id: modifier.id,
+  groupName: modifier.groupName,
+  label: modifier.label,
+  additionalCents: modifier.additionalCents,
+  isRequired: modifier.isRequired,
+  maxSelections: modifier.maxSelections,
+});
+
+const toPublicMenuItem = (
+  item: MenuItem,
+  variants: MenuItemVariant[],
+  modifiers: MenuItemModifier[],
+) => ({
+  id: item.id,
+  menuId: item.menuId,
+  categoryId: item.categoryId,
+  restaurantId: item.restaurantId,
+  name: item.name,
+  description: item.description,
+  priceCents: item.priceCents,
+  itemType: item.itemType,
+  imageUrl: item.imageUrl,
+  calories: item.calories,
+  allergens: item.allergens,
+  dietaryTags: item.dietaryTags,
+  isAvailable: true,
+  variants: variants
+    .filter((variant) => variant.menuItemId === item.id)
+    .map(toPublicMenuVariant),
+  modifiers: modifiers
+    .filter((modifier) => modifier.menuItemId === item.id)
+    .map(toPublicMenuModifier),
+});
+
+const toPublicOrderingReadiness = (
+  readiness: Awaited<ReturnType<typeof buildOrderingReadiness>>,
+  publicRestaurant: any,
+) => ({
+  restaurantName: publicRestaurant?.name ?? null,
+  restaurantCity: publicRestaurant?.city ?? null,
+  restaurantState: publicRestaurant?.state ?? null,
+  pickupAddressLabel: readiness.pickupAddressLabel,
+  pickupDirectionsUrl: readiness.pickupDirectionsUrl,
+  isFoodTruck: readiness.isFoodTruck,
+  cuisineType: readiness.cuisineType,
+  orderingEnabled: readiness.orderingEnabled,
+  acceptsCash: false,
+  paymentMethods: readiness.paymentMethods,
+  activeMenuCount: readiness.activeMenuCount,
+  availableItemCount: readiness.availableItemCount,
+  openNow: readiness.openNow,
+  timeZone: readiness.timeZone,
+  checks: [],
+  blockingReasons: readiness.orderingEnabled
+    ? []
+    : ["Online pickup ordering is not currently available"],
+});
+
 function toDateOrNull(value: unknown): Date | null {
   if (!value) return null;
   const parsed = new Date(String(value));
@@ -170,93 +271,136 @@ function dollarsToCents(
   return Number.isFinite(fromLabel) ? Math.round(fromLabel * 100) : null;
 }
 
-const dayKeys = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
-
-function minutesFromTime(value: unknown): number | null {
-  const match = String(value || "").match(/^(\d{1,2}):(\d{2})/);
-  if (!match) return null;
-  const hour = Number(match[1]);
-  const minute = Number(match[2]);
-  if (!Number.isFinite(hour) || !Number.isFinite(minute)) return null;
-  return hour * 60 + minute;
-}
-
-export function isRestaurantOpenNow(
-  operatingHours: unknown,
-  timeZone: string | null,
-  now = new Date(),
-): boolean | null {
-  if (!operatingHours || typeof operatingHours !== "object") return null;
-  if (!timeZone || !isValidIanaTimeZone(timeZone)) return null;
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone,
-    weekday: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-  }).formatToParts(now);
-  const weekday = String(parts.find((part) => part.type === "weekday")?.value || "")
-    .slice(0, 3)
-    .toLowerCase();
-  const todayKey = dayKeys.find((key) => key === weekday);
-  if (!todayKey) return null;
-  const windows = (operatingHours as Record<string, unknown>)[todayKey];
-  if (!Array.isArray(windows)) return null;
-  if (windows.length === 0) return false;
-  const hour = Number(parts.find((part) => part.type === "hour")?.value);
-  const minute = Number(parts.find((part) => part.type === "minute")?.value);
-  if (!Number.isFinite(hour) || !Number.isFinite(minute)) return null;
-  const nowMinutes = hour * 60 + minute;
-  return windows.some((window: any) => {
-    const open = minutesFromTime(window?.open ?? window?.start);
-    const close = minutesFromTime(window?.close ?? window?.end);
-    if (open === null || close === null) return false;
-    if (close < open) {
-      return nowMinutes >= open || nowMinutes <= close;
-    }
-    return nowMinutes >= open && nowMinutes <= close;
-  });
-}
-
-export async function buildOrderingReadiness(restaurantId: string) {
-  const [restaurantRow] = await db
+export async function buildOrderingReadiness(
+  restaurantId: string,
+  requestedMenuId?: string,
+  context?: {
+    existingReservedMenuItemIds?: string[];
+    includeSettlementIdentity?: boolean;
+    database?: any;
+  },
+) {
+  const database = context?.database || db;
+  const [restaurantRow] = await database
     .select({
       id: restaurants.id,
       ownerId: restaurants.ownerId,
+      isVerified: restaurants.isVerified,
       name: restaurants.name,
+      address: restaurants.address,
       city: restaurants.city,
       state: restaurants.state,
+      phone: restaurants.phone,
+      email: users.email,
+      ownerEmailVerified: users.emailVerified,
+      ownerIsDisabled: users.isDisabled,
+      websiteUrl: restaurants.websiteUrl,
+      rawData: restaurants.rawData,
       isFoodTruck: restaurants.isFoodTruck,
       cuisineType: restaurants.cuisineType,
       isActive: restaurants.isActive,
       operatingHours: restaurants.operatingHours,
+      stripeConnectAccountId: restaurants.stripeConnectAccountId,
+      stripeConnectStatus: restaurants.stripeConnectStatus,
+      stripeOnboardingCompleted: restaurants.stripeOnboardingCompleted,
+      stripeChargesEnabled: restaurants.stripeChargesEnabled,
+      stripePayoutsEnabled: restaurants.stripePayoutsEnabled,
+      orderingApprovedAt: restaurants.orderingApprovedAt,
+      orderingApprovedByUserId: restaurants.orderingApprovedByUserId,
+      pickupAcknowledgementMinutes:
+        restaurants.pickupAcknowledgementMinutes,
+      orderingAuthorityVersion: restaurants.orderingAuthorityVersion,
+      ownerPublicProfileSettings: users.publicProfileSettings,
     })
     .from(restaurants)
+    .leftJoin(users, eq(users.id, restaurants.ownerId))
     .where(eq(restaurants.id, restaurantId))
     .limit(1);
 
-  const restaurantMenus = await db
+  const restaurantMenus: Menu[] = await database
     .select()
     .from(menus)
-    .where(and(eq(menus.restaurantId, restaurantId), eq(menus.isActive, true)))
+    .where(
+      and(
+        eq(menus.restaurantId, restaurantId),
+        eq(menus.isActive, true),
+        requestedMenuId ? eq(menus.id, requestedMenuId) : undefined,
+      ),
+    )
     .orderBy(asc(menus.serviceType));
 
   const menuIds = restaurantMenus.map((menu: any) => menu.id);
+  const existingReservedMenuItemIds = Array.from(
+    new Set(
+      (context?.existingReservedMenuItemIds || [])
+        .map((id) => String(id || "").trim())
+        .filter(Boolean),
+    ),
+  );
+  const itemAvailableWithKnownStock = and(
+    eq(menuItems.isAvailable, true),
+    or(
+      eq(menuItems.trackInventory, false),
+      and(eq(menuItems.trackInventory, true), gt(menuItems.inventoryQty, 0)),
+    ),
+  );
+  const itemAvailableForThisRequest = existingReservedMenuItemIds.length
+    ? or(
+        itemAvailableWithKnownStock,
+        and(
+          inArray(menuItems.id, existingReservedMenuItemIds),
+          eq(menuItems.trackInventory, true),
+          eq(menuItems.inventoryQty, 0),
+          eq(menuItems.inventoryAutoUnavailable, true),
+        ),
+      )
+    : itemAvailableWithKnownStock;
   const items = menuIds.length
-    ? await db
-        .select({ id: menuItems.id })
+      ? await database
+        .select({ id: menuItems.id, menuId: menuItems.menuId })
         .from(menuItems)
+        .leftJoin(
+          menuCategories,
+          and(
+            eq(menuCategories.id, menuItems.categoryId),
+            eq(menuCategories.menuId, menuItems.menuId),
+            eq(menuCategories.restaurantId, menuItems.restaurantId),
+          ),
+        )
         .where(
           and(
             inArray(menuItems.menuId, menuIds),
-            eq(menuItems.isAvailable, true),
+            itemAvailableForThisRequest,
+            gte(menuItems.priceCents, 0),
+            isNull(menuItems.availableFrom),
+            isNull(menuItems.availableTo),
+            or(
+              isNull(menuItems.categoryId),
+              eq(menuCategories.isActive, true),
+            ),
           ),
         )
     : [];
 
-  const acceptsCash = restaurantMenus.some((menu: any) => menu.acceptsCash);
   const stripeConfigured = Boolean(process.env.STRIPE_SECRET_KEY);
-  const profileOwnerReady = Boolean(restaurantRow?.ownerId);
+  const profileOwnerReady = isRestaurantOrderingAuthorityReady({
+    ownerId: restaurantRow?.ownerId,
+    ownerEmail: restaurantRow?.email,
+    ownerEmailVerified: restaurantRow?.ownerEmailVerified,
+    ownerIsDisabled: restaurantRow?.ownerIsDisabled,
+    isVerified: restaurantRow?.isVerified,
+    orderingApprovedAt: restaurantRow?.orderingApprovedAt,
+    orderingApprovedByUserId: restaurantRow?.orderingApprovedByUserId,
+  });
+  const configuredAcknowledgementMinutes = Number(
+    restaurantRow?.pickupAcknowledgementMinutes,
+  );
+  const merchantAcknowledgementMinutes =
+    Number.isInteger(configuredAcknowledgementMinutes) &&
+    configuredAcknowledgementMinutes >= 5 &&
+    configuredAcknowledgementMinutes <= 30
+      ? configuredAcknowledgementMinutes
+      : null;
   const timeZone = await resolveCityTimeZoneStrict({
     city: restaurantRow?.city,
     state: restaurantRow?.state,
@@ -266,15 +410,32 @@ export async function buildOrderingReadiness(restaurantId: string) {
     timeZone,
   );
   const truckPlan = restaurantRow?.isFoodTruck
-    ? await buildPublicTruckOperatingPlan(restaurantId)
+    ? await buildPublicTruckOperatingPlan(restaurantId, { database })
     : null;
   const currentTruckStop = truckPlan?.truckSchedule.currentStop || null;
-  const truckOrderableNow = Boolean(
-    currentTruckStop?.status === "here_now" &&
-    currentTruckStop.addressPublicLabel,
-  );
+  const truckOrderableNow = isTruckStopOrderableForPickup(currentTruckStop);
+  const fixedPickupAddress = resolveFixedRestaurantPickupAddress({
+    restaurant: restaurantRow,
+    ownerPublicProfileSettings: restaurantRow?.ownerPublicProfileSettings,
+  });
+  const pickupAddressLabel = restaurantRow?.isFoodTruck
+    ? String(
+        currentTruckStop?.addressPublicLabel ||
+          currentTruckStop?.locationName ||
+          "Truck pickup location",
+      ).trim() || null
+    : fixedPickupAddress;
+  const pickupDirectionsUrl = restaurantRow?.isFoodTruck
+    ? String(currentTruckStop?.directionsUrl || "").trim() || null
+    : fixedPickupAddress
+      ? buildPublicDirectionsUrl({
+          latitude: null,
+          longitude: null,
+          addressPublicLabel: fixedPickupAddress,
+        })
+      : null;
 
-  const checks = [
+  const commonChecks = [
     {
       id: "business_active",
       label: "Business profile is active",
@@ -283,34 +444,19 @@ export async function buildOrderingReadiness(restaurantId: string) {
       action: "Reactivate the business profile.",
     },
     {
-      id: "active_menu",
-      label: "At least one active menu is published",
-      ok: restaurantMenus.length > 0,
-      blocking: true,
-      action: "Publish an active menu.",
-    },
-    {
-      id: "menu_items",
-      label: "Menu has available items",
-      ok: items.length > 0,
-      blocking: true,
-      action: "Add or enable menu items.",
-    },
-    {
       id: "profile_owner",
-      label: "Business profile has a confirmed owner",
+      label: "Business and owner are approved for native ordering",
       ok: profileOwnerReady,
       blocking: true,
-      action: "Claim and confirm the business profile before taking orders.",
+      action:
+        "Complete evidence-backed ordering approval with an active, verified owner before taking orders.",
     },
     {
-      id: "stripe",
-      label: "Card payment processing is configured",
-      ok: stripeConfigured,
-      blocking: !acceptsCash,
-      action: acceptsCash
-        ? "Card payments are unavailable; cash ordering can still work."
-        : "Configure Stripe before taking online orders.",
+      id: "pickup_location",
+      label: "A customer pickup location is published",
+      ok: Boolean(pickupAddressLabel),
+      blocking: true,
+      action: "Publish the address customers should use for pickup.",
     },
     {
       id: "hours",
@@ -319,11 +465,19 @@ export async function buildOrderingReadiness(restaurantId: string) {
           ? "Operating hours are not set"
           : "Business is open now",
       ok: openNow === true,
-      blocking: openNow === false,
+      blocking: openNow !== true,
       action:
         openNow === false
           ? "Update hours or reopen ordering when service starts."
           : "Set hours so customers know when ordering is available.",
+    },
+    {
+      id: "merchant_acknowledgement_window",
+      label: "A merchant response deadline is configured",
+      ok: merchantAcknowledgementMinutes !== null,
+      blocking: true,
+      action:
+        "Complete ordering approval with a 5-30 minute merchant acknowledgement window.",
     },
     ...(restaurantRow?.isFoodTruck
       ? [
@@ -339,6 +493,142 @@ export async function buildOrderingReadiness(restaurantId: string) {
       : []),
   ];
 
+  const commonBlockingReasons = commonChecks
+    .filter((check) => check.blocking && !check.ok)
+    .map((check) => check.label);
+  const orderableItemCountByMenu = new Map<string, number>();
+  for (const item of items) {
+    orderableItemCountByMenu.set(
+      item.menuId,
+      (orderableItemCountByMenu.get(item.menuId) || 0) + 1,
+    );
+  }
+  const menuReadiness = restaurantMenus.map((menu) => {
+    const availableItemCount = orderableItemCountByMenu.get(menu.id) || 0;
+    const availableNow = isRestaurantMenuAvailableNow(menu, timeZone);
+    const methods = resolveRestaurantPaymentMethods({
+      // Native MealScout checkout is deliberately card-only. The stored menu
+      // flag may describe an in-person policy, but it is not checkout authority.
+      acceptsCash: false,
+      platformStripeConfigured: stripeConfigured,
+      stripeConnectAccountId: restaurantRow?.stripeConnectAccountId,
+      stripeOnboardingCompleted: restaurantRow?.stripeOnboardingCompleted,
+      stripeChargesEnabled: restaurantRow?.stripeChargesEnabled,
+      stripePayoutsEnabled: restaurantRow?.stripePayoutsEnabled,
+    });
+    const menuChecks = [
+      {
+        id: "menu_items",
+        label: "Menu has available priced items",
+        ok: availableItemCount > 0,
+        action: "Add prices to at least one available item.",
+      },
+      {
+        id: "menu_window",
+        label: "Menu is available now",
+        ok: availableNow,
+        action: "Use an all-day menu or update this menu's service window.",
+      },
+      {
+        id: "payment_method",
+        label: "Menu is ready for secure card checkout",
+        ok: methods.card,
+        action: "Complete Stripe Connect before publishing online checkout.",
+      },
+      {
+        id: "tax_pricing",
+        label: "Menu prices include applicable tax",
+        ok: menu.pricesIncludeTax === true,
+        action:
+          "Confirm that every displayed menu price already includes applicable tax.",
+      },
+    ];
+    const blockingReasons = [
+      ...commonBlockingReasons,
+      ...menuChecks.filter((check) => !check.ok).map((check) => check.label),
+    ];
+    return {
+      menuId: menu.id,
+      orderingEnabled: blockingReasons.length === 0,
+      availableNow,
+      availableItemCount,
+      acceptsCash: menu.acceptsCash,
+      hidePlatformFee: menu.hidePlatformFee,
+      pricesIncludeTax: menu.pricesIncludeTax,
+      paymentMethods: { card: methods.card, cash: false },
+      blockingReasons,
+    };
+  });
+  const hasOrderableMenu = menuReadiness.some(
+    (menu) => menu.orderingEnabled,
+  );
+  const paymentMethods = {
+    card: menuReadiness.some(
+      (menu) =>
+        menu.availableItemCount > 0 &&
+        menu.availableNow &&
+        menu.paymentMethods.card,
+    ),
+    cash: false,
+  };
+  const payoutReadiness = resolveRestaurantPaymentMethods({
+    acceptsCash: false,
+    platformStripeConfigured: stripeConfigured,
+    stripeConnectAccountId: restaurantRow?.stripeConnectAccountId,
+    stripeOnboardingCompleted: restaurantRow?.stripeOnboardingCompleted,
+    stripeChargesEnabled: restaurantRow?.stripeChargesEnabled,
+    stripePayoutsEnabled: restaurantRow?.stripePayoutsEnabled,
+  });
+  const acceptsCash = false;
+  const checks = [
+    commonChecks[0],
+    {
+      id: "active_menu",
+      label: requestedMenuId
+        ? "Requested menu is active"
+        : "At least one active menu is published",
+      ok: restaurantMenus.length > 0,
+      blocking: true,
+      action: "Publish an active menu.",
+    },
+    {
+      id: "menu_items",
+      label: "Menu has available priced items",
+      ok: items.length > 0,
+      blocking: true,
+      action: "Add prices to at least one available item.",
+    },
+    ...commonChecks.slice(1, 3),
+    {
+      id: "stripe",
+      label: "Secure card checkout is ready for this menu",
+      ok: paymentMethods.card,
+      blocking: true,
+      action: "Complete Stripe Connect before taking online orders.",
+    },
+    {
+      id: "tax_pricing",
+      label: "Menu prices include applicable tax",
+      ok: menuReadiness.some(
+        (menu) => menu.orderingEnabled || menu.pricesIncludeTax === true,
+      ),
+      blocking: true,
+      action:
+        "Confirm that displayed menu prices include applicable tax before taking online orders.",
+    },
+    commonChecks[3],
+    {
+      id: "menu_window",
+      label: requestedMenuId
+        ? "Requested menu is available now"
+        : "At least one menu is available now",
+      ok: menuReadiness.some((menu) => menu.availableNow),
+      blocking: true,
+      action: "Use an all-day menu or update the menu service window.",
+    },
+    ...commonChecks.slice(4),
+  ];
+
   const blockingReasons = checks
     .filter((check) => check.blocking && !check.ok)
     .map((check) => check.label);
@@ -346,26 +636,50 @@ export async function buildOrderingReadiness(restaurantId: string) {
   return {
     restaurantName: restaurantRow?.name ?? null,
     restaurantCity: restaurantRow?.city ?? null,
+    restaurantState: restaurantRow?.state ?? null,
+    pickupAddressLabel,
+    pickupDirectionsUrl,
     isFoodTruck: restaurantRow?.isFoodTruck ?? false,
     cuisineType: restaurantRow?.cuisineType ?? null,
-    orderingEnabled: blockingReasons.length === 0,
+    orderingEnabled: hasOrderableMenu,
     acceptsCash,
     stripeConfigured,
+    paymentMethods: {
+      card: paymentMethods.card,
+      cash: false,
+    },
     activeMenuCount: restaurantMenus.length,
     availableItemCount: items.length,
     openNow,
     timeZone,
     currentTruckStop,
+    orderingAuthorityVersion: Number(
+      restaurantRow?.orderingAuthorityVersion || 0,
+    ),
+    merchantAcknowledgementMinutes,
+    requestedMenuId: requestedMenuId || null,
+    menuReadiness,
     checks,
     blockingReasons,
+    ...(context?.includeSettlementIdentity
+      ? {
+          settlementIdentity: {
+            merchantOwnerId: restaurantRow?.ownerId ?? null,
+            stripeConnectAccountId:
+              restaurantRow?.stripeConnectAccountId ?? null,
+          },
+        }
+      : {}),
     payout: {
-      connected: false,
-      chargesEnabled: stripeConfigured,
-      payoutsEnabled: false,
-      status: stripeConfigured ? "platform_collected" : "not_configured",
-      message: stripeConfigured
-        ? "Customer payments are collected by MealScout. Direct restaurant payouts still need a dedicated Connect setup path."
-        : "Stripe is not configured, so card payments cannot be collected.",
+      connected: Boolean(restaurantRow?.stripeConnectAccountId),
+      chargesEnabled: restaurantRow?.stripeChargesEnabled === true,
+      payoutsEnabled: restaurantRow?.stripePayoutsEnabled === true,
+      status: payoutReadiness.payoutReady
+        ? "active"
+        : String(restaurantRow?.stripeConnectStatus || "not_connected"),
+      message: payoutReadiness.payoutReady
+        ? "Stripe Connect is ready for card-order settlement."
+        : "Complete Stripe Connect so paid orders can settle to this business.",
     },
   };
 }
@@ -955,7 +1269,10 @@ export function registerMenuRoutes(app: Express) {
           dietaryTags: menuItems.dietaryTags,
           updatedAt: menuItems.updatedAt,
           restaurantId: menuItems.restaurantId,
+          restaurantOwnerId: restaurants.ownerId,
           restaurantName: restaurants.name,
+          restaurantAddress: restaurants.address,
+          restaurantPhone: restaurants.phone,
           restaurantCity: restaurants.city,
           restaurantState: restaurants.state,
           restaurantLogoUrl: restaurants.logoUrl,
@@ -963,6 +1280,14 @@ export function registerMenuRoutes(app: Express) {
           cuisineType: restaurants.cuisineType,
           restaurantLatitude: restaurants.latitude,
           restaurantLongitude: restaurants.longitude,
+          restaurantCurrentLatitude: restaurants.currentLatitude,
+          restaurantCurrentLongitude: restaurants.currentLongitude,
+          restaurantMobileOnline: restaurants.mobileOnline,
+          restaurantLastBroadcastAt: restaurants.lastBroadcastAt,
+          restaurantLiveUntilAt: restaurants.liveUntilAt,
+          restaurantIsActive: restaurants.isActive,
+          restaurantIsVerified: restaurants.isVerified,
+          restaurantRawData: restaurants.rawData,
           isFoodTruck: restaurants.isFoodTruck,
           businessType: restaurants.businessType,
           favoriteCount: restaurants.goldenPlateCount,
@@ -978,6 +1303,27 @@ export function registerMenuRoutes(app: Express) {
             eq(restaurants.isActive, true),
           ),
         );
+
+      const visibilityByOwnerId = await loadPublicRestaurantListingVisibility(
+        rows.map((row: any) => ({ ownerId: row.restaurantOwnerId })),
+      );
+      const publicRows = rows
+        .map((row: any) => {
+          const projected = projectPublicLocalMenuItemRow(
+            row,
+            visibilityByOwnerId.get(String(row.restaurantOwnerId || "")) || {
+              showAddress: false,
+              showContact: false,
+            },
+          );
+          return projected
+            ? {
+                ...projected.publicRow,
+                __privateRankingScore: projected.privateRankingScore,
+              }
+            : null;
+        })
+        .filter(Boolean);
 
       // Dish-level CVS score (0-100): rank-by-recommendations-and-activity,
       // applied per dish instead of per restaurant.
@@ -1003,7 +1349,7 @@ export function registerMenuRoutes(app: Express) {
       // these aren't standalone dishes worth surfacing as a featured item.
       const ADDON_NAME_PATTERN =
         /^(extra|add[\s-]?on|side of|upgrade|substitut)/i;
-      const discoveryRows = rows.filter(
+      const discoveryRows = publicRows.filter(
         (row: any) => !ADDON_NAME_PATTERN.test(String(row.name || "").trim()),
       );
 
@@ -1059,26 +1405,21 @@ export function registerMenuRoutes(app: Express) {
             return null;
           }
 
-          const targetLat = Number(row.restaurantLatitude);
-          const targetLng = Number(row.restaurantLongitude);
           let distanceKm: number | null = null;
           if (hasLocation) {
-            if (!Number.isFinite(targetLat) || !Number.isFinite(targetLng)) {
-              return null;
-            }
-            const toRad = (value: number) => (value * Math.PI) / 180;
-            const earthRadiusKm = 6371;
-            const dLat = toRad(targetLat - lat);
-            const dLng = toRad(targetLng - lng);
-            const a =
-              Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-              Math.cos(toRad(lat)) *
-                Math.cos(toRad(targetLat)) *
-                Math.sin(dLng / 2) *
-                Math.sin(dLng / 2);
-            distanceKm =
-              earthRadiusKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-            if (!Number.isFinite(distanceKm) || distanceKm > radiusKm) {
+            distanceKm = publicRestaurantDistanceKm(
+              {
+                latitude: row.restaurantLatitude,
+                longitude: row.restaurantLongitude,
+              },
+              lat,
+              lng,
+            );
+            if (
+              distanceKm === null ||
+              !Number.isFinite(distanceKm) ||
+              distanceKm > radiusKm
+            ) {
               return null;
             }
           }
@@ -1188,7 +1529,7 @@ export function registerMenuRoutes(app: Express) {
             }
           }
 
-          const businessScore = Number(row.rankingScore || 0);
+          const businessScore = Number(row.__privateRankingScore || 0);
           if (businessScore > 0) {
             const trustScore = Math.min(20, Math.round(businessScore / 10));
             score += trustScore;
@@ -1206,8 +1547,10 @@ export function registerMenuRoutes(app: Express) {
               ? Math.min(100, Math.round(dishRecommendationCount * 12))
               : null;
 
+          const { __privateRankingScore: _privateRankingScore, ...publicRow } =
+            row;
           return {
-            ...row,
+            ...publicRow,
             distanceMiles:
               typeof distanceKm === "number" ? distanceKm * 0.621371 : null,
             discoveryScore: score,
@@ -1251,7 +1594,17 @@ export function registerMenuRoutes(app: Express) {
     "/api/menus/:restaurantId",
     wrap(async (req, res) => {
       const { restaurantId } = req.params;
+      res.setHeader("Cache-Control", "no-store");
+      const parent = await loadPublicMenuParent(restaurantId);
+      if (!parent) {
+        res.status(404).json({ message: "Restaurant not found" });
+        return;
+      }
       const readiness = await buildOrderingReadiness(restaurantId);
+      const publicReadiness = toPublicOrderingReadiness(
+        readiness,
+        parent.publicRestaurant,
+      );
 
       const restaurantMenus: Menu[] = await db
         .select()
@@ -1265,11 +1618,11 @@ export function registerMenuRoutes(app: Express) {
         return res.json({
           menus: [],
           orderingEnabled: false,
-          readiness,
-          restaurantName: readiness.restaurantName,
-          restaurantCity: readiness.restaurantCity,
-          isFoodTruck: readiness.isFoodTruck,
-          cuisineType: readiness.cuisineType,
+          readiness: publicReadiness,
+          restaurantName: publicReadiness.restaurantName,
+          restaurantCity: publicReadiness.restaurantCity,
+          isFoodTruck: publicReadiness.isFoodTruck,
+          cuisineType: publicReadiness.cuisineType,
         });
       }
 
@@ -1287,12 +1640,33 @@ export function registerMenuRoutes(app: Express) {
           )
           .orderBy(asc(menuCategories.sortOrder)),
         db
-          .select()
+          .select({ ...getTableColumns(menuItems) })
           .from(menuItems)
+          .leftJoin(
+            menuCategories,
+            and(
+              eq(menuCategories.id, menuItems.categoryId),
+              eq(menuCategories.menuId, menuItems.menuId),
+              eq(menuCategories.restaurantId, menuItems.restaurantId),
+            ),
+          )
           .where(
             and(
               inArray(menuItems.menuId, menuIds),
               eq(menuItems.isAvailable, true),
+              isNull(menuItems.availableFrom),
+              isNull(menuItems.availableTo),
+              or(
+                eq(menuItems.trackInventory, false),
+                and(
+                  eq(menuItems.trackInventory, true),
+                  gt(menuItems.inventoryQty, 0),
+                ),
+              ),
+              or(
+                isNull(menuItems.categoryId),
+                eq(menuCategories.isActive, true),
+              ),
             ),
           )
           .orderBy(asc(menuItems.sortOrder)),
@@ -1323,43 +1697,56 @@ export function registerMenuRoutes(app: Express) {
       const result = restaurantMenus.map((menu) => {
         const menuCats = typedCategories.filter((c) => c.menuId === menu.id);
         const menuItemsList = typedItems.filter((i) => i.menuId === menu.id);
+        const orderingTruth = readiness.menuReadiness.find(
+          (candidate) => candidate.menuId === menu.id,
+        );
 
-        const enrichedItems = menuItemsList.map((item) => ({
-          ...item,
-          variants: realVariants.filter((v) => v.menuItemId === item.id),
-          modifiers: realModifiers.filter((m) => m.menuItemId === item.id),
-        }));
+        const enrichedItems = menuItemsList.map((item) =>
+          toPublicMenuItem(item, realVariants, realModifiers),
+        );
 
         return {
-          ...menu,
+          id: menu.id,
+          restaurantId: menu.restaurantId,
+          name: menu.name,
+          serviceType: menu.serviceType,
+          availableFrom: menu.availableFrom,
+          availableTo: menu.availableTo,
+          availableDays: menu.availableDays,
+          isActive: true,
+          hidePlatformFee: menu.hidePlatformFee,
+          pricesIncludeTax: menu.pricesIncludeTax,
+          // Do not leak a legacy in-person cash preference as a native
+          // checkout capability. paymentMethods is the canonical contract.
+          acceptsCash: false,
+          orderingEnabled: Boolean(orderingTruth?.orderingEnabled),
+          orderingBlockingReasons: orderingTruth?.orderingEnabled
+            ? []
+            : ["Online pickup ordering is not currently available"],
+          paymentMethods: orderingTruth?.paymentMethods || {
+            card: false,
+            cash: false,
+          },
           categories: menuCats.map((cat) => ({
-            ...cat,
+            id: cat.id,
+            menuId: cat.menuId,
+            restaurantId: cat.restaurantId,
+            name: cat.name,
+            description: cat.description,
             items: enrichedItems.filter((i) => i.categoryId === cat.id),
           })),
           uncategorizedItems: enrichedItems.filter((i) => !i.categoryId),
         };
       });
 
-      const [restaurantRow] = await db
-        .select({
-          ownerId: restaurants.ownerId,
-          name: restaurants.name,
-          city: restaurants.city,
-          isFoodTruck: restaurants.isFoodTruck,
-          cuisineType: restaurants.cuisineType,
-        })
-        .from(restaurants)
-        .where(eq(restaurants.id, restaurantId))
-        .limit(1);
-
       res.json({
         menus: result,
         orderingEnabled: readiness.orderingEnabled,
-        readiness,
-        restaurantName: restaurantRow?.name ?? null,
-        restaurantCity: restaurantRow?.city ?? null,
-        isFoodTruck: restaurantRow?.isFoodTruck ?? false,
-        cuisineType: restaurantRow?.cuisineType ?? null,
+        readiness: publicReadiness,
+        restaurantName: publicReadiness.restaurantName,
+        restaurantCity: publicReadiness.restaurantCity,
+        isFoodTruck: publicReadiness.isFoodTruck,
+        cuisineType: publicReadiness.cuisineType,
       });
     }),
   );
@@ -1671,7 +2058,14 @@ export function registerMenuRoutes(app: Express) {
 
       const [updated] = await db
         .update(menuItems)
-        .set({ ...updates, updatedAt: new Date() })
+        .set({
+          ...updates,
+          ...(Object.prototype.hasOwnProperty.call(updates, "isAvailable") ||
+          Object.prototype.hasOwnProperty.call(updates, "inventoryQty")
+            ? { inventoryAutoUnavailable: false }
+            : {}),
+          updatedAt: new Date(),
+        })
         .where(eq(menuItems.id, itemId))
         .returning();
       res.json({ item: updated });
@@ -2456,6 +2850,7 @@ export function registerMenuRoutes(app: Express) {
     "/api/restaurants/:restaurantId/featured-item",
     wrap(async (req, res) => {
       const restaurantId = String(req.params.restaurantId || "").trim();
+      res.setHeader("Cache-Control", "no-store");
       if (!restaurantId) {
         throw Object.assign(new Error("restaurantId is required"), {
           statusCode: 400,
@@ -2470,21 +2865,24 @@ export function registerMenuRoutes(app: Express) {
         imageUrl: menuItems.imageUrl,
       };
 
-      const [restaurant] = await db
-        .select({ featuredMenuItemId: restaurants.featuredMenuItemId })
-        .from(restaurants)
-        .where(eq(restaurants.id, restaurantId))
-        .limit(1);
+      const parent = await loadPublicMenuParent(restaurantId);
+      if (!parent) {
+        return res.status(404).json({ message: "Restaurant not found" });
+      }
+      const { restaurant } = parent;
 
       if (restaurant?.featuredMenuItemId) {
         const [ownerPick] = await db
           .select(selectItemFields)
           .from(menuItems)
+          .innerJoin(menus, eq(menus.id, menuItems.menuId))
           .where(
             and(
               eq(menuItems.id, restaurant.featuredMenuItemId),
               eq(menuItems.restaurantId, restaurantId),
               eq(menuItems.isAvailable, true),
+              gt(menuItems.priceCents, 0),
+              eq(menus.isActive, true),
             ),
           )
           .limit(1);
@@ -2508,10 +2906,15 @@ export function registerMenuRoutes(app: Express) {
           menuItems,
           eq(menuItems.id, menuItemRecommendations.menuItemId),
         )
+        .innerJoin(menus, eq(menus.id, menuItems.menuId))
+        .innerJoin(users, eq(users.id, menuItemRecommendations.userId))
         .where(
           and(
             eq(menuItemRecommendations.restaurantId, restaurantId),
             eq(menuItems.isAvailable, true),
+            gt(menuItems.priceCents, 0),
+            eq(menus.isActive, true),
+            eq(users.isDisabled, false),
           ),
         )
         .groupBy(
@@ -2537,6 +2940,7 @@ export function registerMenuRoutes(app: Express) {
           and(
             eq(menuItems.restaurantId, restaurantId),
             eq(menuItems.isAvailable, true),
+            gt(menuItems.priceCents, 0),
             eq(menus.isActive, true),
           ),
         )
@@ -2662,6 +3066,36 @@ export function registerMenuRoutes(app: Express) {
     "/api/menu-items/:menuItemId/photos/public",
     wrap(async (req, res) => {
       const menuItemId = String(req.params.menuItemId || "").trim();
+      res.setHeader("Cache-Control", "no-store");
+      const [itemParent] = await db
+        .select({
+          restaurantId: menuItems.restaurantId,
+          itemAvailable: menuItems.isAvailable,
+          categoryId: menuItems.categoryId,
+          categoryActive: menuCategories.isActive,
+          menuActive: menus.isActive,
+        })
+        .from(menuItems)
+        .innerJoin(menus, eq(menus.id, menuItems.menuId))
+        .leftJoin(
+          menuCategories,
+          and(
+            eq(menuCategories.id, menuItems.categoryId),
+            eq(menuCategories.menuId, menuItems.menuId),
+            eq(menuCategories.restaurantId, menuItems.restaurantId),
+          ),
+        )
+        .where(eq(menuItems.id, menuItemId))
+        .limit(1);
+      if (
+        !itemParent ||
+        itemParent.itemAvailable !== true ||
+        itemParent.menuActive !== true ||
+        (itemParent.categoryId && itemParent.categoryActive !== true) ||
+        !(await loadPublicMenuParent(String(itemParent.restaurantId || "")))
+      ) {
+        return res.status(404).json({ message: "Menu item not found" });
+      }
       const photos = await db
         .select({
           id: menuItemPhotos.id,
@@ -2673,10 +3107,12 @@ export function registerMenuRoutes(app: Express) {
           createdAt: menuItemPhotos.createdAt,
         })
         .from(menuItemPhotos)
+        .innerJoin(users, eq(users.id, menuItemPhotos.sourceUserId))
         .where(
           and(
             eq(menuItemPhotos.menuItemId, menuItemId),
             inArray(menuItemPhotos.status, ["accepted", "featured"] as any),
+            eq(users.isDisabled, false),
           ),
         )
         .orderBy(menuItemPhotos.createdAt);

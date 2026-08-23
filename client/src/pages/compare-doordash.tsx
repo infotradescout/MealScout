@@ -5,24 +5,30 @@ import { Card, CardContent } from "@/components/ui/card";
 
 const rows = [
   {
-    label: "Top placement logic",
-    mealscout: "Ranked by recommendations, follows, favorites, active deals, and location.",
-    legacy: "Sponsored and paid placement can strongly influence visibility.",
+    label: "Current scope",
+    mealscout:
+      "Local profiles, menus, discovery signals, and eligibility-gated ASAP pickup by card.",
+    legacy:
+      "A mature marketplace that includes restaurant ordering, pickup, and courier delivery.",
   },
   {
-    label: "Small business competitiveness",
-    mealscout: "Can compete through local trust and consistency without bidding for placement.",
-    legacy: "Operators with larger budgets can often outspend smaller competitors.",
+    label: "Delivery",
+    mealscout: "No native courier-delivery network is promised today.",
+    legacy: "Courier delivery is a core customer capability.",
   },
   {
-    label: "Community signal usage",
-    mealscout: "Community actions directly improve profile visibility.",
-    legacy: "Engagement exists, but ranking is often mixed with ad economics.",
+    label: "Pickup checkout",
+    mealscout:
+      "Shown only for a verified, open, locatable merchant with priced available items and recorded card-payout readiness.",
+    legacy:
+      "Ordering availability follows DoorDash's merchant marketplace coverage.",
   },
   {
-    label: "Discovery experience",
-    mealscout: "Public profiles plus active deals and online menu context on one surface.",
-    legacy: "Primarily transaction-focused listing and ordering flow.",
+    label: "Honest comparison",
+    mealscout:
+      "An early local discovery product with a narrow pickup transaction path.",
+    legacy:
+      "MealScout does not currently match its marketplace breadth or delivery operations.",
   },
 ];
 
@@ -30,8 +36,8 @@ export default function CompareDoorDashPage() {
   return (
     <div className="page">
       <SEOHead
-        title="MealScout vs DoorDash | Fair Local Ranking for Restaurants and Trucks"
-        description="Compare MealScout and DoorDash. MealScout prioritizes trust-based local ranking instead of paid placement."
+        title="MealScout vs DoorDash | Discovery and Pickup Scope"
+        description="MealScout is a local discovery product with limited verified pickup checkout, not a DoorDash-scale delivery marketplace."
         canonicalUrl="https://www.mealscout.us/compare/doordash"
       />
       <section className="section section--full border-b border-[color:var(--border-subtle)] py-6">
@@ -43,8 +49,9 @@ export default function CompareDoorDashPage() {
             MealScout vs DoorDash
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            MealScout is designed to avoid nickel-and-diming small businesses.
-            Ranking is community-first and location-aware, not ad-budget-first.
+            This is a scope comparison, not a parity claim. MealScout does not
+            currently match DoorDash&apos;s merchant coverage, ordering breadth,
+            or courier-delivery operations.
           </p>
         </div>
       </section>
@@ -53,13 +60,19 @@ export default function CompareDoorDashPage() {
           {rows.map((row) => (
             <Card key={row.label}>
               <CardContent className="p-4">
-                <h2 className="text-sm font-semibold text-foreground">{row.label}</h2>
+                <h2 className="text-sm font-semibold text-foreground">
+                  {row.label}
+                </h2>
                 <p className="mt-2 text-xs text-muted-foreground">
-                  <span className="font-semibold text-foreground">MealScout:</span>{" "}
+                  <span className="font-semibold text-foreground">
+                    MealScout:
+                  </span>{" "}
                   {row.mealscout}
                 </p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  <span className="font-semibold text-foreground">DoorDash model:</span>{" "}
+                  <span className="font-semibold text-foreground">
+                    DoorDash model:
+                  </span>{" "}
                   {row.legacy}
                 </p>
               </CardContent>

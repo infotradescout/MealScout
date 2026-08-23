@@ -3,7 +3,9 @@ import { readFileSync } from "node:fs";
 
 import {
   DEPLOY_MIGRATION_FLOOR,
+  DEPLOY_MIGRATION_DDL_LOCK_TIMEOUT_MS,
   DEPLOY_MIGRATION_LOCK_TIMEOUT_MS,
+  DEPLOY_MIGRATION_STATEMENT_TIMEOUT_MS,
   assertTransactionCompatibleMigration,
   discoverBootstrapMigrations,
   discoverDeployMigrations,
@@ -145,6 +147,12 @@ assert.ok(
   DEPLOY_MIGRATION_LOCK_TIMEOUT_MS > 0,
   "migration lock wait must be bounded",
 );
+assert.ok(
+  DEPLOY_MIGRATION_DDL_LOCK_TIMEOUT_MS > 0 &&
+    DEPLOY_MIGRATION_DDL_LOCK_TIMEOUT_MS <
+      DEPLOY_MIGRATION_STATEMENT_TIMEOUT_MS,
+  "DDL lock waits must fail before the bounded statement timeout",
+);
 assert.doesNotThrow(() =>
   assertTransactionCompatibleMigration(migrations[0]!, "select 1"),
 );
@@ -246,6 +254,21 @@ assert.match(
   "concurrent migration runs must serialize behind a bounded blocking lock",
 );
 assert.doesNotMatch(runnerSource, /pg_try_advisory_lock/);
+assert.match(
+  runnerSource,
+  /set_config\('lock_timeout', \$1, false\)/,
+  "live-table DDL lock acquisition must be bounded",
+);
+assert.match(
+  runnerSource,
+  /DEPLOY_MIGRATION_STATEMENT_TIMEOUT_MS/,
+  "every deploy migration statement must retain a finite runtime bound",
+);
+assert.doesNotMatch(
+  runnerSource,
+  /set_config\('statement_timeout', '0', false\)/,
+  "the migration runner must never disable its statement timeout",
+);
 assert.match(
   runnerSource,
   /client\.query\("begin"\)[\s\S]*insert into mealscout_release_migrations[\s\S]*client\.query\("commit"\)/,

@@ -9,6 +9,7 @@ import {
   hosts,
   restaurants,
   telemetryEvents,
+  users,
 } from "@shared/schema";
 import { eq, and, or, desc, gte, inArray } from "drizzle-orm";
 import { isAuthenticated } from "../unifiedAuth";
@@ -22,10 +23,22 @@ import Stripe from "stripe";
 import { isInternalTeamUserType } from "../roleAccess";
 import { isTruckOperatingPlanRowPublic } from "../services/truckOperatingPlan";
 import { resolveStoredFoodBusinessType } from "@shared/businessTypes";
+import { resolvePublicProfileVisibility } from "../publicProfiles/publicProfileUtils";
+import { toPublicRestaurantListingWithVisibility } from "../publicProfiles/toPublicRestaurantListingWithVisibility";
+import { deriveProfileEvidenceQuarantineVisibility } from "../services/profileEvidenceQuarantine";
+import { isPublicBusinessVisible } from "../utils/publicBusinessVisibility";
 
 const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY)
   : null;
+
+const escapeHtml = (value: unknown) =>
+  String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 
 type BookingRouteDependencies = {
   hasCompleteProfileAccess: (userId: string) => Promise<boolean>;
@@ -492,18 +505,20 @@ export function registerBookingRoutes(
   app.get("/api/trucks/:truckId/manual-schedule", async (req: any, res) => {
     try {
       const { truckId } = req.params;
-      const [truck] = await db
-        .select({
-          id: restaurants.id,
-          ownerId: restaurants.ownerId,
-          businessType: restaurants.businessType,
-          isFoodTruck: restaurants.isFoodTruck,
-          isActive: restaurants.isActive,
-        })
-        .from(restaurants)
-        .where(eq(restaurants.id, truckId));
+      res.setHeader("Cache-Control", "no-store");
+      const truck = await storage.getRestaurant(truckId);
 
-      if (!truck || resolveStoredFoodBusinessType(truck) !== "food_truck") {
+      if (
+        !truck ||
+        resolveStoredFoodBusinessType(truck) !== "food_truck"
+      ) {
+        return res.status(404).json({ message: "Truck not found" });
+      }
+
+      const truckOwner = truck.ownerId
+        ? await storage.getUser(String(truck.ownerId))
+        : null;
+      if (!truckOwner || truckOwner.isDisabled !== false) {
         return res.status(404).json({ message: "Truck not found" });
       }
 
@@ -519,8 +534,17 @@ export function registerBookingRoutes(
           "manageParkingPass",
         );
       }
-      if (!truck.isActive && !includePrivate) {
-        return res.status(404).json({ message: "Truck not found" });
+      if (!includePrivate) {
+        const publicTruck =
+          truck.isActive === true && isPublicBusinessVisible(truck)
+            ? await toPublicRestaurantListingWithVisibility(truck)
+            : null;
+        if (
+          !(publicTruck as any)?.id ||
+          deriveProfileEvidenceQuarantineVisibility(truck).isQuarantined
+        ) {
+          return res.status(404).json({ message: "Truck not found" });
+        }
       }
 
       const entries = await storage.getTruckManualSchedules(truckId);
@@ -874,6 +898,7 @@ export function registerBookingRoutes(
   app.get("/api/bookings/truck/:truckId/schedule", async (req: any, res) => {
     try {
       const { truckId } = req.params;
+      res.setHeader("Cache-Control", "no-store");
 
       const [truck] = await db
         .select({
@@ -883,11 +908,24 @@ export function registerBookingRoutes(
           businessType: restaurants.businessType,
           isFoodTruck: restaurants.isFoodTruck,
           isActive: restaurants.isActive,
+          rawData: restaurants.rawData,
+          ownerDisabled: users.isDisabled,
         })
         .from(restaurants)
+        .innerJoin(users, eq(restaurants.ownerId, users.id))
         .where(eq(restaurants.id, truckId));
 
-      if (!truck || resolveStoredFoodBusinessType(truck) !== "food_truck") {
+      const publicTruck = truck
+        ? await toPublicRestaurantListingWithVisibility(truck)
+        : null;
+      if (
+        !truck ||
+        truck.ownerDisabled !== false ||
+        !(publicTruck as any)?.id ||
+        !isPublicBusinessVisible(truck) ||
+        deriveProfileEvidenceQuarantineVisibility(truck).isQuarantined ||
+        resolveStoredFoodBusinessType(truck) !== "food_truck"
+      ) {
         return res.status(404).json({ message: "Truck not found" });
       }
 
@@ -929,10 +967,13 @@ export function registerBookingRoutes(
           timezone: eventSeries.timezone,
           event: events,
           host: hosts,
+          hostOwnerDisabled: users.isDisabled,
+          hostPublicProfileSettings: users.publicProfileSettings,
         })
         .from(eventBookings)
         .innerJoin(events, eq(eventBookings.eventId, events.id))
         .innerJoin(hosts, eq(events.hostId, hosts.id))
+        .innerJoin(users, eq(hosts.userId, users.id))
         .leftJoin(eventSeries, eq(events.seriesId, eventSeries.id))
         .where(
           and(
@@ -951,10 +992,13 @@ export function registerBookingRoutes(
           createdAt: eventInterests.createdAt,
           event: events,
           host: hosts,
+          hostOwnerDisabled: users.isDisabled,
+          hostPublicProfileSettings: users.publicProfileSettings,
         })
         .from(eventInterests)
         .innerJoin(events, eq(eventInterests.eventId, events.id))
         .innerJoin(hosts, eq(events.hostId, hosts.id))
+        .innerJoin(users, eq(hosts.userId, users.id))
         .where(
           and(
             eq(eventInterests.truckId, truckId),
@@ -970,6 +1014,13 @@ export function registerBookingRoutes(
       );
 
       const isPublicBookingSlot = (row: (typeof bookingRows)[number]) => {
+        if (
+          row.hostOwnerDisabled !== false ||
+          !resolvePublicProfileVisibility(row.hostPublicProfileSettings)
+            .showAddress
+        ) {
+          return false;
+        }
         return isTruckOperatingPlanRowPublic({
           sourceKind: "booking",
           stopId: row.bookingId,
@@ -1094,7 +1145,7 @@ export function registerBookingRoutes(
       };
 
       const manualSchedule = manualEntries
-        .filter(() => ownerHasProfileAccess)
+        .filter(() => includePending || truck.ownerDisabled === false)
         .filter((entry) => entry.isPublic)
         .filter((entry) => (includePending ? true : isPublicManualSlot(entry)))
         .map((entry) => ({
@@ -1145,47 +1196,62 @@ export function registerBookingRoutes(
   });
 
   // Admin/staff-only: booking request from public profile
-  app.post("/api/trucks/:truckId/booking-request", async (req: any, res) => {
+  app.post(
+    "/api/trucks/:truckId/booking-request",
+    isAuthenticated,
+    async (req: any, res) => {
     try {
       const { truckId } = req.params;
+      if (!isInternalTeamUserType(req.user?.userType)) {
+        return res.status(403).json({ message: "Staff access required" });
+      }
 
       const schema = z.object({
-        name: z.string().min(1),
+        name: z.string().trim().min(1).max(120),
         email: z.string().email(),
-        phone: z.string().min(5),
-        expectedGuests: z.string().min(1),
-        date: z.string().min(1),
-        startTime: z.string().min(1),
-        endTime: z.string().min(1),
-        location: z.string().min(1),
-        notes: z.string().optional(),
+        phone: z.string().trim().min(5).max(40),
+        expectedGuests: z.string().trim().min(1).max(40),
+        date: z.string().trim().min(1).max(40),
+        startTime: z.string().trim().min(1).max(20),
+        endTime: z.string().trim().min(1).max(20),
+        location: z.string().trim().min(1).max(240),
+        notes: z.string().trim().max(1000).optional(),
       });
 
       const parsed = schema.parse(req.body);
 
       const truck = await storage.getRestaurant(truckId);
-      if (!truck) {
+      const publicTruck =
+        truck?.isActive === true && isPublicBusinessVisible(truck)
+          ? await toPublicRestaurantListingWithVisibility(truck)
+          : null;
+      if (
+        !truck ||
+        resolveStoredFoodBusinessType(truck) !== "food_truck" ||
+        !(publicTruck as any)?.id ||
+        deriveProfileEvidenceQuarantineVisibility(truck).isQuarantined
+      ) {
         return res.status(404).json({ message: "Truck not found" });
       }
 
       const owner = await storage.getUser(truck.ownerId);
-      if (!owner || !owner.email) {
+      if (!owner || owner.isDisabled !== false || !owner.email) {
         return res
           .status(400)
           .json({ message: "Truck owner email not available" });
       }
 
-      const subject = `New booking request for ${truck.name}`;
+      const subject = `New booking request for ${String(truck.name || "food truck").replace(/[\r\n]+/g, " ")}`;
       const html = `
-          <h2>New booking request for ${truck.name}</h2>
-          <p><strong>Requester:</strong> ${parsed.name}</p>
-          <p><strong>Email:</strong> ${parsed.email}</p>
-          <p><strong>Phone:</strong> ${parsed.phone}</p>
-          <p><strong>Expected Guests:</strong> ${parsed.expectedGuests}</p>
-          <p><strong>Date:</strong> ${parsed.date}</p>
-          <p><strong>Time:</strong> ${parsed.startTime} - ${parsed.endTime}</p>
-          <p><strong>Location:</strong> ${parsed.location}</p>
-          ${parsed.notes ? `<p><strong>Notes:</strong> ${parsed.notes}</p>` : ""}
+          <h2>New booking request for ${escapeHtml(truck.name)}</h2>
+          <p><strong>Requester:</strong> ${escapeHtml(parsed.name)}</p>
+          <p><strong>Email:</strong> ${escapeHtml(parsed.email)}</p>
+          <p><strong>Phone:</strong> ${escapeHtml(parsed.phone)}</p>
+          <p><strong>Expected Guests:</strong> ${escapeHtml(parsed.expectedGuests)}</p>
+          <p><strong>Date:</strong> ${escapeHtml(parsed.date)}</p>
+          <p><strong>Time:</strong> ${escapeHtml(parsed.startTime)} - ${escapeHtml(parsed.endTime)}</p>
+          <p><strong>Location:</strong> ${escapeHtml(parsed.location)}</p>
+          ${parsed.notes ? `<p><strong>Notes:</strong> ${escapeHtml(parsed.notes)}</p>` : ""}
         `;
 
       if (canEmailForTopic((owner as any).accountSettings, "businessMessages")) {
@@ -1203,7 +1269,6 @@ export function registerBookingRoutes(
         userId: req.user?.id || null,
         properties: {
           truckId,
-          requesterEmail: parsed.email,
           expectedGuests: parsed.expectedGuests,
         },
       });
@@ -1218,5 +1283,6 @@ export function registerBookingRoutes(
       }
       res.status(500).json({ message: "Failed to send request" });
     }
-  });
+    },
+  );
 }

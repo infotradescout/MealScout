@@ -64,6 +64,46 @@ const confirmedBooking = {
 };
 
 {
+  const privateStop = assembleTruckOperatingPlan({
+    rows: [{ ...confirmedBooking, stopId: "private-address", addressVisible: false }],
+    now,
+  }).currentStop;
+  assert.equal(privateStop?.directionsUrl, null);
+  assert.equal(privateStop?.latitude, null);
+  assert.equal(privateStop?.longitude, null);
+
+  const localityOnly = assembleTruckOperatingPlan({
+    rows: [
+      {
+        ...confirmedBooking,
+        stopId: "locality-only",
+        address: null,
+        latitude: null,
+        longitude: null,
+      },
+    ],
+    now,
+  }).currentStop;
+  assert.equal(localityOnly?.addressPublicLabel, "Pensacola, FL");
+  assert.equal(localityOnly?.directionsUrl, null);
+
+  const sentinelCoordinates = assembleTruckOperatingPlan({
+    rows: [
+      {
+        ...confirmedBooking,
+        stopId: "sentinel-coordinates",
+        latitude: 0,
+        longitude: 0,
+      },
+    ],
+    now,
+  }).currentStop;
+  assert.equal(sentinelCoordinates?.latitude, null);
+  assert.equal(sentinelCoordinates?.longitude, null);
+  assert.doesNotMatch(sentinelCoordinates?.directionsUrl || "", /0,0/);
+}
+
+{
   const plan = assembleTruckOperatingPlan({
     rows: [
       confirmedBooking,

@@ -89,6 +89,9 @@ async function run() {
     supplierUser: id("supplier_user"),
     truck: id("truck"),
     currentRestaurant: id("current_restaurant"),
+    pickupMenu: id("pickup_menu"),
+    pickupInventoryItem: id("pickup_inventory_item"),
+    pickupTransferGroup: id("tg_pickup_pending"),
     host: id("host"),
     event: id("event"),
     booking: id("booking"),
@@ -117,19 +120,20 @@ async function run() {
     staleCustomer: id("cus_stale"),
     currentCustomer: id("cus_current"),
   };
-  let pickupInventoryItemId = "";
+  const pickupInventoryItemId = fixtures.pickupInventoryItem;
 
   await pool.query("BEGIN");
   try {
     await pool.query(
       `
         insert into users
-          (id, user_type, stripe_customer_id, stripe_subscription_id)
+          (id, user_type, email, email_verified, is_disabled,
+           stripe_customer_id, stripe_subscription_id, public_profile_settings)
         values
-          ($1, 'food_truck', $2, $3),
-          ($4, 'restaurant_owner', $5, $6),
-          ($7, 'host', null, null),
-          ($8, 'supplier', null, null)
+          ($1, 'food_truck', $9, true, false, $2, $3, '{"showAddress":true}'::jsonb),
+          ($4, 'restaurant_owner', $10, true, false, $5, $6, '{"showAddress":true}'::jsonb),
+          ($7, 'host', $11, true, false, null, null, '{}'::jsonb),
+          ($8, 'supplier', $12, true, false, null, null, '{}'::jsonb)
       `,
       [
         fixtures.staleOwner,
@@ -140,21 +144,55 @@ async function run() {
         fixtures.currentSubscription,
         fixtures.hostUser,
         fixtures.supplierUser,
+        `truck-${suffix}@example.test`,
+        `restaurant-${suffix}@example.test`,
+        `host-${suffix}@example.test`,
+        `supplier-${suffix}@example.test`,
       ],
     );
     await pool.query(
       `
         insert into restaurants
-          (id, owner_id, name, address, business_type, is_food_truck)
+          (id, owner_id, name, address, city, state, business_type,
+           is_food_truck, is_verified, is_active, operating_hours,
+           stripe_connect_account_id, stripe_connect_status,
+           stripe_onboarding_completed, stripe_charges_enabled,
+           stripe_payouts_enabled, ordering_approved_at,
+           ordering_approved_by_user_id, ordering_approval_evidence_url,
+           pickup_acknowledgement_minutes)
         values
-          ($1, $2, 'PR300 replay truck', 'Disposable branch only', 'food_truck', true),
-          ($3, $4, 'PR300 current subscription restaurant', 'Disposable branch only', 'restaurant', false)
+          ($1, $2, 'PR300 replay truck', 'Disposable branch only', 'Pensacola', 'FL', 'food_truck', true, false, true, '{}'::jsonb, null, 'pending', false, false, false, null, null, null, null),
+          ($3, $4, 'PR300 current subscription restaurant', '101 Test St', 'Pensacola', 'FL', 'restaurant', false, true, true,
+           '{"sun":[{"open":"00:00","close":"23:59"}],"mon":[{"open":"00:00","close":"23:59"}],"tue":[{"open":"00:00","close":"23:59"}],"wed":[{"open":"00:00","close":"23:59"}],"thu":[{"open":"00:00","close":"23:59"}],"fri":[{"open":"00:00","close":"23:59"}],"sat":[{"open":"00:00","close":"23:59"}]}'::jsonb,
+           'acct_disposable_fixture', 'active', true, true, true, now(), $4,
+           'https://example.test/evidence/disposable-ordering-approval', 10)
       `,
       [
         fixtures.truck,
         fixtures.staleOwner,
         fixtures.currentRestaurant,
         fixtures.currentOwner,
+      ],
+    );
+    await pool.query(
+      `
+        insert into menus
+          (id, restaurant_id, name, is_active, prices_include_tax)
+        values ($1, $2, 'Disposable pickup menu', true, true)
+      `,
+      [fixtures.pickupMenu, fixtures.currentRestaurant],
+    );
+    await pool.query(
+      `
+        insert into menu_items
+          (id, menu_id, restaurant_id, name, price_cents, track_inventory,
+           inventory_qty, is_available)
+        values ($1, $2, $3, 'Disposable pickup item', 1200, true, 47, true)
+      `,
+      [
+        fixtures.pickupInventoryItem,
+        fixtures.pickupMenu,
+        fixtures.currentRestaurant,
       ],
     );
     await pool.query(
@@ -198,18 +236,24 @@ async function run() {
         insert into pickup_orders
           (id, restaurant_id, customer_name, status, subtotal_cents,
            platform_fee_cents, total_cents, payment_method,
-           stripe_payment_intent_id, stripe_transfer_group_id, payout_status)
+           stripe_payment_intent_id, stripe_transfer_group_id, payout_status,
+           merchant_name_snapshot, merchant_owner_id_snapshot,
+           stripe_connect_account_id_snapshot,
+           merchant_acknowledgement_minutes_snapshot, pickup_address_snapshot,
+           pickup_directions_url_snapshot, ordering_contract_version,
+           prices_include_tax)
         values
-          ($1, $2, 'PR300 pending pickup', 'pending', 1200, 100, 1300, 'card', $3, null, 'pending'),
-          ($4, $2, 'PR300 cancelled pickup', 'cancelled', 1200, 100, 1300, 'card', $5, $6, 'pending'),
-          ($7, $2, 'PR300 failed-pending pickup', 'pending', 1200, 100, 1300, 'card', $8, null, 'pending'),
-          ($9, $2, 'PR300 mismatch pickup', 'pending', 1200, 100, 1300, 'card', $10, null, 'pending'),
-          ($11, $2, 'PR300 completed pickup', 'completed', 1200, 100, 1300, 'card', $12, null, 'pending')
+          ($1, $2, 'PR300 pending pickup', 'pending', 1200, 100, 1300, 'card', $3, $4, 'pending', $13, $18, $19, $20, $14, $15, $16, true),
+          ($5, $2, 'PR300 cancelled pickup', 'cancelled', 1200, 100, 1300, 'card', $6, $7, 'pending', $13, $18, $19, $20, $14, $15, $16, true),
+          ($8, $2, 'PR300 failed-pending pickup', 'pending', 1200, 100, 1300, 'card', $9, null, 'pending', $13, $18, $19, $20, $14, $15, $16, true),
+          ($10, $2, 'PR300 mismatch pickup', 'pending', 1200, 100, 1300, 'card', $11, null, 'pending', $13, $18, $19, $20, $14, $15, $16, true),
+          ($12, $2, 'PR300 completed pickup', 'completed', 1200, 100, 1300, 'card', $17, null, 'pending', $13, $18, $19, $20, $14, $15, $16, true)
       `,
       [
         fixtures.pickupPending,
-        fixtures.truck,
+        fixtures.currentRestaurant,
         fixtures.pickupPendingIntent,
+        fixtures.pickupTransferGroup,
         fixtures.pickupCancelled,
         fixtures.pickupCancelledIntent,
         id("tg_cancelled"),
@@ -218,35 +262,26 @@ async function run() {
         fixtures.pickupFailureMismatch,
         fixtures.pickupMismatchIntent,
         fixtures.pickupCompleted,
+        "PR300 current subscription restaurant",
+        "101 Test St, Pensacola, FL",
+        "https://maps.google.com/?q=101%20Test%20St%2C%20Pensacola%2C%20FL",
+        "2026-08-23-v1",
         fixtures.pickupCompletedIntent,
+        fixtures.currentOwner,
+        "acct_disposable_fixture",
+        10,
       ],
-    );
-    const pickupInventorySource = await pool.query(
-      `select id from menu_items order by created_at nulls last limit 1`,
-    );
-    assert.equal(
-      pickupInventorySource.rowCount,
-      1,
-      "Webhook replay requires a disposable menu item fixture",
-    );
-    pickupInventoryItemId = String(pickupInventorySource.rows[0].id);
-    await pool.query(
-      `update menu_items
-          set track_inventory = true,
-              inventory_qty = 50,
-              is_available = true
-        where id = $1`,
-      [pickupInventoryItemId],
     );
     await pool.query(
       `insert into pickup_order_items
-         (order_id, menu_item_id, item_name, base_price_cents, quantity, line_total_cents)
+         (order_id, menu_item_id, item_name, base_price_cents, quantity,
+          inventory_reserved_quantity, line_total_cents)
        values
-         ($1, $6, 'Pending item', 1200, 3, 3600),
-         ($2, $6, 'Cancelled item', 1200, 4, 4800),
-         ($3, $6, 'Failed item', 1200, 2, 2400),
-         ($4, $6, 'Mismatch item', 1200, 5, 6000),
-         ($5, $6, 'Completed item', 1200, 6, 7200)`,
+         ($1, $6, 'Pending item', 1200, 1, 1, 1200),
+         ($2, $6, 'Cancelled item', 1200, 1, 0, 1200),
+         ($3, $6, 'Failed item', 1200, 1, 1, 1200),
+         ($4, $6, 'Mismatch item', 1200, 1, 1, 1200),
+         ($5, $6, 'Completed item', 1200, 1, 0, 1200)`,
       [
         fixtures.pickupPending,
         fixtures.pickupCancelled,
@@ -323,10 +358,117 @@ async function run() {
     throw error;
   }
 
+  const stripeTransport = new Stripe(stripeSecret);
+  const transfersByIdempotencyKey = new Map<string, any>();
+  const refundsByIdempotencyKey = new Map<string, any>();
+  const pickupOrderByIntent = new Map([
+    [fixtures.pickupPendingIntent, fixtures.pickupPending],
+    [fixtures.pickupCancelledIntent, fixtures.pickupCancelled],
+    [fixtures.pickupFailureIntent, fixtures.pickupFailurePending],
+    [fixtures.pickupMismatchIntent, fixtures.pickupFailureMismatch],
+    [fixtures.pickupCompletedIntent, fixtures.pickupCompleted],
+  ]);
+  const pickupSettlementMetadata = (orderId: string) => ({
+    pickupOrderId: orderId,
+    orderId,
+    restaurantId: fixtures.currentRestaurant,
+    merchantOwnerId: fixtures.currentOwner,
+    stripeConnectAccountId: "acct_disposable_fixture",
+  });
+  const stripeStub = {
+    webhooks: stripeTransport.webhooks,
+    transfers: {
+      create: async (params: any, options?: any) => {
+        const key = String(options?.idempotencyKey || "");
+        const existing = transfersByIdempotencyKey.get(key);
+        if (existing) return existing;
+        const transfer = {
+          id: id(`tr_${transfersByIdempotencyKey.size + 1}`),
+          amount: params.amount,
+          amount_reversed: 0,
+          reversed: false,
+          currency: params.currency,
+          destination: params.destination,
+          source_transaction: params.source_transaction,
+          transfer_group: params.transfer_group,
+          metadata: { ...(params.metadata || {}) },
+        };
+        transfersByIdempotencyKey.set(key, transfer);
+        return transfer;
+      },
+      list: async (params: any) => ({
+        data: [...transfersByIdempotencyKey.values()].filter(
+          (transfer) => transfer.transfer_group === params.transfer_group,
+        ),
+        has_more: false,
+      }),
+      createReversal: async (transferId: string, params: any) => {
+        const transfer = [...transfersByIdempotencyKey.values()].find(
+          (candidate) => candidate.id === transferId,
+        );
+        assert.ok(transfer, `Unknown transfer ${transferId}`);
+        transfer.amount_reversed += Number(params.amount || 0);
+        transfer.reversed = transfer.amount_reversed >= transfer.amount;
+        return { id: id("trr_fixture"), amount: params.amount };
+      },
+    },
+    paymentIntents: {
+      retrieve: async (intentId: string) => {
+        const orderId = pickupOrderByIntent.get(intentId);
+        return {
+          id: intentId,
+          status: "succeeded",
+          amount: 1300,
+          amount_received: 1300,
+          currency: "usd",
+          latest_charge: `ch_${intentId}`,
+          transfer_group:
+            intentId === fixtures.pickupPendingIntent
+              ? fixtures.pickupTransferGroup
+              : null,
+          metadata: orderId ? pickupSettlementMetadata(orderId) : {},
+        };
+      },
+      cancel: async (intentId: string) => ({
+        id: intentId,
+        status: "canceled",
+      }),
+    },
+    refunds: {
+      create: async (params: any, options?: any) => {
+        const key = String(options?.idempotencyKey || "");
+        const existing = refundsByIdempotencyKey.get(key);
+        if (existing) return existing;
+        const refund = {
+          id: id(`re_${refundsByIdempotencyKey.size + 1}`),
+          status: "succeeded",
+          payment_intent: params.payment_intent,
+          amount: Number(params.amount),
+          currency: "usd",
+          created: Math.floor(Date.now() / 1000),
+          metadata: { ...(params.metadata || {}) },
+        };
+        refundsByIdempotencyKey.set(key, refund);
+        return refund;
+      },
+      retrieve: async (refundId: string) =>
+        [...refundsByIdempotencyKey.values()].find(
+          (refund) => refund.id === refundId,
+        ) || { id: refundId, status: "succeeded" },
+      list: async (params: any) => ({
+        data: [...refundsByIdempotencyKey.values()].filter(
+          (refund) => refund.payment_intent === params.payment_intent,
+        ),
+        has_more: false,
+      }),
+    },
+  } as unknown as Stripe;
+
   const app = express();
   app.use(express.raw({ type: "application/json" }));
   registerStripeWebhookRoutes(app, {
     notifyHostCapacityWarning: async () => undefined,
+    stripeClient: stripeStub,
   });
   const server = app.listen(0, "127.0.0.1");
   await new Promise<void>((resolve, reject) => {
@@ -336,10 +478,9 @@ async function run() {
 
   const address = server.address() as AddressInfo;
   const apiBase = `http://127.0.0.1:${address.port}`;
-  const stripe = new Stripe(stripeSecret);
   const send = (eventType: string, object: Record<string, unknown>) =>
     postWebhookEvent({
-      stripe,
+      stripe: stripeTransport,
       webhookSecret,
       apiBase,
       eventType,
@@ -349,10 +490,16 @@ async function run() {
     intentId: string,
     metadata: Record<string, string>,
     amount = 1500,
+    transferGroup?: string,
   ) => ({
     id: intentId,
     object: "payment_intent",
     amount,
+    amount_received: amount,
+    currency: "usd",
+    status: "succeeded",
+    latest_charge: `ch_${intentId}`,
+    transfer_group: transferGroup || null,
     metadata,
   });
   const subscription = (
@@ -402,21 +549,22 @@ async function run() {
 
     const pickupPendingObject = paymentIntent(
       fixtures.pickupPendingIntent,
-      { pickupOrderId: fixtures.pickupPending },
+      pickupSettlementMetadata(fixtures.pickupPending),
       1300,
+      fixtures.pickupTransferGroup,
     );
     await send("payment_intent.succeeded", pickupPendingObject);
     await send("payment_intent.succeeded", pickupPendingObject);
 
     const pickupCancelledObject = paymentIntent(
       fixtures.pickupCancelledIntent,
-      { orderId: fixtures.pickupCancelled },
+      pickupSettlementMetadata(fixtures.pickupCancelled),
       1300,
     );
     await send("payment_intent.succeeded", pickupCancelledObject);
     const pickupFailurePendingObject = paymentIntent(
       fixtures.pickupFailureIntent,
-      { orderId: fixtures.pickupFailurePending },
+      pickupSettlementMetadata(fixtures.pickupFailurePending),
       1300,
     );
     await send("payment_intent.payment_failed", pickupFailurePendingObject);
@@ -427,7 +575,7 @@ async function run() {
       "payment_intent.payment_failed",
       paymentIntent(
         id("pi_pickup_mismatch_event"),
-        { orderId: fixtures.pickupFailureMismatch },
+        pickupSettlementMetadata(fixtures.pickupFailureMismatch),
         1300,
       ),
     );
@@ -435,14 +583,15 @@ async function run() {
       "payment_intent.payment_failed",
       paymentIntent(
         fixtures.pickupCompletedIntent,
-        { pickupOrderId: fixtures.pickupCompleted },
+        pickupSettlementMetadata(fixtures.pickupCompleted),
         1300,
       ),
     );
 
     const pickups = await pool.query(
       `
-        select id, status, payout_status
+        select id, status, payout_status,
+               merchant_acknowledgement_due_at is not null as acknowledgement_due
           from pickup_orders
          where id = any($1::varchar[])
          order by id
@@ -461,36 +610,75 @@ async function run() {
     assert.deepEqual(pickupById.get(fixtures.pickupPending), {
       id: fixtures.pickupPending,
       status: "confirmed",
-      payout_status: "pending",
+      payout_status: "transferred",
+      acknowledgement_due: true,
     });
+    assert.equal(
+      transfersByIdempotencyKey.size,
+      1,
+      "Duplicate succeeded webhooks must create exactly one merchant transfer",
+    );
     assert.deepEqual(pickupById.get(fixtures.pickupCancelled), {
       id: fixtures.pickupCancelled,
       status: "cancelled",
       payout_status: "pending",
+      acknowledgement_due: false,
     });
     assert.deepEqual(pickupById.get(fixtures.pickupFailurePending), {
       id: fixtures.pickupFailurePending,
-      status: "cancelled",
+      status: "pending",
       payout_status: "pending",
+      acknowledgement_due: false,
     });
     assert.deepEqual(pickupById.get(fixtures.pickupFailureMismatch), {
       id: fixtures.pickupFailureMismatch,
       status: "pending",
       payout_status: "pending",
+      acknowledgement_due: false,
     });
     assert.deepEqual(pickupById.get(fixtures.pickupCompleted), {
       id: fixtures.pickupCompleted,
       status: "completed",
       payout_status: "pending",
+      acknowledgement_due: false,
     });
+
+    const manualRefund = {
+      id: id("re_manual_pickup"),
+      object: "refund",
+      status: "succeeded",
+      payment_intent: fixtures.pickupPendingIntent,
+      amount: 1300,
+      currency: "usd",
+      created: Math.floor(Date.now() / 1000),
+      metadata: {},
+    };
+    refundsByIdempotencyKey.set("manual-pickup-refund", manualRefund);
+    await send("refund.updated", manualRefund);
+    const refundedPickup = await pool.query(
+      `select status, payout_status, stripe_refund_id,
+              inventory_restored_at is not null as inventory_restored
+         from pickup_orders where id = $1`,
+      [fixtures.pickupPending],
+    );
+    assert.deepEqual(refundedPickup.rows[0], {
+      status: "cancelled",
+      payout_status: "reversed",
+      stripe_refund_id: manualRefund.id,
+      inventory_restored: true,
+    });
+    const [settledTransfer] = [...transfersByIdempotencyKey.values()];
+    assert.equal(settledTransfer.reversed, true);
+    assert.equal(settledTransfer.amount_reversed, settledTransfer.amount);
+
     const pickupInventory = await pool.query(
       `select inventory_qty from menu_items where id = $1`,
       [pickupInventoryItemId],
     );
     assert.equal(
       Number(pickupInventory.rows[0]?.inventory_qty),
-      52,
-      "Only the pending failed pickup may restore inventory, exactly once",
+      48,
+      "The refunded order restores once while retryable failed attempts keep their reservations",
     );
 
     if (process.env.MEALSCOUT_STRIPE_WEBHOOK_PICKUP_ONLY === "true") {
@@ -499,13 +687,14 @@ async function run() {
           status: "PASS",
           branchId: process.env[REQUIRED_BRANCH],
           checks: {
-            pickupPaidReplay: true,
-            pickupFailureInventoryExactlyOnce: true,
+            pickupSettledBeforeConfirmationReplay: true,
+            pickupFailureReservationRetained: true,
             pickupFailureMetadataFallback: true,
             pickupFailureIntentMismatchGuard: true,
             pickupFailureNonPendingGuard: true,
             cancelledPickupNonRegression: true,
             completedPickupNonRegression: true,
+            manualFullRefundConverged: true,
           },
         }),
       );

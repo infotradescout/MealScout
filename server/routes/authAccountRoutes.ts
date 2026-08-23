@@ -34,6 +34,7 @@ import {
   isMealScoutPlatformHostname,
   normalizeCustomProfileHostname,
 } from "../services/customProfileDomain";
+import { clearPublicMapLocationsCache } from "./publicMapRoutes";
 
 const FIRST_PARTNER_MESSAGE =
   "As an appreciation of being our first MealScout Partner, 3D Eats is recognized as a founding partner. Your complete profile remains included. Keep killin it.";
@@ -573,6 +574,9 @@ export function registerAuthAccountRoutes(app: Express) {
         accountSettings: nextAccountSettings as any,
         publicProfileSettings: nextPublicProfileSettings as any,
       });
+      if (parsed.publicProfileSettings) {
+        clearPublicMapLocationsCache();
+      }
 
       res.json({
         accountSettings: updated.accountSettings || {},

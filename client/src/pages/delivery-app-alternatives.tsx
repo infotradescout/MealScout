@@ -6,51 +6,43 @@ import { CheckCircle2, ArrowRight } from "lucide-react";
 
 const alternatives = [
   {
-    title: "Alternative to DoorDash for local visibility",
+    title: "Discovery before delivery checkout",
     summary:
-      "MealScout ranks by local recommendations, follows, favorites, active deals, and proximity.",
+      "Use MealScout to find local profiles, menus, deals, and community signals before choosing how to order.",
   },
   {
-    title: "Alternative to Uber Eats for small operators",
+    title: "A profile surface for small operators",
     summary:
-      "MealScout is built so smaller restaurants and trucks can rise through trust signals instead of paid placement.",
+      "Restaurants and food trucks can publish a local profile without MealScout claiming to provide a citywide courier network.",
   },
   {
-    title: "Alternative to Grubhub for community discovery",
+    title: "Limited verified pickup checkout",
     summary:
-      "MealScout combines local profile discovery with active deals and online menu context.",
+      "ASAP pickup by card appears only when a claimed business, live menu, hours, item availability, pickup location, and payout account all pass current checks.",
   },
-];
-
-const keywordBullets = [
-  "food delivery app alternatives",
-  "best doordash alternative",
-  "uber eats alternative",
-  "grubhub alternative",
-  "food ordering platform for small restaurants",
-  "local food delivery alternatives near me",
 ];
 
 export default function DeliveryAppAlternativesPage() {
   return (
     <div className="page">
       <SEOHead
-        title="Food Delivery App Alternatives | DoorDash, Uber Eats, Grubhub vs MealScout"
-        description="Looking for alternatives to DoorDash, Uber Eats, or Grubhub? MealScout offers local-first discovery and online ordering with transparent, community-driven ranking."
+        title="Local Food Discovery Beyond Delivery Apps | MealScout"
+        description="MealScout supports local food discovery and limited eligibility-gated pickup ordering. It is not a DoorDash-scale delivery network."
         canonicalUrl="https://www.mealscout.us/delivery-app-alternatives"
       />
 
       <section className="section section--full border-b border-[color:var(--border-subtle)] py-6">
         <div className="content max-w-4xl">
           <p className="text-xs font-semibold uppercase tracking-wide text-[color:var(--accent-text)]">
-            Delivery & Ordering Alternatives
+            Discovery beyond delivery apps
           </p>
           <h1 className="mt-2 text-2xl font-bold text-foreground">
-            Alternatives to legacy delivery and online ordering apps
+            Find local food first; choose an available ordering path second
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
             MealScout helps people discover nearby food trucks, restaurants, and
-            bars while giving local operators a fair shot at visibility.
+            bars. It does not currently provide a DoorDash-scale delivery
+            network. Eligible businesses may offer verified ASAP pickup by card.
           </p>
         </div>
       </section>
@@ -83,7 +75,7 @@ export default function DeliveryAppAlternativesPage() {
               "Follows and favorites",
               "Active deals and menu activity",
               "Location relevance",
-              "No paid top-slot bidding",
+              "Placement rules are not promised to be neutral or ad-free",
             ].map((point) => (
               <div
                 key={point}
@@ -100,22 +92,16 @@ export default function DeliveryAppAlternativesPage() {
       <section className="section section--full py-5">
         <div className="content max-w-4xl">
           <h2 className="text-lg font-semibold text-foreground">
-            Related searches this page is built for
+            Start with what is actually available
           </h2>
-          <div className="mt-3 flex flex-wrap gap-2">
-            {keywordBullets.map((term) => (
-              <span
-                key={term}
-                className="rounded-full border border-[color:var(--border-subtle)] px-2.5 py-1 text-xs text-muted-foreground"
-              >
-                {term}
-              </span>
-            ))}
-          </div>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Browse local profiles and menus. An order button appears only for a
+            business that passes MealScout&apos;s current pickup and card checks.
+          </p>
           <div className="mt-4 flex flex-wrap gap-2">
             <Link href="/compare">
               <Button size="sm" variant="outline">
-                Full comparison hub <ArrowRight className="ml-1 h-3.5 w-3.5" />
+                Compare discovery models <ArrowRight className="ml-1 h-3.5 w-3.5" />
               </Button>
             </Link>
             <Link href="/search">

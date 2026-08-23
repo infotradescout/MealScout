@@ -94,10 +94,10 @@ async function run() {
     await tx.execute(sql`
       insert into pickup_order_items
         (order_id, menu_item_id, item_name, base_price_cents, quantity,
-         line_total_cents)
+         inventory_reserved_quantity, line_total_cents)
       values
         (${orderId}, ${menuItemId}, ${`Safety ${label}`}, 1200,
-         ${quantity}, ${1200 * quantity})
+         ${quantity}, ${quantity}, ${1200 * quantity})
     `);
     return orderId;
   }

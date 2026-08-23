@@ -13,10 +13,12 @@ import {
 import { toPublicProfileSeo } from "./toPublicProfileSeo";
 import {
   buildPublicCta,
+  buildPublicDirectionsUrl,
   buildPublicProfilePath,
   imageAsset,
   joinedAddressLabel,
   normalizePublicUrl,
+  resolvePublicCoordinatePair,
   toSlug,
 } from "./publicProfileUtils";
 import { shouldExposeStaticTruckProfileLocation } from "../utils/truckLocationSemantics";
@@ -99,13 +101,18 @@ export function formatOperatingHoursSummary(value: unknown): string | null {
     ) {
       last.end = row.label;
     } else {
-      groups.push({ start: row.label, end: row.label, slotLabel: row.slotLabel });
+      groups.push({
+        start: row.label,
+        end: row.label,
+        slotLabel: row.slotLabel,
+      });
     }
   }
 
   return groups
-    .map((group) =>
-      `${group.start}${group.end !== group.start ? `–${group.end}` : ""} ${group.slotLabel}`,
+    .map(
+      (group) =>
+        `${group.start}${group.end !== group.start ? `–${group.end}` : ""} ${group.slotLabel}`,
     )
     .join("; ");
 }
@@ -148,12 +155,17 @@ export function toPublicRestaurantProfile(input: {
             canonicalBusinessType === "private_chef"
           ? canonicalBusinessType
           : "restaurant");
-  const capabilities = getBusinessCapabilities(canonicalBusinessType || profileType);
+  const capabilities = getBusinessCapabilities(
+    canonicalBusinessType || profileType,
+  );
   const id = String(row.id || "");
-  const claimedProfile = Boolean(row.claimedProfile ?? row.isVerified);
+  const claimedProfile = Boolean(row.claimedProfile);
   const orderingPath = normalizePublicUrl(row?.ordering?.path, {
     allowInternalPath: true,
   });
+  const nativeOrderingEnabled = Boolean(
+    claimedProfile && row?.ordering?.enabled === true && orderingPath,
+  );
   const displayName = String(row.name || "MealScout business");
   const slug = toSlug(displayName) || id;
   const canonicalPath = buildPublicProfilePath({
@@ -172,14 +184,11 @@ export function toPublicRestaurantProfile(input: {
       ? null
       : joinedAddressLabel(row.address, row.city, row.state);
   const exposeProfileCoordinates = Boolean(addressPublicLabel);
-  const publicLatitude =
-    exposeProfileCoordinates && Number.isFinite(Number(row.latitude))
-      ? Number(row.latitude)
-      : null;
-  const publicLongitude =
-    exposeProfileCoordinates && Number.isFinite(Number(row.longitude))
-      ? Number(row.longitude)
-      : null;
+  const publicCoordinatePair = exposeProfileCoordinates
+    ? resolvePublicCoordinatePair(row.latitude, row.longitude)
+    : null;
+  const publicLatitude = publicCoordinatePair?.latitude ?? null;
+  const publicLongitude = publicCoordinatePair?.longitude ?? null;
   const derivedTruckPresence =
     profileType === "truck"
       ? deriveTruckPresence(
@@ -205,6 +214,13 @@ export function toPublicRestaurantProfile(input: {
     truckPresence?.location?.latitude ?? publicLatitude;
   const directionsLongitude =
     truckPresence?.location?.longitude ?? publicLongitude;
+  const directionsUrl = buildPublicDirectionsUrl({
+    latitude: directionsLatitude,
+    longitude: directionsLongitude,
+    addressPublicLabel: String(row.address || "").trim()
+      ? addressPublicLabel
+      : null,
+  });
   const phonePublic =
     input.showContact === false ||
     isRejected("contact_phone") ||
@@ -224,57 +240,54 @@ export function toPublicRestaurantProfile(input: {
     (hidePublicTrustFields && !isAccepted("website_link"))
       ? null
       : normalizePublicUrl(row.websiteUrl);
-  const onlineOrderingUrl =
-    normalizePublicUrl(
-      (claimedProfile && orderingPath ? orderingPath : null) ||
-        row.onlineOrderingUrl ||
-        publicActionLinks.onlineOrderingUrl ||
-        row.orderingUrl ||
-        row.orderUrl ||
-        row.onlineOrderUrl ||
-        "",
-      { allowInternalPath: true },
-    );
-  const deliveryUrl = claimedProfile && orderingPath
-    ? row?.fulfillment?.delivery?.enabled
+  const onlineOrderingUrl = normalizePublicUrl(
+    (nativeOrderingEnabled ? orderingPath : null) ||
+      row.onlineOrderingUrl ||
+      publicActionLinks.onlineOrderingUrl ||
+      row.orderingUrl ||
+      row.orderUrl ||
+      row.onlineOrderUrl ||
+      "",
+    { allowInternalPath: true },
+  );
+  const deliveryUrl =
+    (nativeOrderingEnabled && row?.fulfillment?.delivery?.enabled === true
       ? orderingPath
-      : null
-    : normalizePublicUrl(
-        row.deliveryUrl ||
-          publicActionLinks.deliveryUrl ||
-          row.doordashUrl ||
-          publicActionLinks.doordashUrl ||
-          row.uberEatsUrl ||
-          publicActionLinks.uberEatsUrl ||
-          row.toastUrl ||
-          publicActionLinks.toastUrl ||
-          row.squareUrl ||
-          publicActionLinks.squareUrl ||
-          row.chowNowUrl ||
-          publicActionLinks.chowNowUrl ||
-          row.grubhubUrl ||
-          publicActionLinks.grubhubUrl ||
-          "",
-        { allowInternalPath: true },
-      );
-  const cateringUrl =
+      : null) ||
     normalizePublicUrl(
-      publicActionLinks.cateringInquiryUrl ||
-        row.cateringInquiryUrl ||
-        row.cateringUrl ||
-        row.cateringRequestUrl ||
+      row.deliveryUrl ||
+        publicActionLinks.deliveryUrl ||
+        row.doordashUrl ||
+        publicActionLinks.doordashUrl ||
+        row.uberEatsUrl ||
+        publicActionLinks.uberEatsUrl ||
+        row.toastUrl ||
+        publicActionLinks.toastUrl ||
+        row.squareUrl ||
+        publicActionLinks.squareUrl ||
+        row.chowNowUrl ||
+        publicActionLinks.chowNowUrl ||
+        row.grubhubUrl ||
+        publicActionLinks.grubhubUrl ||
         "",
       { allowInternalPath: true },
     );
-  const truckBookingUrl =
-    normalizePublicUrl(
-      publicActionLinks.truckBookingInquiryUrl ||
-        row.truckBookingInquiryUrl ||
-        row.truckBookingUrl ||
-        row.bookingInquiryUrl ||
-        "",
-      { allowInternalPath: true },
-    );
+  const cateringUrl = normalizePublicUrl(
+    publicActionLinks.cateringInquiryUrl ||
+      row.cateringInquiryUrl ||
+      row.cateringUrl ||
+      row.cateringRequestUrl ||
+      "",
+    { allowInternalPath: true },
+  );
+  const truckBookingUrl = normalizePublicUrl(
+    publicActionLinks.truckBookingInquiryUrl ||
+      row.truckBookingInquiryUrl ||
+      row.truckBookingUrl ||
+      row.bookingInquiryUrl ||
+      "",
+    { allowInternalPath: true },
+  );
   const instagramUrl =
     input.showContact === false ||
     isRejectedWithLegacyFallback("social_instagram", "social_links") ||
@@ -566,9 +579,7 @@ export function toPublicRestaurantProfile(input: {
     rawMenuApproval.sourceAttribution
       ? (rawMenuApproval.sourceAttribution as Record<string, any>)
       : {};
-  const sourcedItemCount = Number(
-    rawMenuSourceAttribution.sourcedItemCount,
-  );
+  const sourcedItemCount = Number(rawMenuSourceAttribution.sourcedItemCount);
   const sourceRevisionAlgorithm = String(
     rawMenuSourceAttribution.sourceRevisionAlgorithm || "",
   ).trim();
@@ -673,15 +684,11 @@ export function toPublicRestaurantProfile(input: {
     menuApproval.status === "rejected" ? [] : featuredMenuItems;
   const publicMenuUrl = menuApproval.status === "rejected" ? null : menuUrl;
   const publicMenuImageUrl =
-    menuApproval.status === "rejected" ||
-    ownerMenuApproved ||
-    adminMenuVerified
+    menuApproval.status === "rejected" || ownerMenuApproved || adminMenuVerified
       ? null
       : menuImageUrl;
   const publicMenuPdfUrl =
-    menuApproval.status === "rejected" ||
-    ownerMenuApproved ||
-    adminMenuVerified
+    menuApproval.status === "rejected" || ownerMenuApproved || adminMenuVerified
       ? null
       : menuPdfUrl;
   const dealCount = Math.max(
@@ -860,12 +867,7 @@ export function toPublicRestaurantProfile(input: {
     .slice(0, 8) as PublicRestaurantProfile["events"]["items"];
   const reviewCount = Math.max(
     0,
-    Number(
-      row.reviewCount ??
-        row.totalReviews ??
-        row.ratingsCount ??
-        0,
-    ) || 0,
+    Number(row.reviewCount ?? row.totalReviews ?? row.ratingsCount ?? 0) || 0,
   );
   const recommendationTotal = Math.max(
     0,
@@ -907,10 +909,7 @@ export function toPublicRestaurantProfile(input: {
     }),
     buildPublicCta({
       label: "Get directions",
-      href:
-        directionsLatitude != null && directionsLongitude != null
-          ? `https://maps.google.com/?q=${directionsLatitude},${directionsLongitude}`
-          : null,
+      href: directionsUrl,
       type: "map",
       priority: 92,
     }),
@@ -940,7 +939,8 @@ export function toPublicRestaurantProfile(input: {
     }),
     buildPublicCta({ label: "X", href: xUrl, type: "social", priority: 78 }),
     buildPublicCta({
-      label: profileType === "caterer" ? "Request catering" : "Catering inquiry",
+      label:
+        profileType === "caterer" ? "Request catering" : "Catering inquiry",
       href: cateringUrl,
       type: "catering",
       priority: 74,
@@ -1003,20 +1003,14 @@ export function toPublicRestaurantProfile(input: {
     verifiedProfile:
       hidePublicTrustFields && !isAccepted("identity_verification")
         ? false
-        : Boolean(
-            row.verifiedProfile ??
-            row.isVerified ??
-            row.profileVerified ??
-            row.claimVerified ??
-            false,
-          ),
+        : Boolean(row.isVerified),
     claimedProfile,
     locallyOwned: Boolean(
       row.locallyOwned ?? row.isLocallyOwned ?? row.localOwned ?? false,
     ),
     timeZone: String(row.timeZone || "").trim() || null,
     ordering: {
-      path: orderingPath,
+      path: nativeOrderingEnabled ? orderingPath : null,
       enabled: Boolean(row?.ordering?.enabled),
       unavailableReason:
         String(row?.ordering?.unavailableReason || "").trim() || null,

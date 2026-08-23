@@ -60,6 +60,7 @@ export async function loadConfirmedEventTrucks(eventIds: string[]) {
         eq(eventBookings.status, "confirmed"),
         isNotNull(eventBookings.bookingConfirmedAt),
         eq(restaurants.isActive, true),
+        eq(users.isDisabled, false),
         publicTruckClassificationWhere(
           restaurants.isFoodTruck,
           restaurants.businessType,

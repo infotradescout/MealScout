@@ -8,7 +8,9 @@ import { Award, MapPin, Trophy, TrendingUp } from 'lucide-react';
 interface GoldenPlateRestaurant {
   id: string;
   name: string;
-  address: string;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
   cuisineType: string;
   logoUrl?: string;
   hasGoldenPlate: boolean;
@@ -48,10 +50,7 @@ export default function GoldenPlateWinners() {
 
   // Group by geographic area
   const winnersByArea = sortedWinners.reduce((acc, winner) => {
-    const addressParts = winner.address.split(',');
-    const area = addressParts.length >= 2 
-      ? addressParts[addressParts.length - 2].trim() 
-      : 'Other';
+    const area = String(winner.city || winner.state || "Other").trim() || "Other";
     
     if (!acc[area]) {
       acc[area] = [];
@@ -198,10 +197,14 @@ export default function GoldenPlateWinners() {
                         </div>
 
                         {/* Address */}
-                        <div className="flex items-start text-sm text-[color:var(--text-muted)] pt-2 border-t">
-                          <MapPin className="h-4 w-4 mr-2 mt-0.5 flex-shrink-0" />
-                          <span className="line-clamp-2">{winner.address}</span>
-                        </div>
+                        {(winner.address || winner.city || winner.state) && (
+                          <div className="flex items-start text-sm text-[color:var(--text-muted)] pt-2 border-t">
+                            <MapPin className="h-4 w-4 mr-2 mt-0.5 flex-shrink-0" />
+                            <span className="line-clamp-2">
+                              {winner.address || [winner.city, winner.state].filter(Boolean).join(", ")}
+                            </span>
+                          </div>
+                        )}
 
                         {/* CTA */}
                         <Button className="w-full bg-amber-600 hover:bg-amber-700">

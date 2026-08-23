@@ -20,13 +20,62 @@ import {
   restaurants,
   users,
 } from '@shared/schema';
-import { eq, desc, and, lte, sql, count, gte, like, or, isNull, isNotNull } from 'drizzle-orm';
+import { eq, desc, and, lte, sql, count, gte, like, or, isNull, isNotNull, getTableColumns } from 'drizzle-orm';
 import { uploadToCloudinary, deleteFromCloudinary } from './imageUpload';
 import { upload } from './imageUpload';
 import multer from 'multer';
 import { storage } from './storage';
 import { LISA_CLAIM_TYPES, LISA_CLAIM_SOURCES } from '@shared/schema';
 import { isStaffOrAdminUserType } from '@shared/profileAccessPolicy';
+import { toPublicRestaurantListingWithVisibility } from './publicProfiles/toPublicRestaurantListingWithVisibility';
+import { isPublicBusinessVisible } from './utils/publicBusinessVisibility';
+import {
+  isPublicStoryAssociationEligible,
+  projectPublicStoryRow,
+  publicStoryPublicationWhere,
+} from './services/publicStoryProjection';
+import { normalizePublicUrl } from './publicProfiles/publicProfileUtils';
+import { deriveProfileEvidenceQuarantineVisibility } from './services/profileEvidenceQuarantine';
+import { distributedRateLimit } from './middleware/distributedRateLimit';
+import {
+  loadEligiblePage,
+  publicStoryFeedRateLimitKey,
+} from './utils/eligiblePagination';
+
+const storyViewLimiter = distributedRateLimit({
+  scope: 'public-story-view',
+  limit: 1,
+  windowMs: 5 * 60 * 1000,
+  key: (req) =>
+    `${String(req.params.storyId || '')}:${String(
+      (req as any).user?.id || (req as any).sessionID || req.ip || 'anonymous',
+    )}`,
+});
+
+const STORY_FEED_MAX_PAGE = 25;
+const STORY_FEED_CANDIDATE_BATCH_SIZE = 100;
+const STORY_FEED_MAX_SCAN_BATCHES = 10;
+const storyFeedLimiter = distributedRateLimit({
+  scope: 'public-story-feed',
+  limit: 60,
+  windowMs: 60 * 1000,
+  key: (req) =>
+    publicStoryFeedRateLimitKey({
+      userId: (req as any).user?.id,
+      ip: req.ip,
+      sessionId: (req as any).sessionID,
+    }),
+});
+
+const storyShareLimiter = distributedRateLimit({
+  scope: 'public-story-share',
+  limit: 1,
+  windowMs: 5 * 60 * 1000,
+  key: (req) =>
+    `${String(req.params.storyId || '')}:${String(
+      (req as any).user?.id || (req as any).sessionID || req.ip || 'anonymous',
+    )}`,
+});
 
 // Configure multer for video uploads
 const videoStorage = multer.memoryStorage();
@@ -46,6 +95,49 @@ const videoUpload = multer({
 });
 
 export default function setupStoriesRoutes(app: Express) {
+  const loadPublicEngageableStory = async (storyId: string) => {
+    const [story] = await db
+      .select({
+        ...getTableColumns(videoStories),
+        creatorDisabled: users.isDisabled,
+        restaurantActive: restaurants.isActive,
+        restaurantName: restaurants.name,
+        restaurantAddress: restaurants.address,
+        restaurantCity: restaurants.city,
+        restaurantState: restaurants.state,
+        restaurantCuisineType: restaurants.cuisineType,
+        restaurantDescription: restaurants.description,
+        restaurantPhone: restaurants.phone,
+        restaurantWebsiteUrl: restaurants.websiteUrl,
+        restaurantOwnerDisabled: sql<boolean | null>`(
+          select linked_owner.is_disabled from users linked_owner
+          where linked_owner.id = ${restaurants.ownerId} limit 1
+        )`,
+        restaurantEmail: sql<string | null>`(
+          select linked_owner.email from users linked_owner
+          where linked_owner.id = ${restaurants.ownerId} limit 1
+        )`,
+        restaurantRawData: restaurants.rawData,
+      })
+      .from(videoStories)
+      .innerJoin(users, eq(videoStories.userId, users.id))
+      .leftJoin(restaurants, eq(videoStories.restaurantId, restaurants.id))
+      .where(
+        and(
+          eq(videoStories.id, storyId),
+          publicStoryPublicationWhere(sql`NOW()`),
+          eq(users.isDisabled, false),
+          or(
+            isNull(videoStories.restaurantId),
+            eq(restaurants.isActive, true),
+          ),
+        ),
+      )
+      .limit(1);
+
+    return story && isPublicStoryAssociationEligible(story) ? story : null;
+  };
+
   // POST - Upload video story
   app.post(
     '/api/stories/upload',
@@ -273,26 +365,83 @@ export default function setupStoriesRoutes(app: Express) {
 
   // GET - Feed (infinite scroll)
   // Feed algorithm: 30% community (recent), 20% featured (sponsored), 20% trending, 20% nearby, 10% discovery
-  app.get('/api/stories/feed', async (req, res) => {
+  app.get('/api/stories/feed', storyFeedLimiter, async (req, res) => {
     try {
       const userId = (req as any).user?.id;
-      const page = parseInt(req.query.page as string) || 0;
+      const requestedPage = Number(String(req.query.page ?? '0').trim() || '0');
+      if (
+        !Number.isSafeInteger(requestedPage) ||
+        requestedPage < 0 ||
+        requestedPage > STORY_FEED_MAX_PAGE
+      ) {
+        return res.status(400).json({ message: 'Invalid story feed page' });
+      }
+      const page = requestedPage;
       const limit = 10;
-      const offset = page * limit;
 
       // Get featured videos (sponsored content)
-      const featuredStories = await db
-        .select()
-        .from(videoStories)
-        .where(
-          and(
-            eq(videoStories.isFeatured, true),
-            eq(videoStories.status, 'ready'),
-            gte(videoStories.expiresAt, sql`NOW()`)
+      const loadFeaturedStoryCandidates = async (
+        candidateOffset: number,
+        candidateLimit: number,
+      ) =>
+        db
+          .select({
+            ...getTableColumns(videoStories),
+            creatorDisabled: users.isDisabled,
+            restaurantActive: restaurants.isActive,
+            restaurantName: restaurants.name,
+            restaurantAddress: restaurants.address,
+            restaurantCity: restaurants.city,
+            restaurantState: restaurants.state,
+            restaurantCuisineType: restaurants.cuisineType,
+            restaurantDescription: restaurants.description,
+            restaurantPhone: restaurants.phone,
+            restaurantWebsiteUrl: restaurants.websiteUrl,
+            restaurantOwnerDisabled: sql<boolean | null>`(
+              select linked_owner.is_disabled from users linked_owner
+              where linked_owner.id = ${restaurants.ownerId} limit 1
+            )`,
+            restaurantEmail: sql<string | null>`(
+              select linked_owner.email from users linked_owner
+              where linked_owner.id = ${restaurants.ownerId} limit 1
+            )`,
+            restaurantRawData: restaurants.rawData,
+          })
+          .from(videoStories)
+          .innerJoin(users, eq(videoStories.userId, users.id))
+          .leftJoin(restaurants, eq(videoStories.restaurantId, restaurants.id))
+          .where(
+            and(
+              eq(videoStories.isFeatured, true),
+              publicStoryPublicationWhere(sql`NOW()`),
+              eq(users.isDisabled, false),
+              or(
+                isNull(videoStories.restaurantId),
+                eq(restaurants.isActive, true),
+              ),
+            ),
           )
-        )
-        .orderBy(desc(videoStories.featuredStartedAt))
-        .limit(2); // Show 2 featured videos per page
+          .orderBy(
+            desc(videoStories.featuredStartedAt),
+            desc(videoStories.id),
+          )
+          .limit(candidateLimit)
+          .offset(candidateOffset);
+      const featuredPage = await loadEligiblePage<any>({
+        offset: 0,
+        limit: 2,
+        batchSize: STORY_FEED_CANDIDATE_BATCH_SIZE,
+        maxBatches: STORY_FEED_MAX_SCAN_BATCHES,
+        loadBatch: loadFeaturedStoryCandidates,
+        isEligible: (row) => isPublicStoryAssociationEligible(row),
+      }); // Show 2 eligible featured videos per page
+      if (featuredPage.scanLimitReached) {
+        res.setHeader('Retry-After', '5');
+        return res
+          .status(503)
+          .json({ message: 'Story feed is temporarily unavailable' });
+      }
+      const featuredStories = featuredPage.items;
 
       // Get active ads (house + affiliate)
       const nowSql = sql`NOW()`;
@@ -315,19 +464,72 @@ export default function setupStoriesRoutes(app: Express) {
         .limit(5); // fetch a handful of ads to rotate
 
       // Get community stories (recent uploads)
-      const communityStories = await db
-        .select()
-        .from(videoStories)
-        .where(
-          and(
-            eq(videoStories.status, 'ready'),
-            lte(videoStories.createdAt, sql`NOW()`),
-            gte(videoStories.expiresAt, sql`NOW()`)
+      const communityPageSize = limit - featuredStories.length;
+      const communityOffset = page * communityPageSize;
+      const featuredStoryIds = new Set(
+        featuredStories.map((story) => String(story.id)),
+      );
+      const loadCommunityStoryCandidates = async (
+        candidateOffset: number,
+        candidateLimit: number,
+      ) =>
+        db
+          .select({
+            ...getTableColumns(videoStories),
+            creatorDisabled: users.isDisabled,
+            restaurantActive: restaurants.isActive,
+            restaurantName: restaurants.name,
+            restaurantAddress: restaurants.address,
+            restaurantCity: restaurants.city,
+            restaurantState: restaurants.state,
+            restaurantCuisineType: restaurants.cuisineType,
+            restaurantDescription: restaurants.description,
+            restaurantPhone: restaurants.phone,
+            restaurantWebsiteUrl: restaurants.websiteUrl,
+            restaurantOwnerDisabled: sql<boolean | null>`(
+              select linked_owner.is_disabled from users linked_owner
+              where linked_owner.id = ${restaurants.ownerId} limit 1
+            )`,
+            restaurantEmail: sql<string | null>`(
+              select linked_owner.email from users linked_owner
+              where linked_owner.id = ${restaurants.ownerId} limit 1
+            )`,
+            restaurantRawData: restaurants.rawData,
+          })
+          .from(videoStories)
+          .innerJoin(users, eq(videoStories.userId, users.id))
+          .leftJoin(restaurants, eq(videoStories.restaurantId, restaurants.id))
+          .where(
+            and(
+              publicStoryPublicationWhere(sql`NOW()`),
+              eq(users.isDisabled, false),
+              or(
+                isNull(videoStories.restaurantId),
+                eq(restaurants.isActive, true),
+              ),
+              lte(videoStories.createdAt, sql`NOW()`),
+            ),
           )
-        )
-        .orderBy(desc(videoStories.createdAt))
-        .limit(limit - featuredStories.length)
-        .offset(offset);
+          .orderBy(desc(videoStories.createdAt), desc(videoStories.id))
+          .limit(candidateLimit)
+          .offset(candidateOffset);
+      const communityPage = await loadEligiblePage<any>({
+        offset: communityOffset,
+        limit: communityPageSize,
+        batchSize: STORY_FEED_CANDIDATE_BATCH_SIZE,
+        maxBatches: STORY_FEED_MAX_SCAN_BATCHES,
+        loadBatch: loadCommunityStoryCandidates,
+        isEligible: (row) =>
+          !featuredStoryIds.has(String(row.id)) &&
+          isPublicStoryAssociationEligible(row),
+      });
+      if (communityPage.scanLimitReached) {
+        res.setHeader('Retry-After', '5');
+        return res
+          .status(503)
+          .json({ message: 'Story feed is temporarily unavailable' });
+      }
+      const communityStories = communityPage.items;
 
       // Combine featured + community
       let allStories: any[] = [...featuredStories, ...communityStories];
@@ -344,17 +546,24 @@ export default function setupStoriesRoutes(app: Express) {
           const nextAd = ads[adIndex % ads.length];
           const frequency = nextAd.insertionFrequency || 5;
           if ((i + 1) % frequency === 0) {
-            withAds.push({
-              __type: 'ad',
-              id: nextAd.id,
-              title: nextAd.title,
-              mediaUrl: nextAd.mediaUrl,
-              targetUrl: nextAd.targetUrl,
-              ctaText: nextAd.ctaText || 'Learn more',
-              isHouseAd: nextAd.isHouseAd,
-              isAffiliate: nextAd.isAffiliate,
-              affiliateName: nextAd.affiliateName,
+            const publicTargetUrl = normalizePublicUrl(nextAd.targetUrl, {
+              allowInternalPath: true,
             });
+            if (publicTargetUrl) {
+              withAds.push({
+                __type: 'ad',
+                id: nextAd.id,
+                title: nextAd.title,
+                mediaUrl: normalizePublicUrl(nextAd.mediaUrl, {
+                  allowInternalPath: true,
+                }),
+                targetUrl: publicTargetUrl,
+                ctaText: nextAd.ctaText || 'Learn more',
+                isHouseAd: nextAd.isHouseAd,
+                isAffiliate: nextAd.isAffiliate,
+                affiliateName: nextAd.affiliateName,
+              });
+            }
             adIndex++;
           }
         }
@@ -382,8 +591,11 @@ export default function setupStoriesRoutes(app: Express) {
             return story;
           }
 
+          const publicStory = projectPublicStoryRow(story);
+          if (!publicStory) return null;
+
           if (!userId) {
-            return { ...story, userLiked: false };
+            return { ...publicStory, userLiked: false };
           }
 
           const userLiked = await db
@@ -397,15 +609,15 @@ export default function setupStoriesRoutes(app: Express) {
             );
 
           return {
-            ...story,
+            ...publicStory,
             userLiked: (userLiked[0]?.count || 0) > 0,
           };
         })
       );
 
       res.json({
-        stories: enrichedStories,
-        hasMore: communityStories.length === limit - featuredStories.length,
+        stories: enrichedStories.filter(Boolean),
+        hasMore: communityPage.hasMore,
         page,
       });
     } catch (error) {
@@ -419,12 +631,43 @@ export default function setupStoriesRoutes(app: Express) {
     try {
       const { storyId } = req.params;
       const userId = (req as any).user?.id;
+      const publicStoryNow = new Date();
 
-      // Get story
+      // Anonymous detail is fail-closed and explicitly allowlisted. Never
+      // return a raw users, restaurants, or moderation row from this route.
       const story = await db
-        .select()
+        .select({
+          id: videoStories.id,
+          creatorUserId: videoStories.userId,
+          restaurantId: videoStories.restaurantId,
+          title: videoStories.title,
+          description: videoStories.description,
+          duration: videoStories.duration,
+          videoUrl: videoStories.videoUrl,
+          thumbnailUrl: videoStories.thumbnailUrl,
+          status: videoStories.status,
+          viewCount: videoStories.viewCount,
+          likeCount: videoStories.likeCount,
+          commentCount: videoStories.commentCount,
+          shareCount: videoStories.shareCount,
+          hashtags: videoStories.hashtags,
+          cuisine: videoStories.cuisine,
+          transcript: videoStories.transcript,
+          transcriptLanguage: videoStories.transcriptLanguage,
+          transcriptSource: videoStories.transcriptSource,
+          createdAt: videoStories.createdAt,
+          expiresAt: videoStories.expiresAt,
+          isFeatured: videoStories.isFeatured,
+          featuredSlotNumber: videoStories.featuredSlotNumber,
+          isApproved: videoStories.isApproved,
+        })
         .from(videoStories)
-        .where(eq(videoStories.id, storyId))
+        .where(
+          and(
+            eq(videoStories.id, storyId),
+            publicStoryPublicationWhere(publicStoryNow),
+          ),
+        )
         .limit(1);
 
       if (!story.length) {
@@ -433,30 +676,81 @@ export default function setupStoriesRoutes(app: Express) {
 
       // Get creator info
       const creator = await db
-        .select()
+        .select({
+          id: users.id,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          profileImageUrl: users.profileImageUrl,
+          hasGoldenFork: users.hasGoldenFork,
+          reviewCount: users.reviewCount,
+          recommendationCount: users.recommendationCount,
+        })
         .from(users)
-        .where(eq(users.id, story[0].userId))
+        .where(
+          and(
+            eq(users.id, story[0].creatorUserId),
+            eq(users.isDisabled, false),
+          ),
+        )
         .limit(1);
+
+      if (!creator.length) {
+        return res.status(404).json({ message: 'Story not found' });
+      }
 
       // Get restaurant info if exists
       const restaurant = story[0].restaurantId
         ? await db
             .select()
             .from(restaurants)
-            .where(eq(restaurants.id, story[0].restaurantId))
+            .where(
+              and(
+                eq(restaurants.id, story[0].restaurantId),
+                eq(restaurants.isActive, true),
+              ),
+            )
             .limit(1)
         : null;
 
+      if (
+        story[0].restaurantId &&
+        (!restaurant?.[0] || !isPublicBusinessVisible(restaurant[0]))
+      ) {
+        return res.status(404).json({ message: 'Story not found' });
+      }
+      const publicRestaurant = restaurant?.[0]
+        ? await toPublicRestaurantListingWithVisibility(restaurant[0], db)
+        : null;
+      if (
+        story[0].restaurantId &&
+        (!publicRestaurant?.id ||
+          deriveProfileEvidenceQuarantineVisibility(restaurant?.[0])
+            .isQuarantined)
+      ) {
+        return res.status(404).json({ message: 'Story not found' });
+      }
+
       // Get creator's reviewer level
       const reviewerLevel = await db
-        .select()
+        .select({
+          level: userReviewerLevels.level,
+          totalFavorites: userReviewerLevels.totalFavorites,
+          totalStories: userReviewerLevels.totalStories,
+          topStoryFavorites: userReviewerLevels.topStoryFavorites,
+        })
         .from(userReviewerLevels)
-        .where(eq(userReviewerLevels.userId, story[0].userId))
+        .where(eq(userReviewerLevels.userId, story[0].creatorUserId))
         .limit(1);
 
       // Get comments (limit to 5, load more on demand)
       const comments = await db
-        .select()
+        .select({
+          id: storyComments.id,
+          parentCommentId: storyComments.parentCommentId,
+          text: storyComments.text,
+          createdAt: storyComments.createdAt,
+          updatedAt: storyComments.updatedAt,
+        })
         .from(storyComments)
         .where(
           and(
@@ -469,7 +763,11 @@ export default function setupStoriesRoutes(app: Express) {
 
       // Get awards
       const awards = await db
-        .select()
+        .select({
+          id: storyAwards.id,
+          awardType: storyAwards.awardType,
+          awardedAt: storyAwards.awardedAt,
+        })
         .from(storyAwards)
         .where(eq(storyAwards.storyId, storyId));
 
@@ -477,7 +775,7 @@ export default function setupStoriesRoutes(app: Express) {
       let userLiked = false;
       if (userId) {
         const likeCheck = await db
-          .select()
+          .select({ id: storyLikes.id })
           .from(storyLikes)
           .where(
             and(
@@ -489,10 +787,21 @@ export default function setupStoriesRoutes(app: Express) {
         userLiked = likeCheck.length > 0;
       }
 
+      const creatorName = [creator[0].firstName, creator[0].lastName]
+        .map((value) => String(value || '').trim())
+        .filter(Boolean)
+        .join(' ');
+      const publicStory = projectPublicStoryRow(story[0], {
+        creatorName: creatorName || 'MealScout Creator',
+      });
+      if (!publicStory) {
+        return res.status(404).json({ message: 'Story not found' });
+      }
+
       res.json({
-        story: story[0],
+        story: publicStory,
         creator: creator[0],
-        restaurant: restaurant?.[0] || null,
+        restaurant: publicRestaurant,
         reviewerLevel: reviewerLevel[0] || null,
         comments,
         awards,
@@ -510,14 +819,8 @@ export default function setupStoriesRoutes(app: Express) {
       const { storyId } = req.params;
       const userId = (req as any).user?.id;
 
-      // Check if story exists
-      const story = await db
-        .select()
-        .from(videoStories)
-        .where(eq(videoStories.id, storyId))
-        .limit(1);
-
-      if (!story.length) {
+      const story = await loadPublicEngageableStory(storyId);
+      if (!story) {
         return res.status(404).json({ message: 'Story not found' });
       }
 
@@ -558,7 +861,7 @@ export default function setupStoriesRoutes(app: Express) {
           .set({
             totalFavorites: sql`GREATEST(${userReviewerLevels.totalFavorites} - 1, 0)`,
           })
-          .where(eq(userReviewerLevels.userId, story[0].userId));
+          .where(eq(userReviewerLevels.userId, story.userId));
 
         return res.json({ liked: false, message: 'Story unliked' });
       }
@@ -581,7 +884,7 @@ export default function setupStoriesRoutes(app: Express) {
       const creatorLevels = await db
         .select()
         .from(userReviewerLevels)
-        .where(eq(userReviewerLevels.userId, story[0].userId));
+        .where(eq(userReviewerLevels.userId, story.userId));
 
       const currentTotal = creatorLevels[0]?.totalFavorites || 0;
       const newTotal = currentTotal + 1;
@@ -591,7 +894,7 @@ export default function setupStoriesRoutes(app: Express) {
         .set({
           totalFavorites: newTotal,
         })
-        .where(eq(userReviewerLevels.userId, story[0].userId));
+        .where(eq(userReviewerLevels.userId, story.userId));
 
       // Check for milestone awards (500, 1000, 3000, 10000)
       const milestones = [500, 1000, 3000, 10000];
@@ -645,7 +948,7 @@ export default function setupStoriesRoutes(app: Express) {
       await db
         .update(userReviewerLevels)
         .set({ level: newLevel })
-        .where(eq(userReviewerLevels.userId, story[0].userId));
+        .where(eq(userReviewerLevels.userId, story.userId));
 
       res.json({ liked: true, message: 'Story liked' });
     } catch (error) {
@@ -675,15 +978,26 @@ export default function setupStoriesRoutes(app: Express) {
             .json({ message: 'Comment must be less than 500 characters' });
         }
 
-        // Check if story exists
-        const story = await db
-          .select()
-          .from(videoStories)
-          .where(eq(videoStories.id, storyId))
-          .limit(1);
-
-        if (!story.length) {
+        const story = await loadPublicEngageableStory(storyId);
+        if (!story) {
           return res.status(404).json({ message: 'Story not found' });
+        }
+
+        if (parentCommentId) {
+          const [parent] = await db
+            .select({ id: storyComments.id })
+            .from(storyComments)
+            .where(
+              and(
+                eq(storyComments.id, String(parentCommentId)),
+                eq(storyComments.storyId, storyId),
+                eq(storyComments.isApproved, true),
+              ),
+            )
+            .limit(1);
+          if (!parent) {
+            return res.status(400).json({ message: 'Invalid parent comment' });
+          }
         }
 
         // Create comment
@@ -692,7 +1006,7 @@ export default function setupStoriesRoutes(app: Express) {
           .values({
             storyId,
             userId,
-            text,
+            text: String(text).trim(),
             parentCommentId: parentCommentId || null,
           })
           .returning();
@@ -707,7 +1021,12 @@ export default function setupStoriesRoutes(app: Express) {
 
         res.status(201).json({
           message: 'Comment added successfully',
-          comment: comment[0],
+          comment: {
+            id: comment[0].id,
+            parentCommentId: comment[0].parentCommentId,
+            text: comment[0].text,
+            createdAt: comment[0].createdAt,
+          },
         });
       } catch (error) {
         console.error('Error adding comment:', error);
@@ -717,30 +1036,38 @@ export default function setupStoriesRoutes(app: Express) {
   );
 
   // POST - Record view
-  app.post('/api/stories/:storyId/view', async (req, res) => {
+  app.post('/api/stories/:storyId/view', storyViewLimiter, async (req, res) => {
     try {
       const { storyId } = req.params;
       const userId = (req as any).user?.id;
-      const { watchDuration } = req.body;
-
-      // Record view (only count if watched 3+ seconds)
-      if (!watchDuration || watchDuration >= 3) {
-        await db.insert(storyViews).values({
-          storyId,
-          userId: userId || null,
-          watchDuration: watchDuration || null,
-        });
-
-        // Increment view count
-        await db
-          .update(videoStories)
-          .set({
-            viewCount: sql`${videoStories.viewCount} + 1`,
-          })
-          .where(eq(videoStories.id, storyId));
+      const watchDuration = Number(req.body?.watchDuration);
+      const story = await loadPublicEngageableStory(storyId);
+      if (!story) {
+        return res.status(404).json({ message: 'Story not found' });
       }
 
-      res.json({ message: 'View recorded' });
+      if (!Number.isFinite(watchDuration) || watchDuration < 3) {
+        return res.json({ success: true, counted: false });
+      }
+
+      const boundedWatchDuration = Math.max(
+        3,
+        Math.min(Math.floor(watchDuration), Math.max(3, Number(story.duration) || 30)),
+      );
+      await db.insert(storyViews).values({
+        storyId,
+        userId: userId || null,
+        watchDuration: boundedWatchDuration,
+      });
+
+      await db
+        .update(videoStories)
+        .set({
+          viewCount: sql`${videoStories.viewCount} + 1`,
+        })
+        .where(eq(videoStories.id, storyId));
+
+      res.json({ success: true, counted: true });
     } catch (error) {
       console.error('Error recording view:', error);
       res.status(500).json({ message: 'Failed to record view' });
@@ -748,9 +1075,13 @@ export default function setupStoriesRoutes(app: Express) {
   });
 
   // POST - Record share
-  app.post('/api/stories/:storyId/share', async (req, res) => {
+  app.post('/api/stories/:storyId/share', storyShareLimiter, async (req, res) => {
     try {
       const { storyId } = req.params;
+      const story = await loadPublicEngageableStory(storyId);
+      if (!story) {
+        return res.status(404).json({ message: 'Story not found' });
+      }
 
       await db
         .update(videoStories)
@@ -783,22 +1114,53 @@ export default function setupStoriesRoutes(app: Express) {
           id: videoStories.id,
           title: videoStories.title,
           creatorName: users.firstName,
+          restaurantId: videoStories.restaurantId,
+          creatorDisabled: users.isDisabled,
+          restaurantActive: restaurants.isActive,
+          restaurantName: restaurants.name,
+          restaurantAddress: restaurants.address,
+          restaurantCity: restaurants.city,
+          restaurantState: restaurants.state,
+          restaurantCuisineType: restaurants.cuisineType,
+          restaurantDescription: restaurants.description,
+          restaurantOwnerDisabled: sql<boolean | null>`(
+            select linked_owner.is_disabled from users linked_owner
+            where linked_owner.id = ${restaurants.ownerId} limit 1
+          )`,
+          restaurantRawData: restaurants.rawData,
           viewCount: videoStories.viewCount,
           likeCount: videoStories.likeCount,
           engagement: sql<number>`(${videoStories.likeCount} + ${videoStories.commentCount} * 2) / NULLIF(${videoStories.viewCount}, 0)`,
         })
         .from(videoStories)
         .innerJoin(users, eq(videoStories.userId, users.id))
+        .leftJoin(restaurants, eq(videoStories.restaurantId, restaurants.id))
         .where(
           and(
-            eq(videoStories.status, 'ready'),
+            publicStoryPublicationWhere(sql`NOW()`),
+            eq(users.isDisabled, false),
+            or(
+              isNull(videoStories.restaurantId),
+              eq(restaurants.isActive, true),
+            ),
             gte(videoStories.createdAt, cutoffDate)
           )
         )
         .orderBy(desc(sql`${videoStories.likeCount} + ${videoStories.commentCount}`))
         .limit(20);
 
-      res.json({ trending, timeframe });
+      const publicTrending = trending
+        .filter((story: any) => isPublicStoryAssociationEligible(story))
+        .map((story: any) => ({
+          id: story.id,
+          title: story.title,
+          creatorName: story.creatorName,
+          viewCount: Number(story.viewCount || 0),
+          likeCount: Number(story.likeCount || 0),
+          engagement: Number(story.engagement || 0),
+        }));
+
+      res.json({ trending: publicTrending, timeframe });
     } catch (error) {
       console.error('Error fetching trending stories:', error);
       res.status(500).json({ message: 'Failed to fetch trending stories' });
@@ -822,6 +1184,7 @@ export default function setupStoriesRoutes(app: Express) {
         })
         .from(userReviewerLevels)
         .innerJoin(users, eq(userReviewerLevels.userId, users.id))
+        .where(eq(users.isDisabled, false))
         .orderBy(desc(userReviewerLevels.totalFavorites))
         .limit(50);
 
@@ -840,17 +1203,44 @@ export default function setupStoriesRoutes(app: Express) {
       const { userId } = req.params;
 
       const userStories = await db
-        .select()
+        .select({
+          ...getTableColumns(videoStories),
+          creatorDisabled: users.isDisabled,
+          restaurantActive: restaurants.isActive,
+          restaurantName: restaurants.name,
+          restaurantAddress: restaurants.address,
+          restaurantCity: restaurants.city,
+          restaurantState: restaurants.state,
+          restaurantCuisineType: restaurants.cuisineType,
+          restaurantDescription: restaurants.description,
+          restaurantOwnerDisabled: sql<boolean | null>`(
+            select linked_owner.is_disabled from users linked_owner
+            where linked_owner.id = ${restaurants.ownerId} limit 1
+          )`,
+          restaurantRawData: restaurants.rawData,
+        })
         .from(videoStories)
+        .innerJoin(users, eq(videoStories.userId, users.id))
+        .leftJoin(restaurants, eq(videoStories.restaurantId, restaurants.id))
         .where(
           and(
             eq(videoStories.userId, userId),
-            eq(videoStories.status, 'ready')
+            publicStoryPublicationWhere(sql`NOW()`),
+            eq(users.isDisabled, false),
+            or(
+              isNull(videoStories.restaurantId),
+              eq(restaurants.isActive, true),
+            ),
           )
         )
         .orderBy(desc(videoStories.createdAt));
 
-      res.json({ stories: userStories });
+      res.json({
+        stories: userStories
+          .filter((row: any) => isPublicStoryAssociationEligible(row))
+          .map((row: any) => projectPublicStoryRow(row))
+          .filter(Boolean),
+      });
     } catch (error) {
       console.error('Error fetching user stories:', error);
       res.status(500).json({ message: 'Failed to fetch user stories' });

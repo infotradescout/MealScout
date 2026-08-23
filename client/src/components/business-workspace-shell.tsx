@@ -233,7 +233,9 @@ export default function BusinessWorkspaceShell({
       description: "Zones, fees, minimums, and capacity",
       href: buildWorkspaceHref("/merchant-delivery", business.id),
       icon: ShoppingBag,
-      visible: capabilities.delivery !== false,
+      // Native checkout is deliberately pickup-only for the verified pilot.
+      // Keep the unfinished delivery controls out of the owner workspace.
+      visible: false,
     },
     {
       id: "audience",

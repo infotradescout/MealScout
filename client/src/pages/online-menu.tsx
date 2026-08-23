@@ -90,12 +90,23 @@ interface Menu {
   isActive: boolean;
   acceptsCash: boolean;
   hidePlatformFee: boolean;
+  pricesIncludeTax: boolean;
+  orderingEnabled: boolean;
+  orderingBlockingReasons: string[];
+  paymentMethods: {
+    card: boolean;
+    cash: boolean;
+  };
   categories: MenuCategory[];
 }
 
 interface OrderingReadiness {
   orderingEnabled: boolean;
   blockingReasons: string[];
+  paymentMethods?: {
+    card: boolean;
+    cash: boolean;
+  };
   checks: Array<{
     id: string;
     label: string;
@@ -163,7 +174,6 @@ export default function MenuPage() {
   });
 
   const menus = menusQuery.data?.menus ?? [];
-  const orderingEnabled = menusQuery.data?.orderingEnabled ?? false;
   const activeMenus = menus.filter((m) => m.isActive);
   const restaurantName = menusQuery.data?.restaurantName ?? null;
   const restaurantCity = menusQuery.data?.restaurantCity ?? null;
@@ -190,15 +200,35 @@ export default function MenuPage() {
   }, [activeMenus.length, selectedMenuId]);
 
   const selectedMenu = activeMenus.find((m) => m.id === selectedMenuId) ?? null;
+  const orderingEnabled = Boolean(selectedMenu?.orderingEnabled);
+  const cardPaymentsEnabled = Boolean(selectedMenu?.paymentMethods?.card);
+  const restaurantCart = cart.filter((i) => i.restaurantId === restaurantId);
+  const cartMenuIds = new Set(restaurantCart.map((item) => item.menuId));
+  const cartHasMixedMenus = cartMenuIds.size > 1;
+  const cartMenu = activeMenus.find(
+    (menu) => menu.id === restaurantCart[0]?.menuId,
+  );
 
-  const cartItemCount = cart
-    .filter((i) => i.restaurantId === restaurantId)
+  const cartItemCount = restaurantCart
     .reduce((sum, i) => sum + i.quantity, 0);
 
   const addToCart = (item: CartItem) => {
-    const newCart = [...cart, item];
+    const existingMenuId = restaurantCart[0]?.menuId;
+    let baseCart = cart;
+    if (existingMenuId && existingMenuId !== item.menuId) {
+      const existingMenuName =
+        activeMenus.find((menu) => menu.id === existingMenuId)?.name ||
+        "another menu";
+      const shouldReplace = window.confirm(
+        `Your cart contains items from ${existingMenuName}. Clear that cart and start an order from this menu?`,
+      );
+      if (!shouldReplace) return false;
+      baseCart = cart.filter((cartItem) => cartItem.restaurantId !== restaurantId);
+    }
+    const newCart = [...baseCart, item];
     setCart(newCart);
     saveCart(newCart);
+    return true;
   };
 
   const removeFromCart = (idx: number) => {
@@ -226,7 +256,6 @@ export default function MenuPage() {
     saveCart(newCart);
   };
 
-  const restaurantCart = cart.filter((i) => i.restaurantId === restaurantId);
   const cartTotal = restaurantCart.reduce(
     (sum, i) => sum + i.lineTotalCents,
     0,
@@ -360,24 +389,32 @@ export default function MenuPage() {
                 <div>
                   <p className="font-black">Browse the menu</p>
                   <p className="mt-0.5 text-xs leading-5">
-                    Online ordering is not available here yet. Contact this {entityType.toLowerCase()} directly to order.
+                    {selectedMenu.orderingBlockingReasons?.join(", ") ||
+                      `Online ordering is not available here yet. Contact this ${entityType.toLowerCase()} directly to order.`}
                   </p>
                 </div>
               </div>
             )}
-            {!selectedMenu.hidePlatformFee && orderingEnabled && (
+            {!selectedMenu.hidePlatformFee &&
+              orderingEnabled &&
+              cardPaymentsEnabled && (
               <p className="mb-4 text-center text-xs text-[color:var(--profile-muted)]">
-                Processing plus a $1.00 MealScout fee is added at checkout.
-                {selectedMenu.acceptsCash && " Cash payments accepted."}
+                Card fees are calculated by MealScout and itemized before payment.
               </p>
             )}
             {selectedMenu.hidePlatformFee &&
               orderingEnabled &&
-              selectedMenu.acceptsCash && (
+              cardPaymentsEnabled && (
                 <p className="mb-4 text-center text-xs text-[color:var(--profile-muted)]">
-                  Cash payments accepted.
+                  Secure card payment is available for pickup.
                 </p>
               )}
+            {orderingEnabled && selectedMenu.pricesIncludeTax ? (
+              <p className="mb-4 text-center text-xs text-[color:var(--profile-muted)]">
+                Displayed item prices include applicable tax as set by this
+                business.
+              </p>
+            ) : null}
 
             {selectedMenu.categories.length > 1 && (
               <nav
@@ -453,7 +490,7 @@ export default function MenuPage() {
       </main>
 
       {/* Floating cart button */}
-      {cartItemCount > 0 && orderingEnabled && (
+      {cartItemCount > 0 && (
         <div className="fixed bottom-4 inset-x-4 md:inset-x-auto md:left-1/2 md:-translate-x-1/2 md:w-96 z-50">
           <Button
             className="h-12 w-full rounded-full bg-[#d84a12] text-base font-black text-white shadow-[0_16px_35px_rgba(149,58,18,0.24)] hover:bg-[#b83a0a]"
@@ -474,8 +511,7 @@ export default function MenuPage() {
           restaurantId={restaurantId ?? ""}
           hidePlatformFee={selectedMenu.hidePlatformFee}
           onAdd={(cartItem) => {
-            addToCart(cartItem);
-            setAddingItem(null);
+            if (addToCart(cartItem)) setAddingItem(null);
           }}
           onClose={() => setAddingItem(null)}
         />
@@ -553,13 +589,12 @@ export default function MenuPage() {
                 <span>{formatMoney(cartTotal)}</span>
               </div>
               {restaurantCart.length > 0 &&
-                selectedMenu &&
-                !selectedMenu.hidePlatformFee && (
-                  <div className="flex justify-between text-sm text-muted-foreground">
-                    <span>MealScout fee</span>
-                    <span>$1.00</span>
-                  </div>
-                )}
+              cartMenu?.paymentMethods.card &&
+              !cartMenu.hidePlatformFee ? (
+                <p className="text-xs text-muted-foreground">
+                  Card fees are itemized before payment.
+                </p>
+              ) : null}
               <Button
                 className="w-full rounded-full bg-[#d84a12] font-black text-white hover:bg-[#b83a0a]"
                 size="lg"
@@ -567,11 +602,25 @@ export default function MenuPage() {
                   setCartOpen(false);
                   navigate(`/checkout/${restaurantId}`);
                 }}
-                disabled={restaurantCart.length === 0}
+                disabled={
+                  restaurantCart.length === 0 ||
+                  cartHasMixedMenus ||
+                  !cartMenu?.orderingEnabled
+                }
               >
                 Proceed to Checkout
                 <ChevronRight className="w-4 h-4 ml-1" />
               </Button>
+              {cartHasMixedMenus ? (
+                <p className="text-xs font-bold text-destructive">
+                  This saved cart contains more than one menu. Remove those items
+                  before checkout.
+                </p>
+              ) : cartMenu && !cartMenu.orderingEnabled ? (
+                <p className="text-xs font-bold text-[#70470f]">
+                  This menu is not accepting orders right now.
+                </p>
+              ) : null}
             </div>
           </SheetFooter>
         </SheetContent>
@@ -590,6 +639,10 @@ function MenuItemCard({
   onAdd: () => void;
   orderingEnabled?: boolean;
 }) {
+  const hasOrderablePrice =
+    typeof item.priceCents === "number" &&
+    Number.isInteger(item.priceCents) &&
+    item.priceCents >= 0;
   const categoryPhoto = getDishCategoryPhoto(item.name, item.description);
   const hasPrimaryImage = Boolean(item.imageUrl?.trim());
   const [imageMode, setImageMode] = useState<"primary" | "category" | "none">(
@@ -630,9 +683,7 @@ function MenuItemCard({
         )}
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <span className="text-sm font-black text-[color:var(--profile-ink)]">
-            {item.priceCents === null
-              ? "Price unavailable"
-              : formatMoney(item.priceCents)}
+            {hasOrderablePrice ? formatMoney(item.priceCents!) : "Price unavailable"}
           </span>
           {item.itemType !== "merchandise" && item.calories && (
             <span className="text-xs font-bold text-[color:var(--profile-muted)]">
@@ -648,7 +699,7 @@ function MenuItemCard({
             </Badge>
           ))}
         </div>
-        {orderingEnabled && item.priceCents !== null ? (
+        {orderingEnabled && hasOrderablePrice ? (
           <button
             type="button"
             onClick={onAdd}
@@ -721,7 +772,13 @@ function AddItemDialog({
     (sum, m) => sum + m.additionalCents,
     0,
   );
-  if (item.priceCents === null) return null;
+  if (
+    typeof item.priceCents !== "number" ||
+    !Number.isInteger(item.priceCents) ||
+    item.priceCents < 0
+  ) {
+    return null;
+  }
 
   const basePriceCents = item.priceCents;
   const unitPrice = basePriceCents + variantAddCents + modifierAddCents;
@@ -736,6 +793,13 @@ function AddItemDialog({
     },
     {},
   );
+  const missingRequiredModifier = Object.values(modifierGroups).some((mods) => {
+    const required = mods.some((modifier) => modifier.isRequired);
+    return (
+      required &&
+      !mods.some((modifier) => selectedModifierIds.includes(modifier.id))
+    );
+  });
 
   const toggleModifier = (
     id: string,
@@ -841,8 +905,10 @@ function AddItemDialog({
 
           {/* Modifiers */}
           {Object.entries(modifierGroups).map(([groupName, mods]) => {
-            const required = mods[0].isRequired;
-            const max = mods[0].maxSelections;
+            const required = mods.some((modifier) => modifier.isRequired);
+            const max = Math.min(
+              ...mods.map((modifier) => Math.max(1, modifier.maxSelections)),
+            );
             return (
               <div key={groupName}>
                 <div className="flex items-center gap-2 mb-2">
@@ -941,8 +1007,11 @@ function AddItemDialog({
           <Button
             className="rounded-full bg-[#d84a12] font-black text-white hover:bg-[#b83a0a]"
             onClick={handleAdd}
+            disabled={missingRequiredModifier}
           >
-            Add to Cart — {formatMoney(lineTotal)}
+            {missingRequiredModifier
+              ? "Choose required options"
+              : `Add to Cart — ${formatMoney(lineTotal)}`}
           </Button>
         </DialogFooter>
       </DialogContent>

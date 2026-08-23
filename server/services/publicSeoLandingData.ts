@@ -88,6 +88,7 @@ const publicRestaurantSelect = {
   isActive: restaurants.isActive,
   ownerId: restaurants.ownerId,
   ownerEmail: users.email,
+  ownerDisabled: users.isDisabled,
   address: restaurants.address,
   city: restaurants.city,
   state: restaurants.state,
@@ -102,6 +103,7 @@ const publicRestaurantSelect = {
 };
 
 const isIndexableRestaurantRow = (row: any) =>
+  row?.ownerDisabled === false &&
   isPublicSeoLandingRestaurantEligible({
     name: row.name,
     isActive: row.isActive,
@@ -341,6 +343,12 @@ const repository: PublicSeoLandingRepository = {
           inArray(events.status, ["open", "booked", "filled"]),
           or(eq(events.requiresPayment, false), isNull(events.requiresPayment)),
           eq(restaurants.isActive, true),
+          eq(users.isDisabled, false),
+          sql`exists (
+            select 1 from users host_owner
+            where host_owner.id = ${hosts.userId}
+              and host_owner.is_disabled = false
+          )`,
           publicTruckClassificationWhere(
             restaurants.isFoodTruck,
             restaurants.businessType,
@@ -508,6 +516,7 @@ const repository: PublicSeoLandingRepository = {
         truckBusinessType: restaurants.businessType,
         truckOwnerId: restaurants.ownerId,
         truckOwnerEmail: users.email,
+        truckOwnerDisabled: users.isDisabled,
         truckAddress: restaurants.address,
         truckCity: restaurants.city,
         truckState: restaurants.state,
@@ -529,6 +538,12 @@ const repository: PublicSeoLandingRepository = {
           inArray(events.status, ["open", "booked", "filled"]),
           or(eq(events.requiresPayment, false), isNull(events.requiresPayment)),
           eq(restaurants.isActive, true),
+          eq(users.isDisabled, false),
+          sql`exists (
+            select 1 from users host_owner
+            where host_owner.id = ${hosts.userId}
+              and host_owner.is_disabled = false
+          )`,
           publicTruckClassificationWhere(
             restaurants.isFoodTruck,
             restaurants.businessType,
@@ -573,6 +588,7 @@ const repository: PublicSeoLandingRepository = {
           isActive: row.truckIsActive,
           ownerId: row.truckOwnerId,
           ownerEmail: row.truckOwnerEmail,
+          ownerDisabled: row.truckOwnerDisabled,
           address: row.truckAddress,
           city: row.truckCity,
           state: row.truckState,
