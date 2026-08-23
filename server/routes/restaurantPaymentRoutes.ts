@@ -7,8 +7,12 @@ import { db } from "../db";
 import { distributedRateLimit } from "../middleware/distributedRateLimit";
 import { canManageBusinessFinancials } from "../businessFinancialAccess";
 import { isAuthenticated, isStaffOrAdmin } from "../unifiedAuth";
-import { isAdminUserType } from "../roleAccess";
+import { isAdminUserType, isInternalTeamUserType } from "../roleAccess";
 import { IMPORT_SYSTEM_EMAIL } from "../seo/publicRestaurantIndexability";
+import {
+  canManageLockedRestaurantConnect,
+  restaurantConnectAccountCreationIdempotencyKey,
+} from "../utils/restaurantConnectOnboarding";
 
 type Dependencies = {
   stripe: Stripe | null;
@@ -183,37 +187,74 @@ export function registerRestaurantPaymentRoutes(
             .json({ message: "Business profile not found" });
         }
 
-        let accountId =
-          restaurant.stripeConnectStatus === "revoked"
-            ? ""
-            : String(restaurant.stripeConnectAccountId || "").trim();
-        if (!accountId) {
-          const account = await stripe.accounts.create({
-            type: "express",
-            country: "US",
-            email: String(req.user?.email || "").trim() || undefined,
-            capabilities: {
-              card_payments: { requested: true },
-              transfers: { requested: true },
-            },
-            metadata: {
-              restaurantId: restaurant.id,
-              businessName: restaurant.name,
-            },
-          });
-          accountId = account.id;
+        const accountId = await db.transaction(async (tx: any) => {
+          const [lockedRestaurant] = await tx
+            .select()
+            .from(restaurants)
+            .where(eq(restaurants.id, restaurant.id))
+            .limit(1)
+            .for("update");
+          if (!lockedRestaurant) {
+            throw new Error("Restaurant disappeared during Stripe onboarding");
+          }
+          if (
+            !canManageLockedRestaurantConnect({
+              restaurantOwnerId: lockedRestaurant.ownerId,
+              requesterUserId: req.user?.id,
+              requesterIsInternalTeam: isInternalTeamUserType(
+                req.user?.userType,
+              ),
+            })
+          ) {
+            return null;
+          }
 
-          await db
+          const existingAccountId =
+            lockedRestaurant.stripeConnectStatus === "revoked"
+              ? ""
+              : String(
+                  lockedRestaurant.stripeConnectAccountId || "",
+                ).trim();
+          if (existingAccountId) return existingAccountId;
+
+          const createIdempotencyKey =
+            restaurantConnectAccountCreationIdempotencyKey({
+              restaurantId: lockedRestaurant.id,
+              connectStatus: lockedRestaurant.stripeConnectStatus,
+              updatedAt: lockedRestaurant.updatedAt,
+            });
+          const account = await stripe.accounts.create(
+            {
+              type: "express",
+              country: "US",
+              capabilities: {
+                card_payments: { requested: true },
+                transfers: { requested: true },
+              },
+              metadata: {
+                restaurantId: lockedRestaurant.id,
+              },
+            },
+            { idempotencyKey: createIdempotencyKey },
+          );
+
+          await tx
             .update(restaurants)
             .set({
-              stripeConnectAccountId: accountId,
+              stripeConnectAccountId: account.id,
               stripeConnectStatus: "pending",
               stripeOnboardingCompleted: false,
               stripeChargesEnabled: false,
               stripePayoutsEnabled: false,
               updatedAt: new Date(),
             })
-            .where(eq(restaurants.id, restaurant.id));
+            .where(eq(restaurants.id, lockedRestaurant.id));
+          return account.id;
+        });
+        if (!accountId) {
+          return res
+            .status(404)
+            .json({ message: "Business profile not found" });
         }
 
         const configuredBaseUrl = String(

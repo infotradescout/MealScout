@@ -1,7 +1,73 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import {
+  canManageLockedRestaurantConnect,
+  restaurantConnectAccountCreationIdempotencyKey,
+} from "../server/utils/restaurantConnectOnboarding";
 
 const read = (path: string) => readFileSync(path, "utf8");
+const initialConnectCreationKey =
+  restaurantConnectAccountCreationIdempotencyKey({
+    restaurantId: "restaurant-fixture",
+    connectStatus: "pending",
+    updatedAt: "2026-08-23T00:00:00.000Z",
+  });
+assert.equal(
+  initialConnectCreationKey,
+  restaurantConnectAccountCreationIdempotencyKey({
+    restaurantId: "restaurant-fixture",
+    connectStatus: "pending",
+    updatedAt: "2026-08-24T00:00:00.000Z",
+  }),
+  "initial Connect account retries must keep a stable per-restaurant key",
+);
+const revokedConnectCreationKey =
+  restaurantConnectAccountCreationIdempotencyKey({
+    restaurantId: "restaurant-fixture",
+    connectStatus: "revoked",
+    updatedAt: "2026-08-25T00:00:00.000Z",
+  });
+assert.notEqual(
+  revokedConnectCreationKey,
+  initialConnectCreationKey,
+  "a revoked connection must start a new account-creation generation",
+);
+assert.equal(
+  revokedConnectCreationKey,
+  restaurantConnectAccountCreationIdempotencyKey({
+    restaurantId: "restaurant-fixture",
+    connectStatus: "revoked",
+    updatedAt: "2026-08-25T00:00:00.000Z",
+  }),
+  "retries in one revoked generation must reuse the same key",
+);
+assert.equal(
+  canManageLockedRestaurantConnect({
+    restaurantOwnerId: "new-owner",
+    requesterUserId: "former-owner",
+    requesterIsInternalTeam: false,
+  }),
+  false,
+  "a former owner must fail reauthorization when ownership changes before the row lock is acquired",
+);
+assert.equal(
+  canManageLockedRestaurantConnect({
+    restaurantOwnerId: "new-owner",
+    requesterUserId: "new-owner",
+    requesterIsInternalTeam: false,
+  }),
+  true,
+  "the current owner must pass locked-row reauthorization",
+);
+assert.equal(
+  canManageLockedRestaurantConnect({
+    restaurantOwnerId: "new-owner",
+    requesterUserId: "support-user",
+    requesterIsInternalTeam: true,
+  }),
+  true,
+  "the intentional internal-team support path must remain available",
+);
 const menuRoutes = read("server/routes/menuRoutes.ts");
 const pickupRoutes = read("server/routes/pickupOrderRoutes.ts");
 const pickupOrderIdentity = read(
@@ -472,6 +538,11 @@ const checks: Array<[string, () => void]> = [
       );
       assert.match(paymentRoutes, /canManageBusinessFinancials/);
       assert.match(paymentRoutes, /stripe\.accounts\.create/);
+      assert.match(
+        paymentRoutes,
+        /db\.transaction[\s\S]*\.for\("update"\)[\s\S]*canManageLockedRestaurantConnect[\s\S]*stripe\.accounts\.create[\s\S]*idempotencyKey: createIdempotencyKey[\s\S]*tx[\s\S]*\.update\(restaurants\)/,
+        "Connect account creation must reauthorize under the row lock, serialize assignment, and use a stable Stripe idempotency key",
+      );
       assert.match(paymentRoutes, /stripe\.accountLinks\.create/);
       assert.match(paymentRoutes, /stripe\.accounts\.retrieve/);
       assert.match(paymentRoutes, /stripeConnectStatus === "revoked"/);
