@@ -147,6 +147,7 @@
     "test:email-html-safety": "node --import tsx scripts/email-html-safety.behavior.test.ts",
     "test:route-ownership": "node --import tsx scripts/duplicate-route-ownership.contract.test.ts",
     "test:dependency-policy": "node --import tsx scripts/dependency-policy.contract.test.ts",
+    "test:repository-hygiene": "node --import tsx scripts/repository-hygiene.contract.test.ts",
     "test:release-gate": "node --import tsx scripts/release-gate.contract.test.ts",
     "smoke:parking-pass-stripe": "tsx scripts/smokeParkingPassStripeFlow.ts",
     "smoke:parking-pass-public-feed": "tsx scripts/smokeParkingPassPublicFeed.ts",

@@ -8,6 +8,7 @@ const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
 const steps = [
   ["Repository structure", "doctor"],
   ["Dependency and package-manager policy", "test:dependency-policy"],
+  ["Repository hygiene", "test:repository-hygiene"],
   ["Canonical route ownership", "test:route-ownership"],
   ["Release-gate wiring", "test:release-gate"],
   ["Request-log privacy", "test:request-log-privacy"],

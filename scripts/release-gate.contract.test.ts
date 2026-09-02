@@ -18,6 +18,7 @@ test("release commands have one canonical orchestrator", () => {
 
   for (const requiredScript of [
     "test:dependency-policy",
+    "test:repository-hygiene",
     "test:route-ownership",
     "test:request-log-privacy",
     "test:tradescout-sso-policy",
