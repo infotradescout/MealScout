@@ -70,7 +70,7 @@ function buildAliases(file: string): string[] {
 function runScript(scriptPath: string): number {
   const rel = path.relative(repoRoot, scriptPath).replace(/\\/g, "/");
   console.log(`[test-runner] running ${rel}`);
-  const result = spawnSync("npx", ["--yes", "tsx", rel], {
+  const result = spawnSync(process.execPath, ["--import", "tsx", rel], {
     stdio: "inherit",
     cwd: repoRoot,
     env: { ...process.env },

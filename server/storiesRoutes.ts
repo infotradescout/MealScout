@@ -22,6 +22,7 @@ import {
 } from '@shared/schema';
 import { eq, desc, and, lte, sql, count, gte, like, or, isNull, isNotNull, getTableColumns } from 'drizzle-orm';
 import {
+  cloudinaryPublicIdFromDeliveryUrl,
   deleteFromCloudinary,
   uploadVideoToCloudinary,
 } from './imageUpload';
@@ -179,6 +180,7 @@ export default function setupStoriesRoutes(app: Express) {
     storyUploadDailyIngressLimiter,
     parseStoryVideoUpload,
     async (req, res) => {
+      let uploadedVideoPublicId: string | null = null;
       try {
         if (!req.file) {
           return res.status(400).json({ message: 'No video file provided' });
@@ -280,14 +282,20 @@ export default function setupStoriesRoutes(app: Express) {
           req.file.buffer,
           `story-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`,
         );
+        uploadedVideoPublicId = cloudinaryResult.publicId;
 
         if (!cloudinaryResult.secureUrl) {
+          await deleteFromCloudinary(uploadedVideoPublicId, {
+            resourceType: 'video',
+          }).catch(() => {});
+          uploadedVideoPublicId = null;
           return res.status(500).json({ message: 'Failed to upload video' });
         }
         if (cloudinaryResult.durationSeconds > 30) {
-          await deleteFromCloudinary(cloudinaryResult.publicId, {
+          await deleteFromCloudinary(uploadedVideoPublicId, {
             resourceType: 'video',
           }).catch(() => {});
+          uploadedVideoPublicId = null;
           return res.status(400).json({
             message: 'Video duration must be 30 seconds or less',
           });
@@ -313,6 +321,11 @@ export default function setupStoriesRoutes(app: Express) {
             status: 'ready', // For MVP, we skip encoding - use Cloudinary's optimization
           })
           .returning();
+        const createdStory = story[0];
+        if (!createdStory) {
+          throw new Error('Story insert returned no record');
+        }
+        uploadedVideoPublicId = null;
 
         // Initialize reviewer level if user doesn't have one
         const existingLevel = await db
@@ -352,7 +365,7 @@ export default function setupStoriesRoutes(app: Express) {
         // LISA Phase 4A: Emit claim for video recommendation creation
         storage.emitClaim({
           subjectType: 'video',
-          subjectId: story[0].id,
+          subjectId: createdStory.id,
           actorType: 'user',
           actorId: userId,
           app: 'mealscout',
@@ -368,9 +381,14 @@ export default function setupStoriesRoutes(app: Express) {
 
         res.status(201).json({
           message: 'Video story uploaded successfully',
-          story: story[0],
+          story: createdStory,
         });
       } catch (error) {
+        if (uploadedVideoPublicId) {
+          await deleteFromCloudinary(uploadedVideoPublicId, {
+            resourceType: 'video',
+          }).catch(() => {});
+        }
         console.error('Error uploading video story:', error);
         res.status(500).json({ message: 'Failed to upload video story' });
       }
@@ -1327,7 +1345,11 @@ export default function setupStoriesRoutes(app: Express) {
         // Delete from Cloudinary
         if (story[0].videoUrl) {
           try {
-            await deleteFromCloudinary(story[0].videoUrl);
+            const publicId = cloudinaryPublicIdFromDeliveryUrl(story[0].videoUrl);
+            if (!publicId) {
+              throw new Error('Stored story video URL is not a recognized Cloudinary delivery URL');
+            }
+            await deleteFromCloudinary(publicId, { resourceType: 'video' });
           } catch (err) {
             console.error('Error deleting from Cloudinary:', err);
             // Continue with DB deletion even if Cloudinary fails

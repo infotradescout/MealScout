@@ -1,6 +1,6 @@
 /**
  * WebSocket Stress Test - Verify 1000 concurrent Socket.IO connections
- * Usage: npx tsx scripts/websocketStressTest.ts
+ * Usage: node --import tsx scripts/websocketStressTest.ts
  */
 
 import { io, Socket } from 'socket.io-client';

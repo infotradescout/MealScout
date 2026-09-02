@@ -21,8 +21,8 @@ import { restaurants, menus } from "@shared/schema";
  * transactional receipts, and PII-free backups.
  *
  * Usage:
- *   npx tsx scripts/deleteNaBusinessRecord.ts --dry-run
- *   npx tsx scripts/deleteNaBusinessRecord.ts --apply
+ *   node --import tsx scripts/deleteNaBusinessRecord.ts --dry-run
+ *   node --import tsx scripts/deleteNaBusinessRecord.ts --apply
  */
 
 const RESTAURANT_ID = "e48278f1-afe5-49be-b763-c76c2fe3d55e";

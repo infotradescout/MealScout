@@ -69,5 +69,5 @@ Those are adapters.
 Run the rendered shell proof with:
 
 ```bash
-npx tsx packages/scout-blueprint/src/demoSmoke.ts
+node --import tsx packages/scout-blueprint/src/demoSmoke.ts
 ```

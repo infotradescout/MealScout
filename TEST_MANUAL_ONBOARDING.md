@@ -209,7 +209,7 @@ Created hosts appear on the map with:
 - [x] Audit logging for all actions
 - [x] Super admin permissions enforced
 - [x] Change password page wired to router
-- [ ] Run migration: `npx tsx scripts/runHostGeocodingMigration.ts`
+- [ ] Run migration: `node --import tsx scripts/runHostGeocodingMigration.ts`
 - [ ] Test complete flow end-to-end
 - [ ] Deploy backend to Render
 - [ ] Deploy frontend to Vercel

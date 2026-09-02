@@ -101,7 +101,7 @@ export async function uploadVideoToCloudinary(
         resource_type: "video",
         overwrite: false,
       },
-      (error, result) => {
+      async (error, result) => {
         if (error) {
           reject(error);
           return;
@@ -113,6 +113,9 @@ export async function uploadVideoToCloudinary(
 
         const durationSeconds = Number((result as any).duration);
         if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) {
+          await deleteFromCloudinary(result.public_id, {
+            resourceType: "video",
+          }).catch(() => undefined);
           reject(new Error("Video duration unavailable"));
           return;
         }
@@ -322,6 +325,36 @@ export function createAuthenticatedEvidenceReviewUrl(
 
 export const isAuthenticatedCloudinaryDeliveryUrl = (value: unknown) =>
   /\/image\/authenticated\//.test(String(value || ""));
+
+export function cloudinaryPublicIdFromDeliveryUrl(value: unknown): string | null {
+  try {
+    const url = new URL(String(value || ""));
+    if (url.protocol !== "https:" || url.hostname !== "res.cloudinary.com") {
+      return null;
+    }
+
+    const pathParts = url.pathname.split("/").filter(Boolean);
+    const versionIndex = pathParts.findIndex((part) => /^v\d+$/.test(part));
+    if (versionIndex < 3 || versionIndex === pathParts.length - 1) {
+      return null;
+    }
+    if (
+      !["image", "video", "raw"].includes(pathParts[1]) ||
+      !["upload", "authenticated", "private"].includes(pathParts[2])
+    ) {
+      return null;
+    }
+
+    const publicIdParts = pathParts.slice(versionIndex + 1).map(decodeURIComponent);
+    const finalPart = publicIdParts.at(-1);
+    if (!finalPart) return null;
+    publicIdParts[publicIdParts.length - 1] = finalPart.replace(/\.[^.\/]+$/, "");
+    const publicId = publicIdParts.join("/");
+    return publicId && !/[\u0000-\u001f\u007f]/.test(publicId) ? publicId : null;
+  } catch {
+    return null;
+  }
+}
 
 // Delete image from Cloudinary
 export async function deleteFromCloudinary(

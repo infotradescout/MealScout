@@ -10,7 +10,7 @@
  * - Backend server running on http://localhost:5200
  * - Valid authentication token (restaurant owner)
  * 
- * Run: npx tsx scripts/testDealCreationRoutes.ts
+ * Run: node --import tsx scripts/testDealCreationRoutes.ts
  */
 
 const API_BASE = process.env.API_BASE || "http://localhost:5200";

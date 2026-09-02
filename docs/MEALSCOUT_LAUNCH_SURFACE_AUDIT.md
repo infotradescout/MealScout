@@ -108,10 +108,10 @@ git rev-parse HEAD
 rg --files | rg "(public-profile|share|discover|search|owner-dashboard|menu|schedule|admin|staff|profile|launch|contract|smoke|test)"
 rg -n "deal.*(required|visibility|appear|Scout|discover)|Scout.*deal|coming soon|sample|placeholder|fake|Share button|Copy Link|navigator\\.share|clipboard\\.writeText|resolveCanonicalShareUrl|ShareButton" client/src scripts docs server shared -S
 npm run check
-npx --yes tsx scripts/mealscout-native-share-attribution.contract.test.ts
-npx --yes tsx scripts/public-profile-menu-logo-schedule.contract.test.ts
-npx --yes tsx scripts/unified-truck-discoverability.contract.test.ts
-npx --yes tsx scripts/owner-discoverability-menu-state.contract.test.ts
+node --import tsx scripts/mealscout-native-share-attribution.contract.test.ts
+node --import tsx scripts/public-profile-menu-logo-schedule.contract.test.ts
+node --import tsx scripts/unified-truck-discoverability.contract.test.ts
+node --import tsx scripts/owner-discoverability-menu-state.contract.test.ts
 node scripts/smokeScoutSurface.mjs
 Invoke-WebRequest https://www.mealscout.us/api/version
 Invoke-WebRequest https://www.mealscout.us/api/health

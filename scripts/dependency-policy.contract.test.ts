@@ -78,3 +78,17 @@ test("security-sensitive transitive dependencies remain patched", () => {
     );
   }
 });
+
+test("package scripts use the installed TypeScript loader without npx", () => {
+  for (const [name, command] of Object.entries<string>(packageJson.scripts ?? {})) {
+    assert.doesNotMatch(command, /(^|\s)npx(?:\s|$)/, `${name} must not invoke npx`);
+    assert.doesNotMatch(
+      command,
+      /(^|&&\s*|;\s*)tsx\s/,
+      `${name} must use node --import tsx`,
+    );
+  }
+
+  const targetedRunner = readFileSync("scripts/runTargetedTests.ts", "utf8");
+  assert.doesNotMatch(targetedRunner, /spawnSync\(["']npx["']/);
+});

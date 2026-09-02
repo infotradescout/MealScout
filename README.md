@@ -45,7 +45,8 @@ npm run test:flows:e2e
 
 Release verification
 - `npm run gate:release:local` runs the deterministic repository, security, migration, type, lint, build, mobile, and store checks used by the Render build.
-- `npm run gate:release` runs the same checks and then performs the strict, read-only production probes. It requires production environment configuration and network access.
+- `npm run gate:release:browser` adds the unauthenticated Chromium, Firefox, WebKit, and mobile journeys when Playwright browsers are installed.
+- `npm run gate:release` runs deterministic checks, browser journeys, and then strict, read-only production probes. It requires Playwright browsers, production environment configuration, and network access.
 
 License
 MIT

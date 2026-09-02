@@ -11,7 +11,7 @@
  * - Search with filters → sort results → compare
  * 
  * Run: npm run test:flows
- * or: npx tsx scripts/userFlows.ts
+ * or: node --import tsx scripts/userFlows.ts
  */
 
 import http from 'http';

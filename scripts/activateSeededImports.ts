@@ -33,9 +33,9 @@ import { users, restaurants } from "../shared/schema";
  * (consider noindex-until-claimed) so Google only indexes richer claimed pages.
  *
  * Examples:
- *   npx tsx scripts/activateSeededImports.ts --match-file=backups/seed-food-bars-nwfl.json
- *   npx tsx scripts/activateSeededImports.ts --match-file=backups/seed-food-bars-nwfl.json --apply
- *   npx tsx scripts/activateSeededImports.ts            # (dry-run, ALL import-owned inactive)
+ *   node --import tsx scripts/activateSeededImports.ts --match-file=backups/seed-food-bars-nwfl.json
+ *   node --import tsx scripts/activateSeededImports.ts --match-file=backups/seed-food-bars-nwfl.json --apply
+ *   node --import tsx scripts/activateSeededImports.ts            # (dry-run, ALL import-owned inactive)
  */
 
 const getArg = (flag: string, dflt = "") => {

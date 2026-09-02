@@ -1,6 +1,6 @@
 /**
  * Quick Load Test - Run NOW to validate 1000-user readiness
- * Usage: npx tsx scripts/quickLoadTest.ts
+ * Usage: node --import tsx scripts/quickLoadTest.ts
  */
 
 const LOAD_TEST_URL = process.env.TEST_URL || 'https://mealscout.onrender.com';

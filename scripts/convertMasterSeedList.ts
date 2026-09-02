@@ -11,8 +11,8 @@ import ExcelJS from "exceljs";
  * DB and fills only missing fields). This script does NOT touch the database.
  *
  * Usage:
- *   npx tsx scripts/convertMasterSeedList.ts
- *   npx tsx scripts/convertMasterSeedList.ts --counties="Escambia,Santa Rosa,Okaloosa,Walton,Bay"
+ *   node --import tsx scripts/convertMasterSeedList.ts
+ *   node --import tsx scripts/convertMasterSeedList.ts --counties="Escambia,Santa Rosa,Okaloosa,Walton,Bay"
  */
 
 const getArg = (flag: string, dflt = "") => {
