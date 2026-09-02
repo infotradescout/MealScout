@@ -1,12 +1,12 @@
 {
   "schema_version": 1,
   "index_version": "0.1.0",
-  "generated_at": "2026-09-01T23:58:31Z",
+  "generated_at": "2026-09-02T00:19:46Z",
   "source": {
     "kind": "git",
-    "revision": "66aa8dc630aa280d9896e3cc1c4ccfc00a2cdc30",
+    "revision": "261443eedfbc7a3c04003fe51da1e45ba2c34d0c",
     "dirty": false,
-    "inventory_sha256": "7de8e080fe297beb9985af4eb39b89c6c750220f109192d02ecdcead42d83067"
+    "inventory_sha256": "f90d323a3bd1e71e5897fd46aca69b0d3710ba8fcc04d99ba524884ca117ac78"
   },
   "inventory": {
     "directories": [
@@ -2477,8 +2477,8 @@
       {
         "path": "scripts/activateSeededImports.ts",
         "language": "ts",
-        "sha256": "f94e7ed4d643f50b379a297742e20b2a6ec184510e8124e676dbb7c59e3e00c7",
-        "bytes": 6929
+        "sha256": "634074b7c5e984cd1f7952d25b87bf2bfc74d8daca9b9ba15b5ac83ccdf7adf8",
+        "bytes": 6959
       },
       {
         "path": "scripts/admin-business-completion-settings.behavior.test.ts",
@@ -2777,8 +2777,8 @@
       {
         "path": "scripts/backfillRestaurantCoordinates.ts",
         "language": "ts",
-        "sha256": "2cb0cda158b0a613626ee9caa2e0a1f20534ed739f28192963623e22115c65cc",
-        "bytes": 4794
+        "sha256": "3d4999d8553c614e43b2e4d0c868d3188125ebe9b77a6ee26bcda50ae9dc9c5c",
+        "bytes": 4814
       },
       {
         "path": "scripts/backfillRestaurantSubscriptions.ts",
@@ -2933,8 +2933,8 @@
       {
         "path": "scripts/classifySeedNeedsReview.ts",
         "language": "ts",
-        "sha256": "c8008b8bfb5a08cb266e69992af2706057e2798b91516047cf929d748f6286e6",
-        "bytes": 11823
+        "sha256": "af1dd186dc7d46495cfc14fff6701ce6988acdf397e164bcb79796e71666b722",
+        "bytes": 11833
       },
       {
         "path": "scripts/confirmed-public-test-record-quarantine.contract.test.ts",
@@ -2951,8 +2951,8 @@
       {
         "path": "scripts/convertMasterSeedList.ts",
         "language": "ts",
-        "sha256": "367b71f98d96642fa481137d65faee574a6213682744475b3641594aa1bbbc32",
-        "bytes": 6375
+        "sha256": "306732fb516f544adab433ff604ee3188830c55eb32da4c984801d65f7e1925f",
+        "bytes": 6395
       },
       {
         "path": "scripts/createAdmin.ts",
@@ -2969,8 +2969,8 @@
       {
         "path": "scripts/curated-profile-cohort-baseline.contract.test.ts",
         "language": "ts",
-        "sha256": "914472a3f6fbf74818d4f63fbc787a111ae61ed370de55a2c6cb2f5564112ee5",
-        "bytes": 7350
+        "sha256": "20fa0886ebd5881e11a15a3940a984bd6a62b62aeee9a5581f71425c12462ab6",
+        "bytes": 7375
       },
       {
         "path": "scripts/customer-signup-referral-canonical.contract.test.ts",
@@ -2981,20 +2981,20 @@
       {
         "path": "scripts/deleteNaBusinessRecord.ts",
         "language": "ts",
-        "sha256": "a8613ac6a361302652a7ef2523f51262a1d51407852094020c3738e4e001fcbd",
-        "bytes": 3370
+        "sha256": "4b760db04d8fe0106790a70c6cd0d3320b81ce3acd297db59962c0a5787ad8f4",
+        "bytes": 3390
       },
       {
         "path": "scripts/deleteSeededRestaurants.ts",
         "language": "ts",
-        "sha256": "36b8fc6c6ca3a7966ec21f6da0ca22a6274f69023824bee984c2ab5aa99d94d9",
-        "bytes": 3729
+        "sha256": "d9cae74bb81e2dacc41e25923864fd26cd09994b248df8f25d286abb4f3f3737",
+        "bytes": 3749
       },
       {
         "path": "scripts/dependency-policy.contract.test.ts",
         "language": "ts",
-        "sha256": "e54bc3c2ca4d2ae7baeb954d1726ea64587bcd68943432da80f22d9c46402966",
-        "bytes": 2467
+        "sha256": "825acf8b2f8a6f86df356136de0038482845507e2cce74f0fbcd34d479de2f2f",
+        "bytes": 2991
       },
       {
         "path": "scripts/direct-connect-contractor-console.contract.test.ts",
@@ -3527,8 +3527,8 @@
       {
         "path": "scripts/mealscout-handoff-spine.contract.test.ts",
         "language": "ts",
-        "sha256": "077d5fe146b1176a265ebf6c9e12997acd5291252bf34c709d0b25baacb8a3cf",
-        "bytes": 5564
+        "sha256": "8d810f2f8aeb5bc9eb3e6e47ddf677421a763335b305feb9c0597548ca5ec9db",
+        "bytes": 5574
       },
       {
         "path": "scripts/mealscout-infinity-shadow.contract.test.ts",
@@ -3935,8 +3935,8 @@
       {
         "path": "scripts/mealscout-render-migration-gate.contract.test.ts",
         "language": "ts",
-        "sha256": "ffe7c9bd50117c86c75daa0810b3217a964a9df9d40b13b050a5feaed150be1a",
-        "bytes": 10021
+        "sha256": "266e1639e8f59c22c707ab943d15a944247b153ddecc8801892cb4aaa4dac327",
+        "bytes": 10035
       },
       {
         "path": "scripts/mealscout-role-admin-display-audit.contract.test.ts",
@@ -4073,8 +4073,8 @@
       {
         "path": "scripts/mergeConfirmedDuplicateRestaurants.ts",
         "language": "ts",
-        "sha256": "2613f54bfda7e85980b03be48f92fe9ff642326d181ae387220a708ca0587959",
-        "bytes": 5792
+        "sha256": "0958a6923f2f03f95d86babe433729e51500dff1553879e787a3c73ab51c4d62",
+        "bytes": 5812
       },
       {
         "path": "scripts/mobileDeepLinkSmoke.ts",
@@ -4097,8 +4097,8 @@
       {
         "path": "scripts/monitorPerformance.ts",
         "language": "ts",
-        "sha256": "58eefa6adc2028653d16c7caab93ad5b6d7bb66045c4fec12ad9929288fb6346",
-        "bytes": 12998
+        "sha256": "9a88fdcb7e725ad18db7ffe2c4927bf7d405d4797eb5e01462798c2e3b486065",
+        "bytes": 13008
       },
       {
         "path": "scripts/my-restaurants-account-scope.contract.test.ts",
@@ -4673,8 +4673,8 @@
       {
         "path": "scripts/public-seo-landing-pages.contract.test.ts",
         "language": "ts",
-        "sha256": "f68661812f7a7dab47f76222295e1d87dbcd5299711f96c1a26386d46a1e7c9b",
-        "bytes": 37117
+        "sha256": "d03959f99b2c24cba7b149863ec9572ea6d23368a7c7670133efcea3fe64f629",
+        "bytes": 37062
       },
       {
         "path": "scripts/public-seo-landing.integration.test.ts",
@@ -4709,8 +4709,8 @@
       {
         "path": "scripts/publishSafeIngestRecord.ts",
         "language": "ts",
-        "sha256": "aa87ba10291d822604e694f71face5479cc97a6b346da3ababfc5e8e884a5914",
-        "bytes": 15229
+        "sha256": "72c4c1cb9b0d344d3d2c690988af9b45ac1181deeb3bc115042039d31f11726d",
+        "bytes": 15239
       },
       {
         "path": "scripts/quarantineConfirmedPublicTestRecords.ts",
@@ -4733,20 +4733,20 @@
       {
         "path": "scripts/quickLoadTest.ts",
         "language": "ts",
-        "sha256": "0802046afa3b422744fdddf1ee547885565218b7b3d0305532980481ac0360a5",
-        "bytes": 3272
+        "sha256": "17571fbdbfebf962272a71ee42406380ba8735a8ddf05d205578d6b811789939",
+        "bytes": 3282
       },
       {
         "path": "scripts/raceConditionTest.ts",
         "language": "ts",
-        "sha256": "0896b044280f38136e23524bfe8afd45879c17d9657419f56f58e13113aa1f5d",
-        "bytes": 3451
+        "sha256": "0bf2a90219a347a2d9ea606bfbe624d6e70bfeaef4551fa2ad088c11e3000440",
+        "bytes": 3461
       },
       {
         "path": "scripts/realAccountCompletenessReport.ts",
         "language": "ts",
-        "sha256": "34df131627ff59136522173ed5c42e4e13fe0216c920a97fff7957f3623e9dd1",
-        "bytes": 10364
+        "sha256": "7c09c568cbfe34e7992ffdecbbfb17793179662be0d9d57dafc8cc5a67b485de",
+        "bytes": 10374
       },
       {
         "path": "scripts/recommend-photo-only-proof.contract.test.ts",
@@ -4763,14 +4763,14 @@
       {
         "path": "scripts/release-gate.contract.test.ts",
         "language": "ts",
-        "sha256": "f36f8ed4b2e996972f0e91318a4e5665043e880a5175f255004c175b3f4c387b",
-        "bytes": 1791
+        "sha256": "a2fd016b1c749420683bf78c9025c1501306ebb1ffc78ac3494e0322bbd6d17d",
+        "bytes": 2899
       },
       {
         "path": "scripts/releaseGate.mjs",
         "language": "mjs",
-        "sha256": "a3014da84b59b8d20760f06e381ad2e5d71e3fc1600db946979023269dc356d7",
-        "bytes": 2473
+        "sha256": "07bf69f32b605aa862bf74ff8c2d66451aed8e67a23caac6ade3c1d9b9c85216",
+        "bytes": 4432
       },
       {
         "path": "scripts/releaseReadinessCheck.mjs",
@@ -4811,8 +4811,8 @@
       {
         "path": "scripts/resolveProfileEvidenceConflicts.ts",
         "language": "ts",
-        "sha256": "6f689235ca3a2e0483180ed6e411430264aaca26a50dc345a5fd209b1c3f096e",
-        "bytes": 15472
+        "sha256": "fdbb16429dcc2e710f2b7112a44e74df506c68ca2446482e9e858af67d9a1658",
+        "bytes": 15482
       },
       {
         "path": "scripts/restaurant-follow-unique-violation.contract.test.ts",
@@ -4847,8 +4847,8 @@
       {
         "path": "scripts/run-protected-route-live-local.mjs",
         "language": "mjs",
-        "sha256": "72a98d9953aa08833c77cc877700560475846e00f29cd72c26fe67c3bd78c146",
-        "bytes": 1161
+        "sha256": "eda618aa9a57b17fe688035832c1e92409d22d407cec04a8b50e8b02201c6a6c",
+        "bytes": 1176
       },
       {
         "path": "scripts/runDeployMigrations.ts",
@@ -4913,8 +4913,8 @@
       {
         "path": "scripts/runTargetedTests.ts",
         "language": "ts",
-        "sha256": "8fa8a1a105e0291819d7073750aef3d91d0f1a2147d7c0a611fe96893157ec38",
-        "bytes": 3755
+        "sha256": "543af88121eee56297fdcd6d43f003620c53e0ab891e4fb567aa2a0ffedbff29",
+        "bytes": 3769
       },
       {
         "path": "scripts/scaleReadinessCheck.ts",
@@ -5171,14 +5171,14 @@
       {
         "path": "scripts/story-upload-ingress.behavior.test.ts",
         "language": "ts",
-        "sha256": "e3b8674687fe7c5f5e4d3b2dbcab7ea767a0b62e1c0ad17ec70555d34e89f561",
-        "bytes": 1892
+        "sha256": "d39d8d86000fdae94581d3d656cbbf4f326638cd595df78aa42cec9717602aa0",
+        "bytes": 3064
       },
       {
         "path": "scripts/stressTest.ts",
         "language": "ts",
-        "sha256": "82c2d0ff5caf4537cc7b29f0b25a0f74dfcfb1c51323b7cff930ba9d0e71df24",
-        "bytes": 19034
+        "sha256": "05f32123f043e953198f693adae0eee8db9ee48bac20775151dc285f9339741a",
+        "bytes": 19044
       },
       {
         "path": "scripts/sweet-love-partial-menu.contract.test.ts",
@@ -5213,14 +5213,14 @@
       {
         "path": "scripts/testDealCreationContract.ts",
         "language": "ts",
-        "sha256": "7dfd3456227532e9cba909bf52b93241df783d51434a68b09224211a32198477",
-        "bytes": 6902
+        "sha256": "803af5052874b853fd635d9c2043b5598fe4bd83703e989e5dfbda94f60569b6",
+        "bytes": 6912
       },
       {
         "path": "scripts/testDealCreationRoutes.ts",
         "language": "ts",
-        "sha256": "ed2e54f82b61638ad799790ad9cfe11c09e69015c1afad33c8c26632caf7efcd",
-        "bytes": 7886
+        "sha256": "d485dcf0a0182c52fe3bd8cf8aaa9db33d13ce2209c3fb141be65d47c97ae841",
+        "bytes": 7896
       },
       {
         "path": "scripts/testEmailPolicy.ts",
@@ -5381,8 +5381,8 @@
       {
         "path": "scripts/userFlows.ts",
         "language": "ts",
-        "sha256": "ea575c4910b24df48edc4c57835a0794995d6fe8e82a6ee0f57f5426c6385eec",
-        "bytes": 29212
+        "sha256": "a5e8f541aa2a0d781d921bb1105d4861e8b2ae84abdfa882fddc1b3d2ef6fba8",
+        "bytes": 29222
       },
       {
         "path": "scripts/validateConfig.ts",
@@ -5423,7 +5423,7 @@
       {
         "path": "scripts/verifyDealWrites.ts",
         "language": "ts",
-        "sha256": "efe4a372e9105e121dcba7115030f28530bc3d7e25be3aea61c14e85150f0738",
+        "sha256": "91dd024a61d3615728ac1ed54018bafbab90bb78bad830b8d6d83720a604764d",
         "bytes": 4121
       },
       {
@@ -5465,8 +5465,8 @@
       {
         "path": "scripts/websocketStressTest.ts",
         "language": "ts",
-        "sha256": "eecbb8baf0c32904d93f78fb317f0ede9ceb087b1e5ba5836219069bee397629",
-        "bytes": 3665
+        "sha256": "7679835cfc8d1c3e59ca81fa7388d5621efe4d3a7348db72c667d9a5d38ad3f3",
+        "bytes": 3675
       },
       {
         "path": "server/adminRoutes.ts",
@@ -5651,8 +5651,8 @@
       {
         "path": "server/imageUpload.ts",
         "language": "ts",
-        "sha256": "4a9496d1f0f7ec10272512c6bf8573a3711db4bd085f879dc3eed56e994b7c28",
-        "bytes": 9845
+        "sha256": "ff18fc73cce93393ba93f974407c3416da480c7597d2519f37988347eef5dbce",
+        "bytes": 11035
       },
       {
         "path": "server/imports/businessIdentityReconciliation.ts",
@@ -7133,14 +7133,14 @@
       {
         "path": "server/storiesCronJobs.ts",
         "language": "ts",
-        "sha256": "4cf0681dfd72ec8486679d6f0dcc4ddbe550386d3e4dc5b041fc93a8c41ee9f7",
-        "bytes": 10114
+        "sha256": "05e6f0bd50d02a3ba8f7e5fdcea32cd79352235f358d5f33d21548f4f791ac2d",
+        "bytes": 10407
       },
       {
         "path": "server/storiesRoutes.ts",
         "language": "ts",
-        "sha256": "c8b541e7ccb8d6f22e1ac4219f371a3946f7858e0b0ba0977b967d34ba4d801a",
-        "bytes": 49238
+        "sha256": "725625975f27acc92f09a2cf05a874d830722a743acb3fb24ac2baf24f373491",
+        "bytes": 50197
       },
       {
         "path": "server/telemetryRoutes.ts",
@@ -33122,49 +33122,56 @@
         "name": "uploadGeneratedSocialCardToCloudinary",
         "kind": "function",
         "path": "server/imageUpload.ts",
-        "line": 146,
+        "line": 149,
         "exported": true
       },
       {
         "name": "fetchOwnerAiRemoteImagePreview",
         "kind": "function",
         "path": "server/imageUpload.ts",
-        "line": 209,
+        "line": 212,
         "exported": true
       },
       {
         "name": "uploadPrivateEvidenceToCloudinary",
         "kind": "function",
         "path": "server/imageUpload.ts",
-        "line": 228,
+        "line": 231,
         "exported": true
       },
       {
         "name": "createAuthenticatedEvidenceReviewUrl",
         "kind": "function",
         "path": "server/imageUpload.ts",
-        "line": 280,
+        "line": 283,
         "exported": true
       },
       {
         "name": "isAuthenticatedCloudinaryDeliveryUrl",
         "kind": "function",
         "path": "server/imageUpload.ts",
-        "line": 322,
+        "line": 325,
+        "exported": true
+      },
+      {
+        "name": "cloudinaryPublicIdFromDeliveryUrl",
+        "kind": "function",
+        "path": "server/imageUpload.ts",
+        "line": 328,
         "exported": true
       },
       {
         "name": "deleteFromCloudinary",
         "kind": "function",
         "path": "server/imageUpload.ts",
-        "line": 327,
+        "line": 360,
         "exported": true
       },
       {
         "name": "isCloudinaryConfigured",
         "kind": "function",
         "path": "server/imageUpload.ts",
-        "line": 341,
+        "line": 374,
         "exported": true
       },
       {
@@ -46366,42 +46373,42 @@
         "name": "cleanupExpiredStories",
         "kind": "function",
         "path": "server/storiesCronJobs.ts",
-        "line": 17,
+        "line": 20,
         "exported": true
       },
       {
         "name": "recalculateReviewerLevels",
         "kind": "function",
         "path": "server/storiesCronJobs.ts",
-        "line": 126,
+        "line": 133,
         "exported": true
       },
       {
         "name": "registerStoryCronJobs",
         "kind": "function",
         "path": "server/storiesCronJobs.ts",
-        "line": 220,
+        "line": 227,
         "exported": true
       },
       {
         "name": "readBearerToken",
         "kind": "function",
         "path": "server/storiesCronJobs.ts",
-        "line": 222,
+        "line": 229,
         "exported": false
       },
       {
         "name": "constantTimeEquals",
         "kind": "function",
         "path": "server/storiesCronJobs.ts",
-        "line": 228,
+        "line": 235,
         "exported": false
       },
       {
         "name": "isLocalDevRequest",
         "kind": "function",
         "path": "server/storiesCronJobs.ts",
-        "line": 235,
+        "line": 242,
         "exported": false
       },
       {
@@ -46422,21 +46429,21 @@
         "name": "parseStoryVideoUpload",
         "kind": "function",
         "path": "server/storiesRoutes.ts",
-        "line": 115,
+        "line": 116,
         "exported": false
       },
       {
         "name": "setupStoriesRoutes",
         "kind": "function",
         "path": "server/storiesRoutes.ts",
-        "line": 129,
+        "line": 130,
         "exported": true
       },
       {
         "name": "loadPublicEngageableStory",
         "kind": "function",
         "path": "server/storiesRoutes.ts",
-        "line": 131,
+        "line": 132,
         "exported": false
       },
       {
@@ -61434,9 +61441,9 @@
   "summary": {
     "directories": 53,
     "source_files": 1254,
-    "symbols": 6245,
+    "symbols": 6246,
     "components": 409,
-    "functions_and_hooks": 4036,
+    "functions_and_hooks": 4037,
     "raw_ui_elements": 1875,
     "errors": 0,
     "warnings": 5
