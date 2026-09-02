@@ -1,4 +1,8 @@
 node_modules
+pnpm-lock.yaml
+yarn.lock
+bun.lock
+bun.lockb
 dist
 client/dist
 .tmp/
