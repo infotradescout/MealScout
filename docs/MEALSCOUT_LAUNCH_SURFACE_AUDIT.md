@@ -72,7 +72,6 @@ Core product doctrine:
 - `client/src/lib/share.ts`
 - `client/src/components/share-hub.tsx`
 - `client/src/components/share-button.tsx`
-- `client/src/components/ShareButton.tsx`
 - `client/src/pages/map.tsx`
 - `client/src/pages/city-landing.tsx`
 - `client/src/pages/deals-city.tsx`

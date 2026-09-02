@@ -567,7 +567,7 @@ class UserFlowTester {
           method: 'POST',
           path: '/api/affiliate/generate-link',
           body: {
-            baseUrl: this.baseUrl,
+            baseUrl: '/scout',
             resourceType: 'page',
             resourceId: 'home',
           },

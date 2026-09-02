@@ -1,4 +1,10 @@
 const BLOCKED_PREFIXES = ["/admin", "/staff", "/api", "/ref"];
+const FIRST_PARTY_AFFILIATE_HOSTS = new Set([
+  "mealscout.us",
+  "www.mealscout.us",
+  "api.mealscout.thetradescout.com",
+  "meal-scout.vercel.app",
+]);
 
 export function normalizeInternalShareTarget(value: unknown): string | null {
   const raw = String(value || "").trim();
@@ -24,6 +30,60 @@ export function isEligibleInternalShareTarget(value: unknown): boolean {
   return !BLOCKED_PREFIXES.some(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
   );
+}
+
+/**
+ * Convert legacy affiliate destinations to a safe, internal path.
+ *
+ * Older affiliate records stored absolute URLs. We continue to support known
+ * MealScout hosts (and the exact current application origin), but never retain
+ * an origin in the redirect target. This keeps old first-party links working
+ * without allowing the affiliate click endpoint to become an open redirect.
+ */
+export function normalizeEligibleAffiliateDestination(
+  value: unknown,
+  currentAppOrigin?: unknown,
+): string | null {
+  const internalTarget = normalizeInternalShareTarget(value);
+  if (internalTarget) {
+    return isEligibleInternalShareTarget(internalTarget)
+      ? internalTarget
+      : null;
+  }
+
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+
+  try {
+    const parsed = new URL(raw);
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+      return null;
+    }
+
+    let currentOrigin: string | null = null;
+    try {
+      const configured = new URL(String(currentAppOrigin || "").trim());
+      if (configured.protocol === "https:" || configured.protocol === "http:") {
+        currentOrigin = configured.origin;
+      }
+    } catch {
+      currentOrigin = null;
+    }
+
+    const isFirstParty =
+      parsed.origin === currentOrigin ||
+      FIRST_PARTY_AFFILIATE_HOSTS.has(parsed.hostname.toLowerCase());
+    if (!isFirstParty) return null;
+
+    const normalized = normalizeInternalShareTarget(
+      `${parsed.pathname}${parsed.search}${parsed.hash}`,
+    );
+    return normalized && isEligibleInternalShareTarget(normalized)
+      ? normalized
+      : null;
+  } catch {
+    return null;
+  }
 }
 
 export function buildUniversalAttributedPath(

@@ -5,7 +5,6 @@ Living registry for mapping visual targets to real app surfaces.
 ## Scout page
 - Likely files:
 - `client/src/pages/explore-preview-v2.tsx` (canonical owner for `/scout`, `/directory`, and `/scout-v2`)
-- `client/src/pages/explore-preview.tsx` (dead/quarantined legacy surface; do not treat as canonical)
 - `client/src/pages/map.tsx` (related map surface patterns)
 - `client/src/components/navigation.tsx`
 - Likely APIs/data sources:

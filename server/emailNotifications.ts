@@ -2,6 +2,20 @@ import { LocationRequest } from '@shared/schema';
 import { emailService } from './emailService';
 import { storage } from './storage';
 import { canEmailForTopic } from './utils/notificationPreferences';
+import { escapeHtml, sanitizeEmailSubject } from './utils/htmlEscape';
+
+function publicAppHref(path = ""): string {
+  const fallback = "https://www.mealscout.us";
+  try {
+    const base = new URL(String(process.env.PUBLIC_BASE_URL || fallback));
+    if (base.protocol !== "https:" && base.protocol !== "http:") {
+      return escapeHtml(new URL(path, fallback).toString());
+    }
+    return escapeHtml(new URL(path, base).toString());
+  } catch {
+    return escapeHtml(new URL(path, fallback).toString());
+  }
+}
 
 /**
  * Send Golden Fork award notification email
@@ -9,6 +23,7 @@ import { canEmailForTopic } from './utils/notificationPreferences';
 export async function sendGoldenForkAwardEmail(userId: string) {
   const user = await storage.getUser(userId);
   if (!user || !user.email) return;
+  const safeFirstName = escapeHtml(user.firstName || 'Food Lover');
 
   const subject = '🍴 Congratulations! You\'ve Earned the Golden Fork Award!';
   const html = `
@@ -38,20 +53,20 @@ export async function sendGoldenForkAwardEmail(userId: string) {
           <p>You're Now an Official MealScout Food Reviewer</p>
         </div>
         <div class="content">
-          <p>Hi ${user.firstName || 'Food Lover'},</p>
+          <p>Hi ${safeFirstName},</p>
           
           <p>We're thrilled to announce that you've earned the prestigious <strong>Golden Fork Award</strong>! Your passion for discovering and reviewing great food has made you an influential member of the MealScout community.</p>
           
           <div class="stats">
             <h3 style="margin-top: 0; color: #92400e;">Your Achievement Stats:</h3>
             <div class="stat-item">
-              <span class="stat-label">Reviews Written:</span> ${user.reviewCount || 0}
+              <span class="stat-label">Reviews Written:</span> ${escapeHtml(user.reviewCount || 0)}
             </div>
             <div class="stat-item">
-              <span class="stat-label">Recommendations Made:</span> ${user.recommendationCount || 0}
+              <span class="stat-label">Recommendations Made:</span> ${escapeHtml(user.recommendationCount || 0)}
             </div>
             <div class="stat-item">
-              <span class="stat-label">Influence Score:</span> ${user.influenceScore || 0}
+              <span class="stat-label">Influence Score:</span> ${escapeHtml(user.influenceScore || 0)}
             </div>
           </div>
 
@@ -65,7 +80,7 @@ export async function sendGoldenForkAwardEmail(userId: string) {
           </ul>
 
           <p style="text-align: center;">
-            <a href="${process.env.PUBLIC_BASE_URL}/profile" class="cta">View Your Profile</a>
+            <a href="${publicAppHref('/profile')}" class="cta">View Your Profile</a>
           </p>
 
           <p>Keep sharing your culinary adventures and helping others discover amazing food!</p>
@@ -89,6 +104,8 @@ export async function sendGoldenPlateAwardEmail(restaurantId: string) {
 
   const owner = await storage.getUser(restaurant.ownerId);
   if (!owner || !owner.email) return;
+  const safeOwnerName = escapeHtml(owner.firstName || 'Restaurant Owner');
+  const safeRestaurantName = escapeHtml(restaurant.name);
 
   const subject = '🏆 Congratulations! Your Restaurant Won the Golden Plate Award!';
   const html = `
@@ -118,22 +135,22 @@ export async function sendGoldenPlateAwardEmail(restaurantId: string) {
           <p>Top Restaurant in Your Area</p>
         </div>
         <div class="content">
-          <p>Dear ${owner.firstName || 'Restaurant Owner'},</p>
+          <p>Dear ${safeOwnerName},</p>
           
-          <p>Congratulations! <strong>${restaurant.name}</strong> has been awarded the prestigious <strong>Golden Plate Award</strong> for this quarter!</p>
+          <p>Congratulations! <strong>${safeRestaurantName}</strong> has been awarded the prestigious <strong>Golden Plate Award</strong> for this quarter!</p>
           
           <p>Your restaurant has been recognized as one of the top-performing establishments in your area based on customer recommendations, favorites, reviews, and overall excellence.</p>
           
           <div class="stats">
             <h3 style="margin-top: 0; color: #92400e;">Your Achievement:</h3>
             <div class="stat-item">
-              <span class="stat-label">Ranking Score:</span> ${restaurant.rankingScore || 0}
+              <span class="stat-label">Ranking Score:</span> ${escapeHtml(restaurant.rankingScore || 0)}
             </div>
             <div class="stat-item">
-              <span class="stat-label">Total Golden Plates:</span> ${restaurant.goldenPlateCount || 1}
+              <span class="stat-label">Total Golden Plates:</span> ${escapeHtml(restaurant.goldenPlateCount || 1)}
             </div>
             <div class="stat-item">
-              <span class="stat-label">Award Date:</span> ${new Date().toLocaleDateString()}
+              <span class="stat-label">Award Date:</span> ${escapeHtml(new Date().toLocaleDateString())}
             </div>
           </div>
 
@@ -148,7 +165,7 @@ export async function sendGoldenPlateAwardEmail(restaurantId: string) {
           </ul>
 
           <p style="text-align: center;">
-            <a href="${process.env.PUBLIC_BASE_URL}/restaurant-owner-dashboard" class="cta">View Your Dashboard</a>
+            <a href="${publicAppHref('/restaurant-owner-dashboard')}" class="cta">View Your Dashboard</a>
           </p>
 
           <p>Thank you for your commitment to excellence. Keep up the amazing work!</p>
@@ -177,7 +194,11 @@ export async function sendDealClaimedNotification(dealId: string, userId: string
   const customer = await storage.getUser(userId);
   if (!owner || !owner.email) return;
 
-  const subject = `🎉 New Deal Claimed: ${deal.title}`;
+  const subject = sanitizeEmailSubject(`🎉 New Deal Claimed: ${deal.title}`);
+  const safeOwnerName = escapeHtml(owner.firstName || 'Restaurant Owner');
+  const safeDealTitle = escapeHtml(deal.title);
+  const safeCustomerFirstName = escapeHtml(customer?.firstName || 'Customer');
+  const safeCustomerLastName = escapeHtml(customer?.lastName || '');
   const html = `
     <!DOCTYPE html>
     <html>
@@ -197,21 +218,21 @@ export async function sendDealClaimedNotification(dealId: string, userId: string
           <h2 style="margin: 0;">New Deal Claimed! 🎉</h2>
         </div>
         <div class="content">
-          <p>Hi ${owner.firstName || 'Restaurant Owner'},</p>
+          <p>Hi ${safeOwnerName},</p>
           
           <p>Great news! A customer just claimed one of your deals:</p>
           
           <div class="deal-info">
-            <h3 style="margin-top: 0;">${deal.title}</h3>
-            <p><strong>Deal:</strong> ${deal.discountValue}% off</p>
-            <p><strong>Customer:</strong> ${customer?.firstName || 'Customer'} ${customer?.lastName || ''}</p>
-            <p><strong>Claimed:</strong> ${new Date().toLocaleString()}</p>
+            <h3 style="margin-top: 0;">${safeDealTitle}</h3>
+            <p><strong>Deal:</strong> ${escapeHtml(deal.discountValue)}% off</p>
+            <p><strong>Customer:</strong> ${safeCustomerFirstName} ${safeCustomerLastName}</p>
+            <p><strong>Claimed:</strong> ${escapeHtml(new Date().toLocaleString())}</p>
           </div>
 
           <p>Make sure to provide excellent service when this customer visits!</p>
 
           <p style="text-align: center;">
-            <a href="${process.env.PUBLIC_BASE_URL}/restaurant-owner-dashboard" class="cta">View All Claims</a>
+            <a href="${publicAppHref('/restaurant-owner-dashboard')}" class="cta">View All Claims</a>
           </p>
 
           <p>Best,<br>MealScout</p>
@@ -230,6 +251,7 @@ export async function sendDealClaimedNotification(dealId: string, userId: string
 export async function sendWelcomeEmail(userId: string) {
   const user = await storage.getUser(userId);
   if (!user || !user.email) return;
+  const safeFirstName = escapeHtml(user.firstName || 'Food Lover');
 
   const subject = 'Welcome to MealScout! 🍽️';
   const html = `
@@ -253,7 +275,7 @@ export async function sendWelcomeEmail(userId: string) {
           <p style="margin: 10px 0 0 0;">Discover Amazing Food Deals Near You</p>
         </div>
         <div class="content">
-          <p>Hi ${user.firstName || 'Food Lover'},</p>
+          <p>Hi ${safeFirstName},</p>
           
           <p>Welcome to MealScout! We're excited to have you join our community of food enthusiasts.</p>
 
@@ -277,7 +299,7 @@ export async function sendWelcomeEmail(userId: string) {
           </div>
 
           <p style="text-align: center;">
-            <a href="${process.env.PUBLIC_BASE_URL}" class="cta">Start Exploring Deals</a>
+            <a href="${publicAppHref()}" class="cta">Start Exploring Deals</a>
           </p>
 
           <p>If you have any questions, just reply to this email!</p>
@@ -304,15 +326,20 @@ export async function sendTruckInterestNotification(locationRequest: LocationReq
 
   const owner = await storage.getUser(restaurant.ownerId);
 
-  const subject = `${restaurant.name} wants to bring their truck to ${locationRequest.businessName}`;
+  const subject = sanitizeEmailSubject(
+    `${restaurant.name} wants to bring their truck to ${locationRequest.businessName}`,
+  );
   const preferredDates = Array.isArray(locationRequest.preferredDates)
     ? locationRequest.preferredDates.join(', ')
     : '';
 
-  const hostMessage = message?.trim() ? `<p style="background:#f8fafc;padding:12px;border-radius:8px;border:1px solid #e5e7eb;"><strong>Message from the truck:</strong><br>${message.trim()}</p>` : '';
+  const safeRestaurantName = escapeHtml(restaurant.name);
+  const safeBusinessName = escapeHtml(locationRequest.businessName);
+  const safePreferredDates = escapeHtml(preferredDates || 'No dates specified');
+  const hostMessage = message?.trim() ? `<p style="background:#f8fafc;padding:12px;border-radius:8px;border:1px solid #e5e7eb;"><strong>Message from the truck:</strong><br>${escapeHtml(message.trim()).replace(/\n/g, '<br>')}</p>` : '';
 
   const contactLine = owner?.email
-    ? `<p style="margin:12px 0 0 0;"><strong>Contact:</strong> ${owner.email}</p>`
+    ? `<p style="margin:12px 0 0 0;"><strong>Contact:</strong> ${escapeHtml(owner.email)}</p>`
     : '';
 
   const html = `
@@ -337,18 +364,18 @@ export async function sendTruckInterestNotification(locationRequest: LocationReq
           <div style="display:flex;align-items:center;gap:8px;">
             <span class="badge">New truck interest</span>
           </div>
-          <h2 style="margin:16px 0 8px 0;">${restaurant.name} wants to park at ${locationRequest.businessName}</h2>
+          <h2 style="margin:16px 0 8px 0;">${safeRestaurantName} wants to park at ${safeBusinessName}</h2>
           <p style="margin:0 0 12px 0;">You received this because you posted a spot for food trucks on MealScout.</p>
 
           <div class="meta">
-            <div><span class="label">Location type</span><span class="value">${locationRequest.locationType}</span></div>
-            <div><span class="label">Address</span><span class="value">${locationRequest.address}</span></div>
-            <div><span class="label">Preferred dates</span><span class="value">${preferredDates || 'No dates specified'}</span></div>
-            <div><span class="label">Expected foot traffic</span><span class="value">${locationRequest.expectedFootTraffic}</span></div>
+            <div><span class="label">Location type</span><span class="value">${escapeHtml(locationRequest.locationType)}</span></div>
+            <div><span class="label">Address</span><span class="value">${escapeHtml(locationRequest.address)}</span></div>
+            <div><span class="label">Preferred dates</span><span class="value">${safePreferredDates}</span></div>
+            <div><span class="label">Expected foot traffic</span><span class="value">${escapeHtml(locationRequest.expectedFootTraffic)}</span></div>
           </div>
 
           ${hostMessage}
-          <p style="margin:12px 0 0 0;"><strong>Truck:</strong> ${restaurant.name}</p>
+          <p style="margin:12px 0 0 0;"><strong>Truck:</strong> ${safeRestaurantName}</p>
           ${contactLine}
 
           <p class="footnote">MealScout does not broker or guarantee bookings. Coordinate directly with the truck to confirm details.</p>
