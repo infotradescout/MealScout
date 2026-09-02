@@ -1,18 +1,18 @@
 {
   "schema_version": 1,
   "index_version": "0.1.0",
-  "generated_at": "2026-09-01T23:40:29Z",
+  "generated_at": "2026-09-01T23:58:31Z",
   "source": {
     "kind": "git",
-    "revision": "6128fbc9539c27d70f937a7ffa1d619bf819c7b3",
-    "dirty": true,
-    "inventory_sha256": "2822c6a3ca33406b21b6ae4d85bad12bc769f77c371ca3ce974aa4ebb85e26e8"
+    "revision": "66aa8dc630aa280d9896e3cc1c4ccfc00a2cdc30",
+    "dirty": false,
+    "inventory_sha256": "7de8e080fe297beb9985af4eb39b89c6c750220f109192d02ecdcead42d83067"
   },
   "inventory": {
     "directories": [
       {
         "path": ".",
-        "source_file_count": 8
+        "source_file_count": 7
       },
       {
         "path": ".agents/skills/selective-intelligence/scripts",
@@ -128,7 +128,7 @@
       },
       {
         "path": "scripts",
-        "source_file_count": 500
+        "source_file_count": 503
       },
       {
         "path": "scripts/lib",
@@ -2991,6 +2991,12 @@
         "bytes": 3729
       },
       {
+        "path": "scripts/dependency-policy.contract.test.ts",
+        "language": "ts",
+        "sha256": "e54bc3c2ca4d2ae7baeb954d1726ea64587bcd68943432da80f22d9c46402966",
+        "bytes": 2467
+      },
+      {
         "path": "scripts/direct-connect-contractor-console.contract.test.ts",
         "language": "ts",
         "sha256": "5268879c1a7d86a2e1d07d18cbe139bf621453bc7df160138e6b9486ce16178a",
@@ -3019,6 +3025,12 @@
         "language": "ts",
         "sha256": "472f63d3faa89ab3c9b42c7a77f0efc470c1956ea52f2272ab242798964f8313",
         "bytes": 1897
+      },
+      {
+        "path": "scripts/duplicate-route-ownership.contract.test.ts",
+        "language": "ts",
+        "sha256": "fbd4dbbd3858afbc16db337151f6df73b6a8e8cf36cf71d629452bd5bd824f58",
+        "bytes": 1240
       },
       {
         "path": "scripts/email-html-safety.behavior.test.ts",
@@ -3409,12 +3421,6 @@
         "language": "ts",
         "sha256": "6e7a089882cc721e9acab73493731290ce1df31d12c5a7ce76e8494872b35737",
         "bytes": 2783
-      },
-      {
-        "path": "scripts/mealscout-c7-context-pack.contract.test.ts",
-        "language": "ts",
-        "sha256": "3d4432c83e597f38dd587b251746d33782714418360a81b452be5c107dc9af6a",
-        "bytes": 4372
       },
       {
         "path": "scripts/mealscout-capacitor-release-shell.contract.test.ts",
@@ -4755,6 +4761,18 @@
         "bytes": 6600
       },
       {
+        "path": "scripts/release-gate.contract.test.ts",
+        "language": "ts",
+        "sha256": "f36f8ed4b2e996972f0e91318a4e5665043e880a5175f255004c175b3f4c387b",
+        "bytes": 1791
+      },
+      {
+        "path": "scripts/releaseGate.mjs",
+        "language": "mjs",
+        "sha256": "a3014da84b59b8d20760f06e381ad2e5d71e3fc1600db946979023269dc356d7",
+        "bytes": 2473
+      },
+      {
         "path": "scripts/releaseReadinessCheck.mjs",
         "language": "mjs",
         "sha256": "73b096b1afbbf379eff358b15044b7e65278053b11e416d89eae9f4826870d89",
@@ -4777,6 +4795,12 @@
         "language": "mjs",
         "sha256": "d963f429f6690380d8a4aad624c33899057bba4d695f2dd369ca257401276cab",
         "bytes": 1912
+      },
+      {
+        "path": "scripts/repository-hygiene.contract.test.ts",
+        "language": "ts",
+        "sha256": "d496dcab5d7ea845a7ae3fd566c444a09f0850140232a4c77ffe4d592708f7b1",
+        "bytes": 2855
       },
       {
         "path": "scripts/request-log-privacy.behavior.test.ts",
@@ -5293,12 +5317,6 @@
         "language": "ts",
         "sha256": "901a754ef60f6c98f3071ea2f480e6933419df3066298c78f6109260ddb12dd4",
         "bytes": 2684
-      },
-      {
-        "path": "scripts/tmp-query-events.mjs",
-        "language": "mjs",
-        "sha256": "4a59dc250b7b54afc46c872d939577c4d03e284990288b061b2aab88cc93921e",
-        "bytes": 686
       },
       {
         "path": "scripts/tradescout-sso-policy.behavior.test.ts",
@@ -6017,8 +6035,8 @@
       {
         "path": "server/routes/admin/userAdminRoutes.ts",
         "language": "ts",
-        "sha256": "106488f91fce9d5517ff5c83ecbdbbe508adec04ede43b9ad30788428e7501db",
-        "bytes": 90806
+        "sha256": "c45d482b5a774fbd3607fe9df7c54b02a242c9918aa51b55256db05791ff312d",
+        "bytes": 89210
       },
       {
         "path": "server/routes/admin/verificationRoutes.ts",
@@ -6161,8 +6179,8 @@
       {
         "path": "server/routes/hosts/eventsRoutes.ts",
         "language": "ts",
-        "sha256": "1c60aa019a15c0d4aeca5ddc3465b15272e492178ffa19e01819a09b6ae38af5",
-        "bytes": 44712
+        "sha256": "ffd0c46cd871a8d336de778a6821b2f6bd91ebc99df5d84037fce425df8b2ecf",
+        "bytes": 39646
       },
       {
         "path": "server/routes/hosts/profileRoutes.ts",
@@ -7717,12 +7735,6 @@
         "language": "ts",
         "sha256": "581a6e276b8aaced53f85132bf250fe32e1573235f1478694891afe31c94466f",
         "bytes": 52
-      },
-      {
-        "path": "test-db.js",
-        "language": "js",
-        "sha256": "46b8baaf78f3deec5a3c37d442a0621dee9f00f19369cbe1a35608a9e979769c",
-        "bytes": 940
       },
       {
         "path": "vite.config.ts",
@@ -26247,6 +26259,34 @@
         "exported": false
       },
       {
+        "name": "PackageRecord",
+        "kind": "type",
+        "path": "scripts/dependency-policy.contract.test.ts",
+        "line": 4,
+        "exported": false
+      },
+      {
+        "name": "Lockfile",
+        "kind": "type",
+        "path": "scripts/dependency-policy.contract.test.ts",
+        "line": 8,
+        "exported": false
+      },
+      {
+        "name": "versionTuple",
+        "kind": "function",
+        "path": "scripts/dependency-policy.contract.test.ts",
+        "line": 25,
+        "exported": false
+      },
+      {
+        "name": "versionAtLeast",
+        "kind": "function",
+        "path": "scripts/dependency-policy.contract.test.ts",
+        "line": 31,
+        "exported": false
+      },
+      {
         "name": "FileHit",
         "kind": "type",
         "path": "scripts/directConnectContractUtils.ts",
@@ -26287,6 +26327,13 @@
         "path": "scripts/directConnectContractUtils.ts",
         "line": 61,
         "exported": true
+      },
+      {
+        "name": "owners",
+        "kind": "function",
+        "path": "scripts/duplicate-route-ownership.contract.test.ts",
+        "line": 10,
+        "exported": false
       },
       {
         "name": "EvidencePayload",
@@ -27413,13 +27460,6 @@
         "kind": "function",
         "path": "scripts/mealscout-business-workspace-shell.contract.test.ts",
         "line": 3,
-        "exported": false
-      },
-      {
-        "name": "sectionFor",
-        "kind": "function",
-        "path": "scripts/mealscout-c7-context-pack.contract.test.ts",
-        "line": 53,
         "exported": false
       },
       {
@@ -37198,42 +37238,42 @@
         "name": "registerHostParkingPassRoutes",
         "kind": "function",
         "path": "server/routes/hosts/eventsRoutes.ts",
-        "line": 44,
+        "line": 35,
         "exported": true
       },
       {
         "name": "createHostParkingPassListing",
         "kind": "function",
         "path": "server/routes/hosts/eventsRoutes.ts",
-        "line": 46,
+        "line": 37,
         "exported": false
       },
       {
         "name": "parseOverrideCents",
         "kind": "function",
         "path": "server/routes/hosts/eventsRoutes.ts",
-        "line": 76,
+        "line": 67,
         "exported": false
       },
       {
         "name": "listHostParkingPassListings",
         "kind": "function",
         "path": "server/routes/hosts/eventsRoutes.ts",
-        "line": 402,
+        "line": 393,
         "exported": false
       },
       {
         "name": "updateHostParkingPassListing",
         "kind": "function",
         "path": "server/routes/hosts/eventsRoutes.ts",
-        "line": 452,
+        "line": 443,
         "exported": false
       },
       {
         "name": "listHostParkingPassInterests",
         "kind": "function",
         "path": "server/routes/hosts/eventsRoutes.ts",
-        "line": 1259,
+        "line": 1108,
         "exported": false
       },
       {
@@ -51424,13 +51464,6 @@
         "path": "shared/trustBonuses.ts",
         "line": 38,
         "exported": true
-      },
-      {
-        "name": "testConnection",
-        "kind": "function",
-        "path": "test-db.js",
-        "line": 7,
-        "exported": false
       }
     ],
     "ui": {
@@ -60909,6 +60942,31 @@
         "name": "email HTML escaping",
         "path": "server/utils/htmlEscape.ts",
         "reason": "Canonical encoder for dynamic notification HTML and subjects."
+      },
+      {
+        "name": "video upload ingress policy",
+        "path": "server/utils/videoUploadPolicy.ts",
+        "reason": "Canonical declared-type and binary-signature boundary for story video uploads."
+      },
+      {
+        "name": "website profile import transport",
+        "path": "server/utils/websiteProfileImport.ts",
+        "reason": "Canonical DNS-validated, IP-pinned HTTP transport for website imports."
+      },
+      {
+        "name": "host interest status route",
+        "path": "server/routes/hostInterestRoutes.ts",
+        "reason": "Single owner for host acceptance and decline transitions."
+      },
+      {
+        "name": "admin OAuth status route",
+        "path": "server/routes/systemUtilityRoutes.ts",
+        "reason": "Single admin-only owner for OAuth configuration status."
+      },
+      {
+        "name": "release gate",
+        "path": "scripts/releaseGate.mjs",
+        "reason": "Canonical deterministic release orchestrator with an explicit strict live extension."
       }
     ]
   },
@@ -60944,6 +61002,57 @@
       "owner": "server/shareTargetPolicy.ts",
       "need": "legacy affiliate destination containment",
       "reason": "Affiliate redirects are another form of internal share targeting."
+    },
+    {
+      "decision": "extend",
+      "owner": "server/utils/websiteProfileImport.ts",
+      "need": "website import SSRF and DNS-rebinding containment",
+      "reason": "The existing importer remained the correct owner after replacing its transport boundary."
+    },
+    {
+      "decision": "create",
+      "owner": "server/utils/videoUploadPolicy.ts",
+      "need": "story upload binary validation",
+      "reason": "No reusable owner verified video container signatures before upload."
+    },
+    {
+      "decision": "extend",
+      "owner": "server/utils/htmlEscape.ts",
+      "need": "notification HTML and subject containment",
+      "reason": "One small encoder now serves every dynamic notification template touched by this recovery."
+    },
+    {
+      "decision": "consolidate",
+      "owner": "server/routes/hostInterestRoutes.ts",
+      "removed": "duplicate handler in server/routes/hosts/eventsRoutes.ts",
+      "need": "host interest status transition",
+      "reason": "The dedicated route module already owned the complete transition and notification behavior."
+    },
+    {
+      "decision": "consolidate",
+      "owner": "server/routes/systemUtilityRoutes.ts",
+      "removed": "duplicate handler in server/routes/admin/userAdminRoutes.ts",
+      "need": "admin OAuth configuration status",
+      "reason": "The system utility route is registered once and enforces the stricter admin-only boundary."
+    },
+    {
+      "decision": "create",
+      "owner": "scripts/releaseGate.mjs",
+      "need": "one deterministic release authority",
+      "reason": "Existing checks remain focused owners; the new orchestrator composes them without duplicating their logic."
+    },
+    {
+      "decision": "consolidate",
+      "owner": "package-lock.json",
+      "removed": "pnpm-lock.yaml",
+      "need": "package manager authority",
+      "reason": "Render, Vercel, documentation, and existing commands already use npm."
+    },
+    {
+      "decision": "remove",
+      "owner": ".gitignore",
+      "need": "machine state and generated operator data containment",
+      "reason": "Generated caches, logs, captures, reports, and contact-bearing operator inputs have no runtime ownership role."
     }
   ],
   "findings": [
@@ -61324,10 +61433,10 @@
   ],
   "summary": {
     "directories": 53,
-    "source_files": 1252,
-    "symbols": 6242,
+    "source_files": 1254,
+    "symbols": 6245,
     "components": 409,
-    "functions_and_hooks": 4035,
+    "functions_and_hooks": 4036,
     "raw_ui_elements": 1875,
     "errors": 0,
     "warnings": 5
