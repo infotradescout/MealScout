@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 
 const shareLib = readFileSync("client/src/lib/share.ts", "utf8");
 const cityLanding = readFileSync("client/src/pages/city-landing.tsx", "utf8");
@@ -11,10 +11,6 @@ const publicProfile = readFileSync(
 const shareHub = readFileSync("client/src/components/share-hub.tsx", "utf8");
 const shareButton = readFileSync(
   "client/src/components/share-button.tsx",
-  "utf8",
-);
-const shareButtonCaps = readFileSync(
-  "client/src/components/ShareButton.tsx",
   "utf8",
 );
 const ownerDashboard = readFileSync(
@@ -91,7 +87,6 @@ const finalShareSurfaces = [
   cityLanding,
   dealDetail,
   shareButton,
-  shareButtonCaps,
   shareHub,
   ownerDashboard,
   publicProfile,
@@ -155,9 +150,14 @@ for (const legacyFragment of [
 
 assert(
   shareHub.includes('fetch("/api/share/generate"') &&
-    shareButton.includes("getAffiliateShareUrl") &&
-    shareButtonCaps.includes("getAffiliateShareUrl"),
+    shareButton.includes("getAffiliateShareUrl"),
   "Share Hub and ShareButton surfaces must use canonical tracked share generation.",
+);
+
+assert.equal(
+  existsSync("client/src/components/ShareButton.tsx"),
+  false,
+  "The retired duplicate ShareButton owner must not return.",
 );
 
 console.log("mealscout-native-share-attribution.contract: PASS");

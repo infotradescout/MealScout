@@ -1,8 +1,7 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 
 const appSource = readFileSync("client/src/App.tsx", "utf8");
 const scoutPage = readFileSync("client/src/pages/explore-preview-v2.tsx", "utf8");
-const quarantinedScoutPage = readFileSync("client/src/pages/explore-preview.tsx", "utf8");
 const scoutCopy = readFileSync("client/src/features/scout/scoutSceneCopy.ts", "utf8");
 const scoutSearchDock = readFileSync("client/src/components/scout/ScoutSearchDock.tsx", "utf8");
 const navigation = readFileSync("client/src/components/navigation.tsx", "utf8");
@@ -13,18 +12,19 @@ if (!appSource.includes('const ScoutPageV2 = lazy(() => import("@/pages/explore-
   throw new Error("Canonical /scout route must lazy-load explore-preview-v2.");
 }
 
-if (
-  !quarantinedScoutPage.includes("DEAD SURFACE") ||
-  !quarantinedScoutPage.includes("explore-preview-v2.tsx (ScoutPageV2)")
-) {
-  throw new Error("Legacy explore-preview.tsx must be explicitly quarantined as a dead surface.");
+if (existsSync("client/src/pages/explore-preview.tsx")) {
+  throw new Error("Retired explore-preview.tsx must not return as a competing Scout owner.");
+}
+
+if (appSource.includes('lazy(() => import("@/pages/explore-preview"))')) {
+  throw new Error("App.tsx must not import the retired Scout implementation.");
 }
 
 for (const routeSnippet of [
   '<Route path="/scout" component={ScoutPageV2} />',
   '<Route path="/directory" component={ScoutPageV2} />',
   '<Route path="/scout-v2" component={ScoutPageV2} />',
-  '<Route path="/scout-prototype" component={ScoutPrototype} />',
+  '<Route path="/scout-prototype" component={RedirectToScout} />',
 ]) {
   if (!appSource.includes(routeSnippet)) {
     throw new Error(`Missing Scout route snippet: ${routeSnippet}`);
@@ -133,7 +133,7 @@ for (const publicProfileSnippet of [
   "const invalidRestaurantRoute =",
   "!UUID_LIKE_RE.test(resolvedProfileId)",
   "enabled:",
-  "!!normalizedProfileType && !!resolvedProfileId && !invalidRestaurantRoute",
+  "!invalidRestaurantRoute &&",
   "retry: false,",
 ]) {
   if (!publicProfilePage.includes(publicProfileSnippet)) {

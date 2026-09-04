@@ -1,10 +1,9 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 
 const read = (path: string) => readFileSync(path, "utf8");
 
 const navigation = read("client/src/components/navigation.tsx");
 const scout = read("client/src/pages/explore-preview-v2.tsx");
-const quarantinedScout = read("client/src/pages/explore-preview.tsx");
 const publicProfile = read("client/src/pages/public-profile.tsx");
 const app = read("client/src/App.tsx");
 
@@ -56,9 +55,9 @@ assert(
 );
 
 assert(
-  quarantinedScout.includes("DEAD SURFACE") &&
-    quarantinedScout.includes("explore-preview-v2.tsx (ScoutPageV2)"),
-  "Legacy explore-preview.tsx must stay marked as quarantined/dead, not canonical.",
+  !existsSync("client/src/pages/explore-preview.tsx") &&
+    !app.includes('lazy(() => import("@/pages/explore-preview"))'),
+  "The retired Scout implementation must not return as a competing owner.",
 );
 
 for (const blockedScoutExit of [

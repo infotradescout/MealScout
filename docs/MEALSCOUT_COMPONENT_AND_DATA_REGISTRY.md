@@ -2,10 +2,14 @@
 
 Living registry for mapping visual targets to real app surfaces.
 
+## Experience-system owners
+- `client/src/components/ui/button.tsx` is the canonical MealScout button primitive and brand adapter. Reuse its approved purpose and size variants before introducing raw button styling.
+- `client/src/components/share-button.tsx` is the one canonical reusable share control. The duplicate case-variant owner has been retired.
+- `client/src/components/ui/` is the canonical reusable-interface directory; feature composition stays with the feature that owns the user job.
+
 ## Scout page
 - Likely files:
 - `client/src/pages/explore-preview-v2.tsx` (canonical owner for `/scout`, `/directory`, and `/scout-v2`)
-- `client/src/pages/explore-preview.tsx` (dead/quarantined legacy surface; do not treat as canonical)
 - `client/src/pages/map.tsx` (related map surface patterns)
 - `client/src/components/navigation.tsx`
 - Likely APIs/data sources:
@@ -17,6 +21,7 @@ Living registry for mapping visual targets to real app surfaces.
 - Implementation cautions:
 - do not replace with directory-only UX
 - preserve map + rail hierarchy + status truth labels from real data
+- the retired `explore-preview.tsx` implementation and its unused lazy import must not return
 
 ## Parking Pass page
 - Likely files:

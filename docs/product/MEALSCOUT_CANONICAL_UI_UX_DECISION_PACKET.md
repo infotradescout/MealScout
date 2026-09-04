@@ -4,6 +4,8 @@ Status: Proposed for approval
 Date: 2026-07-16
 Scope: UI/UX architecture only. No implementation authorization.
 
+Implementation update (2026-09-04): the later Infinity convergence program authorized retirement of proven dead and duplicate owners. The obsolete `explore-preview.tsx` implementation and its unused import were removed after its still-relevant contracts were migrated to the canonical Scout page. This update supersedes the historical retention statement below.
+
 ## Executive decision
 
 MealScout should become one everyday food-discovery product with two related shells:
@@ -28,7 +30,7 @@ No route should be removed in the first implementation slice. Legacy retirement 
 - Signed-in `/` redirects to Scout; signed-out `/` renders Welcome.
 - `/map` and `/trending` already redirect to Scout.
 - Public restaurant, truck, bar, location, supplier, generic profile, and clean-slug routes converge on `PublicProfilePage` or `CleanPublicProfileRoute`.
-- `explore-preview.tsx` contains an explicit dead-surface comment and is retained because contract tests read it by path. It is not the served Scout implementation.
+- The obsolete `explore-preview.tsx` implementation has been retired; `explore-preview-v2.tsx` is the sole Scout page owner.
 - `/truck-discovery` is routed and has active inbound links from the dashboard switcher, events router, and Pensacola spots surface. It is not orphaned.
 - `/food-truck-rush`, `/golden-plate-winners`, and `/scout-prototype` are routed but have no inbound references in `client/src` outside their route declarations and own files. That makes them confirmed **unlinked routes**, not automatically safe to delete.
 - `/pensacola/report` and `/pensacola/spots` cross-link and are campaign/lead-generation surfaces. Absence from primary navigation does not prove they are unused externally.
