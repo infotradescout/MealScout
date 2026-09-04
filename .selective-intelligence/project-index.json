@@ -1,18 +1,18 @@
 {
   "schema_version": 1,
   "index_version": "0.1.0",
-  "generated_at": "2026-09-04T17:13:16Z",
+  "generated_at": "2026-09-04T18:18:50Z",
   "source": {
     "kind": "git",
-    "revision": "7d38f3c3ffdfd4a59793f3f2319f378f4b0f34dd",
+    "revision": "430f7a39366cca292c8e3d182e41a5374e52d651",
     "dirty": true,
-    "inventory_sha256": "0caae96295e64a556be60ccb0eaf06d143cf2f23af9409dbda7e9b0084699cb3"
+    "inventory_sha256": "c9fb8a487ed9b8425ecd5d5a24cae0f2ef417632769cc4f8a43d38b0f698d90f"
   },
   "inventory": {
     "directories": [
       {
         "path": ".",
-        "source_file_count": 8
+        "source_file_count": 7
       },
       {
         "path": ".agents/skills/selective-intelligence/scripts",
@@ -28,7 +28,7 @@
       },
       {
         "path": "client/src",
-        "source_file_count": 5
+        "source_file_count": 4
       },
       {
         "path": "client/src/components",
@@ -128,7 +128,7 @@
       },
       {
         "path": "scripts",
-        "source_file_count": 493
+        "source_file_count": 494
       },
       {
         "path": "scripts/lib",
@@ -136,7 +136,7 @@
       },
       {
         "path": "server",
-        "source_file_count": 67
+        "source_file_count": 65
       },
       {
         "path": "server/bootstrap",
@@ -283,12 +283,6 @@
         "language": "tsx",
         "sha256": "dcd5e4848f3ea917e860976df37d68533894338abc50d39883f7e6b21368dd1c",
         "bytes": 33431
-      },
-      {
-        "path": "client/src/MealScoutApp.tsx",
-        "language": "tsx",
-        "sha256": "c81d64f8758d2d3badbc8bd6526afeb1552bd64391d9a10d401008e2a9d00b68",
-        "bytes": 2434
       },
       {
         "path": "client/src/components/ImageUploader.tsx",
@@ -3327,6 +3321,12 @@
         "bytes": 11782
       },
       {
+        "path": "scripts/mealscout-auth-owner.contract.test.ts",
+        "language": "ts",
+        "sha256": "d70bc577ecc7d53c7191bc25777d4f7b3b1fc16204d27a9addf9f9af423c4ee7",
+        "bytes": 1713
+      },
+      {
         "path": "scripts/mealscout-authenticated-production-smoke-p2-accounts-and-secrets.contract.test.ts",
         "language": "ts",
         "sha256": "d5aee13052cff21e522635a348ae3b5c2d23a35f22e9126f822f07ee87510e45",
@@ -5571,12 +5571,6 @@
         "bytes": 11257
       },
       {
-        "path": "server/facebookAuth.ts",
-        "language": "ts",
-        "sha256": "e28cac9c90bd060060b8fbac185fa530a3519256a505eb4ef072c7502d331c79",
-        "bytes": 3673
-      },
-      {
         "path": "server/featuredVideoCron.ts",
         "language": "ts",
         "sha256": "a8a54e285bad1ab31ff589a15ef709c68dfede6a510796a3d0f003048ac211b7",
@@ -5615,8 +5609,8 @@
       {
         "path": "server/index.ts",
         "language": "ts",
-        "sha256": "53a65fa40fc6b011343f20440efa41180d8e10fa894c5ea0daecc2ddb805b0a6",
-        "bytes": 48585
+        "sha256": "f99e29187e8d5613bf7436a800ea08574bd3d87d321e05e897d5f40a1b6e3158",
+        "bytes": 48533
       },
       {
         "path": "server/integrations/infinityShadow.ts",
@@ -5887,12 +5881,6 @@
         "language": "ts",
         "sha256": "6ebbf014e17bad7beb58077a4b75d4165924110bf02723fb508e14dbea554dfb",
         "bytes": 8860
-      },
-      {
-        "path": "server/restaurantAuth.ts",
-        "language": "ts",
-        "sha256": "2073236392d49ce689151a85bae5e529f2ee91a4d98d4e1d93e6a709fd6361e6",
-        "bytes": 6437
       },
       {
         "path": "server/reviewerLevelDriftDetector.ts",
@@ -7013,8 +7001,8 @@
       {
         "path": "server/storage.ts",
         "language": "ts",
-        "sha256": "4233b9c57480692bd2d457994e9cae69adb65bde3dd6f6e9218174e57f7a0ceb",
-        "bytes": 180348
+        "sha256": "c55be32018eb16fc7377dcc7676fccd23a639aece087e06812224316d9ed5606",
+        "bytes": 180197
       },
       {
         "path": "server/storage/analyticsRepository.ts",
@@ -7055,8 +7043,8 @@
       {
         "path": "server/storage/usersRepository.ts",
         "language": "ts",
-        "sha256": "1689ecc433732613ab14eb204e61b4ffa074a3fa15edb9e53e52f800032cd18f",
-        "bytes": 35096
+        "sha256": "3ee4e952de85aee9b587cc4d932203f61b25017be7120a28668a3000f474bab7",
+        "bytes": 30330
       },
       {
         "path": "server/storiesCronJobs.ts",
@@ -7115,8 +7103,8 @@
       {
         "path": "server/unifiedAuth.ts",
         "language": "ts",
-        "sha256": "befc2c547c4a95c850118b2358dfacac89d15546bac19e4527e166fb5a72bdb2",
-        "bytes": 94439
+        "sha256": "1310375bba0b203245f1c0c2f6ed0f47a2df29dc1b9ffeeaa9c576a0d8c9b3b2",
+        "bytes": 91012
       },
       {
         "path": "server/userRoutes.ts",
@@ -7565,8 +7553,8 @@
       {
         "path": "shared/schema/legacy.ts",
         "language": "ts",
-        "sha256": "e4ed2a934d2e33b373e585c72de78e644d37abc6e0fa64904607058225891179",
-        "bytes": 255714
+        "sha256": "06d0889abbbb22e31373c680def7d3db86dca0ea005e6271d91f89ac55bf46cf",
+        "bytes": 255626
       },
       {
         "path": "shared/schema/marketIntel.ts",
@@ -7619,8 +7607,8 @@
       {
         "path": "shared/schema/users.ts",
         "language": "ts",
-        "sha256": "8a5930232de3939fa3ea56da11be0d881c03c99cf41e648854a75a4d05dcab7e",
-        "bytes": 1132
+        "sha256": "01be9bef3b4f6d4250632f581e044e0485db494dbc2b0f8df25eb8ad7f10bc47",
+        "bytes": 1110
       },
       {
         "path": "shared/scoutDiscoveryResult.ts",
@@ -7663,12 +7651,6 @@
         "language": "ts",
         "sha256": "67df77c3dbdda082cf7f5284eaa79a0d84b85f6d8da203a1d7540f43a029aed0",
         "bytes": 1082
-      },
-      {
-        "path": "vite.lib.config.ts",
-        "language": "ts",
-        "sha256": "16fc637aecbc1e0d598e4c263976d57db9ae0ed8386d310860f9ed31468e066b",
-        "bytes": 950
       }
     ],
     "symbols": [
@@ -8994,48 +8976,6 @@
         "path": "client/src/App.tsx",
         "line": 697,
         "exported": false
-      },
-      {
-        "name": "MealScoutProvider",
-        "kind": "component",
-        "path": "client/src/MealScoutApp.tsx",
-        "line": 7,
-        "exported": false
-      },
-      {
-        "name": "MealScoutRoutes",
-        "kind": "component",
-        "path": "client/src/MealScoutApp.tsx",
-        "line": 15,
-        "exported": false
-      },
-      {
-        "name": "useMealScoutContext",
-        "kind": "hook",
-        "path": "client/src/MealScoutApp.tsx",
-        "line": 21,
-        "exported": true
-      },
-      {
-        "name": "MealScoutApp",
-        "kind": "component",
-        "path": "client/src/MealScoutApp.tsx",
-        "line": 29,
-        "exported": true
-      },
-      {
-        "name": "MealScoutUser",
-        "kind": "type",
-        "path": "client/src/MealScoutApp.tsx",
-        "line": 40,
-        "exported": true
-      },
-      {
-        "name": "performMealScoutSSO",
-        "kind": "function",
-        "path": "client/src/MealScoutApp.tsx",
-        "line": 47,
-        "exported": true
       },
       {
         "name": "ImageUploaderProps",
@@ -27023,6 +26963,13 @@
       {
         "name": "read",
         "kind": "function",
+        "path": "scripts/mealscout-auth-owner.contract.test.ts",
+        "line": 6,
+        "exported": false
+      },
+      {
+        "name": "read",
+        "kind": "function",
         "path": "scripts/mealscout-authenticated-production-smoke-p2-accounts-and-secrets.contract.test.ts",
         "line": 9,
         "exported": false
@@ -32901,27 +32848,6 @@
         "exported": true
       },
       {
-        "name": "getSession",
-        "kind": "function",
-        "path": "server/facebookAuth.ts",
-        "line": 11,
-        "exported": true
-      },
-      {
-        "name": "setupAuth",
-        "kind": "function",
-        "path": "server/facebookAuth.ts",
-        "line": 33,
-        "exported": true
-      },
-      {
-        "name": "isAuthenticated",
-        "kind": "function",
-        "path": "server/facebookAuth.ts",
-        "line": 117,
-        "exported": true
-      },
-      {
         "name": "VideoScore",
         "kind": "type",
         "path": "server/featuredVideoCron.ts",
@@ -33338,14 +33264,14 @@
         "name": "escapeHtml",
         "kind": "function",
         "path": "server/index.ts",
-        "line": 1012,
+        "line": 1011,
         "exported": false
       },
       {
         "name": "sendVideoNotFound",
         "kind": "function",
         "path": "server/index.ts",
-        "line": 1022,
+        "line": 1021,
         "exported": false
       },
       {
@@ -34844,20 +34770,6 @@
         "kind": "class",
         "path": "server/restaurantActivationService.ts",
         "line": 54,
-        "exported": true
-      },
-      {
-        "name": "setupRestaurantAuth",
-        "kind": "function",
-        "path": "server/restaurantAuth.ts",
-        "line": 12,
-        "exported": true
-      },
-      {
-        "name": "isRestaurantOwner",
-        "kind": "function",
-        "path": "server/restaurantAuth.ts",
-        "line": 201,
         "exported": true
       },
       {
@@ -45452,276 +45364,269 @@
         "exported": false
       },
       {
-        "name": "TradeScoutUserData",
+        "name": "UpdateRestaurantLocation",
         "kind": "type",
         "path": "server/storage.ts",
         "line": 72,
         "exported": false
       },
       {
-        "name": "UpdateRestaurantLocation",
+        "name": "OperatingHours",
         "kind": "type",
         "path": "server/storage.ts",
         "line": 73,
         "exported": false
       },
       {
-        "name": "OperatingHours",
-        "kind": "type",
-        "path": "server/storage.ts",
-        "line": 74,
-        "exported": false
-      },
-      {
         "name": "Host",
         "kind": "type",
         "path": "server/storage.ts",
-        "line": 78,
+        "line": 77,
         "exported": false
       },
       {
         "name": "InsertHost",
         "kind": "type",
         "path": "server/storage.ts",
-        "line": 79,
+        "line": 78,
         "exported": false
       },
       {
         "name": "ParkingPassBlackoutDate",
         "kind": "type",
         "path": "server/storage.ts",
-        "line": 81,
+        "line": 80,
         "exported": false
       },
       {
         "name": "InsertParkingPassBlackoutDate",
         "kind": "type",
         "path": "server/storage.ts",
-        "line": 82,
+        "line": 81,
         "exported": false
       },
       {
         "name": "TruckManualSchedule",
         "kind": "type",
         "path": "server/storage.ts",
-        "line": 84,
+        "line": 83,
         "exported": false
       },
       {
         "name": "InsertTruckManualSchedule",
         "kind": "type",
         "path": "server/storage.ts",
-        "line": 85,
+        "line": 84,
         "exported": false
       },
       {
         "name": "TruckParkingReport",
         "kind": "type",
         "path": "server/storage.ts",
-        "line": 87,
+        "line": 86,
         "exported": false
       },
       {
         "name": "InsertTruckParkingReport",
         "kind": "type",
         "path": "server/storage.ts",
-        "line": 88,
+        "line": 87,
         "exported": false
       },
       {
         "name": "Event",
         "kind": "type",
         "path": "server/storage.ts",
-        "line": 89,
+        "line": 88,
         "exported": false
       },
       {
         "name": "InsertEvent",
         "kind": "type",
         "path": "server/storage.ts",
-        "line": 90,
+        "line": 89,
         "exported": false
       },
       {
         "name": "EventSeries",
         "kind": "type",
         "path": "server/storage.ts",
-        "line": 91,
+        "line": 90,
         "exported": false
       },
       {
         "name": "InsertEventSeries",
         "kind": "type",
         "path": "server/storage.ts",
-        "line": 92,
+        "line": 91,
         "exported": false
       },
       {
         "name": "EventInterest",
         "kind": "type",
         "path": "server/storage.ts",
-        "line": 94,
+        "line": 93,
         "exported": false
       },
       {
         "name": "InsertEventInterest",
         "kind": "type",
         "path": "server/storage.ts",
-        "line": 95,
+        "line": 94,
         "exported": false
       },
       {
         "name": "HostReview",
         "kind": "type",
         "path": "server/storage.ts",
-        "line": 97,
+        "line": 96,
         "exported": false
       },
       {
         "name": "InsertHostReview",
         "kind": "type",
         "path": "server/storage.ts",
-        "line": 98,
+        "line": 97,
         "exported": false
       },
       {
         "name": "InsertTelemetryEvent",
         "kind": "type",
         "path": "server/storage.ts",
-        "line": 100,
+        "line": 99,
         "exported": false
       },
       {
         "name": "LisaClaim",
         "kind": "type",
         "path": "server/storage.ts",
-        "line": 102,
+        "line": 101,
         "exported": false
       },
       {
         "name": "InsertLisaClaim",
         "kind": "type",
         "path": "server/storage.ts",
-        "line": 103,
+        "line": 102,
         "exported": false
       },
       {
         "name": "LisaClaimType",
         "kind": "type",
         "path": "server/storage.ts",
-        "line": 104,
+        "line": 103,
         "exported": false
       },
       {
         "name": "LisaClaimSource",
         "kind": "type",
         "path": "server/storage.ts",
-        "line": 105,
+        "line": 104,
         "exported": false
       },
       {
         "name": "Claim",
         "kind": "type",
         "path": "server/storage.ts",
-        "line": 107,
+        "line": 106,
         "exported": false
       },
       {
         "name": "InsertClaim",
         "kind": "type",
         "path": "server/storage.ts",
-        "line": 108,
+        "line": 107,
         "exported": false
       },
       {
         "name": "TruckPresence",
         "kind": "type",
         "path": "server/storage.ts",
-        "line": 114,
+        "line": 113,
         "exported": false
       },
       {
         "name": "IStorage",
         "kind": "type",
         "path": "server/storage.ts",
-        "line": 156,
+        "line": 155,
         "exported": true
       },
       {
         "name": "DatabaseStorage",
         "kind": "class",
         "path": "server/storage.ts",
-        "line": 813,
+        "line": 808,
         "exported": true
       },
       {
         "name": "has",
         "kind": "function",
         "path": "server/storage.ts",
-        "line": 1049,
+        "line": 1044,
         "exported": false
       },
       {
         "name": "q",
         "kind": "function",
         "path": "server/storage.ts",
-        "line": 1050,
+        "line": 1045,
         "exported": false
       },
       {
         "name": "has",
         "kind": "function",
         "path": "server/storage.ts",
-        "line": 1091,
+        "line": 1086,
         "exported": false
       },
       {
         "name": "q",
         "kind": "function",
         "path": "server/storage.ts",
-        "line": 1092,
+        "line": 1087,
         "exported": false
       },
       {
         "name": "has",
         "kind": "function",
         "path": "server/storage.ts",
-        "line": 1141,
+        "line": 1136,
         "exported": false
       },
       {
         "name": "q",
         "kind": "function",
         "path": "server/storage.ts",
-        "line": 1143,
+        "line": 1138,
         "exported": false
       },
       {
         "name": "has",
         "kind": "function",
         "path": "server/storage.ts",
-        "line": 1213,
+        "line": 1208,
         "exported": false
       },
       {
         "name": "q",
         "kind": "function",
         "path": "server/storage.ts",
-        "line": 1215,
+        "line": 1210,
         "exported": false
       },
       {
         "name": "normalizeCoord",
         "kind": "function",
         "path": "server/storage.ts",
-        "line": 1447,
+        "line": 1442,
         "exported": false
       },
       {
         "name": "kickOffGeocode",
         "kind": "function",
         "path": "server/storage.ts",
-        "line": 1464,
+        "line": 1459,
         "exported": false
       },
       {
@@ -46047,73 +45952,66 @@
         "exported": false
       },
       {
-        "name": "TradeScoutUserData",
-        "kind": "type",
-        "path": "server/storage/usersRepository.ts",
-        "line": 9,
-        "exported": false
-      },
-      {
         "name": "getUserTableInfo",
         "kind": "function",
         "path": "server/storage/usersRepository.ts",
-        "line": 28,
+        "line": 27,
         "exported": false
       },
       {
         "name": "selectUsersSafe",
         "kind": "function",
         "path": "server/storage/usersRepository.ts",
-        "line": 67,
+        "line": 66,
         "exported": false
       },
       {
         "name": "has",
         "kind": "function",
         "path": "server/storage/usersRepository.ts",
-        "line": 74,
+        "line": 73,
         "exported": false
       },
       {
         "name": "q",
         "kind": "function",
         "path": "server/storage/usersRepository.ts",
-        "line": 75,
+        "line": 74,
         "exported": false
       },
       {
         "name": "shouldAssignAffiliateTag",
         "kind": "function",
         "path": "server/storage/usersRepository.ts",
-        "line": 118,
+        "line": 117,
         "exported": false
       },
       {
         "name": "normalizeEmail",
         "kind": "function",
         "path": "server/storage/usersRepository.ts",
-        "line": 122,
+        "line": 121,
         "exported": false
       },
       {
         "name": "getSafePublicSignupUserType",
         "kind": "function",
         "path": "server/storage/usersRepository.ts",
-        "line": 127,
+        "line": 126,
         "exported": false
       },
       {
         "name": "recordAuthLinkEvent",
         "kind": "function",
         "path": "server/storage/usersRepository.ts",
-        "line": 142,
+        "line": 141,
         "exported": false
       },
       {
         "name": "createUsersRepository",
         "kind": "function",
         "path": "server/storage/usersRepository.ts",
-        "line": 165,
+        "line": 164,
         "exported": true
       },
       {
@@ -46295,147 +46193,147 @@
         "name": "UnifiedAuthDependencies",
         "kind": "type",
         "path": "server/unifiedAuth.ts",
-        "line": 49,
+        "line": 47,
         "exported": false
       },
       {
         "name": "SessionData",
         "kind": "type",
         "path": "server/unifiedAuth.ts",
-        "line": 65,
+        "line": 63,
         "exported": false
       },
       {
         "name": "getSession",
         "kind": "function",
         "path": "server/unifiedAuth.ts",
-        "line": 100,
+        "line": 98,
         "exported": true
       },
       {
         "name": "getSessionCookieOptions",
         "kind": "function",
         "path": "server/unifiedAuth.ts",
-        "line": 128,
+        "line": 126,
         "exported": false
       },
       {
         "name": "establishAuthenticatedSession",
         "kind": "function",
         "path": "server/unifiedAuth.ts",
-        "line": 138,
+        "line": 136,
         "exported": false
       },
       {
         "name": "finalizeLogin",
         "kind": "function",
         "path": "server/unifiedAuth.ts",
-        "line": 141,
+        "line": 139,
         "exported": false
       },
       {
         "name": "setupUnifiedAuth",
         "kind": "function",
         "path": "server/unifiedAuth.ts",
-        "line": 171,
+        "line": 169,
         "exported": true
       },
       {
         "name": "getBaseUrl",
         "kind": "function",
         "path": "server/unifiedAuth.ts",
-        "line": 220,
+        "line": 218,
         "exported": false
       },
       {
         "name": "normalizePhone",
         "kind": "function",
         "path": "server/unifiedAuth.ts",
-        "line": 268,
+        "line": 266,
         "exported": false
       },
       {
         "name": "hasRequiredPhone",
         "kind": "function",
         "path": "server/unifiedAuth.ts",
-        "line": 270,
+        "line": 268,
         "exported": false
       },
       {
         "name": "buildPhoneRequiredSetupPath",
         "kind": "function",
         "path": "server/unifiedAuth.ts",
-        "line": 272,
+        "line": 270,
         "exported": false
       },
       {
         "name": "isBusinessCapableForContinuation",
         "kind": "function",
         "path": "server/unifiedAuth.ts",
-        "line": 444,
+        "line": 442,
         "exported": false
       },
       {
         "name": "verifyPhoneCode",
         "kind": "function",
         "path": "server/unifiedAuth.ts",
-        "line": 1435,
+        "line": 1433,
         "exported": false
       },
       {
         "name": "finish",
         "kind": "function",
         "path": "server/unifiedAuth.ts",
-        "line": 2118,
+        "line": 2015,
         "exported": false
       },
       {
         "name": "applyAffiliateReferral",
         "kind": "function",
         "path": "server/unifiedAuth.ts",
-        "line": 2601,
+        "line": 2498,
         "exported": false
       },
       {
         "name": "kickAffiliateTag",
         "kind": "function",
         "path": "server/unifiedAuth.ts",
-        "line": 2638,
+        "line": 2535,
         "exported": false
       },
       {
         "name": "isAuthenticated",
         "kind": "function",
         "path": "server/unifiedAuth.ts",
-        "line": 2648,
+        "line": 2545,
         "exported": true
       },
       {
         "name": "isRestaurantOwner",
         "kind": "function",
         "path": "server/unifiedAuth.ts",
-        "line": 2656,
+        "line": 2553,
         "exported": true
       },
       {
         "name": "UserRole",
         "kind": "type",
         "path": "server/unifiedAuth.ts",
-        "line": 2672,
+        "line": 2569,
         "exported": false
       },
       {
         "name": "requireRole",
         "kind": "function",
         "path": "server/unifiedAuth.ts",
-        "line": 2680,
+        "line": 2577,
         "exported": true
       },
       {
         "name": "apiKeyAuth",
         "kind": "function",
         "path": "server/unifiedAuth.ts",
-        "line": 2754,
+        "line": 2651,
         "exported": true
       },
       {
@@ -49298,1547 +49196,1540 @@
         "name": "UpsertUser",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 2882,
+        "line": 2883,
         "exported": true
       },
       {
         "name": "User",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 2883,
+        "line": 2884,
         "exported": true
       },
       {
         "name": "FacebookUserData",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 2886,
+        "line": 2887,
         "exported": true
       },
       {
         "name": "GoogleUserData",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 2894,
-        "exported": true
-      },
-      {
-        "name": "TradeScoutUserData",
-        "kind": "type",
-        "path": "shared/schema/legacy.ts",
-        "line": 2903,
+        "line": 2895,
         "exported": true
       },
       {
         "name": "EmailUserData",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 2911,
+        "line": 2904,
         "exported": true
       },
       {
         "name": "InsertRestaurant",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 2919,
+        "line": 2912,
         "exported": true
       },
       {
         "name": "Restaurant",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 2920,
+        "line": 2913,
         "exported": true
       },
       {
         "name": "TruckImportBatch",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 2921,
+        "line": 2914,
         "exported": true
       },
       {
         "name": "TruckImportListing",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 2922,
+        "line": 2915,
         "exported": true
       },
       {
         "name": "TruckClaimRequest",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 2923,
+        "line": 2916,
         "exported": true
       },
       {
         "name": "LocationState",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 2926,
+        "line": 2919,
         "exported": true
       },
       {
         "name": "RestaurantWithLocation",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 2929,
+        "line": 2922,
         "exported": true
       },
       {
         "name": "InsertDeal",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 2933,
+        "line": 2926,
         "exported": true
       },
       {
         "name": "Deal",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 2935,
+        "line": 2928,
         "exported": true
       },
       {
         "name": "InsertDealClaim",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 2936,
+        "line": 2929,
         "exported": true
       },
       {
         "name": "DealClaim",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 2937,
+        "line": 2930,
         "exported": true
       },
       {
         "name": "InsertReview",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 2938,
+        "line": 2931,
         "exported": true
       },
       {
         "name": "Review",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 2940,
+        "line": 2933,
         "exported": true
       },
       {
         "name": "InsertVerificationRequest",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 2941,
+        "line": 2934,
         "exported": true
       },
       {
         "name": "VerificationRequest",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 2945,
+        "line": 2938,
         "exported": true
       },
       {
         "name": "InsertDealView",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 2946,
+        "line": 2939,
         "exported": true
       },
       {
         "name": "DealView",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 2948,
+        "line": 2941,
         "exported": true
       },
       {
         "name": "InsertFoodTruckSession",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 2949,
+        "line": 2942,
         "exported": true
       },
       {
         "name": "FoodTruckSession",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 2953,
+        "line": 2946,
         "exported": true
       },
       {
         "name": "InsertFoodTruckLocation",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 2954,
+        "line": 2947,
         "exported": true
       },
       {
         "name": "FoodTruckLocation",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 2958,
+        "line": 2951,
         "exported": true
       },
       {
         "name": "UpdateRestaurantMobileSettings",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 2959,
+        "line": 2952,
         "exported": true
       },
       {
         "name": "InsertRestaurantFavorite",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 2963,
+        "line": 2956,
         "exported": true
       },
       {
         "name": "RestaurantFavorite",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 2967,
+        "line": 2960,
         "exported": true
       },
       {
         "name": "InsertRestaurantFollow",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 2968,
+        "line": 2961,
         "exported": true
       },
       {
         "name": "RestaurantFollow",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 2972,
+        "line": 2965,
         "exported": true
       },
       {
         "name": "InsertRestaurantUserRecommendation",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 2973,
+        "line": 2966,
         "exported": true
       },
       {
         "name": "RestaurantUserRecommendation",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 2977,
+        "line": 2970,
         "exported": true
       },
       {
         "name": "InsertMenuItemRecommendation",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 2979,
+        "line": 2972,
         "exported": true
       },
       {
         "name": "MenuItemRecommendation",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 2982,
+        "line": 2975,
         "exported": true
       },
       {
         "name": "InsertMenuItemPhoto",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 2983,
+        "line": 2976,
         "exported": true
       },
       {
         "name": "MenuItemPhoto",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 2984,
+        "line": 2977,
         "exported": true
       },
       {
         "name": "InsertBusinessStaffInvite",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 2985,
+        "line": 2978,
         "exported": true
       },
       {
         "name": "BusinessStaffInvite",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 2989,
+        "line": 2982,
         "exported": true
       },
       {
         "name": "InsertBusinessStaffMembership",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 2990,
+        "line": 2983,
         "exported": true
       },
       {
         "name": "BusinessStaffMembership",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 2994,
+        "line": 2987,
         "exported": true
       },
       {
         "name": "InsertRestaurantRecommendation",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 2996,
+        "line": 2989,
         "exported": true
       },
       {
         "name": "RestaurantRecommendation",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 3000,
+        "line": 2993,
         "exported": true
       },
       {
         "name": "InsertUserAddress",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 3002,
+        "line": 2995,
         "exported": true
       },
       {
         "name": "UserAddress",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 3004,
+        "line": 2997,
         "exported": true
       },
       {
         "name": "InsertPasswordResetToken",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 3005,
+        "line": 2998,
         "exported": true
       },
       {
         "name": "PasswordResetToken",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 3009,
+        "line": 3002,
         "exported": true
       },
       {
         "name": "InsertPhoneVerificationToken",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 3010,
+        "line": 3003,
         "exported": true
       },
       {
         "name": "PhoneVerificationToken",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 3013,
+        "line": 3006,
         "exported": true
       },
       {
         "name": "InsertAccountSetupToken",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 3015,
+        "line": 3008,
         "exported": true
       },
       {
         "name": "AccountSetupToken",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 3019,
+        "line": 3012,
         "exported": true
       },
       {
         "name": "InsertDealFeedback",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 3020,
+        "line": 3013,
         "exported": true
       },
       {
         "name": "DealFeedback",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 3022,
+        "line": 3015,
         "exported": true
       },
       {
         "name": "InsertVideoStory",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 3025,
+        "line": 3018,
         "exported": true
       },
       {
         "name": "VideoStory",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 3026,
+        "line": 3019,
         "exported": true
       },
       {
         "name": "InsertStoryLike",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 3027,
+        "line": 3020,
         "exported": true
       },
       {
         "name": "StoryLike",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 3029,
+        "line": 3022,
         "exported": true
       },
       {
         "name": "InsertStoryComment",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 3030,
+        "line": 3023,
         "exported": true
       },
       {
         "name": "StoryComment",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 3032,
+        "line": 3025,
         "exported": true
       },
       {
         "name": "InsertStoryView",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 3033,
+        "line": 3026,
         "exported": true
       },
       {
         "name": "StoryView",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 3035,
+        "line": 3028,
         "exported": true
       },
       {
         "name": "InsertStoryAward",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 3036,
+        "line": 3029,
         "exported": true
       },
       {
         "name": "StoryAward",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 3038,
+        "line": 3031,
         "exported": true
       },
       {
         "name": "UserReviewerLevel",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 3039,
+        "line": 3032,
         "exported": true
       },
       {
         "name": "LocationRequest",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 4633,
+        "line": 4626,
         "exported": true
       },
       {
         "name": "InsertLocationRequest",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 4635,
+        "line": 4628,
         "exported": true
       },
       {
         "name": "InsertHostPartnerLead",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 4636,
+        "line": 4629,
         "exported": true
       },
       {
         "name": "TruckInterest",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 4637,
+        "line": 4630,
         "exported": true
       },
       {
         "name": "InsertTruckInterest",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 4638,
+        "line": 4631,
         "exported": true
       },
       {
         "name": "HostLocationClaim",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 4639,
+        "line": 4632,
         "exported": true
       },
       {
         "name": "InsertHostLocationClaim",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 4640,
+        "line": 4633,
         "exported": true
       },
       {
         "name": "InsertSupportTicket",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 4641,
+        "line": 4634,
         "exported": true
       },
       {
         "name": "SupportTicket",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 4643,
+        "line": 4636,
         "exported": true
       },
       {
         "name": "InsertModerationEvent",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 4644,
+        "line": 4637,
         "exported": true
       },
       {
         "name": "ModerationEvent",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 4646,
+        "line": 4639,
         "exported": true
       },
       {
         "name": "AffiliateLink",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 4647,
+        "line": 4640,
         "exported": true
       },
       {
         "name": "InsertAffiliateLink",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 4649,
+        "line": 4642,
         "exported": true
       },
       {
         "name": "AffiliateClick",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 4650,
+        "line": 4643,
         "exported": true
       },
       {
         "name": "AffiliateCommission",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 4652,
+        "line": 4645,
         "exported": true
       },
       {
         "name": "AffiliateWallet",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 4653,
+        "line": 4646,
         "exported": true
       },
       {
         "name": "AffiliateWithdrawal",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 4654,
+        "line": 4647,
         "exported": true
       },
       {
         "name": "RestaurantSubmission",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 4655,
+        "line": 4648,
         "exported": true
       },
       {
         "name": "InsertRestaurantSubmission",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 4656,
+        "line": 4649,
         "exported": true
       },
       {
         "name": "Referral",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 4661,
+        "line": 4654,
         "exported": true
       },
       {
         "name": "InsertReferral",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 4662,
+        "line": 4655,
         "exported": true
       },
       {
         "name": "ReferralClick",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 4663,
+        "line": 4656,
         "exported": true
       },
       {
         "name": "InsertReferralClick",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 4664,
+        "line": 4657,
         "exported": true
       },
       {
         "name": "AffiliateCommissionLedger",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 4667,
+        "line": 4660,
         "exported": true
       },
       {
         "name": "InsertAffiliateCommissionLedger",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 4669,
+        "line": 4662,
         "exported": true
       },
       {
         "name": "CreditLedger",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 4673,
+        "line": 4666,
         "exported": true
       },
       {
         "name": "InsertCreditLedger",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 4674,
+        "line": 4667,
         "exported": true
       },
       {
         "name": "HostEarningsLedger",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 4675,
+        "line": 4668,
         "exported": true
       },
       {
         "name": "InsertHostEarningsLedger",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 4677,
+        "line": 4670,
         "exported": true
       },
       {
         "name": "HostPayoutRequest",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 4678,
+        "line": 4671,
         "exported": true
       },
       {
         "name": "InsertHostPayoutRequest",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 4679,
+        "line": 4672,
         "exported": true
       },
       {
         "name": "UserPayoutPreferences",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 4682,
+        "line": 4675,
         "exported": true
       },
       {
         "name": "InsertUserPayoutPreferences",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 4683,
+        "line": 4676,
         "exported": true
       },
       {
         "name": "RestaurantCreditRedemption",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 4687,
+        "line": 4680,
         "exported": true
       },
       {
         "name": "InsertRestaurantCreditRedemption",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 4689,
+        "line": 4682,
         "exported": true
       },
       {
         "name": "RestaurantSettlementBatch",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 4693,
+        "line": 4686,
         "exported": true
       },
       {
         "name": "InsertRestaurantSettlementBatch",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 4695,
+        "line": 4688,
         "exported": true
       },
       {
         "name": "OperatingHoursTimeSlot",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 4697,
+        "line": 4690,
         "exported": true
       },
       {
         "name": "OperatingHours",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 4701,
+        "line": 4694,
         "exported": true
       },
       {
         "name": "UpdateRestaurantLocation",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 4702,
+        "line": 4695,
         "exported": true
       },
       {
         "name": "UpdateRestaurantOperatingHours",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 4705,
+        "line": 4698,
         "exported": true
       },
       {
         "name": "AwardHistory",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 4850,
+        "line": 4843,
         "exported": true
       },
       {
         "name": "InsertAwardHistory",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 4852,
+        "line": 4845,
         "exported": true
       },
       {
         "name": "ImageUpload",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 4859,
+        "line": 4852,
         "exported": true
       },
       {
         "name": "InsertImageUpload",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 4861,
+        "line": 4854,
         "exported": true
       },
       {
         "name": "FeaturedVideoSlot",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 4871,
+        "line": 4864,
         "exported": true
       },
       {
         "name": "InsertFeaturedVideoSlot",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 4873,
+        "line": 4866,
         "exported": true
       },
       {
         "name": "RestaurantSubscription",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 4887,
+        "line": 4880,
         "exported": true
       },
       {
         "name": "InsertRestaurantSubscription",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 4890,
+        "line": 4883,
         "exported": true
       },
       {
         "name": "VideoStoryReport",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 4905,
+        "line": 4898,
         "exported": true
       },
       {
         "name": "InsertVideoStoryReport",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 4907,
+        "line": 4900,
         "exported": true
       },
       {
         "name": "FeedAd",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 4917,
+        "line": 4910,
         "exported": true
       },
       {
         "name": "InsertFeedAd",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 4919,
+        "line": 4912,
         "exported": true
       },
       {
         "name": "GeoAd",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 4927,
+        "line": 4920,
         "exported": true
       },
       {
         "name": "InsertGeoAd",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 4929,
+        "line": 4922,
         "exported": true
       },
       {
         "name": "GeoAdEvent",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 4935,
+        "line": 4928,
         "exported": true
       },
       {
         "name": "InsertGeoAdEvent",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 4937,
+        "line": 4930,
         "exported": true
       },
       {
         "name": "GeoLocationPing",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 4945,
+        "line": 4938,
         "exported": true
       },
       {
         "name": "InsertGeoLocationPing",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 4947,
+        "line": 4940,
         "exported": true
       },
       {
         "name": "Host",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 4965,
+        "line": 4958,
         "exported": true
       },
       {
         "name": "InsertHost",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 4967,
+        "line": 4960,
         "exported": true
       },
       {
         "name": "ParkingPassBlackoutDate",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 4975,
+        "line": 4968,
         "exported": true
       },
       {
         "name": "InsertParkingPassBlackoutDate",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 4978,
+        "line": 4971,
         "exported": true
       },
       {
         "name": "EventSeries",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 4989,
+        "line": 4982,
         "exported": true
       },
       {
         "name": "InsertEventSeries",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 4991,
+        "line": 4984,
         "exported": true
       },
       {
         "name": "Event",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 5000,
+        "line": 4993,
         "exported": true
       },
       {
         "name": "InsertEvent",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 5002,
+        "line": 4995,
         "exported": true
       },
       {
         "name": "EventInterest",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 5010,
+        "line": 5003,
         "exported": true
       },
       {
         "name": "InsertEventInterest",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 5012,
+        "line": 5005,
         "exported": true
       },
       {
         "name": "HostReview",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 5019,
+        "line": 5012,
         "exported": true
       },
       {
         "name": "InsertHostReview",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 5021,
+        "line": 5014,
         "exported": true
       },
       {
         "name": "EventBooking",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 5032,
+        "line": 5025,
         "exported": true
       },
       {
         "name": "InsertEventBooking",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 5034,
+        "line": 5027,
         "exported": true
       },
       {
         "name": "TruckManualSchedule",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 5043,
+        "line": 5036,
         "exported": true
       },
       {
         "name": "InsertTruckManualSchedule",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 5045,
+        "line": 5038,
         "exported": true
       },
       {
         "name": "TruckParkingReport",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 5056,
+        "line": 5049,
         "exported": true
       },
       {
         "name": "InsertTruckParkingReport",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 5058,
+        "line": 5051,
         "exported": true
       },
       {
         "name": "EmailVerificationToken",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 5068,
+        "line": 5061,
         "exported": true
       },
       {
         "name": "InsertEmailVerificationToken",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 5071,
+        "line": 5064,
         "exported": true
       },
       {
         "name": "TelemetryEvent",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 5092,
+        "line": 5085,
         "exported": true
       },
       {
         "name": "InsertTelemetryEvent",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 5094,
+        "line": 5087,
         "exported": true
       },
       {
         "name": "ParkingRoutePlan",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 5124,
+        "line": 5117,
         "exported": true
       },
       {
         "name": "InsertParkingRoutePlan",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 5126,
+        "line": 5119,
         "exported": true
       },
       {
         "name": "RequestLog",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 5285,
+        "line": 5278,
         "exported": true
       },
       {
         "name": "InsertRequestLog",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 5287,
+        "line": 5280,
         "exported": true
       },
       {
         "name": "AdminDailyReport",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 5288,
+        "line": 5281,
         "exported": true
       },
       {
         "name": "InsertAdminDailyReport",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 5289,
+        "line": 5282,
         "exported": true
       },
       {
         "name": "MarketCounty",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 5290,
+        "line": 5283,
         "exported": true
       },
       {
         "name": "InsertMarketCounty",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 5291,
+        "line": 5284,
         "exported": true
       },
       {
         "name": "MarketMetric",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 5292,
+        "line": 5285,
         "exported": true
       },
       {
         "name": "InsertMarketMetric",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 5293,
+        "line": 5286,
         "exported": true
       },
       {
         "name": "MarketNote",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 5294,
+        "line": 5287,
         "exported": true
       },
       {
         "name": "InsertMarketNote",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 5295,
+        "line": 5288,
         "exported": true
       },
       {
         "name": "MarketEntity",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 5296,
+        "line": 5289,
         "exported": true
       },
       {
         "name": "InsertMarketEntity",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 5297,
+        "line": 5290,
         "exported": true
       },
       {
         "name": "EmailSequenceSend",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 5328,
+        "line": 5321,
         "exported": true
       },
       {
         "name": "InsertEmailSequenceSend",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 5330,
+        "line": 5323,
         "exported": true
       },
       {
         "name": "HostPartnerLead",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 5391,
+        "line": 5384,
         "exported": true
       },
       {
         "name": "InsertHostPartnerLeadRow",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 5393,
+        "line": 5386,
         "exported": true
       },
       {
         "name": "HostPartnerLeadSequenceSend",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 5394,
+        "line": 5387,
         "exported": true
       },
       {
         "name": "InsertHostPartnerLeadSequenceSend",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 5396,
+        "line": 5389,
         "exported": true
       },
       {
         "name": "PensacolaReportLead",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 5464,
+        "line": 5457,
         "exported": true
       },
       {
         "name": "InsertPensacolaReportLead",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 5466,
+        "line": 5459,
         "exported": true
       },
       {
         "name": "ReportDownloadToken",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 5468,
+        "line": 5461,
         "exported": true
       },
       {
         "name": "InsertReportDownloadToken",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 5469,
+        "line": 5462,
         "exported": true
       },
       {
         "name": "ReportLeadSequenceSend",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 5499,
+        "line": 5492,
         "exported": true
       },
       {
         "name": "InsertReportLeadSequenceSend",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 5502,
+        "line": 5495,
         "exported": true
       },
       {
         "name": "OwnerAiActionDraft",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 5559,
+        "line": 5552,
         "exported": true
       },
       {
         "name": "InsertOwnerAiActionDraft",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 5561,
+        "line": 5554,
         "exported": true
       },
       {
         "name": "SocialPostQueueItem",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 5603,
+        "line": 5596,
         "exported": true
       },
       {
         "name": "InsertSocialPostQueueItem",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 5605,
+        "line": 5598,
         "exported": true
       },
       {
         "name": "SocialPublishingConnection",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 5648,
+        "line": 5641,
         "exported": true
       },
       {
         "name": "InsertSocialPublishingConnection",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 5651,
+        "line": 5644,
         "exported": true
       },
       {
         "name": "SearchQueryEvent",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 5675,
+        "line": 5668,
         "exported": true
       },
       {
         "name": "InsertSearchQueryEvent",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 5677,
+        "line": 5670,
         "exported": true
       },
       {
         "name": "LisaClaim",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 5730,
+        "line": 5723,
         "exported": true
       },
       {
         "name": "InsertLisaClaim",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 5732,
+        "line": 5725,
         "exported": true
       },
       {
         "name": "LisaClaimType",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 5769,
+        "line": 5762,
         "exported": true
       },
       {
         "name": "LisaClaimSource",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 5788,
+        "line": 5781,
         "exported": true
       },
       {
         "name": "Claim",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 5857,
+        "line": 5850,
         "exported": true
       },
       {
         "name": "InsertClaim",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 5859,
+        "line": 5852,
         "exported": true
       },
       {
         "name": "ClaimType",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 5869,
+        "line": 5862,
         "exported": true
       },
       {
         "name": "ClaimStatus",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 5879,
+        "line": 5872,
         "exported": true
       },
       {
         "name": "Menu",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 7223,
+        "line": 7216,
         "exported": true
       },
       {
         "name": "InsertMenu",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 7225,
+        "line": 7218,
         "exported": true
       },
       {
         "name": "MenuCategory",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 7226,
+        "line": 7219,
         "exported": true
       },
       {
         "name": "InsertMenuCategory",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 7227,
+        "line": 7220,
         "exported": true
       },
       {
         "name": "MenuItem",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 7228,
+        "line": 7221,
         "exported": true
       },
       {
         "name": "InsertMenuItem",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 7229,
+        "line": 7222,
         "exported": true
       },
       {
         "name": "MenuItemVariant",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 7230,
+        "line": 7223,
         "exported": true
       },
       {
         "name": "InsertMenuItemVariant",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 7231,
+        "line": 7224,
         "exported": true
       },
       {
         "name": "MenuItemModifier",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 7232,
+        "line": 7225,
         "exported": true
       },
       {
         "name": "InsertMenuItemModifier",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 7233,
+        "line": 7226,
         "exported": true
       },
       {
         "name": "MenuImportLog",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 7236,
+        "line": 7229,
         "exported": true
       },
       {
         "name": "MenuDraftReview",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 7237,
+        "line": 7230,
         "exported": true
       },
       {
         "name": "MenuDraftReviewItem",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 7238,
+        "line": 7231,
         "exported": true
       },
       {
         "name": "PickupOrder",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 7239,
+        "line": 7232,
         "exported": true
       },
       {
         "name": "MerchantDeliverySettings",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 7240,
+        "line": 7233,
         "exported": true
       },
       {
         "name": "InsertPickupOrder",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 7241,
+        "line": 7234,
         "exported": true
       },
       {
         "name": "PickupOrderItem",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 7242,
+        "line": 7235,
         "exported": true
       },
       {
         "name": "InsertPickupOrderItem",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 7243,
+        "line": 7236,
         "exported": true
       },
       {
         "name": "OrderNotification",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 7244,
+        "line": 7237,
         "exported": true
       },
       {
         "name": "DriverProfile",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 7245,
+        "line": 7238,
         "exported": true
       },
       {
         "name": "InsertDriverProfile",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 7246,
+        "line": 7239,
         "exported": true
       },
       {
         "name": "DeliveryJob",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 7247,
+        "line": 7240,
         "exported": true
       },
       {
         "name": "InsertDeliveryJob",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 7248,
+        "line": 7241,
         "exported": true
       },
       {
         "name": "DeliveryJobApplication",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 7249,
+        "line": 7242,
         "exported": true
       },
       {
         "name": "InsertDeliveryJobApplication",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 7251,
+        "line": 7244,
         "exported": true
       },
       {
         "name": "WorkerProfile",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 7254,
+        "line": 7247,
         "exported": true
       },
       {
         "name": "InsertWorkerProfile",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 7255,
+        "line": 7248,
         "exported": true
       },
       {
         "name": "JobPost",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 7256,
+        "line": 7249,
         "exported": true
       },
       {
         "name": "InsertJobPost",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 7257,
+        "line": 7250,
         "exported": true
       },
       {
         "name": "JobApplication",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 7258,
+        "line": 7251,
         "exported": true
       },
       {
         "name": "InsertJobApplication",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 7259,
+        "line": 7252,
         "exported": true
       },
       {
         "name": "PrivateChefLead",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 7260,
+        "line": 7253,
         "exported": true
       },
       {
         "name": "InsertPrivateChefLead",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 7261,
+        "line": 7254,
         "exported": true
       },
       {
@@ -60628,6 +60519,11 @@
         "name": "ExplorePreview",
         "path": "client/src/pages/explore-preview-v2.tsx",
         "responsibility": "Sole canonical Scout discovery page"
+      },
+      {
+        "name": "setupUnifiedAuth",
+        "path": "server/unifiedAuth.ts",
+        "responsibility": "Sole MealScout authentication, session, and auth-middleware owner"
       }
     ]
   },
@@ -60649,6 +60545,18 @@
       "subject": "MealScout buttons",
       "canonical_owner": "client/src/components/ui/button.tsx",
       "reason": "New button styling must reuse or improve the existing product adapter instead of creating a local variant."
+    },
+    {
+      "disposition": "remove",
+      "subject": "server/facebookAuth.ts and server/restaurantAuth.ts",
+      "canonical_owner": "server/unifiedAuth.ts",
+      "reason": "Both authentication stacks were unreachable; server/routes.ts registers only setupUnifiedAuth."
+    },
+    {
+      "disposition": "remove",
+      "subject": "Dormant TradeScout SSO endpoint and MealScout embedded-app package",
+      "canonical_owner": "server/unifiedAuth.ts",
+      "reason": "No issuer or external consumer exists; product-local authentication remains until an ecosystem identity contract is approved."
     }
   ],
   "findings": [
@@ -61029,10 +60937,10 @@
   ],
   "summary": {
     "directories": 53,
-    "source_files": 1241,
-    "symbols": 6212,
-    "components": 409,
-    "functions_and_hooks": 4017,
+    "source_files": 1238,
+    "symbols": 6199,
+    "components": 406,
+    "functions_and_hooks": 4011,
     "raw_ui_elements": 1875,
     "errors": 0,
     "warnings": 5

@@ -7,6 +7,13 @@ Living registry for mapping visual targets to real app surfaces.
 - `client/src/components/share-button.tsx` is the one canonical reusable share control. The duplicate case-variant owner has been retired.
 - `client/src/components/ui/` is the canonical reusable-interface directory; feature composition stays with the feature that owns the user job.
 
+## Identity owner
+- `server/unifiedAuth.ts` is the sole product-local authentication and session owner.
+- `server/routes.ts` is the sole registration path for that owner.
+- The dormant TradeScout SSO proposal and two unreachable auth stacks are retired.
+- `users.tradescoutId` is retained as read-only migration evidence until stored-data reconciliation proves removal safe.
+- This is not the Infinity-wide identity-owner decision; see `docs/MEALSCOUT_IDENTITY_BOUNDARY.md`.
+
 ## Scout page
 - Likely files:
 - `client/src/pages/explore-preview-v2.tsx` (canonical owner for `/scout`, `/directory`, and `/scout-v2`)

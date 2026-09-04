@@ -12,8 +12,8 @@ The `upsertUserByAuth` function already defaults to `'customer'` role for all ne
 
 ```typescript
 async upsertUserByAuth(
-  authType: 'google' | 'email' | 'facebook' | 'tradescout',
-  userData: GoogleUserData | EmailUserData | FacebookUserData | TradeScoutUserData,
+  authType: 'google' | 'email' | 'facebook',
+  userData: GoogleUserData | EmailUserData | FacebookUserData,
   userType: 'customer' | 'restaurant_owner' | 'admin' = 'customer'  // ✅ Defaults to customer
 ): Promise<User>
 ```
@@ -22,7 +22,11 @@ This applies to:
 - Google OAuth signups
 - Facebook OAuth signups
 - Email/password signups
-- TradeScout SSO
+
+The former dormant TradeScout SSO path was removed after an organization-wide
+consumer search found no issuer or caller. The legacy `tradescout_id` column is
+retained only for stored-data reconciliation; it is not an active login or
+linking path.
 
 ### 2. Unbooked Event Notification System ✅
 
