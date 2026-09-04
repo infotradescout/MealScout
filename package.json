@@ -50,6 +50,8 @@
     "test:action-api-public-read-projection": "node --import tsx scripts/mealscout-action-api-public-read-projection.contract.test.ts",
     "test:owner-ai-actions": "node --import tsx scripts/mealscout-owner-ai-actions.contract.test.ts && node --import tsx scripts/mealscout-owner-ai-control-workspace.contract.test.ts && node --import tsx scripts/mealscout-owner-ai-lifecycle-entry.contract.test.ts && node --import tsx scripts/mealscout-owner-ai-oauth-mcp.contract.test.ts && node --import tsx scripts/admin-password-startup-sync.contract.test.ts",
     "test:owner-ai-browser": "node --import tsx scripts/mealscout-owner-ai-browser.smoke.ts",
+    "test:menu-lisa": "node --import tsx --test scripts/menu-creation-request.behavior.test.ts scripts/menu-creation-lisa.integration.test.ts",
+    "test:menu-lisa:browser": "node --import tsx scripts/menu-creation-lisa.browser.test.ts",
     "test:post-merge-safety": "npx --yes tsx scripts/post-merge-safety.contract.test.ts",
     "test:about-explainer": "npx --yes tsx scripts/mealscout-about-explainer.contract.test.ts",
     "test:native-unpriced-menu-items": "node --import tsx scripts/native-unpriced-menu-items.contract.test.ts",
@@ -275,6 +277,7 @@
     "zod": "^3.24.2"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.5.8",
     "@playwright/test": "^1.57.0",
     "@tailwindcss/typography": "^0.5.15",
     "@types/connect-pg-simple": "^7.0.3",
