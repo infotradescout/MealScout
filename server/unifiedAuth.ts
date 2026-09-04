@@ -2,7 +2,6 @@ import passport from "passport";
 import { Strategy as GoogleStrategy } from "passport-google-oauth20";
 import { Strategy as FacebookStrategy } from "passport-facebook";
 import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
 import type { Express } from "express";
@@ -16,7 +15,6 @@ import type {
   GoogleUserData,
   EmailUserData,
   FacebookUserData,
-  TradeScoutUserData,
   User,
 } from "@shared/schema";
 import crypto from "crypto";
@@ -2008,107 +2006,6 @@ export async function setupUnifiedAuth(
     }
   });
 
-  // TradeScout SSO endpoint - accepts a signed JWT from TradeScout and
-  // creates/links a MealScout user, then establishes a session.
-  app.post("/api/auth/tradescout/sso", async (req, res) => {
-    try {
-      const secret = process.env.TRADESCOUT_JWT_SECRET;
-      if (!secret) {
-        return res.status(503).json({
-          error: "TradeScout SSO not configured",
-          message: "TRADESCOUT_JWT_SECRET is not set on the MealScout server",
-        });
-      }
-
-      const authHeader = req.headers["authorization"];
-      const bearerToken =
-        typeof authHeader === "string" && authHeader.startsWith("Bearer ")
-          ? authHeader.slice("Bearer ".length)
-          : undefined;
-
-      const token = (req.body && (req.body as any).token) || bearerToken;
-      if (!token || typeof token !== "string") {
-        return res.status(400).json({ error: "SSO token is required" });
-      }
-
-      let decoded: any;
-      try {
-        decoded = jwt.verify(token, secret);
-      } catch (err) {
-        console.error("TradeScout SSO token verification failed:", err);
-        return res.status(401).json({ error: "Invalid SSO token" });
-      }
-
-      const roles: string[] | undefined = Array.isArray(decoded.roles)
-        ? decoded.roles
-        : typeof decoded.role === "string"
-          ? [decoded.role]
-          : undefined;
-
-      const mapRolesToUserType = (r?: string[]): User["userType"] => {
-        if (!r || r.length === 0) return "customer";
-        if (r.includes("mealscout_super_admin")) return "super_admin";
-        if (r.includes("mealscout_duper_admin")) return "duper_admin";
-        if (r.includes("mealscout_admin") || r.includes("admin"))
-          return "admin";
-        if (
-          r.includes("restaurant_owner") ||
-          r.includes("merchant") ||
-          r.includes("vendor")
-        )
-          return "restaurant_owner";
-        return "customer";
-      };
-
-      const userType = mapRolesToUserType(roles);
-
-      const tsUserData: TradeScoutUserData = {
-        tradescoutId: String(decoded.sub || decoded.id || decoded.userId),
-        email: decoded.email ?? null,
-        firstName:
-          decoded.given_name ||
-          decoded.firstName ||
-          (decoded.name ? String(decoded.name).split(" ")[0] : null),
-        lastName:
-          decoded.family_name ||
-          decoded.lastName ||
-          (decoded.name
-            ? String(decoded.name).split(" ").slice(1).join(" ") || null
-            : null),
-        roles: roles ?? null,
-      };
-
-      if (!tsUserData.tradescoutId) {
-        return res
-          .status(400)
-          .json({ error: "SSO token missing subject (sub)" });
-      }
-
-      const user = await storage.upsertUserByAuth(
-        "tradescout",
-        tsUserData,
-        userType === "super_admin"
-          ? "admin"
-          : (userType as
-              | "customer"
-              | "restaurant_owner"
-              | "admin"
-              | "duper_admin"),
-      );
-      kickAffiliateTag(user);
-      await applyAffiliateReferral(req, user);
-
-      await establishAuthenticatedSession(req, user);
-      res.json({
-        user: sanitizeUser(user),
-        message: "TradeScout SSO login successful",
-      });
-    } catch (error) {
-      console.error("TradeScout SSO error:", error);
-      res.status(500).json({ error: "Unable to complete SSO login" });
-    }
-  });
-
   // Unified logout route
   app.post("/api/auth/logout", (req, res) => {
     req.logout((err) => {
@@ -2870,4 +2767,3 @@ export const verifyResourceOwnership = (
     }
   };
 };
-

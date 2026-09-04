@@ -6,7 +6,6 @@ import {
   type GoogleUserData,
   type EmailUserData,
   type FacebookUserData,
-  type TradeScoutUserData,
 } from "@shared/schema";
 import { db, pool } from "../db";
 import { eq, and, or, isNull, desc, sql } from "drizzle-orm";
@@ -352,101 +351,14 @@ export function createUsersRepository() {
     },
 
     async upsertUserByAuth(
-      authType: "google" | "email" | "facebook" | "tradescout",
-      userData:
-        | GoogleUserData
-        | EmailUserData
-        | FacebookUserData
-        | TradeScoutUserData,
+      authType: "google" | "email" | "facebook",
+      userData: GoogleUserData | EmailUserData | FacebookUserData,
       userType: User["userType"] = "customer",
       appContext: "mealscout" | "tradescout" = "mealscout",
     ): Promise<User> {
       try {
-        const insertUserType =
-          authType === "tradescout"
-            ? userType
-            : getSafePublicSignupUserType(userType);
-        if (authType === "tradescout") {
-          const tsData = userData as TradeScoutUserData;
-          const normalizedEmail = normalizeEmail(tsData.email);
-          let existingUser = await db
-            .select()
-            .from(users)
-            .where(eq(users.tradescoutId, tsData.tradescoutId))
-            .limit(1);
-
-          if (existingUser.length > 0) {
-            const current = existingUser[0];
-            const newAppContext =
-              current.appContext && current.appContext !== appContext
-                ? "both"
-                : appContext;
-            const [user] = await db
-              .update(users)
-              .set({
-                email: normalizedEmail ?? current.email,
-                ...(normalizedEmail ? { emailVerified: true } : {}),
-                firstName: tsData.firstName ?? current.firstName,
-                lastName: tsData.lastName ?? current.lastName,
-                appContext: newAppContext,
-                updatedAt: new Date(),
-              })
-              .where(eq(users.id, current.id))
-              .returning();
-            void syncUserToBrevo(user).catch(() => {});
-            return user;
-          }
-
-          if (normalizedEmail) {
-            existingUser = await db
-              .select()
-              .from(users)
-              .where(sql`lower(${users.email}) = ${normalizedEmail}`)
-              .limit(1);
-            if (existingUser.length > 0) {
-              const current = existingUser[0];
-              const newAppContext =
-                current.appContext && current.appContext !== appContext
-                  ? "both"
-                  : appContext;
-              const [user] = await db
-                .update(users)
-                .set({
-                  tradescoutId: tsData.tradescoutId,
-                  emailVerified: true,
-                  firstName: tsData.firstName ?? current.firstName,
-                  lastName: tsData.lastName ?? current.lastName,
-                  appContext: newAppContext,
-                  updatedAt: new Date(),
-                })
-                .where(eq(users.id, current.id))
-                .returning();
-              void syncUserToBrevo(user).catch(() => {});
-              void recordAuthLinkEvent({
-                userId: user.id,
-                provider: "tradescout",
-                matchedBy: "normalized_email",
-                email: normalizedEmail,
-              });
-              return user;
-            }
-          }
-
-          const [user] = await db
-            .insert(users)
-            .values({
-              userType: insertUserType,
-              tradescoutId: tsData.tradescoutId,
-              email: normalizedEmail ?? undefined,
-              emailVerified: Boolean(normalizedEmail),
-              firstName: tsData.firstName ?? undefined,
-              lastName: tsData.lastName ?? undefined,
-              appContext,
-            })
-            .returning();
-          void syncUserToBrevo(user).catch(() => {});
-          return user;
-        } else if (authType === "google") {
+        const insertUserType = getSafePublicSignupUserType(userType);
+        if (authType === "google") {
           const googleData = userData as GoogleUserData;
           const normalizedEmail = normalizeEmail(googleData.email);
           let existingUser = await db
@@ -644,45 +556,7 @@ export function createUsersRepository() {
         }
       } catch (error: any) {
         if (isUniqueViolation(error)) {
-          if (authType === "tradescout") {
-            const tsData = userData as TradeScoutUserData;
-            const normalizedEmail = normalizeEmail(tsData.email);
-            const existingUser = await db
-              .select()
-              .from(users)
-              .where(
-                normalizedEmail
-                  ? or(
-                      eq(users.tradescoutId, tsData.tradescoutId),
-                      sql`lower(${users.email}) = ${normalizedEmail}`,
-                    )
-                  : eq(users.tradescoutId, tsData.tradescoutId),
-              )
-              .limit(1);
-            if (existingUser.length > 0) {
-              const current = existingUser[0];
-              const [user] = await db
-                .update(users)
-                .set({
-                  tradescoutId: tsData.tradescoutId,
-                  email: normalizedEmail ?? current.email,
-                  ...(normalizedEmail ? { emailVerified: true } : {}),
-                  firstName: tsData.firstName ?? current.firstName,
-                  lastName: tsData.lastName ?? current.lastName,
-                  updatedAt: new Date(),
-                })
-                .where(eq(users.id, current.id))
-                .returning();
-              void syncUserToBrevo(user).catch(() => {});
-              void recordAuthLinkEvent({
-                userId: user.id,
-                provider: "tradescout",
-                matchedBy: "duplicate_key",
-                email: normalizedEmail,
-              });
-              return user;
-            }
-          } else if (authType === "google") {
+          if (authType === "google") {
             const googleData = userData as GoogleUserData;
             const normalizedEmail = normalizeEmail(googleData.email);
             const existingUser = await db

@@ -69,7 +69,6 @@ import {
   type GoogleUserData,
   type EmailUserData,
   type FacebookUserData,
-  type TradeScoutUserData,
   type UpdateRestaurantLocation,
   type OperatingHours,
   hosts,
@@ -254,12 +253,8 @@ export interface IStorage {
   getUserByPhone(phone: string): Promise<User | undefined>;
   upsertUser(user: UpsertUser): Promise<User>;
   upsertUserByAuth(
-    authType: "google" | "email" | "facebook" | "tradescout",
-    userData:
-      | GoogleUserData
-      | EmailUserData
-      | FacebookUserData
-      | TradeScoutUserData,
+    authType: "google" | "email" | "facebook",
+    userData: GoogleUserData | EmailUserData | FacebookUserData,
     userType?: User["userType"],
     appContext?: "mealscout" | "tradescout",
   ): Promise<User>;
@@ -1893,12 +1888,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async upsertUserByAuth(
-    authType: "google" | "email" | "facebook" | "tradescout",
-    userData:
-      | GoogleUserData
-      | EmailUserData
-      | FacebookUserData
-      | TradeScoutUserData,
+    authType: "google" | "email" | "facebook",
+    userData: GoogleUserData | EmailUserData | FacebookUserData,
     userType: User["userType"] = "customer",
     appContext: "mealscout" | "tradescout" = "mealscout",
   ): Promise<User> {

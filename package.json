@@ -20,7 +20,6 @@
     "cap:prepare": "npm run build && npm run cap:sync",
     "cap:open:android": "cap open android",
     "cap:open:ios": "cap open ios",
-    "build:lib": "vite build --config vite.lib.config.ts",
     "doctor": "node scripts/repoDoctor.mjs",
     "start": "node dist/server/index.js",
     "start:local": "cross-env NODE_ENV=production PUBLIC_BASE_URL=http://127.0.0.1:5200 INCIDENT_SIGNATURE_SECRET=local-dev node dist/server/index.js",
@@ -306,14 +305,6 @@
     },
     "exceljs": {
       "uuid": "^11.1.1"
-    }
-  },
-  "main": "dist/public/assets/mealscout-app.cjs.js",
-  "module": "dist/public/assets/mealscout-app.es.js",
-  "exports": {
-    ".": {
-      "import": "./dist/public/assets/mealscout-app.es.js",
-      "require": "./dist/public/assets/mealscout-app.cjs.js"
     }
   }
 }

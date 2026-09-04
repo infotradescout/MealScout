@@ -28,7 +28,8 @@ export const users: any = pgTable(
       .primaryKey()
       .default(sql`gen_random_uuid()`),
     userType: varchar("user_type").notNull().default("customer"), // 'customer' | 'restaurant_owner' | 'food_truck' | 'supplier' | 'host' | 'event_coordinator' | 'staff' | 'admin' | 'duper_admin' | 'super_admin'
-    // TradeScout SSO linkage (for unified accounts between TradeScout and MealScout)
+    // Legacy dormant cross-product link. No active authentication path may write
+    // this field; retain it only until stored-data reconciliation proves removal safe.
     tradescoutId: varchar("tradescout_id").unique(),
     // Facebook authentication (for regular users)
     facebookId: varchar("facebook_id").unique(),
@@ -2899,14 +2900,6 @@ export type GoogleUserData = {
   lastName?: string | null;
   profileImageUrl?: string | null;
   googleAccessToken?: string | null;
-};
-
-export type TradeScoutUserData = {
-  tradescoutId: string;
-  email?: string | null;
-  firstName?: string | null;
-  lastName?: string | null;
-  roles?: string[] | null;
 };
 
 export type EmailUserData = {

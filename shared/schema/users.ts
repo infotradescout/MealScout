@@ -31,7 +31,6 @@ export type {
   User,
   FacebookUserData,
   GoogleUserData,
-  TradeScoutUserData,
   EmailUserData,
   InsertUserAddress,
   UserAddress,
