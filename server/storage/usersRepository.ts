@@ -17,6 +17,12 @@ import {
   shouldAssignAffiliateTagForUserType,
 } from "../roleAccess";
 import { isUniqueViolation } from "../utils/isUniqueViolation";
+import {
+  OAuthIdentityBoundaryError,
+  assertOAuthIdentityCanProceed,
+  decideOAuthIdentity,
+  type OAuthProvider,
+} from "../utils/oauthIdentityPolicy";
 
 // ── Cached table-info (module-level singleton, matches the instance cache in DatabaseStorage) ──
 
@@ -158,6 +164,99 @@ async function recordAuthLinkEvent(params: {
   } catch {
     // Telemetry must never block login.
   }
+}
+
+type SocialOAuthUserInput = {
+  provider: OAuthProvider;
+  providerId: string;
+  email: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  profileImageUrl?: string | null;
+  userType: User["userType"];
+};
+
+async function resolveSocialOAuthUser(
+  input: SocialOAuthUserInput,
+): Promise<User> {
+  const providerId = String(input.providerId || "").trim();
+  if (!providerId) {
+    throw new Error(`Missing ${input.provider} provider subject`);
+  }
+
+  const normalizedEmail = normalizeEmail(input.email);
+  const providerColumn =
+    input.provider === "google" ? users.googleId : users.facebookId;
+  const [providerRows, emailRows] = await Promise.all([
+    db.select().from(users).where(eq(providerColumn, providerId)).limit(1),
+    normalizedEmail
+      ? db
+          .select()
+          .from(users)
+          .where(sql`lower(${users.email}) = ${normalizedEmail}`)
+          .limit(1)
+      : Promise.resolve([]),
+  ]);
+  const providerUser = providerRows[0] as User | undefined;
+  const emailUser = emailRows[0] as User | undefined;
+  if (providerUser?.isDisabled === true || emailUser?.isDisabled === true) {
+    throw new OAuthIdentityBoundaryError(
+      "AUTH_ACCOUNT_DISABLED",
+      input.provider,
+    );
+  }
+  const decision = decideOAuthIdentity({
+    providerUserId: providerUser?.id,
+    emailUserId: emailUser?.id,
+  });
+  assertOAuthIdentityCanProceed(input.provider, decision);
+
+  if (decision.kind === "existing") {
+    if (!providerUser || providerUser.id !== decision.userId) {
+      throw new Error("OAuth provider identity could not be confirmed");
+    }
+    const currentEmail = normalizeEmail(providerUser.email);
+    const resolvedEmail = currentEmail || normalizedEmail;
+    const providerConfirmsResolvedEmail = Boolean(
+      normalizedEmail && normalizedEmail === resolvedEmail,
+    );
+    const [user] = await db
+      .update(users)
+      .set({
+        email: resolvedEmail,
+        emailVerified:
+          providerUser.emailVerified === true || providerConfirmsResolvedEmail,
+        firstName: providerUser.firstName || input.firstName,
+        lastName: providerUser.lastName || input.lastName,
+        profileImageUrl:
+          providerUser.profileImageUrl || input.profileImageUrl,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, providerUser.id))
+      .returning();
+    void syncUserToBrevo(user).catch(() => {});
+    return user;
+  }
+
+  const providerIdentity =
+    input.provider === "google"
+      ? { googleId: providerId }
+      : { facebookId: providerId };
+  const [user] = await db
+    .insert(users)
+    .values({
+      ...providerIdentity,
+      userType: getSafePublicSignupUserType(input.userType),
+      email: normalizedEmail,
+      emailVerified: Boolean(normalizedEmail),
+      firstName: input.firstName,
+      lastName: input.lastName,
+      profileImageUrl: input.profileImageUrl,
+      appContext: "mealscout",
+    })
+    .returning();
+  void syncUserToBrevo(user).catch(() => {});
+  return user;
 }
 
 // ── Repository factory ────────────────────────────────────────────────────────
@@ -354,290 +453,66 @@ export function createUsersRepository() {
       authType: "google" | "email" | "facebook",
       userData: GoogleUserData | EmailUserData | FacebookUserData,
       userType: User["userType"] = "customer",
-      appContext: "mealscout" | "tradescout" = "mealscout",
+      appContext: "mealscout" = "mealscout",
     ): Promise<User> {
-      try {
-        const insertUserType = getSafePublicSignupUserType(userType);
-        if (authType === "google") {
-          const googleData = userData as GoogleUserData;
-          const normalizedEmail = normalizeEmail(googleData.email);
-          let existingUser = await db
-            .select()
-            .from(users)
-            .where(eq(users.googleId, googleData.googleId))
-            .limit(1);
-
-          if (existingUser.length > 0) {
-            const current = existingUser[0];
-            const newAppContext =
-              current.appContext && current.appContext !== appContext
-                ? "both"
-                : appContext;
-            const [user] = await db
-              .update(users)
-              .set({
-                email: normalizedEmail,
-                emailVerified: true,
-                firstName: googleData.firstName,
-                lastName: googleData.lastName,
-                profileImageUrl: googleData.profileImageUrl,
-                googleAccessToken: googleData.googleAccessToken,
-                appContext: newAppContext,
-                updatedAt: new Date(),
-              })
-              .where(eq(users.id, existingUser[0].id))
-              .returning();
-            void syncUserToBrevo(user).catch(() => {});
-            return user;
-          }
-
-          if (normalizedEmail) {
-            existingUser = await db
-              .select()
-              .from(users)
-              .where(sql`lower(${users.email}) = ${normalizedEmail}`)
-              .limit(1);
-            if (existingUser.length > 0) {
-              const current = existingUser[0];
-              const newAppContext =
-                current.appContext && current.appContext !== appContext
-                  ? "both"
-                  : appContext;
-              const [user] = await db
-                .update(users)
-                .set({
-                  googleId: googleData.googleId,
-                  emailVerified: true,
-                  firstName: googleData.firstName || existingUser[0].firstName,
-                  lastName: googleData.lastName || existingUser[0].lastName,
-                  profileImageUrl:
-                    googleData.profileImageUrl ||
-                    existingUser[0].profileImageUrl,
-                  googleAccessToken: googleData.googleAccessToken,
-                  appContext: newAppContext,
-                  updatedAt: new Date(),
-                })
-                .where(eq(users.id, existingUser[0].id))
-                .returning();
-              void syncUserToBrevo(user).catch(() => {});
-              void recordAuthLinkEvent({
-                userId: user.id,
-                provider: "google",
-                matchedBy: "normalized_email",
-                email: normalizedEmail,
-              });
-              return user;
-            }
-          }
-
-          const [user] = await db
-            .insert(users)
-            .values({
-              userType: insertUserType,
-              googleId: googleData.googleId,
-              email: normalizedEmail,
-              emailVerified: true,
-              firstName: googleData.firstName,
-              lastName: googleData.lastName,
-              profileImageUrl: googleData.profileImageUrl,
-              googleAccessToken: googleData.googleAccessToken,
-              appContext,
-            })
-            .returning();
-          void syncUserToBrevo(user).catch(() => {});
-          return user;
-        } else if (authType === "facebook") {
-          const facebookData = userData as FacebookUserData;
-          const normalizedEmail = normalizeEmail(facebookData.email);
-          let existingUser = await db
-            .select()
-            .from(users)
-            .where(eq(users.facebookId, facebookData.facebookId))
-            .limit(1);
-
-          if (existingUser.length > 0) {
-            const current = existingUser[0];
-            const newAppContext =
-              current.appContext && current.appContext !== appContext
-                ? "both"
-                : appContext;
-            const [user] = await db
-              .update(users)
-              .set({
-                email: normalizedEmail,
-                emailVerified: true,
-                firstName: facebookData.firstName,
-                lastName: facebookData.lastName,
-                profileImageUrl: facebookData.profileImageUrl,
-                facebookAccessToken: facebookData.facebookAccessToken,
-                appContext: newAppContext,
-                updatedAt: new Date(),
-              })
-              .where(eq(users.id, existingUser[0].id))
-              .returning();
-            void syncUserToBrevo(user).catch(() => {});
-            return user;
-          }
-
-          if (normalizedEmail) {
-            existingUser = await db
-              .select()
-              .from(users)
-              .where(sql`lower(${users.email}) = ${normalizedEmail}`)
-              .limit(1);
-            if (existingUser.length > 0) {
-              const current = existingUser[0];
-              const newAppContext =
-                current.appContext && current.appContext !== appContext
-                  ? "both"
-                  : appContext;
-              const [user] = await db
-                .update(users)
-                .set({
-                  facebookId: facebookData.facebookId,
-                  emailVerified: true,
-                  firstName:
-                    facebookData.firstName || existingUser[0].firstName,
-                  lastName: facebookData.lastName || existingUser[0].lastName,
-                  profileImageUrl:
-                    facebookData.profileImageUrl ||
-                    existingUser[0].profileImageUrl,
-                  facebookAccessToken: facebookData.facebookAccessToken,
-                  appContext: newAppContext,
-                  updatedAt: new Date(),
-                })
-                .where(eq(users.id, existingUser[0].id))
-                .returning();
-              void syncUserToBrevo(user).catch(() => {});
-              void recordAuthLinkEvent({
-                userId: user.id,
-                provider: "facebook",
-                matchedBy: "normalized_email",
-                email: normalizedEmail,
-              });
-              return user;
-            }
-          }
-
-          const [user] = await db
-            .insert(users)
-            .values({
-              userType: insertUserType,
-              facebookId: facebookData.facebookId,
-              email: normalizedEmail,
-              emailVerified: true,
-              firstName: facebookData.firstName,
-              lastName: facebookData.lastName,
-              profileImageUrl: facebookData.profileImageUrl,
-              facebookAccessToken: facebookData.facebookAccessToken,
-              appContext,
-            })
-            .returning();
-          void syncUserToBrevo(user).catch(() => {});
-          return user;
-        } else {
-          const emailData = userData as EmailUserData;
-          const normalizedEmail = normalizeEmail(emailData.email);
-          const [user] = await db
-            .insert(users)
-            .values({
-              userType: insertUserType,
-              email: normalizedEmail,
-              firstName: emailData.firstName,
-              lastName: emailData.lastName,
-              phone: emailData.phone,
-              passwordHash: emailData.passwordHash,
-              emailVerified: false,
-              appContext,
-            })
-            .returning();
-          void syncUserToBrevo(user).catch(() => {});
-          return user;
+      if (authType === "google") {
+        const googleData = userData as GoogleUserData;
+        const input: SocialOAuthUserInput = {
+          provider: "google",
+          providerId: googleData.googleId,
+          email: normalizeEmail(googleData.email),
+          firstName: googleData.firstName,
+          lastName: googleData.lastName,
+          profileImageUrl: googleData.profileImageUrl,
+          userType,
+        };
+        try {
+          return await resolveSocialOAuthUser(input);
+        } catch (error) {
+          if (!isUniqueViolation(error)) throw error;
+          // A concurrent callback may have inserted the provider or email row.
+          // Re-evaluate the evidence; never turn the collision into a silent link.
+          return await resolveSocialOAuthUser(input);
         }
-      } catch (error: any) {
-        if (isUniqueViolation(error)) {
-          if (authType === "google") {
-            const googleData = userData as GoogleUserData;
-            const normalizedEmail = normalizeEmail(googleData.email);
-            const existingUser = await db
-              .select()
-              .from(users)
-              .where(
-                normalizedEmail
-                  ? or(
-                      eq(users.googleId, googleData.googleId),
-                      sql`lower(${users.email}) = ${normalizedEmail}`,
-                    )
-                  : eq(users.googleId, googleData.googleId),
-              )
-              .limit(1);
-            if (existingUser.length > 0) {
-              const [user] = await db
-                .update(users)
-                .set({
-                  googleId: googleData.googleId,
-                  email: normalizedEmail,
-                  emailVerified: true,
-                  firstName: googleData.firstName,
-                  lastName: googleData.lastName,
-                  profileImageUrl: googleData.profileImageUrl,
-                  googleAccessToken: googleData.googleAccessToken,
-                  updatedAt: new Date(),
-                })
-                .where(eq(users.id, existingUser[0].id))
-                .returning();
-              void syncUserToBrevo(user).catch(() => {});
-              void recordAuthLinkEvent({
-                userId: user.id,
-                provider: "google",
-                matchedBy: "duplicate_key",
-                email: normalizedEmail,
-              });
-              return user;
-            }
-          } else if (authType === "facebook") {
-            const facebookData = userData as FacebookUserData;
-            const normalizedEmail = normalizeEmail(facebookData.email);
-            const existingUser = await db
-              .select()
-              .from(users)
-              .where(
-                normalizedEmail
-                  ? or(
-                      eq(users.facebookId, facebookData.facebookId),
-                      sql`lower(${users.email}) = ${normalizedEmail}`,
-                    )
-                  : eq(users.facebookId, facebookData.facebookId),
-              )
-              .limit(1);
-            if (existingUser.length > 0) {
-              const [user] = await db
-                .update(users)
-                .set({
-                  facebookId: facebookData.facebookId,
-                  email: normalizedEmail,
-                  emailVerified: true,
-                  firstName: facebookData.firstName,
-                  lastName: facebookData.lastName,
-                  profileImageUrl: facebookData.profileImageUrl,
-                  facebookAccessToken: facebookData.facebookAccessToken,
-                  updatedAt: new Date(),
-                })
-                .where(eq(users.id, existingUser[0].id))
-                .returning();
-              void syncUserToBrevo(user).catch(() => {});
-              void recordAuthLinkEvent({
-                userId: user.id,
-                provider: "facebook",
-                matchedBy: "duplicate_key",
-                email: normalizedEmail,
-              });
-              return user;
-            }
-          }
-        }
-        throw error;
       }
+
+      if (authType === "facebook") {
+        const facebookData = userData as FacebookUserData;
+        const input: SocialOAuthUserInput = {
+          provider: "facebook",
+          providerId: facebookData.facebookId,
+          email: normalizeEmail(facebookData.email),
+          firstName: facebookData.firstName,
+          lastName: facebookData.lastName,
+          profileImageUrl: facebookData.profileImageUrl,
+          userType,
+        };
+        try {
+          return await resolveSocialOAuthUser(input);
+        } catch (error) {
+          if (!isUniqueViolation(error)) throw error;
+          // Preserve the same fail-closed decision under concurrent callbacks.
+          return await resolveSocialOAuthUser(input);
+        }
+      }
+
+      const emailData = userData as EmailUserData;
+      const normalizedEmail = normalizeEmail(emailData.email);
+      const [user] = await db
+        .insert(users)
+        .values({
+          userType: getSafePublicSignupUserType(userType),
+          email: normalizedEmail,
+          firstName: emailData.firstName,
+          lastName: emailData.lastName,
+          phone: emailData.phone,
+          passwordHash: emailData.passwordHash,
+          emailVerified: false,
+          appContext,
+        })
+        .returning();
+      void syncUserToBrevo(user).catch(() => {});
+      return user;
     },
 
     async getAllUsers(): Promise<User[]> {

@@ -32,13 +32,32 @@ The nullable `users.tradescoutId` column remains as dormant historical evidence
 until stored-data reconciliation proves whether any row contains a value. No
 active authentication path writes it in this draft.
 
-MealScout's working email, phone, Google, and Facebook authentication paths are
-unchanged. Existing OAuth app-context behavior is also unchanged in this slice;
-its redirect and cookie consumers require a separate finished-flow review.
+MealScout's email, phone, Google, and Facebook entry points remain product-local.
+Google and Facebook now resolve login by provider subject. A matching email is
+collision evidence and cannot silently attach a provider to an existing row.
 
-Provider access-token columns and their active writers are not deleted here.
-Their encryption, expiry, rotation, revocation, and consumer boundaries remain
-a high-priority security evidence requirement.
+The dormant cross-product OAuth app context is rejected at the MealScout entry
+points. TradeScout owns its own provider login and session.
+
+Provider access-token columns remain as stored-data migration evidence, but
+active sign-in no longer writes tokens to user rows. Repository search found no
+runtime consumer requiring those login tokens. Existing values must be measured
+and retired through an explicit data migration rather than erased by this code
+change.
+
+## OAuth decisions
+
+| Provider subject | Email | Result |
+| --- | --- | --- |
+| Existing row | Same row or no row | Sign in to that provider row |
+| No row | Existing row | Stop; authenticated linking is required |
+| One row | Different row | Stop; identity collision review is required |
+| No row | No row | Create a MealScout-local account |
+| Disabled provider or email row | Any | Stop; recovery or support is required |
+
+Rejected outcomes return a constrained error code to the active login or
+business-signup surface. No token, provider ID, role, or app-context write occurs
+for those outcomes.
 
 ## Ecosystem boundary
 

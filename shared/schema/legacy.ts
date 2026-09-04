@@ -31,10 +31,11 @@ export const users: any = pgTable(
     // Legacy dormant cross-product link. No active authentication path may write
     // this field; retain it only until stored-data reconciliation proves removal safe.
     tradescoutId: varchar("tradescout_id").unique(),
-    // Facebook authentication (for regular users)
+    // Legacy OAuth fields. Provider IDs remain active login evidence. Access
+    // tokens are retained only for stored-data reconciliation and deletion;
+    // active authentication must not write new token values here.
     facebookId: varchar("facebook_id").unique(),
     facebookAccessToken: text("facebook_access_token"),
-    // Google authentication (for all users)
     googleId: varchar("google_id").unique(),
     googleAccessToken: text("google_access_token"),
     // Email/password authentication (for all users)
@@ -83,8 +84,9 @@ export const users: any = pgTable(
     flaggedCount: integer("flagged_count").default(0),
     upheldAgainstCount: integer("upheld_against_count").default(0),
     falseFlagCount: integer("false_flag_count").default(0),
-    // App context for multi-platform shared auth (TradeScout + MealScout)
-    appContext: varchar("app_context").default("mealscout"), // 'mealscout' | 'tradescout' | 'both'
+    // Legacy multi-platform marker. New authentication is MealScout-local;
+    // retain old values only until production records are reconciled.
+    appContext: varchar("app_context").default("mealscout"),
     publicProfileSettings: jsonb("public_profile_settings")
       .notNull()
       .default(sql`'{}'::jsonb`),
@@ -2890,7 +2892,6 @@ export type FacebookUserData = {
   firstName?: string | null;
   lastName?: string | null;
   profileImageUrl?: string | null;
-  facebookAccessToken?: string | null;
 };
 
 export type GoogleUserData = {
@@ -2899,7 +2900,6 @@ export type GoogleUserData = {
   firstName?: string | null;
   lastName?: string | null;
   profileImageUrl?: string | null;
-  googleAccessToken?: string | null;
 };
 
 export type EmailUserData = {

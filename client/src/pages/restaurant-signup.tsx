@@ -55,6 +55,7 @@ import {
   parseBusinessSignupRouteIntent,
   shouldRestoreBusinessSignupDraft,
 } from "@shared/businessSignupIntent";
+import { getOAuthIdentityFailureMessage } from "@/lib/oauthIdentityFailure";
 
 /**
  * Host Onboarding v1  COPY LOCK
@@ -394,6 +395,20 @@ export default function RestaurantSignup() {
       setLocation("/restaurant-owner-dashboard");
     }
   }, [isAuthenticated, user, setLocation]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const oauthIdentityMessage = getOAuthIdentityFailureMessage(
+      params.get("error"),
+    );
+    if (!oauthIdentityMessage) return;
+    setAuthMode("login");
+    toast({
+      title: "Account sign-in needs attention",
+      description: oauthIdentityMessage,
+      variant: "destructive",
+    });
+  }, [toast]);
 
   // Logged-out visitors stay on this page so they can lead with the
   // "import from your website" step, which prefills the business profile

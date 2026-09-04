@@ -1,12 +1,12 @@
 {
   "schema_version": 1,
   "index_version": "0.1.0",
-  "generated_at": "2026-09-04T18:18:50Z",
+  "generated_at": "2026-09-04T19:17:15Z",
   "source": {
     "kind": "git",
     "revision": "430f7a39366cca292c8e3d182e41a5374e52d651",
     "dirty": true,
-    "inventory_sha256": "c9fb8a487ed9b8425ecd5d5a24cae0f2ef417632769cc4f8a43d38b0f698d90f"
+    "inventory_sha256": "518468d075b4c88b25eca8d9204a104ed8ffcddcd701c1a819f3f96e65880f17"
   },
   "inventory": {
     "directories": [
@@ -88,7 +88,7 @@
       },
       {
         "path": "client/src/lib",
-        "source_file_count": 38
+        "source_file_count": 40
       },
       {
         "path": "client/src/pages",
@@ -128,7 +128,7 @@
       },
       {
         "path": "scripts",
-        "source_file_count": 494
+        "source_file_count": 495
       },
       {
         "path": "scripts/lib",
@@ -208,7 +208,7 @@
       },
       {
         "path": "server/utils",
-        "source_file_count": 38
+        "source_file_count": 40
       },
       {
         "path": "shared",
@@ -1395,6 +1395,18 @@
         "bytes": 609
       },
       {
+        "path": "client/src/lib/oauthIdentityFailure.test.ts",
+        "language": "ts",
+        "sha256": "8cb6ac657afe0297a6ffa5c6b642f1450eedaa7573663dae5fcdbe986bb58f3e",
+        "bytes": 814
+      },
+      {
+        "path": "client/src/lib/oauthIdentityFailure.ts",
+        "language": "ts",
+        "sha256": "4c2a8377b1ac6d21050215474efbf2cade4443c4fab139682a84b3adde7734d7",
+        "bytes": 775
+      },
+      {
         "path": "client/src/lib/owner-value-attribution-client.ts",
         "language": "ts",
         "sha256": "9a7ca35a8bce4279f8ab9b7b217ff5d75de946ada17daa23160c7db60f1a91b6",
@@ -1919,8 +1931,8 @@
       {
         "path": "client/src/pages/login.tsx",
         "language": "tsx",
-        "sha256": "9116cec4191ffc6695fa44952ae3010244a30adb73396ace33fb024ff45e1978",
-        "bytes": 24289
+        "sha256": "5b569270710c5383e747405032fea7765150eb07dd9474f4b749242540cdf013",
+        "bytes": 24716
       },
       {
         "path": "client/src/pages/mealscout-about-content.ts",
@@ -2123,8 +2135,8 @@
       {
         "path": "client/src/pages/restaurant-signup.tsx",
         "language": "tsx",
-        "sha256": "cf3a8e311f8d7fc7eac13859655431afbd790d7a256fb3cd251c96f3c3fe2d83",
-        "bytes": 117383
+        "sha256": "f11a12808e7298563e347af326d72d5d68b9d53224111d36852c07550fe4acbe",
+        "bytes": 117863
       },
       {
         "path": "client/src/pages/reviews.tsx",
@@ -3595,6 +3607,12 @@
         "language": "ts",
         "sha256": "73896151aa3289242d115974cc8ad5e444f22937c5650691c3b4fb4c9e24b739",
         "bytes": 5077
+      },
+      {
+        "path": "scripts/mealscout-oauth-identity-boundary.contract.test.ts",
+        "language": "ts",
+        "sha256": "8221f31da9cf0586706f305a2c3bc8c0c503252a64be5cf434d38159506392e9",
+        "bytes": 2448
       },
       {
         "path": "scripts/mealscout-one-market-launch-board.contract.test.ts",
@@ -5987,8 +6005,8 @@
       {
         "path": "server/routes/authAccountRoutes.ts",
         "language": "ts",
-        "sha256": "9e9dfa885895e0677b39e2cf652da80cf13b282fb795599eb64738e5b7713ab6",
-        "bytes": 37108
+        "sha256": "afbb4a4c6fdeda9238c86b63ba52deb9f6a3ca08cc791320131f80dc7252f9a2",
+        "bytes": 36998
       },
       {
         "path": "server/routes/awardsRoutes.ts",
@@ -7001,8 +7019,8 @@
       {
         "path": "server/storage.ts",
         "language": "ts",
-        "sha256": "c55be32018eb16fc7377dcc7676fccd23a639aece087e06812224316d9ed5606",
-        "bytes": 180197
+        "sha256": "b3a27c6144b1b263200b82ca438bea3ee6aed6f34aca1dc80ec5dd54e51ab576",
+        "bytes": 180167
       },
       {
         "path": "server/storage/analyticsRepository.ts",
@@ -7043,8 +7061,8 @@
       {
         "path": "server/storage/usersRepository.ts",
         "language": "ts",
-        "sha256": "3ee4e952de85aee9b587cc4d932203f61b25017be7120a28668a3000f474bab7",
-        "bytes": 30330
+        "sha256": "7f4885870793e22a13d9d2d684abae043e61db7c09b0943d49f6548c81ed145d",
+        "bytes": 24791
       },
       {
         "path": "server/storiesCronJobs.ts",
@@ -7103,8 +7121,8 @@
       {
         "path": "server/unifiedAuth.ts",
         "language": "ts",
-        "sha256": "1310375bba0b203245f1c0c2f6ed0f47a2df29dc1b9ffeeaa9c576a0d8c9b3b2",
-        "bytes": 91012
+        "sha256": "6e7c5c3589afe6eb3b28dd7b42e152ced2b3da35750f2afba25c8dfdee355411",
+        "bytes": 90202
       },
       {
         "path": "server/userRoutes.ts",
@@ -7219,6 +7237,18 @@
         "language": "ts",
         "sha256": "43e34ef3ff90d5af76fb0911d2c800a43dc162333ecd5818f49f905859da5754",
         "bytes": 1679
+      },
+      {
+        "path": "server/utils/oauthIdentityPolicy.test.ts",
+        "language": "ts",
+        "sha256": "3d33246dcc6baa2834f7e452b0da9a3b8e286e8381aaccd5b7b9313b269e6845",
+        "bytes": 2171
+      },
+      {
+        "path": "server/utils/oauthIdentityPolicy.ts",
+        "language": "ts",
+        "sha256": "b89bbc62229b67c55da31b350f474cfdff8ff87b8b42e72779620fd806920759",
+        "bytes": 2982
       },
       {
         "path": "server/utils/passwordPolicy.ts",
@@ -7553,8 +7583,8 @@
       {
         "path": "shared/schema/legacy.ts",
         "language": "ts",
-        "sha256": "06d0889abbbb22e31373c680def7d3db86dca0ea005e6271d91f89ac55bf46cf",
-        "bytes": 255626
+        "sha256": "2ef0d18d58572233610e689ca5959c83cf96b6f7e80cec1c6d264d00cc915c6c",
+        "bytes": 255709
       },
       {
         "path": "shared/schema/marketIntel.ts",
@@ -14865,6 +14895,13 @@
         "exported": true
       },
       {
+        "name": "getOAuthIdentityFailureMessage",
+        "kind": "function",
+        "path": "client/src/lib/oauthIdentityFailure.ts",
+        "line": 9,
+        "exported": true
+      },
+      {
         "name": "OwnerValueAttributionWindow",
         "kind": "type",
         "path": "client/src/lib/owner-value-attribution-client.ts",
@@ -20538,49 +20575,49 @@
         "name": "Login",
         "kind": "component",
         "path": "client/src/pages/login.tsx",
-        "line": 30,
+        "line": 31,
         "exported": true
       },
       {
         "name": "buildAuthPath",
         "kind": "function",
         "path": "client/src/pages/login.tsx",
-        "line": 44,
+        "line": 45,
         "exported": false
       },
       {
         "name": "attemptLoginWithRetry",
         "kind": "function",
         "path": "client/src/pages/login.tsx",
-        "line": 54,
+        "line": 55,
         "exported": false
       },
       {
         "name": "handleGoogleLogin",
         "kind": "function",
         "path": "client/src/pages/login.tsx",
-        "line": 83,
+        "line": 84,
         "exported": false
       },
       {
         "name": "handleFacebookLogin",
         "kind": "function",
         "path": "client/src/pages/login.tsx",
-        "line": 93,
+        "line": 94,
         "exported": false
       },
       {
         "name": "handleEmailLogin",
         "kind": "function",
         "path": "client/src/pages/login.tsx",
-        "line": 105,
+        "line": 106,
         "exported": false
       },
       {
         "name": "handleResendVerification",
         "kind": "function",
         "path": "client/src/pages/login.tsx",
-        "line": 184,
+        "line": 185,
         "exported": false
       },
       {
@@ -23324,217 +23361,217 @@
         "name": "RestaurantFormData",
         "kind": "type",
         "path": "client/src/pages/restaurant-signup.tsx",
-        "line": 171,
+        "line": 172,
         "exported": false
       },
       {
         "name": "SignupFormData",
         "kind": "type",
         "path": "client/src/pages/restaurant-signup.tsx",
-        "line": 173,
+        "line": 174,
         "exported": false
       },
       {
         "name": "LoginFormData",
         "kind": "type",
         "path": "client/src/pages/restaurant-signup.tsx",
-        "line": 174,
+        "line": 175,
         "exported": false
       },
       {
         "name": "RestaurantSubmissionData",
         "kind": "type",
         "path": "client/src/pages/restaurant-signup.tsx",
-        "line": 175,
+        "line": 176,
         "exported": false
       },
       {
         "name": "normalizeListingIdentity",
         "kind": "function",
         "path": "client/src/pages/restaurant-signup.tsx",
-        "line": 176,
+        "line": 177,
         "exported": false
       },
       {
         "name": "HostOnboardingStep",
         "kind": "type",
         "path": "client/src/pages/restaurant-signup.tsx",
-        "line": 206,
+        "line": 207,
         "exported": false
       },
       {
         "name": "HostOnboardingState",
         "kind": "type",
         "path": "client/src/pages/restaurant-signup.tsx",
-        "line": 208,
+        "line": 209,
         "exported": false
       },
       {
         "name": "HostOnboardingEvent",
         "kind": "type",
         "path": "client/src/pages/restaurant-signup.tsx",
-        "line": 212,
+        "line": 213,
         "exported": false
       },
       {
         "name": "assertNever",
         "kind": "function",
         "path": "client/src/pages/restaurant-signup.tsx",
-        "line": 216,
+        "line": 217,
         "exported": false
       },
       {
         "name": "hostOnboardingTransition",
         "kind": "function",
         "path": "client/src/pages/restaurant-signup.tsx",
-        "line": 220,
+        "line": 221,
         "exported": false
       },
       {
         "name": "getSafeFreeProfileErrorMessage",
         "kind": "function",
         "path": "client/src/pages/restaurant-signup.tsx",
-        "line": 240,
+        "line": 241,
         "exported": false
       },
       {
         "name": "createOnboardingAttemptId",
         "kind": "function",
         "path": "client/src/pages/restaurant-signup.tsx",
-        "line": 286,
+        "line": 287,
         "exported": false
       },
       {
         "name": "getOrCreateOnboardingAttemptId",
         "kind": "function",
         "path": "client/src/pages/restaurant-signup.tsx",
-        "line": 310,
+        "line": 311,
         "exported": false
       },
       {
         "name": "getStoredSignupTermsAccepted",
         "kind": "function",
         "path": "client/src/pages/restaurant-signup.tsx",
-        "line": 327,
+        "line": 328,
         "exported": false
       },
       {
         "name": "setStoredSignupTermsAccepted",
         "kind": "function",
         "path": "client/src/pages/restaurant-signup.tsx",
-        "line": 338,
+        "line": 339,
         "exported": false
       },
       {
         "name": "RestaurantSignup",
         "kind": "component",
         "path": "client/src/pages/restaurant-signup.tsx",
-        "line": 351,
+        "line": 352,
         "exported": true
       },
       {
         "name": "rotateOnboardingAttemptId",
         "kind": "function",
         "path": "client/src/pages/restaurant-signup.tsx",
-        "line": 437,
+        "line": 452,
         "exported": false
       },
       {
         "name": "persistMenuImportDraft",
         "kind": "function",
         "path": "client/src/pages/restaurant-signup.tsx",
-        "line": 485,
+        "line": 500,
         "exported": false
       },
       {
         "name": "onSubmit",
         "kind": "function",
         "path": "client/src/pages/restaurant-signup.tsx",
-        "line": 1053,
+        "line": 1068,
         "exported": false
       },
       {
         "name": "handleRestaurantInvalid",
         "kind": "function",
         "path": "client/src/pages/restaurant-signup.tsx",
-        "line": 1122,
+        "line": 1137,
         "exported": false
       },
       {
         "name": "handleVerificationSubmit",
         "kind": "function",
         "path": "client/src/pages/restaurant-signup.tsx",
-        "line": 1131,
+        "line": 1146,
         "exported": false
       },
       {
         "name": "handleSkipVerification",
         "kind": "function",
         "path": "client/src/pages/restaurant-signup.tsx",
-        "line": 1156,
+        "line": 1171,
         "exported": false
       },
       {
         "name": "handleRequestTruck",
         "kind": "function",
         "path": "client/src/pages/restaurant-signup.tsx",
-        "line": 1171,
+        "line": 1186,
         "exported": false
       },
       {
         "name": "handleDisputeClaim",
         "kind": "function",
         "path": "client/src/pages/restaurant-signup.tsx",
-        "line": 1204,
+        "line": 1219,
         "exported": false
       },
       {
         "name": "handleClaimSearch",
         "kind": "function",
         "path": "client/src/pages/restaurant-signup.tsx",
-        "line": 1236,
+        "line": 1251,
         "exported": false
       },
       {
         "name": "applyClaimSelection",
         "kind": "function",
         "path": "client/src/pages/restaurant-signup.tsx",
-        "line": 1322,
+        "line": 1337,
         "exported": false
       },
       {
         "name": "handleWebsiteImport",
         "kind": "function",
         "path": "client/src/pages/restaurant-signup.tsx",
-        "line": 1339,
+        "line": 1354,
         "exported": false
       },
       {
         "name": "onSignup",
         "kind": "function",
         "path": "client/src/pages/restaurant-signup.tsx",
-        "line": 1403,
+        "line": 1418,
         "exported": false
       },
       {
         "name": "onLogin",
         "kind": "function",
         "path": "client/src/pages/restaurant-signup.tsx",
-        "line": 1414,
+        "line": 1429,
         "exported": false
       },
       {
         "name": "handleSignupInvalid",
         "kind": "function",
         "path": "client/src/pages/restaurant-signup.tsx",
-        "line": 1418,
+        "line": 1433,
         "exported": false
       },
       {
         "name": "handleGoogleSignup",
         "kind": "function",
         "path": "client/src/pages/restaurant-signup.tsx",
-        "line": 1427,
+        "line": 1442,
         "exported": false
       },
       {
@@ -27574,6 +27611,13 @@
         "kind": "function",
         "path": "scripts/mealscout-merlin-seed-import.contract.test.ts",
         "line": 24,
+        "exported": false
+      },
+      {
+        "name": "read",
+        "kind": "function",
+        "path": "scripts/mealscout-oauth-identity-boundary.contract.test.ts",
+        "line": 6,
         "exported": false
       },
       {
@@ -45952,66 +45996,87 @@
         "exported": false
       },
       {
+        "name": "OAuthProvider",
+        "kind": "type",
+        "path": "server/storage/usersRepository.ts",
+        "line": 24,
+        "exported": false
+      },
+      {
         "name": "getUserTableInfo",
         "kind": "function",
         "path": "server/storage/usersRepository.ts",
-        "line": 27,
+        "line": 33,
         "exported": false
       },
       {
         "name": "selectUsersSafe",
         "kind": "function",
         "path": "server/storage/usersRepository.ts",
-        "line": 66,
+        "line": 72,
         "exported": false
       },
       {
         "name": "has",
         "kind": "function",
         "path": "server/storage/usersRepository.ts",
-        "line": 73,
+        "line": 79,
         "exported": false
       },
       {
         "name": "q",
         "kind": "function",
         "path": "server/storage/usersRepository.ts",
-        "line": 74,
+        "line": 80,
         "exported": false
       },
       {
         "name": "shouldAssignAffiliateTag",
         "kind": "function",
         "path": "server/storage/usersRepository.ts",
-        "line": 117,
+        "line": 123,
         "exported": false
       },
       {
         "name": "normalizeEmail",
         "kind": "function",
         "path": "server/storage/usersRepository.ts",
-        "line": 121,
+        "line": 127,
         "exported": false
       },
       {
         "name": "getSafePublicSignupUserType",
         "kind": "function",
         "path": "server/storage/usersRepository.ts",
-        "line": 126,
+        "line": 132,
         "exported": false
       },
       {
         "name": "recordAuthLinkEvent",
         "kind": "function",
         "path": "server/storage/usersRepository.ts",
-        "line": 141,
+        "line": 147,
+        "exported": false
+      },
+      {
+        "name": "SocialOAuthUserInput",
+        "kind": "type",
+        "path": "server/storage/usersRepository.ts",
+        "line": 168,
+        "exported": false
+      },
+      {
+        "name": "resolveSocialOAuthUser",
+        "kind": "function",
+        "path": "server/storage/usersRepository.ts",
+        "line": 178,
         "exported": false
       },
       {
         "name": "createUsersRepository",
         "kind": "function",
         "path": "server/storage/usersRepository.ts",
-        "line": 164,
+        "line": 263,
         "exported": true
       },
       {
@@ -46193,147 +46258,147 @@
         "name": "UnifiedAuthDependencies",
         "kind": "type",
         "path": "server/unifiedAuth.ts",
-        "line": 47,
+        "line": 51,
         "exported": false
       },
       {
         "name": "SessionData",
         "kind": "type",
         "path": "server/unifiedAuth.ts",
-        "line": 63,
+        "line": 66,
         "exported": false
       },
       {
         "name": "getSession",
         "kind": "function",
         "path": "server/unifiedAuth.ts",
-        "line": 98,
+        "line": 99,
         "exported": true
       },
       {
         "name": "getSessionCookieOptions",
         "kind": "function",
         "path": "server/unifiedAuth.ts",
-        "line": 126,
+        "line": 127,
         "exported": false
       },
       {
         "name": "establishAuthenticatedSession",
         "kind": "function",
         "path": "server/unifiedAuth.ts",
-        "line": 136,
+        "line": 137,
         "exported": false
       },
       {
         "name": "finalizeLogin",
         "kind": "function",
         "path": "server/unifiedAuth.ts",
-        "line": 139,
+        "line": 140,
         "exported": false
       },
       {
         "name": "setupUnifiedAuth",
         "kind": "function",
         "path": "server/unifiedAuth.ts",
-        "line": 169,
+        "line": 170,
         "exported": true
       },
       {
         "name": "getBaseUrl",
         "kind": "function",
         "path": "server/unifiedAuth.ts",
-        "line": 218,
+        "line": 219,
         "exported": false
       },
       {
         "name": "normalizePhone",
         "kind": "function",
         "path": "server/unifiedAuth.ts",
-        "line": 266,
+        "line": 270,
         "exported": false
       },
       {
         "name": "hasRequiredPhone",
         "kind": "function",
         "path": "server/unifiedAuth.ts",
-        "line": 268,
+        "line": 272,
         "exported": false
       },
       {
         "name": "buildPhoneRequiredSetupPath",
         "kind": "function",
         "path": "server/unifiedAuth.ts",
-        "line": 270,
+        "line": 274,
         "exported": false
       },
       {
         "name": "isBusinessCapableForContinuation",
         "kind": "function",
         "path": "server/unifiedAuth.ts",
-        "line": 442,
+        "line": 446,
         "exported": false
       },
       {
         "name": "verifyPhoneCode",
         "kind": "function",
         "path": "server/unifiedAuth.ts",
-        "line": 1433,
+        "line": 1429,
         "exported": false
       },
       {
         "name": "finish",
         "kind": "function",
         "path": "server/unifiedAuth.ts",
-        "line": 2015,
+        "line": 2011,
         "exported": false
       },
       {
         "name": "applyAffiliateReferral",
         "kind": "function",
         "path": "server/unifiedAuth.ts",
-        "line": 2498,
+        "line": 2494,
         "exported": false
       },
       {
         "name": "kickAffiliateTag",
         "kind": "function",
         "path": "server/unifiedAuth.ts",
-        "line": 2535,
+        "line": 2531,
         "exported": false
       },
       {
         "name": "isAuthenticated",
         "kind": "function",
         "path": "server/unifiedAuth.ts",
-        "line": 2545,
+        "line": 2541,
         "exported": true
       },
       {
         "name": "isRestaurantOwner",
         "kind": "function",
         "path": "server/unifiedAuth.ts",
-        "line": 2553,
+        "line": 2549,
         "exported": true
       },
       {
         "name": "UserRole",
         "kind": "type",
         "path": "server/unifiedAuth.ts",
-        "line": 2569,
+        "line": 2565,
         "exported": false
       },
       {
         "name": "requireRole",
         "kind": "function",
         "path": "server/unifiedAuth.ts",
-        "line": 2577,
+        "line": 2573,
         "exported": true
       },
       {
         "name": "apiKeyAuth",
         "kind": "function",
         "path": "server/unifiedAuth.ts",
-        "line": 2651,
+        "line": 2647,
         "exported": true
       },
       {
@@ -46915,6 +46980,62 @@
         "kind": "function",
         "path": "server/utils/notificationPreferences.ts",
         "line": 55,
+        "exported": true
+      },
+      {
+        "name": "OAuthProvider",
+        "kind": "type",
+        "path": "server/utils/oauthIdentityPolicy.ts",
+        "line": 1,
+        "exported": true
+      },
+      {
+        "name": "OAuthIdentityDecision",
+        "kind": "type",
+        "path": "server/utils/oauthIdentityPolicy.ts",
+        "line": 2,
+        "exported": true
+      },
+      {
+        "name": "OAuthIdentityFailureCode",
+        "kind": "type",
+        "path": "server/utils/oauthIdentityPolicy.ts",
+        "line": 12,
+        "exported": true
+      },
+      {
+        "name": "OAuthIdentityEvidence",
+        "kind": "type",
+        "path": "server/utils/oauthIdentityPolicy.ts",
+        "line": 17,
+        "exported": false
+      },
+      {
+        "name": "decideOAuthIdentity",
+        "kind": "function",
+        "path": "server/utils/oauthIdentityPolicy.ts",
+        "line": 30,
+        "exported": true
+      },
+      {
+        "name": "OAuthIdentityBoundaryError",
+        "kind": "class",
+        "path": "server/utils/oauthIdentityPolicy.ts",
+        "line": 53,
+        "exported": true
+      },
+      {
+        "name": "assertOAuthIdentityCanProceed",
+        "kind": "function",
+        "path": "server/utils/oauthIdentityPolicy.ts",
+        "line": 69,
+        "exported": true
+      },
+      {
+        "name": "oauthIdentityRedirectCode",
+        "kind": "function",
+        "path": "server/utils/oauthIdentityPolicy.ts",
+        "line": 84,
         "exported": true
       },
       {
@@ -49196,28 +49317,28 @@
         "name": "UpsertUser",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 2883,
+        "line": 2885,
         "exported": true
       },
       {
         "name": "User",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 2884,
+        "line": 2886,
         "exported": true
       },
       {
         "name": "FacebookUserData",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 2887,
+        "line": 2889,
         "exported": true
       },
       {
         "name": "GoogleUserData",
         "kind": "type",
         "path": "shared/schema/legacy.ts",
-        "line": 2895,
+        "line": 2896,
         "exported": true
       },
       {
@@ -57340,62 +57461,62 @@
         {
           "tag": "button",
           "path": "client/src/pages/login.tsx",
-          "line": 293
+          "line": 306
         },
         {
           "tag": "button",
           "path": "client/src/pages/login.tsx",
-          "line": 325
+          "line": 338
         },
         {
           "tag": "button",
           "path": "client/src/pages/login.tsx",
-          "line": 360
+          "line": 373
         },
         {
           "tag": "button",
           "path": "client/src/pages/login.tsx",
-          "line": 369
+          "line": 382
         },
         {
           "tag": "form",
           "path": "client/src/pages/login.tsx",
-          "line": 389
+          "line": 402
         },
         {
           "tag": "input",
           "path": "client/src/pages/login.tsx",
-          "line": 391
+          "line": 404
         },
         {
           "tag": "input",
           "path": "client/src/pages/login.tsx",
-          "line": 403
+          "line": 416
         },
         {
           "tag": "button",
           "path": "client/src/pages/login.tsx",
-          "line": 412
+          "line": 425
         },
         {
           "tag": "button",
           "path": "client/src/pages/login.tsx",
-          "line": 422
+          "line": 435
         },
         {
           "tag": "button",
           "path": "client/src/pages/login.tsx",
-          "line": 464
+          "line": 477
         },
         {
           "tag": "button",
           "path": "client/src/pages/login.tsx",
-          "line": 478
+          "line": 491
         },
         {
           "tag": "button",
           "path": "client/src/pages/login.tsx",
-          "line": 560
+          "line": 573
         },
         {
           "tag": "button",
@@ -59330,252 +59451,252 @@
         {
           "tag": "button",
           "path": "client/src/pages/restaurant-signup.tsx",
-          "line": 1520
+          "line": 1535
         },
         {
           "tag": "button",
           "path": "client/src/pages/restaurant-signup.tsx",
-          "line": 1529
+          "line": 1544
         },
         {
           "tag": "button",
           "path": "client/src/pages/restaurant-signup.tsx",
-          "line": 1540
+          "line": 1555
         },
         {
           "tag": "input",
           "path": "client/src/pages/restaurant-signup.tsx",
-          "line": 1584
+          "line": 1599
         },
         {
           "tag": "button",
           "path": "client/src/pages/restaurant-signup.tsx",
-          "line": 1594
+          "line": 1609
         },
         {
           "tag": "form",
           "path": "client/src/pages/restaurant-signup.tsx",
-          "line": 1665
+          "line": 1680
         },
         {
           "tag": "form",
           "path": "client/src/pages/restaurant-signup.tsx",
-          "line": 1666
+          "line": 1681
         },
         {
           "tag": "input",
           "path": "client/src/pages/restaurant-signup.tsx",
-          "line": 1683
+          "line": 1698
         },
         {
           "tag": "input",
           "path": "client/src/pages/restaurant-signup.tsx",
-          "line": 1705
+          "line": 1720
         },
         {
           "tag": "input",
           "path": "client/src/pages/restaurant-signup.tsx",
-          "line": 1731
+          "line": 1746
         },
         {
           "tag": "input",
           "path": "client/src/pages/restaurant-signup.tsx",
-          "line": 1760
+          "line": 1775
         },
         {
           "tag": "input",
           "path": "client/src/pages/restaurant-signup.tsx",
-          "line": 1780
+          "line": 1795
         },
         {
           "tag": "input",
           "path": "client/src/pages/restaurant-signup.tsx",
-          "line": 1810
+          "line": 1825
         },
         {
           "tag": "button",
           "path": "client/src/pages/restaurant-signup.tsx",
-          "line": 1820
+          "line": 1835
         },
         {
           "tag": "input",
           "path": "client/src/pages/restaurant-signup.tsx",
-          "line": 1853
+          "line": 1868
         },
         {
           "tag": "button",
           "path": "client/src/pages/restaurant-signup.tsx",
-          "line": 1865
+          "line": 1880
         },
         {
           "tag": "button",
           "path": "client/src/pages/restaurant-signup.tsx",
-          "line": 1890
+          "line": 1905
         },
         {
           "tag": "form",
           "path": "client/src/pages/restaurant-signup.tsx",
-          "line": 1903
+          "line": 1918
         },
         {
           "tag": "form",
           "path": "client/src/pages/restaurant-signup.tsx",
-          "line": 1904
+          "line": 1919
         },
         {
           "tag": "input",
           "path": "client/src/pages/restaurant-signup.tsx",
-          "line": 1917
+          "line": 1932
         },
         {
           "tag": "input",
           "path": "client/src/pages/restaurant-signup.tsx",
-          "line": 1944
+          "line": 1959
         },
         {
           "tag": "button",
           "path": "client/src/pages/restaurant-signup.tsx",
-          "line": 1954
+          "line": 1969
         },
         {
           "tag": "button",
           "path": "client/src/pages/restaurant-signup.tsx",
-          "line": 1979
+          "line": 1994
         },
         {
           "tag": "form",
           "path": "client/src/pages/restaurant-signup.tsx",
-          "line": 2073
+          "line": 2088
         },
         {
           "tag": "form",
           "path": "client/src/pages/restaurant-signup.tsx",
-          "line": 2074
+          "line": 2089
         },
         {
           "tag": "button",
           "path": "client/src/pages/restaurant-signup.tsx",
-          "line": 2094
+          "line": 2109
         },
         {
           "tag": "input",
           "path": "client/src/pages/restaurant-signup.tsx",
-          "line": 2126
+          "line": 2141
         },
         {
           "tag": "select",
           "path": "client/src/pages/restaurant-signup.tsx",
-          "line": 2146
+          "line": 2161
         },
         {
           "tag": "input",
           "path": "client/src/pages/restaurant-signup.tsx",
-          "line": 2238
+          "line": 2253
         },
         {
           "tag": "button",
           "path": "client/src/pages/restaurant-signup.tsx",
-          "line": 2251
+          "line": 2266
         },
         {
           "tag": "button",
           "path": "client/src/pages/restaurant-signup.tsx",
-          "line": 2269
+          "line": 2284
         },
         {
           "tag": "button",
           "path": "client/src/pages/restaurant-signup.tsx",
-          "line": 2318
+          "line": 2333
         },
         {
           "tag": "button",
           "path": "client/src/pages/restaurant-signup.tsx",
-          "line": 2328
+          "line": 2343
         },
         {
           "tag": "button",
           "path": "client/src/pages/restaurant-signup.tsx",
-          "line": 2348
+          "line": 2363
         },
         {
           "tag": "input",
           "path": "client/src/pages/restaurant-signup.tsx",
-          "line": 2395
+          "line": 2410
         },
         {
           "tag": "input",
           "path": "client/src/pages/restaurant-signup.tsx",
-          "line": 2416
+          "line": 2431
         },
         {
           "tag": "input",
           "path": "client/src/pages/restaurant-signup.tsx",
-          "line": 2437
+          "line": 2452
         },
         {
           "tag": "input",
           "path": "client/src/pages/restaurant-signup.tsx",
-          "line": 2461
+          "line": 2476
         },
         {
           "tag": "select",
           "path": "client/src/pages/restaurant-signup.tsx",
-          "line": 2482
+          "line": 2497
         },
         {
           "tag": "textarea",
           "path": "client/src/pages/restaurant-signup.tsx",
-          "line": 2539
+          "line": 2554
         },
         {
           "tag": "input",
           "path": "client/src/pages/restaurant-signup.tsx",
-          "line": 2563
+          "line": 2578
         },
         {
           "tag": "input",
           "path": "client/src/pages/restaurant-signup.tsx",
-          "line": 2580
+          "line": 2595
         },
         {
           "tag": "input",
           "path": "client/src/pages/restaurant-signup.tsx",
-          "line": 2597
+          "line": 2612
         },
         {
           "tag": "button",
           "path": "client/src/pages/restaurant-signup.tsx",
-          "line": 2609
+          "line": 2624
         },
         {
           "tag": "button",
           "path": "client/src/pages/restaurant-signup.tsx",
-          "line": 2737
+          "line": 2752
         },
         {
           "tag": "input",
           "path": "client/src/pages/restaurant-signup.tsx",
-          "line": 2822
+          "line": 2837
         },
         {
           "tag": "button",
           "path": "client/src/pages/restaurant-signup.tsx",
-          "line": 2845
+          "line": 2860
         },
         {
           "tag": "button",
           "path": "client/src/pages/restaurant-signup.tsx",
-          "line": 2858
+          "line": 2873
         },
         {
           "tag": "button",
           "path": "client/src/pages/restaurant-signup.tsx",
-          "line": 2870
+          "line": 2885
         },
         {
           "tag": "button",
           "path": "client/src/pages/restaurant-signup.tsx",
-          "line": 2890
+          "line": 2905
         },
         {
           "tag": "button",
@@ -60937,10 +61058,10 @@
   ],
   "summary": {
     "directories": 53,
-    "source_files": 1238,
-    "symbols": 6199,
+    "source_files": 1243,
+    "symbols": 6212,
     "components": 406,
-    "functions_and_hooks": 4011,
+    "functions_and_hooks": 4017,
     "raw_ui_elements": 1875,
     "errors": 0,
     "warnings": 5
