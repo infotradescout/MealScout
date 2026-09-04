@@ -10,7 +10,9 @@ if (!existsSync(routeMapPath)) {
 const routeMap = readFileSync(routeMapPath, "utf8");
 
 function requireIncludes(snippet: string, label = snippet) {
-  if (!routeMap.toLowerCase().includes(snippet.toLowerCase())) {
+  const normalize = (value: string) =>
+    value.toLowerCase().replace(/\s+/g, " ").trim();
+  if (!normalize(routeMap).includes(normalize(snippet))) {
     throw new Error(`Route map missing ${label}.`);
   }
 }
@@ -51,14 +53,15 @@ function requireMatch(pattern: RegExp, label: string) {
 ].forEach((snippet) => requireIncludes(snippet, `public customer route ${snippet}`));
 
 [
-  "`/scout`, `/scout/:refTag`, `/directory`, `/directory/:refTag`, `/scout-v2` | `client/src/pages/explore-preview-v2.tsx`",
+  "`/scout`, `/scout/:refTag`, `/directory`, `/directory/:refTag`, `/scout-v2`, `/food-trucks`",
+  "`client/src/pages/explore-preview-v2.tsx` (`ScoutPageV2`)",
   "`/map` | `RedirectToScout` in `client/src/App.tsx`, then `client/src/pages/explore-preview-v2.tsx`",
   "The obsolete standalone map page has been retired.",
   "`/sitemap` | `client/src/pages/sitemap.tsx`",
   "`/restaurant/:id`, `/restaurant/:id/:profileSlug`, `/truck/:slug`, `/bar/:slug`, `/location/:slug`, `/p/:profileType/:profileId`, `/p/:profileType/:profileId/:profileSlug` | `client/src/pages/public-profile.tsx`",
   "`/city/:city/food`, `/food-trucks-today/:city`, `/deals-today/:city`, `/events-today/:city`, `/locations-with-trucks/:city`, `/cuisine/:cuisine/:city` | `client/src/pages/public-seo-landing.tsx`",
   "`/profile-setup` | `client/src/pages/profile-setup.tsx`",
-  "`client/src/pages/explore-preview.tsx` is legacy/quarantined",
+  "The retired `client/src/pages/explore-preview.tsx` implementation no longer exists",
   "`client/src/pages/trending.tsx` exists, but `/trending` redirects to `/scout`",
 ].forEach((snippet) => requireIncludes(snippet, `public route source inventory ${snippet}`));
 

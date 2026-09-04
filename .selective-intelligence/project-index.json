@@ -1,12 +1,12 @@
 {
   "schema_version": 1,
   "index_version": "0.1.0",
-  "generated_at": "2026-09-04T16:48:16Z",
+  "generated_at": "2026-09-04T17:13:16Z",
   "source": {
     "kind": "git",
-    "revision": "6128fbc9539c27d70f937a7ffa1d619bf819c7b3",
+    "revision": "7d38f3c3ffdfd4a59793f3f2319f378f4b0f34dd",
     "dirty": true,
-    "inventory_sha256": "caf1829329bd9930f7b488b5843a07a77b38b4e8ceffb7cef1d08076b075d727"
+    "inventory_sha256": "0caae96295e64a556be60ccb0eaf06d143cf2f23af9409dbda7e9b0084699cb3"
   },
   "inventory": {
     "directories": [
@@ -32,7 +32,7 @@
       },
       {
         "path": "client/src/components",
-        "source_file_count": 56
+        "source_file_count": 55
       },
       {
         "path": "client/src/components/admin",
@@ -92,7 +92,7 @@
       },
       {
         "path": "client/src/pages",
-        "source_file_count": 115
+        "source_file_count": 114
       },
       {
         "path": "client/src/pages/admin",
@@ -281,8 +281,8 @@
       {
         "path": "client/src/App.tsx",
         "language": "tsx",
-        "sha256": "4ee646e2c5975f320c7262ff54237a6096460f8c048ad14b8c463663cf722e5b",
-        "bytes": 33496
+        "sha256": "dcd5e4848f3ea917e860976df37d68533894338abc50d39883f7e6b21368dd1c",
+        "bytes": 33431
       },
       {
         "path": "client/src/MealScoutApp.tsx",
@@ -313,12 +313,6 @@
         "language": "tsx",
         "sha256": "95ab851de6eee11ea51733f78126e879175129de8edb325a3bcce90cf7d065dc",
         "bytes": 10177
-      },
-      {
-        "path": "client/src/components/ShareButton.tsx",
-        "language": "tsx",
-        "sha256": "b55172f3d6f1e933929d2808611f066401a27b34105d953665a0a69ac3a941ab",
-        "bytes": 3109
       },
       {
         "path": "client/src/components/TimeOfDayBackground.tsx",
@@ -1813,12 +1807,6 @@
         "language": "tsx",
         "sha256": "c0c061bf8bde67564cd08b79adc42ca3dafcd3d86ceb32340962f6a54d395ce4",
         "bytes": 416401
-      },
-      {
-        "path": "client/src/pages/explore-preview.tsx",
-        "language": "tsx",
-        "sha256": "30e41f0b19e5d90fdf93934239af536e6e113909e3f8d9cb3dbd5a7db9726026",
-        "bytes": 353814
       },
       {
         "path": "client/src/pages/faq.tsx",
@@ -3563,8 +3551,8 @@
       {
         "path": "scripts/mealscout-live-exposure-guardrails.contract.test.ts",
         "language": "ts",
-        "sha256": "c5239ccaad64c6c24c1802bf459a096da827f097f9bb52923f5f4eb51cc07c10",
-        "bytes": 3947
+        "sha256": "5245083a0682ef1ffcc3f6027f0f39a3efef2b1c38affed2d1b0b048cc9250a0",
+        "bytes": 3886
       },
       {
         "path": "scripts/mealscout-login-recovery.contract.test.ts",
@@ -3605,8 +3593,8 @@
       {
         "path": "scripts/mealscout-native-share-attribution.contract.test.ts",
         "language": "ts",
-        "sha256": "e6db2f81bea153bfb14f156cc32c22512f07366c9c6c963f8ee2ef50ec8fd653",
-        "bytes": 5090
+        "sha256": "73896151aa3289242d115974cc8ad5e444f22937c5650691c3b4fb4c9e24b739",
+        "bytes": 5077
       },
       {
         "path": "scripts/mealscout-one-market-launch-board.contract.test.ts",
@@ -3941,8 +3929,8 @@
       {
         "path": "scripts/mealscout-route-map.contract.test.ts",
         "language": "ts",
-        "sha256": "9f671e0e3bd6ca34794f1e89c5215d384bea02f9689d7a0e11cb3940a7ff2723",
-        "bytes": 7135
+        "sha256": "6f584903ef110cbb9606ec6c0d4542f79b1d14dfd6fad1969b1b7cebfb250b83",
+        "bytes": 7278
       },
       {
         "path": "scripts/mealscout-scout-discovery-result.contract.test.ts",
@@ -4895,14 +4883,14 @@
       {
         "path": "scripts/scout-canonical-dedupe-image.contract.test.ts",
         "language": "ts",
-        "sha256": "660831a5193776d7dddb59edc842ebf96e5fee459476a82191a7c52db8ade251",
-        "bytes": 1479
+        "sha256": "51d341c84e2e49c1dfd594e5b8b026fe1add60eaed21e50008ce592104b9d1e6",
+        "bytes": 1491
       },
       {
         "path": "scripts/scout-canonical-runtime-build.contract.test.ts",
         "language": "ts",
-        "sha256": "96f6f42e844d4cbf69d20bae297e6383e3c1676c9a03f8b1ee65c92c66c8cc81",
-        "bytes": 5907
+        "sha256": "fd6b9ca8c9d3431493ea563935aa900b3af2a9735f7a666f4a39d9227dbbdd83",
+        "bytes": 5859
       },
       {
         "path": "scripts/scout-classification-section-dedup.contract.test.ts",
@@ -4937,8 +4925,8 @@
       {
         "path": "scripts/scout-image-fallback.contract.test.ts",
         "language": "ts",
-        "sha256": "7c79d83c368d1692935fecc4d5cb673df4bf0b3b89da6d57d6efcaa3238b50fb",
-        "bytes": 1038
+        "sha256": "af0e00f0cb23da2c9d60b0a8fc36821f448b7bc4fd939f0731c96ab43eef268f",
+        "bytes": 1041
       },
       {
         "path": "scripts/scout-location-context-origin.contract.test.ts",
@@ -5009,8 +4997,8 @@
       {
         "path": "scripts/scout-trending-promotion.contract.test.ts",
         "language": "ts",
-        "sha256": "9db87600028720137678cd335ca84020ec34bf034832b36a172a9d78b1d199ea",
-        "bytes": 2894
+        "sha256": "a429e161e42d3af8c2725ed9c9d945630c765d6ec0743c2ab10dde4242cfb3a3",
+        "bytes": 2897
       },
       {
         "path": "scripts/scout-truck-menu-schedule-regression.contract.test.ts",
@@ -8906,105 +8894,105 @@
         "name": "PageLoader",
         "kind": "component",
         "path": "client/src/App.tsx",
-        "line": 165,
+        "line": 164,
         "exported": false
       },
       {
         "name": "RedirectToScout",
         "kind": "component",
         "path": "client/src/App.tsx",
-        "line": 170,
+        "line": 169,
         "exported": false
       },
       {
         "name": "RedirectToLogin",
         "kind": "component",
         "path": "client/src/App.tsx",
-        "line": 180,
+        "line": 179,
         "exported": false
       },
       {
         "name": "RedirectToSettingsNotifications",
         "kind": "component",
         "path": "client/src/App.tsx",
-        "line": 196,
+        "line": 195,
         "exported": false
       },
       {
         "name": "RedirectToSettingsAccount",
         "kind": "component",
         "path": "client/src/App.tsx",
-        "line": 206,
+        "line": 205,
         "exported": false
       },
       {
         "name": "RedirectToHelp",
         "kind": "component",
         "path": "client/src/App.tsx",
-        "line": 216,
+        "line": 215,
         "exported": false
       },
       {
         "name": "RedirectToAdmin",
         "kind": "component",
         "path": "client/src/App.tsx",
-        "line": 226,
+        "line": 225,
         "exported": false
       },
       {
         "name": "CleanPublicProfileRoute",
         "kind": "component",
         "path": "client/src/App.tsx",
-        "line": 236,
+        "line": 235,
         "exported": false
       },
       {
         "name": "isPublicPath",
         "kind": "function",
         "path": "client/src/App.tsx",
-        "line": 316,
+        "line": 315,
         "exported": false
       },
       {
         "name": "shouldRenderShellNotFound",
         "kind": "function",
         "path": "client/src/App.tsx",
-        "line": 322,
+        "line": 321,
         "exported": false
       },
       {
         "name": "DashboardSwitcherPage",
         "kind": "component",
         "path": "client/src/App.tsx",
-        "line": 338,
+        "line": 337,
         "exported": false
       },
       {
         "name": "GuestProtectedRoutes",
         "kind": "component",
         "path": "client/src/App.tsx",
-        "line": 343,
+        "line": 342,
         "exported": false
       },
       {
         "name": "SharedPublicRoutes",
         "kind": "component",
         "path": "client/src/App.tsx",
-        "line": 376,
+        "line": 375,
         "exported": false
       },
       {
         "name": "Router",
         "kind": "component",
         "path": "client/src/App.tsx",
-        "line": 511,
+        "line": 510,
         "exported": false
       },
       {
         "name": "App",
         "kind": "component",
         "path": "client/src/App.tsx",
-        "line": 698,
+        "line": 697,
         "exported": false
       },
       {
@@ -9166,62 +9154,6 @@
         "kind": "function",
         "path": "client/src/components/RestaurantTrustPanel.tsx",
         "line": 276,
-        "exported": false
-      },
-      {
-        "name": "ShareButtonProps",
-        "kind": "type",
-        "path": "client/src/components/ShareButton.tsx",
-        "line": 11,
-        "exported": false
-      },
-      {
-        "name": "ShareButton",
-        "kind": "component",
-        "path": "client/src/components/ShareButton.tsx",
-        "line": 18,
-        "exported": true
-      },
-      {
-        "name": "getShareUrl",
-        "kind": "function",
-        "path": "client/src/components/ShareButton.tsx",
-        "line": 21,
-        "exported": false
-      },
-      {
-        "name": "shareToFacebook",
-        "kind": "function",
-        "path": "client/src/components/ShareButton.tsx",
-        "line": 22,
-        "exported": false
-      },
-      {
-        "name": "shareToTwitter",
-        "kind": "function",
-        "path": "client/src/components/ShareButton.tsx",
-        "line": 32,
-        "exported": false
-      },
-      {
-        "name": "shareToWhatsApp",
-        "kind": "function",
-        "path": "client/src/components/ShareButton.tsx",
-        "line": 42,
-        "exported": false
-      },
-      {
-        "name": "copyLink",
-        "kind": "function",
-        "path": "client/src/components/ShareButton.tsx",
-        "line": 51,
-        "exported": false
-      },
-      {
-        "name": "nativeShare",
-        "kind": "function",
-        "path": "client/src/components/ShareButton.tsx",
-        "line": 68,
         "exported": false
       },
       {
@@ -20082,1427 +20014,6 @@
         "exported": false
       },
       {
-        "name": "ReactNode",
-        "kind": "type",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 14,
-        "exported": false
-      },
-      {
-        "name": "EffectiveLocationContext",
-        "kind": "type",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 48,
-        "exported": false
-      },
-      {
-        "name": "ScoutSearchFilterId",
-        "kind": "type",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 56,
-        "exported": false
-      },
-      {
-        "name": "ScoutHorizontalRowId",
-        "kind": "type",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 78,
-        "exported": false
-      },
-      {
-        "name": "ScoutNormalizedCardKind",
-        "kind": "type",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 79,
-        "exported": false
-      },
-      {
-        "name": "formatScoutMarketLabel",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 100,
-        "exported": false
-      },
-      {
-        "name": "MapRuntimeResponse",
-        "kind": "type",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 143,
-        "exported": false
-      },
-      {
-        "name": "LiveTruckSummary",
-        "kind": "type",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 172,
-        "exported": false
-      },
-      {
-        "name": "LiveTrucksResponse",
-        "kind": "type",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 205,
-        "exported": false
-      },
-      {
-        "name": "DealSummary",
-        "kind": "type",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 210,
-        "exported": false
-      },
-      {
-        "name": "DealsResponse",
-        "kind": "type",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 219,
-        "exported": false
-      },
-      {
-        "name": "EventSummary",
-        "kind": "type",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 221,
-        "exported": false
-      },
-      {
-        "name": "EventsResponse",
-        "kind": "type",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 239,
-        "exported": false
-      },
-      {
-        "name": "ScoutHostLocation",
-        "kind": "type",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 241,
-        "exported": false
-      },
-      {
-        "name": "ScoutMapEventLocation",
-        "kind": "type",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 259,
-        "exported": false
-      },
-      {
-        "name": "ScoutParkingPassListing",
-        "kind": "type",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 280,
-        "exported": false
-      },
-      {
-        "name": "MapLocationsResponse",
-        "kind": "type",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 295,
-        "exported": false
-      },
-      {
-        "name": "RestaurantSummary",
-        "kind": "type",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 301,
-        "exported": false
-      },
-      {
-        "name": "MenuPreviewItem",
-        "kind": "type",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 339,
-        "exported": false
-      },
-      {
-        "name": "LocalMenuItemFeedItem",
-        "kind": "type",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 347,
-        "exported": false
-      },
-      {
-        "name": "TrendingPlaceSummary",
-        "kind": "type",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 364,
-        "exported": false
-      },
-      {
-        "name": "TrendingDishSummary",
-        "kind": "type",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 380,
-        "exported": false
-      },
-      {
-        "name": "ScoutTrendingResponse",
-        "kind": "type",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 400,
-        "exported": false
-      },
-      {
-        "name": "RestaurantRelationshipSnapshot",
-        "kind": "type",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 407,
-        "exported": false
-      },
-      {
-        "name": "CravingCategory",
-        "kind": "type",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 413,
-        "exported": false
-      },
-      {
-        "name": "ScoutSceneLaneId",
-        "kind": "type",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 422,
-        "exported": false
-      },
-      {
-        "name": "getSceneOptionIcon",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 472,
-        "exported": false
-      },
-      {
-        "name": "Daypart",
-        "kind": "type",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 494,
-        "exported": false
-      },
-      {
-        "name": "getDaypart",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 496,
-        "exported": false
-      },
-      {
-        "name": "CravingBoardItem",
-        "kind": "type",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 709,
-        "exported": false
-      },
-      {
-        "name": "LocalActivityItem",
-        "kind": "type",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 725,
-        "exported": false
-      },
-      {
-        "name": "ScoutActivityMode",
-        "kind": "type",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 737,
-        "exported": false
-      },
-      {
-        "name": "ScoutActivityInputs",
-        "kind": "type",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 739,
-        "exported": false
-      },
-      {
-        "name": "DiscoveryLayerId",
-        "kind": "type",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 749,
-        "exported": false
-      },
-      {
-        "name": "getMetaDistance",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 802,
-        "exported": false
-      },
-      {
-        "name": "FreshnessState",
-        "kind": "type",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 809,
-        "exported": false
-      },
-      {
-        "name": "FreshnessMeta",
-        "kind": "type",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 811,
-        "exported": false
-      },
-      {
-        "name": "MapLayerId",
-        "kind": "type",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 836,
-        "exported": false
-      },
-      {
-        "name": "MapLayerState",
-        "kind": "type",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 838,
-        "exported": false
-      },
-      {
-        "name": "ScoutSourceStatusKey",
-        "kind": "type",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 840,
-        "exported": false
-      },
-      {
-        "name": "readStringField",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 847,
-        "exported": false
-      },
-      {
-        "name": "readBooleanField",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 857,
-        "exported": false
-      },
-      {
-        "name": "parseTimestampMs",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 878,
-        "exported": false
-      },
-      {
-        "name": "getRestaurantEntityType",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 884,
-        "exported": false
-      },
-      {
-        "name": "getRestaurantProfilePath",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 903,
-        "exported": false
-      },
-      {
-        "name": "getScoutRestaurantLikeKind",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 915,
-        "exported": false
-      },
-      {
-        "name": "getScoutBusinessCardKey",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 921,
-        "exported": false
-      },
-      {
-        "name": "getTruckProfilePath",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 928,
-        "exported": false
-      },
-      {
-        "name": "getMenuItemProfilePath",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 938,
-        "exported": false
-      },
-      {
-        "name": "getTrendingPlaceProfilePath",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 949,
-        "exported": false
-      },
-      {
-        "name": "getCurrentUserId",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 968,
-        "exported": false
-      },
-      {
-        "name": "isFoodOperator",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 972,
-        "exported": false
-      },
-      {
-        "name": "isOwnedByCurrentUser",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 977,
-        "exported": false
-      },
-      {
-        "name": "isTruckServingNow",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 995,
-        "exported": false
-      },
-      {
-        "name": "getRestaurantOpenState",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 1031,
-        "exported": false
-      },
-      {
-        "name": "getKnownTimestamp",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 1057,
-        "exported": false
-      },
-      {
-        "name": "formatFreshnessTime",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 1067,
-        "exported": false
-      },
-      {
-        "name": "isTodayDate",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 1093,
-        "exported": false
-      },
-      {
-        "name": "getFreshnessState",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 1106,
-        "exported": false
-      },
-      {
-        "name": "getFreshnessLabel",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 1123,
-        "exported": false
-      },
-      {
-        "name": "getSourceLabel",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 1164,
-        "exported": false
-      },
-      {
-        "name": "getOperationalBadges",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 1171,
-        "exported": false
-      },
-      {
-        "name": "getFreshnessBadgeClass",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 1209,
-        "exported": false
-      },
-      {
-        "name": "getRestaurantUpdateHref",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 1221,
-        "exported": false
-      },
-      {
-        "name": "getTruckUpdateHref",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 1234,
-        "exported": false
-      },
-      {
-        "name": "getMapMarkerColor",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 1241,
-        "exported": false
-      },
-      {
-        "name": "getMapMarkerSubtitle",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 1250,
-        "exported": false
-      },
-      {
-        "name": "getScoutActivityMode",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 1261,
-        "exported": false
-      },
-      {
-        "name": "getActivityRailTitle",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 1300,
-        "exported": false
-      },
-      {
-        "name": "getActivityRailSubtitle",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 1306,
-        "exported": false
-      },
-      {
-        "name": "getRestaurantIdFromActivity",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 1316,
-        "exported": false
-      },
-      {
-        "name": "formatDistance",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 1325,
-        "exported": false
-      },
-      {
-        "name": "formatMiles",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 1338,
-        "exported": false
-      },
-      {
-        "name": "readNumberField",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 1343,
-        "exported": false
-      },
-      {
-        "name": "getBoundsForScoutLocation",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 1354,
-        "exported": false
-      },
-      {
-        "name": "getDistanceMiles",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 1370,
-        "exported": false
-      },
-      {
-        "name": "toRad",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 1375,
-        "exported": false
-      },
-      {
-        "name": "getScoutHostMarkerKey",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 1386,
-        "exported": false
-      },
-      {
-        "name": "normalizeScoutLocationAddress",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 1399,
-        "exported": false
-      },
-      {
-        "name": "timeStringToMinutes",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 1414,
-        "exported": false
-      },
-      {
-        "name": "isScoutMapWindowActiveNow",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 1423,
-        "exported": false
-      },
-      {
-        "name": "getRestaurantName",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 1438,
-        "exported": false
-      },
-      {
-        "name": "getRestaurantDistance",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 1442,
-        "exported": false
-      },
-      {
-        "name": "formatScoutCount",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 1452,
-        "exported": false
-      },
-      {
-        "name": "formatScoutResultSummary",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 1460,
-        "exported": false
-      },
-      {
-        "name": "getRestaurantArea",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 1465,
-        "exported": false
-      },
-      {
-        "name": "getTruckArea",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 1469,
-        "exported": false
-      },
-      {
-        "name": "buildDirectionsUrl",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 1473,
-        "exported": false
-      },
-      {
-        "name": "scoreTextForCraving",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 1485,
-        "exported": false
-      },
-      {
-        "name": "getRestaurantCravingScore",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 1493,
-        "exported": false
-      },
-      {
-        "name": "getTruckCravingScore",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 1501,
-        "exported": false
-      },
-      {
-        "name": "getMenuItemCravingScore",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 1509,
-        "exported": false
-      },
-      {
-        "name": "getDealCravingScore",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 1517,
-        "exported": false
-      },
-      {
-        "name": "getRestaurantDiscoveryReason",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 1525,
-        "exported": false
-      },
-      {
-        "name": "getRestaurantCommunityScore",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 1543,
-        "exported": false
-      },
-      {
-        "name": "getMenuItemSearchReason",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 1554,
-        "exported": false
-      },
-      {
-        "name": "getRestaurantSearchReason",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 1565,
-        "exported": false
-      },
-      {
-        "name": "getRestaurantImage",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 1569,
-        "exported": false
-      },
-      {
-        "name": "getTruckImage",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 1579,
-        "exported": false
-      },
-      {
-        "name": "buildCravingBoardItems",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 1589,
-        "exported": false
-      },
-      {
-        "name": "getFreshnessTimeLabel",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 1803,
-        "exported": false
-      },
-      {
-        "name": "formatEventStartLabel",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 1808,
-        "exported": false
-      },
-      {
-        "name": "buildLocalActivityItems",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 1820,
-        "exported": false
-      },
-      {
-        "name": "formatWait",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 2017,
-        "exported": false
-      },
-      {
-        "name": "getCrowdVibe",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 2025,
-        "exported": false
-      },
-      {
-        "name": "TruckCardTone",
-        "kind": "type",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 2033,
-        "exported": false
-      },
-      {
-        "name": "getTruckCardTone",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 2035,
-        "exported": false
-      },
-      {
-        "name": "getTruckToneClass",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 2057,
-        "exported": false
-      },
-      {
-        "name": "getTruckToneDotClass",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 2066,
-        "exported": false
-      },
-      {
-        "name": "getTruckCoords",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 2072,
-        "exported": false
-      },
-      {
-        "name": "formatTruckPlace",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 2081,
-        "exported": false
-      },
-      {
-        "name": "buildTruckDirectionsUrl",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 2088,
-        "exported": false
-      },
-      {
-        "name": "getGreetingTime",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 2100,
-        "exported": false
-      },
-      {
-        "name": "clampDiscoveryRadiusKm",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 2112,
-        "exported": false
-      },
-      {
-        "name": "readDiscoveryRadiusKm",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 2120,
-        "exported": false
-      },
-      {
-        "name": "ScoutCoords",
-        "kind": "type",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 2129,
-        "exported": false
-      },
-      {
-        "name": "toScoutNumber",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 2131,
-        "exported": false
-      },
-      {
-        "name": "distanceKmBetween",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 2136,
-        "exported": false
-      },
-      {
-        "name": "toRad",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 2143,
-        "exported": false
-      },
-      {
-        "name": "isWithinScoutRadius",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 2154,
-        "exported": false
-      },
-      {
-        "name": "ScoutSearchIntent",
-        "kind": "type",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 2176,
-        "exported": false
-      },
-      {
-        "name": "normalizeScoutSearchText",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 2189,
-        "exported": false
-      },
-      {
-        "name": "tokenizeScoutSearch",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 2195,
-        "exported": false
-      },
-      {
-        "name": "inferScoutSearchIntent",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 2202,
-        "exported": false
-      },
-      {
-        "name": "scoutRecordSearchText",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 2233,
-        "exported": false
-      },
-      {
-        "name": "matchesScoutSearchText",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 2264,
-        "exported": false
-      },
-      {
-        "name": "hasCommunitySignal",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 2270,
-        "exported": false
-      },
-      {
-        "name": "hasNewListingSignal",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 2282,
-        "exported": false
-      },
-      {
-        "name": "matchesScoutIntent",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 2292,
-        "exported": false
-      },
-      {
-        "name": "shiftCenterForRightQuadrant",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 2377,
-        "exported": false
-      },
-      {
-        "name": "ExplorePreview",
-        "kind": "component",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 2395,
-        "exported": true
-      },
-      {
-        "name": "pickId",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 3298,
-        "exported": false
-      },
-      {
-        "name": "hasCoords",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 3703,
-        "exported": false
-      },
-      {
-        "name": "startPrefetch",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 3990,
-        "exported": false
-      },
-      {
-        "name": "pickByKind",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 4381,
-        "exported": false
-      },
-      {
-        "name": "add",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 4384,
-        "exported": false
-      },
-      {
-        "name": "SectionHeader",
-        "kind": "component",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 5201,
-        "exported": false
-      },
-      {
-        "name": "CravingCompass",
-        "kind": "component",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 5244,
-        "exported": false
-      },
-      {
-        "name": "SceneOptionsBar",
-        "kind": "component",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 5304,
-        "exported": false
-      },
-      {
-        "name": "getIcon",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 5316,
-        "exported": false
-      },
-      {
-        "name": "ActiveSceneIntro",
-        "kind": "component",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 5370,
-        "exported": false
-      },
-      {
-        "name": "ScoutRailRenderCard",
-        "kind": "type",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 5430,
-        "exported": false
-      },
-      {
-        "name": "ScoutImmediateDecisionItem",
-        "kind": "type",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 5446,
-        "exported": false
-      },
-      {
-        "name": "ScoutHorizontalRailDefinition",
-        "kind": "type",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 5492,
-        "exported": false
-      },
-      {
-        "name": "getScoutRailCardKey",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 5506,
-        "exported": false
-      },
-      {
-        "name": "ScoutHorizontalCategoryRail",
-        "kind": "component",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 5515,
-        "exported": false
-      },
-      {
-        "name": "ScoutFirstScreenDecisionStack",
-        "kind": "component",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 5569,
-        "exported": false
-      },
-      {
-        "name": "ScoutRecoveryActions",
-        "kind": "component",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 5639,
-        "exported": false
-      },
-      {
-        "name": "ScoutImmediateCompactCard",
-        "kind": "component",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 5658,
-        "exported": false
-      },
-      {
-        "name": "CompactDecisionCardVariant",
-        "kind": "type",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 5862,
-        "exported": false
-      },
-      {
-        "name": "CompactDecisionCardShell",
-        "kind": "component",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 5870,
-        "exported": false
-      },
-      {
-        "name": "DishCategoryPhoto",
-        "kind": "type",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 5999,
-        "exported": false
-      },
-      {
-        "name": "getDishCategoryPhoto",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 6091,
-        "exported": false
-      },
-      {
-        "name": "ScoutCardMedia",
-        "kind": "component",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 6103,
-        "exported": false
-      },
-      {
-        "name": "ActiveSceneContent",
-        "kind": "component",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 6182,
-        "exported": false
-      },
-      {
-        "name": "ScoutBusinessSectionCard",
-        "kind": "type",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 6284,
-        "exported": false
-      },
-      {
-        "name": "toBusinessKey",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 6287,
-        "exported": false
-      },
-      {
-        "name": "extractTrucks",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 6303,
-        "exported": false
-      },
-      {
-        "name": "extractRestaurants",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 6310,
-        "exported": false
-      },
-      {
-        "name": "suppressFirstScreenBusiness",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 6680,
-        "exported": false
-      },
-      {
-        "name": "renderScoutRailCard",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 6951,
-        "exported": false
-      },
-      {
-        "name": "SceneMixedFeed",
-        "kind": "component",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 7272,
-        "exported": false
-      },
-      {
-        "name": "SceneMixedFeedCard",
-        "kind": "component",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 7291,
-        "exported": false
-      },
-      {
-        "name": "ActiveSceneEmptyState",
-        "kind": "component",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 7420,
-        "exported": false
-      },
-      {
-        "name": "ExploreSceneTiles",
-        "kind": "component",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 7479,
-        "exported": false
-      },
-      {
-        "name": "FilterNearbyChips",
-        "kind": "component",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 7528,
-        "exported": false
-      },
-      {
-        "name": "QuietNearbyNotice",
-        "kind": "component",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 7574,
-        "exported": false
-      },
-      {
-        "name": "CollapsedMapPinCard",
-        "kind": "component",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 7589,
-        "exported": false
-      },
-      {
-        "name": "LocalActivityRail",
-        "kind": "component",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 7675,
-        "exported": false
-      },
-      {
-        "name": "QuickUpdateBar",
-        "kind": "component",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 7715,
-        "exported": false
-      },
-      {
-        "name": "OwnerOperationalActions",
-        "kind": "component",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 7769,
-        "exported": false
-      },
-      {
-        "name": "LocalActivityCard",
-        "kind": "component",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 7794,
-        "exported": false
-      },
-      {
-        "name": "HeroMapFallback",
-        "kind": "component",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 7854,
-        "exported": false
-      },
-      {
-        "name": "LiveNowEmptyCard",
-        "kind": "component",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 7927,
-        "exported": false
-      },
-      {
-        "name": "LiveTruckSkeletonCard",
-        "kind": "component",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 7964,
-        "exported": false
-      },
-      {
-        "name": "LiveTruckCard",
-        "kind": "component",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 7975,
-        "exported": false
-      },
-      {
-        "name": "toggleFavorite",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 7992,
-        "exported": false
-      },
-      {
-        "name": "DealCard",
-        "kind": "component",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 8167,
-        "exported": false
-      },
-      {
-        "name": "trackLocalMenuItemEngagement",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 8251,
-        "exported": false
-      },
-      {
-        "name": "LocalMenuItemCard",
-        "kind": "component",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 8269,
-        "exported": false
-      },
-      {
-        "name": "handleRecommendClick",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 8354,
-        "exported": false
-      },
-      {
-        "name": "submitEnrichedRecommendation",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 8386,
-        "exported": false
-      },
-      {
-        "name": "removeRecommendation",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 8417,
-        "exported": false
-      },
-      {
-        "name": "EventCard",
-        "kind": "component",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 8617,
-        "exported": false
-      },
-      {
-        "name": "DiscoveryEmptyRow",
-        "kind": "component",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 8715,
-        "exported": false
-      },
-      {
-        "name": "NearbyRestaurantCard",
-        "kind": "component",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 8753,
-        "exported": false
-      },
-      {
-        "name": "formatPrice",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 8841,
-        "exported": false
-      },
-      {
-        "name": "toggleFavorite",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 8926,
-        "exported": false
-      },
-      {
-        "name": "toggleFollow",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 8952,
-        "exported": false
-      },
-      {
-        "name": "recommend",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 8964,
-        "exported": false
-      },
-      {
-        "name": "submitRestaurantRecommendationDetails",
-        "kind": "function",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 9001,
-        "exported": false
-      },
-      {
-        "name": "SavedRestaurantCard",
-        "kind": "component",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 9301,
-        "exported": false
-      },
-      {
-        "name": "OpenNowSection",
-        "kind": "component",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 9409,
-        "exported": false
-      },
-      {
-        "name": "LiveTruckMapCard",
-        "kind": "component",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 9579,
-        "exported": false
-      },
-      {
-        "name": "MapPlaceCard",
-        "kind": "component",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 9663,
-        "exported": false
-      },
-      {
-        "name": "MapActivityPips",
-        "kind": "component",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 9872,
-        "exported": false
-      },
-      {
-        "name": "MapLayerToggles",
-        "kind": "component",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 9935,
-        "exported": false
-      },
-      {
-        "name": "ScoutMapHud",
-        "kind": "component",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 9997,
-        "exported": false
-      },
-      {
-        "name": "MapHudCount",
-        "kind": "component",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 10150,
-        "exported": false
-      },
-      {
-        "name": "MapFreshnessKey",
-        "kind": "component",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 10161,
-        "exported": false
-      },
-      {
-        "name": "MapEdgeIndicators",
-        "kind": "component",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 10179,
-        "exported": false
-      },
-      {
-        "name": "TruckCard",
-        "kind": "component",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 10282,
-        "exported": false
-      },
-      {
-        "name": "HorizontalSkeletonRow",
-        "kind": "component",
-        "path": "client/src/pages/explore-preview.tsx",
-        "line": 10453,
-        "exported": false
-      },
-      {
         "name": "FAQ",
         "kind": "component",
         "path": "client/src/pages/faq.tsx",
@@ -29045,14 +27556,14 @@
         "name": "assert",
         "kind": "function",
         "path": "scripts/mealscout-live-exposure-guardrails.contract.test.ts",
-        "line": 10,
+        "line": 9,
         "exported": false
       },
       {
         "name": "sliceBetween",
         "kind": "function",
         "path": "scripts/mealscout-live-exposure-guardrails.contract.test.ts",
-        "line": 14,
+        "line": 13,
         "exported": false
       },
       {
@@ -29749,10 +28260,17 @@
         "exported": false
       },
       {
+        "name": "normalize",
+        "kind": "function",
+        "path": "scripts/mealscout-route-map.contract.test.ts",
+        "line": 13,
+        "exported": false
+      },
+      {
         "name": "requireMatch",
         "kind": "function",
         "path": "scripts/mealscout-route-map.contract.test.ts",
-        "line": 17,
+        "line": 19,
         "exported": false
       },
       {
@@ -52760,11 +51278,6 @@
         },
         {
           "tag": "button",
-          "path": "client/src/components/ShareButton.tsx",
-          "line": 90
-        },
-        {
-          "tag": "button",
           "path": "client/src/components/WelcomeLocationModal.tsx",
           "line": 136
         },
@@ -58310,146 +56823,6 @@
         },
         {
           "tag": "button",
-          "path": "client/src/pages/explore-preview.tsx",
-          "line": 4946
-        },
-        {
-          "tag": "button",
-          "path": "client/src/pages/explore-preview.tsx",
-          "line": 5101
-        },
-        {
-          "tag": "button",
-          "path": "client/src/pages/explore-preview.tsx",
-          "line": 5289
-        },
-        {
-          "tag": "button",
-          "path": "client/src/pages/explore-preview.tsx",
-          "line": 5348
-        },
-        {
-          "tag": "button",
-          "path": "client/src/pages/explore-preview.tsx",
-          "line": 7509
-        },
-        {
-          "tag": "button",
-          "path": "client/src/pages/explore-preview.tsx",
-          "line": 7553
-        },
-        {
-          "tag": "button",
-          "path": "client/src/pages/explore-preview.tsx",
-          "line": 7662
-        },
-        {
-          "tag": "button",
-          "path": "client/src/pages/explore-preview.tsx",
-          "line": 7938
-        },
-        {
-          "tag": "button",
-          "path": "client/src/pages/explore-preview.tsx",
-          "line": 8112
-        },
-        {
-          "tag": "button",
-          "path": "client/src/pages/explore-preview.tsx",
-          "line": 8545
-        },
-        {
-          "tag": "textarea",
-          "path": "client/src/pages/explore-preview.tsx",
-          "line": 8578
-        },
-        {
-          "tag": "input",
-          "path": "client/src/pages/explore-preview.tsx",
-          "line": 8585
-        },
-        {
-          "tag": "button",
-          "path": "client/src/pages/explore-preview.tsx",
-          "line": 8595
-        },
-        {
-          "tag": "button",
-          "path": "client/src/pages/explore-preview.tsx",
-          "line": 8603
-        },
-        {
-          "tag": "button",
-          "path": "client/src/pages/explore-preview.tsx",
-          "line": 8741
-        },
-        {
-          "tag": "button",
-          "path": "client/src/pages/explore-preview.tsx",
-          "line": 9203
-        },
-        {
-          "tag": "textarea",
-          "path": "client/src/pages/explore-preview.tsx",
-          "line": 9240
-        },
-        {
-          "tag": "input",
-          "path": "client/src/pages/explore-preview.tsx",
-          "line": 9248
-        },
-        {
-          "tag": "input",
-          "path": "client/src/pages/explore-preview.tsx",
-          "line": 9270
-        },
-        {
-          "tag": "button",
-          "path": "client/src/pages/explore-preview.tsx",
-          "line": 9287
-        },
-        {
-          "tag": "button",
-          "path": "client/src/pages/explore-preview.tsx",
-          "line": 9623
-        },
-        {
-          "tag": "button",
-          "path": "client/src/pages/explore-preview.tsx",
-          "line": 9743
-        },
-        {
-          "tag": "button",
-          "path": "client/src/pages/explore-preview.tsx",
-          "line": 9843
-        },
-        {
-          "tag": "button",
-          "path": "client/src/pages/explore-preview.tsx",
-          "line": 9976
-        },
-        {
-          "tag": "button",
-          "path": "client/src/pages/explore-preview.tsx",
-          "line": 10074
-        },
-        {
-          "tag": "button",
-          "path": "client/src/pages/explore-preview.tsx",
-          "line": 10082
-        },
-        {
-          "tag": "button",
-          "path": "client/src/pages/explore-preview.tsx",
-          "line": 10121
-        },
-        {
-          "tag": "button",
-          "path": "client/src/pages/explore-preview.tsx",
-          "line": 10244
-        },
-        {
-          "tag": "button",
           "path": "client/src/pages/faq.tsx",
           "line": 294
         },
@@ -62228,74 +60601,65 @@
     "duplicates": {
       "exact_files": [],
       "justified_generated_projections": [],
-      "exported_symbol_collisions": [
-        {
-          "name": "ExplorePreview",
-          "owners": [
-            {
-              "path": "client/src/pages/explore-preview-v2.tsx",
-              "line": 2642,
-              "kind": "component"
-            },
-            {
-              "path": "client/src/pages/explore-preview.tsx",
-              "line": 2395,
-              "kind": "component"
-            }
-          ]
-        },
-        {
-          "name": "ShareButton",
-          "owners": [
-            {
-              "path": "client/src/components/ShareButton.tsx",
-              "line": 18,
-              "kind": "component"
-            },
-            {
-              "path": "client/src/components/share-button.tsx",
-              "line": 21,
-              "kind": "component"
-            }
-          ]
-        }
-      ]
+      "exported_symbol_collisions": []
     }
   },
   "canonical": {
-    "directories": [],
-    "ui_primitives": [],
-    "shared_symbols": []
+    "directories": [
+      {
+        "path": "client/src/components/ui",
+        "responsibility": "Reusable MealScout interface primitives"
+      }
+    ],
+    "ui_primitives": [
+      {
+        "name": "Button",
+        "path": "client/src/components/ui/button.tsx",
+        "responsibility": "Canonical MealScout button semantics, states, sizes, and brand styling"
+      }
+    ],
+    "shared_symbols": [
+      {
+        "name": "ShareButton",
+        "path": "client/src/components/share-button.tsx",
+        "responsibility": "Canonical tracked share control"
+      },
+      {
+        "name": "ExplorePreview",
+        "path": "client/src/pages/explore-preview-v2.tsx",
+        "responsibility": "Sole canonical Scout discovery page"
+      }
+    ]
   },
-  "reuse_decisions": [],
+  "reuse_decisions": [
+    {
+      "disposition": "remove",
+      "subject": "client/src/components/ShareButton.tsx",
+      "canonical_owner": "client/src/components/share-button.tsx",
+      "reason": "The case-variant duplicate had no runtime consumer and less complete behavior."
+    },
+    {
+      "disposition": "remove",
+      "subject": "client/src/pages/explore-preview.tsx",
+      "canonical_owner": "client/src/pages/explore-preview-v2.tsx",
+      "reason": "The legacy page was explicitly dead and retained only by stale source-reading tests."
+    },
+    {
+      "disposition": "reuse",
+      "subject": "MealScout buttons",
+      "canonical_owner": "client/src/components/ui/button.tsx",
+      "reason": "New button styling must reuse or improve the existing product adapter instead of creating a local variant."
+    }
+  ],
   "findings": [
-    {
-      "severity": "error",
-      "code": "PI002",
-      "message": "Exported symbol ExplorePreview has multiple candidate owners.",
-      "paths": [
-        "client/src/pages/explore-preview-v2.tsx",
-        "client/src/pages/explore-preview.tsx"
-      ]
-    },
-    {
-      "severity": "error",
-      "code": "PI002",
-      "message": "Exported symbol ShareButton has multiple candidate owners.",
-      "paths": [
-        "client/src/components/ShareButton.tsx",
-        "client/src/components/share-button.tsx"
-      ]
-    },
     {
       "severity": "warning",
       "code": "PI003",
-      "message": "Raw <button> markup is spread across 164 files; reuse or establish one canonical primitive before adding another variant.",
+      "message": "Raw <button> markup is spread across 162 files; reuse or establish one canonical primitive before adding another variant.",
       "paths": [
         "client/src/components/ImageUploader.tsx",
         "client/src/components/MapPreviewSheet.tsx",
         "client/src/components/RestaurantCreditRedemptionForm.tsx",
-        "client/src/components/ShareButton.tsx",
         "client/src/components/WelcomeLocationModal.tsx",
         "client/src/components/admin/host-location-manager.tsx",
         "client/src/components/back-header.tsx",
@@ -62399,7 +60763,6 @@
         "client/src/pages/event-detail.tsx",
         "client/src/pages/events-router.tsx",
         "client/src/pages/explore-preview-v2.tsx",
-        "client/src/pages/explore-preview.tsx",
         "client/src/pages/faq.tsx",
         "client/src/pages/food-truck-rush.tsx",
         "client/src/pages/for-hosts.tsx",
@@ -62498,7 +60861,7 @@
     {
       "severity": "warning",
       "code": "PI003",
-      "message": "Raw <input> markup is spread across 72 files; reuse or establish one canonical primitive before adding another variant.",
+      "message": "Raw <input> markup is spread across 71 files; reuse or establish one canonical primitive before adding another variant.",
       "paths": [
         "client/src/components/ImageUploader.tsx",
         "client/src/components/RestaurantCreditRedemptionForm.tsx",
@@ -62545,7 +60908,6 @@
         "client/src/pages/deal-edit.tsx",
         "client/src/pages/event-coordinator-dashboard.tsx",
         "client/src/pages/explore-preview-v2.tsx",
-        "client/src/pages/explore-preview.tsx",
         "client/src/pages/forgot-password.tsx",
         "client/src/pages/hiring.tsx",
         "client/src/pages/host-dashboard.tsx",
@@ -62626,7 +60988,7 @@
     {
       "severity": "warning",
       "code": "PI003",
-      "message": "Raw <textarea> markup is spread across 35 files; reuse or establish one canonical primitive before adding another variant.",
+      "message": "Raw <textarea> markup is spread across 34 files; reuse or establish one canonical primitive before adding another variant.",
       "paths": [
         "client/src/components/RestaurantCreditRedemptionForm.tsx",
         "client/src/components/deal-card.tsx",
@@ -62650,7 +61012,6 @@
         "client/src/pages/deal-edit.tsx",
         "client/src/pages/event-coordinator-dashboard.tsx",
         "client/src/pages/explore-preview-v2.tsx",
-        "client/src/pages/explore-preview.tsx",
         "client/src/pages/hiring.tsx",
         "client/src/pages/host-dashboard.tsx",
         "client/src/pages/host-location-partner.tsx",
@@ -62668,12 +61029,12 @@
   ],
   "summary": {
     "directories": 53,
-    "source_files": 1243,
-    "symbols": 6422,
-    "components": 454,
-    "functions_and_hooks": 4136,
-    "raw_ui_elements": 1904,
-    "errors": 2,
+    "source_files": 1241,
+    "symbols": 6212,
+    "components": 409,
+    "functions_and_hooks": 4017,
+    "raw_ui_elements": 1875,
+    "errors": 0,
     "warnings": 5
   }
 }

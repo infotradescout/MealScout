@@ -39,7 +39,7 @@ Public route source inventory:
 
 Legacy/dead-looking public surfaces to verify before editing:
 
-- `client/src/pages/explore-preview.tsx` is legacy/quarantined; `ScoutPageV2` is the canonical Scout route.
+- The retired `client/src/pages/explore-preview.tsx` implementation no longer exists; `ScoutPageV2` is the sole canonical Scout route.
 - `client/src/pages/trending.tsx` exists, but `/trending` redirects to `/scout` and is not mounted as a standalone public page.
 
 Main backend groups:
