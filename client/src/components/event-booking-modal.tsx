@@ -41,6 +41,8 @@ interface EventBookingModalProps {
 interface PaymentFormProps {
   clientSecret: string;
   bookingId: string;
+  paymentIntentId: string;
+  truckId: string;
   totalCents: number;
   breakdown: { hostPrice: number; platformFee: number };
   onSuccess: () => void;
@@ -50,6 +52,8 @@ interface PaymentFormProps {
 function PaymentForm({
   clientSecret,
   bookingId,
+  paymentIntentId,
+  truckId,
   totalCents,
   breakdown,
   onSuccess,
@@ -59,6 +63,54 @@ function PaymentForm({
   const elements = useElements();
   const { toast } = useToast();
   const [isProcessing, setIsProcessing] = useState(false);
+
+  const waitForBookingConfirmation = async () => {
+    const startedAt = Date.now();
+    const timeoutMs = 25_000;
+
+    while (Date.now() - startedAt < timeoutMs) {
+      try {
+        const res = await fetch(
+          apiUrl(
+            `/api/bookings/payment-intent/${encodeURIComponent(
+              paymentIntentId,
+            )}?truckId=${encodeURIComponent(truckId)}`,
+          ),
+          { credentials: "include" },
+        );
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.status === "confirmed") return "confirmed" as const;
+          if (data?.status === "credited") return "credited" as const;
+          if (data?.status === "refunded") return "refunded" as const;
+        }
+      } catch {
+        // The provider/webhook may still be reconciling the payment.
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+    }
+
+    return "pending" as const;
+  };
+
+  const confirmBooking = async () => {
+    try {
+      const res = await fetch(
+        apiUrl(`/api/bookings/${encodeURIComponent(bookingId)}/confirm`),
+        {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+      if (res.ok) return "confirmed" as const;
+    } catch {
+      // Fall through to the durable status reader below.
+    }
+
+    return waitForBookingConfirmation();
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -83,20 +135,33 @@ function PaymentForm({
         return;
       }
 
-      // Confirm booking via API (idempotent — webhook also handles this)
-      try {
-        await fetch(`/api/bookings/${encodeURIComponent(bookingId)}/confirm`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
+      const confirmationOutcome = await confirmBooking();
+      if (confirmationOutcome === "credited") {
+        toast({
+          title: "Booking Unavailable",
+          description:
+            "Payment succeeded but the spot was no longer available. Credits were issued to your account.",
+          variant: "destructive",
         });
-      } catch {
-        // Non-fatal: webhook will confirm the booking
+      } else if (confirmationOutcome === "refunded") {
+        toast({
+          title: "Booking could not be served",
+          description:
+            "The full payment is being returned to the original payment method through Stripe, including the platform fee.",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title:
+            confirmationOutcome === "confirmed"
+              ? "Booking Confirmed!"
+              : "Payment received",
+          description:
+            confirmationOutcome === "confirmed"
+              ? "Your spot has been reserved."
+              : "We’re confirming your booking. It will appear shortly.",
+        });
       }
-
-      toast({
-        title: "Booking Confirmed!",
-        description: "Your spot has been reserved.",
-      });
       onSuccess();
     } catch (err: any) {
       toast({
@@ -164,8 +229,11 @@ function PaymentForm({
       </div>
 
       <p className="text-xs text-[color:var(--text-muted)] text-center">
-        By confirming payment you agree that bookings are non-refundable once
-        confirmed.
+        Before a booked line starts, voluntary cancellation returns its full
+        line value as non-cash credit restricted to future Parking Pass platform
+        fees. After start there is no voluntary remedy. Technical or host
+        cancellation of a future non-service line is refunded to the original
+        card through Stripe.
       </p>
     </form>
   );
@@ -193,6 +261,7 @@ export function EventBookingModal({
   );
   const [isStripeConfigLoading, setIsStripeConfigLoading] = useState(false);
   const paymentIntentIdRef = useRef<string | null>(null);
+  const idempotencyKeyRef = useRef<string | null>(null);
   const activeInitiationRef = useRef<{ cancelRequested: boolean } | null>(null);
   const hostileBrowser = isPaymentHostileBrowser();
 
@@ -291,12 +360,20 @@ export function EventBookingModal({
     activeInitiationRef.current = initiation;
     setIsLoading(true);
     try {
+      const requestIdempotencyKey =
+        idempotencyKeyRef.current ||
+        (globalThis.crypto?.randomUUID?.() ??
+          `event-booking-${eventId}-${truckId}-${Date.now()}`);
+      idempotencyKeyRef.current = requestIdempotencyKey;
       const res = await fetch(
         apiUrl(`/api/events/${encodeURIComponent(eventId)}/book`),
         {
           method: "POST",
           credentials: "include",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            "Idempotency-Key": requestIdempotencyKey,
+          },
           body: JSON.stringify({ truckId }),
         },
       );
@@ -365,6 +442,7 @@ export function EventBookingModal({
     setBookingId(null);
     setPaymentIntentId(null);
     setBookingData(null);
+    idempotencyKeyRef.current = null;
   };
 
   const handleCancel = () => {
@@ -493,6 +571,8 @@ export function EventBookingModal({
               <PaymentForm
                 clientSecret={clientSecret}
                 bookingId={bookingId}
+                paymentIntentId={paymentIntentId}
+                truckId={truckId}
                 totalCents={bookingData.totalCents}
                 breakdown={bookingData.breakdown}
                 onSuccess={handleSuccess}
