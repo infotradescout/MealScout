@@ -25,7 +25,7 @@ import {
 } from "./utils/passwordPolicy";
 import { db } from "./db";
 import { emailSequenceSends, users } from "@shared/schema";
-import { and, eq, or, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import {
   ensureAffiliateTag,
   resolveAffiliateUserId,
@@ -44,6 +44,10 @@ import {
   completeAccountSetupTransaction,
 } from "./services/accountSetupCompletion";
 import { distributedRateLimit } from "./middleware/distributedRateLimit";
+import {
+  OAuthIdentityBoundaryError,
+  oauthIdentityRedirectCode,
+} from "./utils/oauthIdentityPolicy";
 
 type UnifiedAuthDependencies = {
   hashAccountSetupPassword?: (password: string) => Promise<string>;
@@ -58,11 +62,8 @@ const completeAccountSetupLimiter = distributedRateLimit({
   key: (req) => String(req.ip || "unknown"),
 });
 
-// Extend session to include app context for multi-app OAuth
 declare module "express-session" {
   interface SessionData {
-    fbAppContext?: "mealscout" | "tradescout";
-    googleAppContext?: "mealscout" | "tradescout";
     oauthUserType?: User["userType"];
     oauthRedirectPath?: string;
     pendingPhoneSignupMethod?: string;
@@ -234,15 +235,18 @@ export async function setupUnifiedAuth(
     );
   };
   const baseUrl = getBaseUrl().replace(/\/+$/, ""); // Remove trailing slashes to prevent double slashes in callback URLs
-  const tradeScoutBaseUrl =
-    resolveConfiguredBaseUrl(process.env.TRADESCOUT_PUBLIC_BASE_URL) ||
-    "https://www.thetradescout.com";
-  const getOAuthAppContext = (
-    req: any,
-    fallback: "mealscout" | "tradescout" = "mealscout",
-  ) => {
-    const appContext = String(req?.query?.app || fallback).toLowerCase();
-    return appContext === "tradescout" ? "tradescout" : "mealscout";
+
+  const rejectCrossProductOAuthContext = (req: any, res: any): boolean => {
+    const requestedApp = String(req?.query?.app || "")
+      .trim()
+      .toLowerCase();
+    if (!requestedApp || requestedApp === "mealscout") return false;
+    res.status(410).json({
+      code: "CROSS_PRODUCT_AUTH_RETIRED",
+      error:
+        "Cross-product sign-in through MealScout has been retired. Use the sign-in page for the product you are entering.",
+    });
+    return true;
   };
 
   const isAccountSetupPathWithoutToken = (path: string): boolean => {
@@ -487,35 +491,19 @@ export async function setupUnifiedAuth(
     return continuationPath || getDefaultPostVerificationRedirect(user);
   };
 
-  const normalizeEmailForLookup = (value: unknown): string | null => {
-    const email = String(value || "")
-      .trim()
-      .toLowerCase();
-    return email.includes("@") ? email : null;
-  };
-
-  const findExistingOAuthUser = async (
+  const findExistingOAuthProviderUser = async (
     provider: "google" | "facebook",
     providerId: string | null | undefined,
-    email: string | null | undefined,
   ): Promise<User | null> => {
-    const normalizedEmail = normalizeEmailForLookup(email);
-    const clauses = [];
-    if (provider === "google" && providerId) {
-      clauses.push(eq(users.googleId, providerId));
-    }
-    if (provider === "facebook" && providerId) {
-      clauses.push(eq(users.facebookId, providerId));
-    }
-    if (normalizedEmail) {
-      clauses.push(sql`lower(${users.email}) = ${normalizedEmail}`);
-    }
-    if (clauses.length === 0) return null;
+    const normalizedProviderId = String(providerId || "").trim();
+    if (!normalizedProviderId) return null;
+    const providerColumn =
+      provider === "google" ? users.googleId : users.facebookId;
 
     const [existing] = await db
       .select()
       .from(users)
-      .where(clauses.length === 1 ? clauses[0] : or(...clauses))
+      .where(eq(providerColumn, normalizedProviderId))
       .limit(1);
     return existing || null;
   };
@@ -724,8 +712,8 @@ export async function setupUnifiedAuth(
         },
         async (
           req: any,
-          accessToken: string,
-          refreshToken: string,
+          _accessToken: string,
+          _refreshToken: string,
           profile: any,
           done: any,
         ) => {
@@ -758,7 +746,6 @@ export async function setupUnifiedAuth(
                 "User",
               profileImageUrl:
                 profile.photos?.[0]?.value || profile._json?.picture || null,
-              googleAccessToken: accessToken,
             };
 
             console.log("[oauth] Processed Google customer user data", {
@@ -766,10 +753,9 @@ export async function setupUnifiedAuth(
               hasProfileImage: Boolean(userData.profileImageUrl),
             });
 
-            const existingOAuthUser = await findExistingOAuthUser(
+            const existingOAuthUser = await findExistingOAuthProviderUser(
               "google",
               userData.googleId,
-              userData.email,
             );
             const user = await storage.upsertUserByAuth(
               "google",
@@ -807,6 +793,12 @@ export async function setupUnifiedAuth(
             }
             return done(null, user);
           } catch (error) {
+            if (error instanceof OAuthIdentityBoundaryError) {
+              return done(null, false, {
+                code: error.code,
+                message: error.message,
+              });
+            }
             console.error("❌ Google customer authentication error:", error);
             console.error("[oauth] Google customer profile metadata:", {
               hasProviderId: Boolean(profile?.id),
@@ -831,8 +823,8 @@ export async function setupUnifiedAuth(
         },
         async (
           req: any,
-          accessToken: string,
-          refreshToken: string,
+          _accessToken: string,
+          _refreshToken: string,
           profile: any,
           done: any,
         ) => {
@@ -865,7 +857,6 @@ export async function setupUnifiedAuth(
                 "User",
               profileImageUrl:
                 profile.photos?.[0]?.value || profile._json?.picture || null,
-              googleAccessToken: accessToken,
             };
 
             console.log("[oauth] Processed Google restaurant user data", {
@@ -874,10 +865,9 @@ export async function setupUnifiedAuth(
             });
 
             const userType = getOauthUserType(req, "restaurant_owner");
-            const existingOAuthUser = await findExistingOAuthUser(
+            const existingOAuthUser = await findExistingOAuthProviderUser(
               "google",
               userData.googleId,
-              userData.email,
             );
             const provisioningUserType = resolveBusinessAuthProvisioningUserType({
               requestedUserType: userType,
@@ -926,6 +916,12 @@ export async function setupUnifiedAuth(
             }
             return done(null, user);
           } catch (error) {
+            if (error instanceof OAuthIdentityBoundaryError) {
+              return done(null, false, {
+                code: error.code,
+                message: error.message,
+              });
+            }
             console.error("❌ Google restaurant authentication error:", error);
             console.error("[oauth] Google restaurant profile metadata:", {
               hasProviderId: Boolean(profile?.id),
@@ -941,7 +937,7 @@ export async function setupUnifiedAuth(
 
     // Google OAuth routes for customers
     app.get("/api/auth/google/customer", (req, res, next) => {
-      req.session.googleAppContext = getOAuthAppContext(req);
+      if (rejectCrossProductOAuthContext(req, res)) return;
       req.session.oauthUserType = "customer";
       req.session.oauthRedirectPath = getSafeRedirectPath(req.query.redirect) || undefined;
       passport.authenticate("google-customer", {
@@ -955,7 +951,7 @@ export async function setupUnifiedAuth(
         error: req.query.error || null,
       });
 
-      passport.authenticate("google-customer", (err: any, user: User | false) => {
+      passport.authenticate("google-customer", (err: any, user: User | false, info: unknown) => {
         if (err) {
           const message = String(err?.message || "").toLowerCase();
           const code = String(err?.code || "").toLowerCase();
@@ -979,7 +975,11 @@ export async function setupUnifiedAuth(
         }
         if (!user) {
           return res.redirect(
-            consumeOAuthErrorRedirect(req, "auth_failed", "/"),
+            consumeOAuthErrorRedirect(
+              req,
+              oauthIdentityRedirectCode(info),
+              "/",
+            ),
           );
         }
         req.logIn(user, async (loginErr: unknown) => {
@@ -989,12 +989,9 @@ export async function setupUnifiedAuth(
               consumeOAuthErrorRedirect(req, "session_error", "/"),
             );
           }
-          const appContext = req.session.googleAppContext || "mealscout";
-          const redirectBase =
-            appContext === "tradescout" ? tradeScoutBaseUrl : baseUrl;
           const redirectPath =
             getOAuthRedirectPath(req) || (await resolveOAuthContinuationPath(user));
-          if (appContext === "mealscout" && !hasRequiredPhone(user)) {
+          if (!hasRequiredPhone(user)) {
             req.session.pendingPhoneSignupMethod =
               req.session.pendingPhoneSignupMethod || "google";
             req.session.pendingPhoneRedirectPath = redirectPath;
@@ -1021,7 +1018,7 @@ export async function setupUnifiedAuth(
               "✅ Google customer OAuth success, session saved, redirecting...",
             );
             return res.redirect(
-              buildOAuthSuccessRedirect(redirectBase, redirectPath),
+              buildOAuthSuccessRedirect(baseUrl, redirectPath),
             );
           });
         });
@@ -1030,7 +1027,7 @@ export async function setupUnifiedAuth(
 
     // Google OAuth routes for restaurant owners
     app.get("/api/auth/google/restaurant", (req, res, next) => {
-      req.session.googleAppContext = getOAuthAppContext(req);
+      if (rejectCrossProductOAuthContext(req, res)) return;
       const desiredType =
         typeof req.query.userType === "string"
           ? req.query.userType
@@ -1056,7 +1053,7 @@ export async function setupUnifiedAuth(
         error: req.query.error || null,
       });
 
-      passport.authenticate("google-restaurant", (err: any, user: User | false) => {
+      passport.authenticate("google-restaurant", (err: any, user: User | false, info: unknown) => {
         if (err) {
           const message = String(err?.message || "").toLowerCase();
           const code = String(err?.code || "").toLowerCase();
@@ -1084,7 +1081,11 @@ export async function setupUnifiedAuth(
         }
         if (!user) {
           return res.redirect(
-            consumeOAuthErrorRedirect(req, "auth_failed", "/restaurant-signup"),
+            consumeOAuthErrorRedirect(
+              req,
+              oauthIdentityRedirectCode(info),
+              "/restaurant-signup",
+            ),
           );
         }
         req.logIn(user, async (loginErr: unknown) => {
@@ -1098,12 +1099,9 @@ export async function setupUnifiedAuth(
               ),
             );
           }
-          const appContext = req.session.googleAppContext || "mealscout";
-          const redirectBase =
-            appContext === "tradescout" ? tradeScoutBaseUrl : baseUrl;
           const redirectPath =
             getOAuthRedirectPath(req) || (await resolveOAuthContinuationPath(user));
-          if (appContext === "mealscout" && !hasRequiredPhone(user)) {
+          if (!hasRequiredPhone(user)) {
             req.session.pendingPhoneSignupMethod =
               req.session.pendingPhoneSignupMethod || "google";
             req.session.pendingPhoneRedirectPath = redirectPath;
@@ -1138,7 +1136,7 @@ export async function setupUnifiedAuth(
               "✅ Google restaurant OAuth success, session saved, redirecting...",
             );
             return res.redirect(
-              buildOAuthSuccessRedirect(redirectBase, redirectPath),
+              buildOAuthSuccessRedirect(baseUrl, redirectPath),
             );
           });
         });
@@ -1185,11 +1183,9 @@ export async function setupUnifiedAuth(
     });
   }
 
-  // Facebook Strategy (shared with TradeScout)
+  // Facebook strategy is MealScout-local. Cross-product login is retired.
   if (process.env.FACEBOOK_APP_ID && process.env.FACEBOOK_APP_SECRET) {
-    console.log(
-      "Setting up Facebook OAuth strategy (shared with TradeScout)...",
-    );
+    console.log("Setting up MealScout Facebook OAuth strategy...");
     passport.use(
       new FacebookStrategy(
         {
@@ -1208,12 +1204,12 @@ export async function setupUnifiedAuth(
             "first_name",
             "last_name",
           ],
-          passReqToCallback: true, // Enable req access to retrieve app param from session
+          passReqToCallback: true,
         },
         async (
           req: any,
-          accessToken: string,
-          refreshToken: string,
+          _accessToken: string,
+          _refreshToken: string,
           profile: any,
           done: any,
         ) => {
@@ -1227,7 +1223,6 @@ export async function setupUnifiedAuth(
                 Boolean(profile?.name?.givenName) ||
                 Boolean(profile?.displayName),
               hasPhoto: Boolean(profile?.photos?.[0]?.value),
-              appContext: req.session?.fbAppContext || "mealscout",
             });
 
             const userData: FacebookUserData = {
@@ -1244,30 +1239,22 @@ export async function setupUnifiedAuth(
                 profile.displayName?.split(" ").slice(1).join(" ") ||
                 "User",
               profileImageUrl: profile.photos?.[0]?.value || null,
-              facebookAccessToken: accessToken,
             };
 
             console.log("[oauth] Processed Facebook user data", {
               hasEmail: Boolean(userData.email),
-              appContext: req.session?.fbAppContext || "mealscout",
               hasProfileImage: Boolean(userData.profileImageUrl),
             });
 
-            // Retrieve app context from session (set in /api/auth/facebook route)
-            const appContext = (req.session?.fbAppContext || "mealscout") as
-              | "mealscout"
-              | "tradescout";
             const userType = getOauthUserType(req, "customer");
-            const existingOAuthUser = await findExistingOAuthUser(
+            const existingOAuthUser = await findExistingOAuthProviderUser(
               "facebook",
               userData.facebookId,
-              userData.email,
             );
             const user = await storage.upsertUserByAuth(
               "facebook",
               userData,
               userType,
-              appContext,
             );
             kickAffiliateTag(user);
             await applyAffiliateReferral(req, user);
@@ -1275,7 +1262,6 @@ export async function setupUnifiedAuth(
             console.log("✅ Facebook user created/updated successfully:", {
               userId: user.id,
               hasEmail: Boolean(user.email),
-              appContext,
             });
 
             // LISA Phase 4A: Emit claim for OAuth login
@@ -1283,7 +1269,7 @@ export async function setupUnifiedAuth(
               .emitClaim({
                 subjectType: "user",
                 subjectId: user.id,
-                app: appContext,
+                app: "mealscout",
                 claimType: "oauth_provider_used",
                 claimValue: { provider: "facebook", email: userData.email },
                 source: "oauth",
@@ -1301,6 +1287,12 @@ export async function setupUnifiedAuth(
             }
             return done(null, user);
           } catch (error) {
+            if (error instanceof OAuthIdentityBoundaryError) {
+              return done(null, false, {
+                code: error.code,
+                message: error.message,
+              });
+            }
             console.error("❌ Facebook authentication error:", error);
             console.error("[oauth] Facebook profile metadata:", {
               hasProviderId: Boolean(profile?.id),
@@ -1314,22 +1306,11 @@ export async function setupUnifiedAuth(
       ),
     );
 
-    // Facebook auth routes with multi-app support
+    // Facebook auth routes are MealScout-local.
     app.get(
       "/api/auth/facebook",
       (req, res, next) => {
-        // Capture app parameter from query string (default: mealscout)
-        const appContext = (req.query.app as string) || "mealscout";
-
-        // Validate app context
-        if (appContext !== "mealscout" && appContext !== "tradescout") {
-          return res.status(400).json({
-            error: 'Invalid app parameter. Must be "mealscout" or "tradescout"',
-          });
-        }
-
-        // Store app context in session for callback retrieval
-        req.session.fbAppContext = appContext as "mealscout" | "tradescout";
+        if (rejectCrossProductOAuthContext(req, res)) return;
         const desiredUserType =
           typeof req.query.userType === "string"
             ? req.query.userType
@@ -1341,9 +1322,6 @@ export async function setupUnifiedAuth(
           : "customer";
         req.session.oauthRedirectPath =
           getSafeRedirectPath(req.query.redirect) || undefined;
-        console.log(
-          `🔵 Starting Facebook OAuth flow with app context: ${appContext}`,
-        );
         next();
       },
       passport.authenticate("facebook", {
@@ -1357,28 +1335,57 @@ export async function setupUnifiedAuth(
         authLog("facebook_oauth_callback", {
           hasError: !!req.query.error,
           error: req.query.error || null,
-          appContext: req.session.fbAppContext || null,
         });
-        next();
+        passport.authenticate(
+          "facebook",
+          (error: unknown, user: User | false, info: unknown) => {
+            if (error) {
+              console.error("❌ Facebook OAuth callback error:", error);
+              return res.redirect(
+                consumeOAuthErrorRedirect(req, "auth_failed", "/"),
+              );
+            }
+            if (!user) {
+              return res.redirect(
+                consumeOAuthErrorRedirect(
+                  req,
+                  oauthIdentityRedirectCode(info),
+                  "/",
+                ),
+              );
+            }
+            return req.logIn(user, (loginError: unknown) => {
+              if (loginError) {
+                console.error("❌ Facebook OAuth login error:", loginError);
+                return res.redirect(
+                  consumeOAuthErrorRedirect(req, "session_error", "/"),
+                );
+              }
+              return next();
+            });
+          },
+        )(req, res, next);
       },
-      passport.authenticate("facebook", {
-        failureRedirect: "/?error=auth_failed&source=facebook",
-      }),
       async (req, res) => {
         const user = req.user as User;
-        const appContext = req.session.fbAppContext || "mealscout";
         const fallbackRedirectPath = await resolveOAuthContinuationPath(user);
         const resolvedRedirectPath =
           getOAuthRedirectPath(req) || fallbackRedirectPath;
-        if (appContext === "mealscout" && !hasRequiredPhone(user)) {
+        if (!hasRequiredPhone(user)) {
           req.session.pendingPhoneSignupMethod =
             req.session.pendingPhoneSignupMethod || "facebook";
           req.session.pendingPhoneRedirectPath = resolvedRedirectPath;
           req.session.oauthRedirectPath = undefined;
-          return req.session.save((err) => {
-            if (err) {
-              console.error("❌ Session save error:", err);
-              return res.redirect("/?error=session_error");
+          return req.session.save((error) => {
+            if (error) {
+              console.error("❌ Session save error:", error);
+              return res.redirect(
+                buildOAuthErrorRedirect(
+                  resolvedRedirectPath,
+                  "session_error",
+                  "/",
+                ),
+              );
             }
             return res.redirect(
               buildPhoneRequiredSetupPath(resolvedRedirectPath),
@@ -1388,41 +1395,30 @@ export async function setupUnifiedAuth(
 
         console.log("✅ Facebook OAuth callback success:", {
           userId: user?.id,
-          appContext,
-          userAppContext: user?.appContext,
         });
 
-        // Save session
-        req.session.save((err) => {
-          if (err) {
-            console.error("❌ Session save error:", err);
-            return res.redirect("/?error=session_error");
+        req.session.oauthRedirectPath = undefined;
+        req.session.save((error) => {
+          if (error) {
+            console.error("❌ Session save error:", error);
+            return res.redirect(
+              buildOAuthErrorRedirect(
+                resolvedRedirectPath,
+                "session_error",
+                "/",
+              ),
+            );
           }
-
-          // Redirect to appropriate domain
-          const frontendBase =
-            process.env.PUBLIC_BASE_URL || "http://localhost:5000";
-
-          const redirectUrls = {
-            mealscout: buildOAuthSuccessRedirect(
-              frontendBase,
-              resolvedRedirectPath,
-            ),
-            tradescout:
-              "https://www.thetradescout.com/?auth=success&t=" + Date.now(),
-          };
-          req.session.oauthRedirectPath = undefined;
-
-          const redirectUrl =
-            redirectUrls[appContext as "mealscout" | "tradescout"];
+          const redirectUrl = buildOAuthSuccessRedirect(
+            baseUrl,
+            resolvedRedirectPath,
+          );
           console.log(`✅ Redirecting to: ${redirectUrl}`);
-          res.redirect(redirectUrl);
+          return res.redirect(redirectUrl);
         });
       },
     );
-    console.log(
-      "✅ Facebook OAuth strategy configured successfully (multi-app enabled)",
-    );
+    console.log("✅ MealScout Facebook OAuth strategy configured successfully");
   } else {
     console.log(
       "Facebook OAuth not configured: FACEBOOK_APP_ID and FACEBOOK_APP_SECRET environment variables are missing",

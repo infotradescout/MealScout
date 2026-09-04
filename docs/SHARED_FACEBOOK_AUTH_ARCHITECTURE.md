@@ -1,8 +1,12 @@
-# Shared Facebook Auth Architecture
+# Shared Facebook Auth Architecture — historical evidence
 
 **Date Created:** January 9, 2026  
-**Status:** Active  
-**Owner:** MealScout (TradeScout subsidiary)
+**Status:** Retired
+**Owner:** Historical evidence only
+
+> This document records an earlier proposal. It is not governing architecture.
+> MealScout now rejects cross-product OAuth and TradeScout owns its own sign-in;
+> see `docs/MEALSCOUT_IDENTITY_BOUNDARY.md`.
 
 ---
 

@@ -11,6 +11,9 @@ Living registry for mapping visual targets to real app surfaces.
 - `server/unifiedAuth.ts` is the sole product-local authentication and session owner.
 - `server/routes.ts` is the sole registration path for that owner.
 - The dormant TradeScout SSO proposal and two unreachable auth stacks are retired.
+- Google and Facebook provider subjects are login proof; matching email alone now stops for authenticated linking or collision review.
+- MealScout rejects the legacy cross-product OAuth app context. TradeScout owns its own provider login and session.
+- Legacy provider-token columns remain migration evidence, but active sign-in no longer writes access tokens to user rows.
 - `users.tradescoutId` is retained as read-only migration evidence until stored-data reconciliation proves removal safe.
 - This is not the Infinity-wide identity-owner decision; see `docs/MEALSCOUT_IDENTITY_BOUNDARY.md`.
 

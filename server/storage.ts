@@ -256,7 +256,7 @@ export interface IStorage {
     authType: "google" | "email" | "facebook",
     userData: GoogleUserData | EmailUserData | FacebookUserData,
     userType?: User["userType"],
-    appContext?: "mealscout" | "tradescout",
+    appContext?: "mealscout",
   ): Promise<User>;
   updateUserStripeInfo(
     id: string,
@@ -1891,7 +1891,7 @@ export class DatabaseStorage implements IStorage {
     authType: "google" | "email" | "facebook",
     userData: GoogleUserData | EmailUserData | FacebookUserData,
     userType: User["userType"] = "customer",
-    appContext: "mealscout" | "tradescout" = "mealscout",
+    appContext: "mealscout" = "mealscout",
   ): Promise<User> {
     return this.usersRepository.upsertUserByAuth(
       authType,

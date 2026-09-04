@@ -18,6 +18,7 @@ import {
 } from "@/utils/funnelTelemetry";
 import { getStoredAffiliateRef, setAffiliateRef } from "@/lib/share";
 import { normalizeSafeInternalPath } from "@shared/safeInternalPath";
+import { getOAuthIdentityFailureMessage } from "@/lib/oauthIdentityFailure";
 
 const getSafeRedirectPath = (): string | null => {
   try {
@@ -238,6 +239,18 @@ export default function Login() {
         title: "Login Session Not Completed",
         description:
           "MealScout could not confirm your signed-in session. Please log in again.",
+        variant: "destructive",
+      });
+    }
+    const oauthIdentityMessage = getOAuthIdentityFailureMessage(
+      params.get("error"),
+    );
+    if (oauthIdentityMessage) {
+      setShowEmailLogin(true);
+      setShowRecoveryHelp(true);
+      toast({
+        title: "Account sign-in needs attention",
+        description: oauthIdentityMessage,
         variant: "destructive",
       });
     }

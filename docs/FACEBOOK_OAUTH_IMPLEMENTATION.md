@@ -1,6 +1,10 @@
-# Facebook OAuth Multi-App Implementation
+# Facebook OAuth Multi-App Implementation — historical evidence
 
-**Status:** ✅ Complete  
+> Historical truth only. The multi-app flow described below is retired and must
+> not be implemented or restored. MealScout now rejects cross-product OAuth;
+> see `docs/MEALSCOUT_IDENTITY_BOUNDARY.md`.
+
+**Status:** Retired historical design
 **Date:** 2025-01-XX  
 **Purpose:** Enable MealScout and TradeScout to share Facebook OAuth using TradeScout's Meta app
 
