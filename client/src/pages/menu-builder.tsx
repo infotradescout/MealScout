@@ -5,6 +5,7 @@
 import { useEffect, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { prepareMenuCreationAttempt, confirmMenuCreationAttempt, assertMenuCreationReceipt, type MenuCreationAttempt } from "@/lib/menu-creation-request";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import BusinessWorkspaceShell from "@/components/business-workspace-shell";
@@ -14,6 +15,7 @@ import {
   type BusinessAccessContext,
 } from "@/lib/business-access";
 import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -217,6 +219,8 @@ export default function MenuBuilderPage() {
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [newMenuName, setNewMenuName] = useState("");
   const [newMenuServiceType, setNewMenuServiceType] = useState("all");
+  const [isPreparingMenu, setIsPreparingMenu] = useState(false);
+  const [menuPreparationError, setMenuPreparationError] = useState("");
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importFiles, setImportFiles] = useState<File[]>([]);
   const [importType, setImportType] = useState<"csv" | "pdf" | "pos_json" | "photo">("csv");
@@ -365,19 +369,21 @@ export default function MenuBuilderPage() {
 
   // create menu
   const createMenuMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/owner/menus", {
-        restaurantId,
-        name: newMenuName,
-        serviceType: newMenuServiceType,
+    mutationFn: async (attempt: MenuCreationAttempt) => {
+      const res = await apiRequest("POST", "/api/owner/menus/create", attempt.input, {
+        headers: { "Idempotency-Key": attempt.requestId },
       });
-      return res.json();
+      const payload = await res.json().catch(() => null);
+      assertMenuCreationReceipt(payload, attempt);
+      return payload;
     },
-    onSuccess: (payload) => {
+    onSuccess: (payload, attempt) => {
+      confirmMenuCreationAttempt(attempt);
       const createdMenu = normalizeFullMenu(payload?.menu ?? payload);
       queryClient.invalidateQueries({
-        queryKey: ["/api/owner/menus", restaurantId],
+        queryKey: ["/api/owner/menus", attempt.input.restaurantId],
       });
+      if (attempt.input.restaurantId !== restaurantId) return;
       if (createdMenu?.id) setSelectedMenuId(createdMenu.id);
       setShowNewMenuDialog(false);
       setNewMenuName("");
@@ -391,6 +397,24 @@ export default function MenuBuilderPage() {
         variant: "destructive",
       }),
   });
+
+  const submitNewMenu = async () => {
+    if (!user?.id || !restaurantId || isPreparingMenu || createMenuMutation.isPending) return;
+    setIsPreparingMenu(true);
+    setMenuPreparationError("");
+    try {
+      const attempt = await prepareMenuCreationAttempt(user.id, {
+        restaurantId, name: newMenuName, serviceType: newMenuServiceType,
+      });
+      createMenuMutation.mutate(attempt);
+    } catch {
+      const message = "The browser could not preserve this request for a safe retry. Nothing was submitted. Please try again.";
+      setMenuPreparationError(message);
+      toast({ title: "Menu not submitted", description: message, variant: "destructive" });
+    } finally {
+      setIsPreparingMenu(false);
+    }
+  };
 
   // import menu items
   const handleImport = async () => {
@@ -856,6 +880,12 @@ export default function MenuBuilderPage() {
           <DialogHeader>
             <DialogTitle>Create menu</DialogTitle>
           </DialogHeader>
+          {(menuPreparationError || createMenuMutation.isError) && (
+            <Alert variant="destructive">
+              <CircleAlert className="h-4 w-4" />
+              <AlertDescription>{menuPreparationError || createMenuMutation.error?.message}</AlertDescription>
+            </Alert>
+          )}
           <div className="space-y-4 py-2">
             <div>
               <Label htmlFor="menu-name">Menu name</Label>
@@ -896,10 +926,10 @@ export default function MenuBuilderPage() {
               Cancel
             </Button>
             <Button
-              onClick={() => createMenuMutation.mutate()}
-              disabled={!newMenuName.trim() || createMenuMutation.isPending}
+              onClick={submitNewMenu}
+              disabled={!newMenuName.trim() || isPreparingMenu || createMenuMutation.isPending}
             >
-              {createMenuMutation.isPending && (
+              {(isPreparingMenu || createMenuMutation.isPending) && (
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
               )}
               Create menu

@@ -5747,6 +5747,7 @@ export const LISA_CLAIM_TYPES = {
   ORDER_PLACED: "order_placed",
   ORDER_COMPLETED: "order_completed",
   ORDER_CANCELLED: "order_cancelled",
+  MENU_CREATED: "menu_created",
   MENU_PUBLISHED: "menu_published",
   MENU_ITEM_CREATED: "menu_item_created",
 

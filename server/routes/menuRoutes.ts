@@ -39,9 +39,6 @@ import {
   insertMenuItemVariantSchema,
   insertMenuItemModifierSchema,
   insertMenuItemRecommendationSchema,
-  LISA_CLAIM_TYPES,
-  LISA_CLAIM_SOURCES,
-  lisaClaims,
   type Menu,
   type MenuCategory,
   type MenuItem,
@@ -65,6 +62,11 @@ import {
 import { isAuthenticated, isStaffOrAdmin } from "../unifiedAuth";
 import { distributedRateLimit } from "../middleware/distributedRateLimit";
 import { storage } from "../storage";
+import {
+  createMenuWithLisaRecord,
+  isMenuManagerUserType,
+  MenuCreationError,
+} from "../services/menuCreation";
 import { buildPublicTruckOperatingPlan } from "../services/truckOperatingPlan";
 import { resolveCityTimeZoneStrict } from "../services/cityTimeZone";
 import {
@@ -114,13 +116,6 @@ const upload = multer({
 });
 
 // ── Ownership helper ──────────────────────────────────────────────────────────
-const isMenuManagerUserType = (userType?: string | null) =>
-  userType === "restaurant_owner" ||
-  userType === "staff" ||
-  userType === "admin" ||
-  userType === "duper_admin" ||
-  userType === "super_admin";
-
 const canManageMenu = (req: any, res: any, next: any) => {
   if (!req.isAuthenticated()) {
     return res.status(401).json({ error: "Authentication required" });
@@ -168,7 +163,10 @@ function wrap(handler: (req: any, res: any) => Promise<void>) {
       const status = err?.statusCode || 500;
       const message = err?.message || "Internal server error";
       if (status === 500) console.error("[menuRoutes]", err);
-      res.status(status).json({ message });
+      res.status(status).json({
+        message,
+        ...(err instanceof MenuCreationError ? { code: err.code } : {}),
+      });
     }
   };
 }
@@ -1870,30 +1868,15 @@ export function registerMenuRoutes(app: Express) {
    * Create a new menu for a restaurant.
    */
   app.post(
-    "/api/owner/menus",
+    // New clients use /create: old servers cannot silently accept an unsafe write.
+    ["/api/owner/menus", "/api/owner/menus/create"],
     isAuthenticated,
     canManageMenu,
     wrap(async (req, res) => {
-      const body = insertMenuSchema.parse(req.body);
-      await assertOwnsRestaurant(req.user, body.restaurantId);
-
-      const [menu] = await db.insert(menus).values(body).returning();
-
-      // Emit LISA claim for menu published
-      db.insert(lisaClaims)
-        .values({
-          app: "mealscout",
-          claimType: LISA_CLAIM_TYPES.MENU_PUBLISHED,
-          source: LISA_CLAIM_SOURCES.MENU,
-          subjectType: "menu",
-          subjectId: menu.id,
-          actorType: "user",
-          actorId: req.user.id,
-          payload: { restaurantId: body.restaurantId, menuName: menu.name },
-        })
-        .catch(() => {});
-
-      res.status(201).json({ menu });
+      const result = await createMenuWithLisaRecord(
+        db, req.user, req.body, req.get("Idempotency-Key"),
+      );
+      res.status(201).json(result);
     }),
   );
 

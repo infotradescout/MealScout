@@ -63,6 +63,8 @@
     "test:profile-first-business-modes": "node --import tsx scripts/profile-first-business-modes.contract.test.ts",
     "test:3d-eats-journey-safety": "node --import tsx scripts/3d-eats-journey-safety.contract.test.ts",
     "test:business-signup-attachment": "node --import tsx scripts/business-signup-menu-attachment.contract.test.ts",
+    "test:menu-lisa": "node --import tsx --test scripts/menu-creation-request.behavior.test.ts scripts/menu-creation-lisa.integration.test.ts",
+    "test:menu-lisa:browser": "node --import tsx scripts/menu-creation-lisa.browser.test.ts",
     "test:truck-availability-truth": "node --import tsx scripts/truck-availability-truth.behavior.test.ts",
     "test:profile-completion-truth": "node --import tsx scripts/profile-completion-truth.behavior.test.ts",
     "test:profile-evidence-owner-review": "node --import tsx scripts/profile-evidence-owner-review.behavior.test.ts && node --import tsx scripts/profile-evidence-public-projection.behavior.test.ts && node --import tsx scripts/owner-settings-boundary-concurrency.behavior.test.ts && node --import tsx scripts/admin-business-completion-settings.behavior.test.ts && node --import tsx scripts/parking-pass-dated-stop-navigation.behavior.test.ts && node --import tsx scripts/profile-evidence-owner-review.integration.contract.test.ts && node --import tsx scripts/profile-evidence-apply.contract.test.ts && node --import tsx scripts/profile-evidence-review-surface.contract.test.ts && node --import tsx scripts/owner-profile-evidence-review-ui.contract.test.ts && node --import tsx scripts/owner-settings-boundary-concurrency.contract.test.ts && node --import tsx scripts/admin-business-completion-settings.contract.test.ts",
@@ -275,6 +277,7 @@
     "zod": "^3.24.2"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.5.8",
     "@playwright/test": "^1.57.0",
     "@tailwindcss/typography": "^0.5.15",
     "@types/connect-pg-simple": "^7.0.3",
