@@ -49,6 +49,15 @@ try {
     if (url.pathname === "/api/restaurants/my-restaurants") return json(route, [business]);
     if (url.pathname === "/api/business-access/me") return json(route, { hasAnyAccess: true, permissions, restaurants: [{ id: restaurantId, isOwner: true, permissions }] });
     if (url.pathname === "/api/notifications/unread-count") return json(route, { count: 0 });
+    if (url.pathname === `/api/restaurants/${restaurantId}/ordering-review`) {
+      // The marketplace integration also renders its existing review workspace.
+      // Supply its real response shape, not the generic optional-endpoint fallback.
+      const readiness = { orderingEnabled: false, blockingReasons: ["Synthetic fixture: ordering review not configured"], checks: [] };
+      return json(route, {
+        restaurant: { id: restaurantId, orderingApprovedAt: null, orderingAuthorityVersion: 1, pickupAcknowledgementMinutes: 10 },
+        request: null, currentReadiness: readiness, reviewReadiness: readiness,
+      });
+    }
     if (url.pathname === "/api/owner/menus/create") {
       const input = route.request().postDataJSON();
       const id = route.request().headers()["idempotency-key"];
@@ -142,6 +151,7 @@ try {
   assert.deepEqual(pageErrors, []);
   console.log(JSON.stringify({ status: "PASS", proof: "built-client-with-synthetic-api", desktop: "A-B-A retry", mobile: "reload-and-retry-B", malformedReceipt: "rejected-and-recovered", unavailableStorage: "no-submission", requests: submissions.length, distinctRecords: records.size, pageErrors, screenshots: output }));
 } catch (error) {
+  console.error(JSON.stringify({ status: "FAIL", pageErrors }));
   await page.screenshot({ path: resolve(output, "failure.png"), fullPage: true }).catch(() => {});
   throw error;
 } finally {
