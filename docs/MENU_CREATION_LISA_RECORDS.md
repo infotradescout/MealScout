@@ -53,6 +53,10 @@ response cache and best-effort claim emitter are intentionally not used: neither
 provides a single durable transaction for this operation. Historical missing or
 misclassified observations are not backfilled by this repair.
 
+The shared `apiRequest` helper retains the existing unfinished work's fourth-argument
+contract: `{ headers: { ... } }`. Menu creation uses that same contract so combining
+this repair with marketplace work does not break its existing request headers.
+
 ## Verification and limits
 
 Run `npm run test:menu-lisa` after installing the locked development dependencies.

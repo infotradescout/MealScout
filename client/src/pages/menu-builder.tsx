@@ -371,7 +371,7 @@ export default function MenuBuilderPage() {
   const createMenuMutation = useMutation({
     mutationFn: async (attempt: MenuCreationAttempt) => {
       const res = await apiRequest("POST", "/api/owner/menus/create", attempt.input, {
-        "Idempotency-Key": attempt.requestId,
+        headers: { "Idempotency-Key": attempt.requestId },
       });
       const payload = await res.json().catch(() => null);
       assertMenuCreationReceipt(payload, attempt);

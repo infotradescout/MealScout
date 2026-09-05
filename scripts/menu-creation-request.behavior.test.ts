@@ -97,7 +97,9 @@ test("live route and browser consumer use the same atomic owner with existing ga
   assert.match(page, /assertMenuCreationReceipt\(payload, attempt\)/);
   assert.match(page, /confirmMenuCreationAttempt\(attempt\)/);
   assert.match(api, /credentials: "include"/);
-  assert.match(api, /\.\.\.headers/);
+  assert.match(api, /options\?: \{ headers\?: Record<string, string> \}/);
+  assert.match(api, /options\?\.headers/);
+  assert.match(page, /headers: \{ "Idempotency-Key": attempt.requestId \}/);
   const publicSignals = read("server/routes.ts");
   assert.match(publicSignals, /source_heartbeat/);
   assert.doesNotMatch(publicSignals, /menuCreation|menu_created/);
