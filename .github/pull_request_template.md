@@ -32,6 +32,7 @@
 ## Validation
 
 - [ ] `npm run check`
+- [ ] `npm run gate:release:local`
 # Refactor controls (required when a hot seam is touched)
 
 - Bounded seam / excluded scope:

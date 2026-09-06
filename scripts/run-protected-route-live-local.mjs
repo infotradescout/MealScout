@@ -25,9 +25,9 @@ const server = app.listen(0, "127.0.0.1", () => {
     PUBLIC_DISCOVERY_LIVE_SITEMAP: "0",
   };
   const child = spawn(
-    "npx",
-    ["--yes", "tsx", "scripts/public-discovery-contract-v1.contract.test.ts"],
-    { stdio: "inherit", env, shell: true },
+    process.execPath,
+    ["--import", "tsx", "scripts/public-discovery-contract-v1.contract.test.ts"],
+    { stdio: "inherit", env, shell: false },
   );
   child.on("exit", (code) => {
     server.close();

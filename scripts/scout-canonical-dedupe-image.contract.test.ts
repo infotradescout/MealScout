@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 
-const scoutPage = readFileSync("client/src/pages/explore-preview.tsx", "utf8");
+const scoutPage = readFileSync("client/src/pages/explore-preview-v2.tsx", "utf8");
 const scoutModel = readFileSync("client/src/features/scout/scoutDiscoveryModel.ts", "utf8");
 
 const requiredSnippets = [
@@ -22,14 +22,12 @@ const requiredSnippets = [
   "fallbackTruckBusinesses.forEach((truck) => {",
   "getRestaurantImage(restaurant)",
   "getTruckImage(truck)",
-  "restaurant.coverImageUrl ||",
-  "restaurant.heroImageUrl ||",
-  "restaurant.imageUrl ||",
-  "restaurant.logoUrl ||",
-  "truck.heroImageUrl ||",
-  "truck.coverImageUrl ||",
-  "truck.imageUrl ||",
-  "truck.logoUrl ||",
+  "function resolveScoutBusinessImage(input:",
+  "input.coverImageUrl",
+  "input.heroImageUrl",
+  "input.imageUrl",
+  "input.logoUrl",
+  'resolveBusinessMedia(assets, "scout_card")',
 ];
 
 for (const snippet of requiredSnippets) {

@@ -1,7 +1,10 @@
 import { db } from './db';
 import { videoStories, storyLikes, storyComments, storyViews, storyAwards } from '@shared/schema';
 import { eq, lte, sql, and, isNull, isNotNull } from 'drizzle-orm';
-import { deleteFromCloudinary } from './imageUpload';
+import {
+  cloudinaryPublicIdFromDeliveryUrl,
+  deleteFromCloudinary,
+} from './imageUpload';
 import auditLogger from './auditLogger';
 import { detectReviewerLevelDrift } from './reviewerLevelDriftDetector';
 import { timingSafeEqual } from 'crypto';
@@ -80,7 +83,11 @@ export async function cleanupExpiredStories(): Promise<{
           // Delete from Cloudinary
           if (story.videoUrl) {
             try {
-              await deleteFromCloudinary(story.videoUrl);
+              const publicId = cloudinaryPublicIdFromDeliveryUrl(story.videoUrl);
+              if (!publicId) {
+                throw new Error('Stored story video URL is not a recognized Cloudinary delivery URL');
+              }
+              await deleteFromCloudinary(publicId, { resourceType: 'video' });
             } catch (err) {
               console.error(`[Cron] Error deleting ${story.id} from Cloudinary:`, err);
               stats.cloudinaryErrors++;

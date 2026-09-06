@@ -144,9 +144,8 @@ Key token finding: the warm-vs-black inconsistency is **at the token level** (`-
    - `scripts/mealscout-referral-attribution-health.contract.test.ts` (L110)
    Because live routing now uses `ScoutPageV2`, these assertions were drifted. They now assert
    `ScoutPageV2` route ownership while preserving the same referral/auth route coverage.
-3. **STALE DOCS (RESOLVED 2026-07-08):** `MEALSCOUT_ROUTE_MAP.md` and
-   `MEALSCOUT_C7_OWNER_DASHBOARD_CONTEXT.md` now state `/scout` routes to `ScoutPageV2`
-   (`client/src/pages/explore-preview-v2.tsx`).
+3. **STALE DOCS (RESOLVED 2026-07-08):** `MEALSCOUT_ROUTE_MAP.md` now states
+   `/scout` routes to `ScoutPageV2` (`client/src/pages/explore-preview-v2.tsx`).
 4. **DUPLICATE DISCOVERY ALIASES:** `/scout`, `/directory`, `/scout-v2` all render the same
    `ScoutPageV2`. Not harmful, but three public aliases of one surface can dilute canonical URLs;
    revisit for SEO canonicalization later (not a UI-rebuild blocker).

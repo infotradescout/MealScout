@@ -29,6 +29,8 @@ import {
 import { ensureAffiliateTag, setAffiliateTag } from "./affiliateTagService";
 import { appendReferralParam } from "./referralService";
 import { getUserCreditBalance } from "./creditService";
+import { resolveCanonicalShareOrigin } from "./shareMiddleware";
+import { normalizeEligibleAffiliateDestination } from "./shareTargetPolicy";
 
 const router = Router();
 
@@ -85,16 +87,33 @@ router.post('/generate-link', isAuthenticated, async (req, res) => {
   try {
     const userId = req.user?.id;
     const { baseUrl, resourceType, resourceId } = req.body;
+    const allowedResourceTypes = new Set([
+      "deal",
+      "restaurant",
+      "page",
+      "collection",
+      "search",
+    ]);
 
-    if (!userId || !baseUrl || !resourceType) {
+    if (!userId || !baseUrl || !allowedResourceTypes.has(resourceType)) {
       return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    const publicOrigin = resolveCanonicalShareOrigin(req);
+    const targetPath = normalizeEligibleAffiliateDestination(
+      baseUrl,
+      publicOrigin,
+    );
+    if (!targetPath) {
+      return res.status(400).json({ error: "Invalid affiliate destination" });
     }
 
     const link = await affiliateService.createAffiliateLink(
       userId,
       resourceType,
-      baseUrl,
+      targetPath,
       resourceId,
+      publicOrigin,
     );
 
     await logAudit(
@@ -104,7 +123,7 @@ router.post('/generate-link', isAuthenticated, async (req, res) => {
       link.id,
       req.ip || 'unknown',
       req.get('user-agent') || 'unknown',
-      { resourceType, baseUrl },
+      { resourceType, targetPath },
     );
 
     res.json(link);
@@ -124,6 +143,24 @@ router.get('/click/:code', async (req, res) => {
     const { code } = req.params;
     const sessionId = req.sessionID || `anonymous-${Date.now()}`;
 
+    const link = (await db
+      .select()
+      .from(affiliateLinks)
+      .where(eq(affiliateLinks.code, code))
+      .limit(1))[0];
+
+    if (!link) {
+      return res.status(404).json({ error: 'Link not found' });
+    }
+
+    const targetPath = normalizeEligibleAffiliateDestination(
+      link.sourceUrl,
+      resolveCanonicalShareOrigin(req),
+    );
+    if (!targetPath) {
+      return res.status(410).json({ error: "Link destination unavailable" });
+    }
+
     // Track the click
     const click = await affiliateService.trackAffiliateClick(
       code,
@@ -134,17 +171,6 @@ router.get('/click/:code', async (req, res) => {
     );
 
     if (!click) {
-      return res.status(404).json({ error: 'Link not found' });
-    }
-
-    // Get the affiliate link
-    const link = (await db
-      .select()
-      .from(affiliateLinks)
-      .where(eq(affiliateLinks.id, click.affiliateLinkId))
-      .limit(1))[0];
-
-    if (!link) {
       return res.status(404).json({ error: 'Link not found' });
     }
 
@@ -178,8 +204,9 @@ router.get('/click/:code', async (req, res) => {
       });
     }
 
-    // Redirect to original URL
-    res.redirect(link.sourceUrl);
+    // Redirect only to the normalized internal path. Legacy absolute
+    // first-party URLs are reduced to their path before this point.
+    res.redirect(targetPath);
   } catch (error) {
     console.error('Failed to track affiliate click:', error);
     res.status(500).json({ error: 'Failed to track click' });

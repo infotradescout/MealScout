@@ -284,7 +284,7 @@ assert.match(
 );
 assert.equal(
   packageJson.scripts["migrate:deploy"],
-  "tsx scripts/runDeployMigrations.ts",
+  "node --import tsx scripts/runDeployMigrations.ts",
 );
 
 const claimRequestMigration = readFileSync(

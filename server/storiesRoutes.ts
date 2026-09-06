@@ -1,4 +1,4 @@
-import type { Express } from 'express';
+import type { Express, NextFunction, Request, Response } from 'express';
 import { db } from './db';
 import { isAuthenticated, isRestaurantOwner } from './unifiedAuth';
 import {
@@ -21,8 +21,11 @@ import {
   users,
 } from '@shared/schema';
 import { eq, desc, and, lte, sql, count, gte, like, or, isNull, isNotNull, getTableColumns } from 'drizzle-orm';
-import { uploadToCloudinary, deleteFromCloudinary } from './imageUpload';
-import { upload } from './imageUpload';
+import {
+  cloudinaryPublicIdFromDeliveryUrl,
+  deleteFromCloudinary,
+  uploadVideoToCloudinary,
+} from './imageUpload';
 import multer from 'multer';
 import { storage } from './storage';
 import { LISA_CLAIM_TYPES, LISA_CLAIM_SOURCES } from '@shared/schema';
@@ -41,6 +44,10 @@ import {
   loadEligiblePage,
   publicStoryFeedRateLimitKey,
 } from './utils/eligiblePagination';
+import {
+  isAllowedDeclaredVideoMime,
+  isVideoContentCompatible,
+} from './utils/videoUploadPolicy';
 
 const storyViewLimiter = distributedRateLimit({
   scope: 'public-story-view',
@@ -77,13 +84,26 @@ const storyShareLimiter = distributedRateLimit({
     )}`,
 });
 
+const storyUploadBurstLimiter = distributedRateLimit({
+  scope: 'story-upload-ingress-burst',
+  limit: 3,
+  windowMs: 10 * 60 * 1000,
+  key: (req) => String((req as any).user?.id || req.ip || 'anonymous'),
+});
+
+const storyUploadDailyIngressLimiter = distributedRateLimit({
+  scope: 'story-upload-ingress-daily',
+  limit: 8,
+  windowMs: 24 * 60 * 60 * 1000,
+  key: (req) => String((req as any).user?.id || req.ip || 'anonymous'),
+});
+
 // Configure multer for video uploads
 const videoStorage = multer.memoryStorage();
 const videoUpload = multer({
   storage: videoStorage,
   fileFilter: (_req, file, cb) => {
-    // Accept video files
-    if (file.mimetype.startsWith('video/')) {
+    if (isAllowedDeclaredVideoMime(file.mimetype)) {
       cb(null as any, true);
     } else {
       cb(new Error('Only video files are allowed') as any);
@@ -93,6 +113,20 @@ const videoUpload = multer({
     fileSize: 50 * 1024 * 1024, // 50MB max
   },
 });
+
+function parseStoryVideoUpload(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  videoUpload.single('video')(req, res, (error: any) => {
+    if (!error) return next();
+    if (error instanceof multer.MulterError && error.code === 'LIMIT_FILE_SIZE') {
+      return res.status(413).json({ message: 'Video file must be 50 MB or smaller' });
+    }
+    return res.status(415).json({ message: 'Only supported video files are allowed' });
+  });
+}
 
 export default function setupStoriesRoutes(app: Express) {
   const loadPublicEngageableStory = async (storyId: string) => {
@@ -142,11 +176,19 @@ export default function setupStoriesRoutes(app: Express) {
   app.post(
     '/api/stories/upload',
     isAuthenticated,
-    videoUpload.single('video'),
+    storyUploadBurstLimiter,
+    storyUploadDailyIngressLimiter,
+    parseStoryVideoUpload,
     async (req, res) => {
+      let uploadedVideoPublicId: string | null = null;
       try {
         if (!req.file) {
           return res.status(400).json({ message: 'No video file provided' });
+        }
+        if (!isVideoContentCompatible(req.file.buffer, req.file.mimetype)) {
+          return res.status(415).json({
+            message: 'The uploaded file content does not match a supported video format',
+          });
         }
 
         const userId = (req as any).user?.id;
@@ -165,11 +207,13 @@ export default function setupStoriesRoutes(app: Express) {
         };
 
         // Enforce 30-second maximum duration
-        if (bodyData.duration > 30) {
+        if (
+          !Number.isFinite(bodyData.duration) ||
+          bodyData.duration < 1 ||
+          bodyData.duration > 30
+        ) {
           return res.status(400).json({ message: 'Video duration must be 30 seconds or less' });
         }
-
-        const hasRestaurant = Boolean(bodyData.restaurantId);
 
         // Complete profiles include video posting. Ownership and anti-spam
         // limits still apply; subscription state never does.
@@ -234,18 +278,32 @@ export default function setupStoriesRoutes(app: Express) {
         }
 
         // Upload video to Cloudinary
-        const cloudinaryResult = await uploadToCloudinary(
+        const cloudinaryResult = await uploadVideoToCloudinary(
           req.file.buffer,
-          'video',
-          {
-            folder: 'mealscout/stories',
-            public_id: `story-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-          } as any
+          `story-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`,
         );
+        uploadedVideoPublicId = cloudinaryResult.publicId;
 
         if (!cloudinaryResult.secureUrl) {
+          await deleteFromCloudinary(uploadedVideoPublicId, {
+            resourceType: 'video',
+          }).catch(() => {});
+          uploadedVideoPublicId = null;
           return res.status(500).json({ message: 'Failed to upload video' });
         }
+        if (cloudinaryResult.durationSeconds > 30) {
+          await deleteFromCloudinary(uploadedVideoPublicId, {
+            resourceType: 'video',
+          }).catch(() => {});
+          uploadedVideoPublicId = null;
+          return res.status(400).json({
+            message: 'Video duration must be 30 seconds or less',
+          });
+        }
+        const verifiedDuration = Math.max(
+          1,
+          Math.min(30, Math.ceil(cloudinaryResult.durationSeconds)),
+        );
 
         // Create story record in database
         const story = await db
@@ -255,7 +313,7 @@ export default function setupStoriesRoutes(app: Express) {
             restaurantId: bodyData.restaurantId,
             title: bodyData.title,
             description: bodyData.description,
-            duration: bodyData.duration,
+            duration: verifiedDuration,
             videoUrl: cloudinaryResult.secureUrl,
             thumbnailUrl: cloudinaryResult.thumbnailUrl || undefined,
             cuisine: bodyData.cuisine,
@@ -263,6 +321,11 @@ export default function setupStoriesRoutes(app: Express) {
             status: 'ready', // For MVP, we skip encoding - use Cloudinary's optimization
           })
           .returning();
+        const createdStory = story[0];
+        if (!createdStory) {
+          throw new Error('Story insert returned no record');
+        }
+        uploadedVideoPublicId = null;
 
         // Initialize reviewer level if user doesn't have one
         const existingLevel = await db
@@ -302,7 +365,7 @@ export default function setupStoriesRoutes(app: Express) {
         // LISA Phase 4A: Emit claim for video recommendation creation
         storage.emitClaim({
           subjectType: 'video',
-          subjectId: story[0].id,
+          subjectId: createdStory.id,
           actorType: 'user',
           actorId: userId,
           app: 'mealscout',
@@ -318,9 +381,14 @@ export default function setupStoriesRoutes(app: Express) {
 
         res.status(201).json({
           message: 'Video story uploaded successfully',
-          story: story[0],
+          story: createdStory,
         });
       } catch (error) {
+        if (uploadedVideoPublicId) {
+          await deleteFromCloudinary(uploadedVideoPublicId, {
+            resourceType: 'video',
+          }).catch(() => {});
+        }
         console.error('Error uploading video story:', error);
         res.status(500).json({ message: 'Failed to upload video story' });
       }
@@ -1277,7 +1345,11 @@ export default function setupStoriesRoutes(app: Express) {
         // Delete from Cloudinary
         if (story[0].videoUrl) {
           try {
-            await deleteFromCloudinary(story[0].videoUrl);
+            const publicId = cloudinaryPublicIdFromDeliveryUrl(story[0].videoUrl);
+            if (!publicId) {
+              throw new Error('Stored story video URL is not a recognized Cloudinary delivery URL');
+            }
+            await deleteFromCloudinary(publicId, { resourceType: 'video' });
           } catch (err) {
             console.error('Error deleting from Cloudinary:', err);
             // Continue with DB deletion even if Cloudinary fails

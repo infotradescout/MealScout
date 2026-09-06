@@ -19,8 +19,8 @@ import { restaurants } from "../shared/schema";
  * - Pass --active-only to restrict to active/claimed profiles.
  *
  * Examples:
- *   npx tsx scripts/backfillRestaurantCoordinates.ts                 # dry-run report
- *   npx tsx scripts/backfillRestaurantCoordinates.ts --apply --limit=50
+ *   node --import tsx scripts/backfillRestaurantCoordinates.ts                 # dry-run report
+ *   node --import tsx scripts/backfillRestaurantCoordinates.ts --apply --limit=50
  */
 
 type GeoPoint = { lat: number; lng: number };

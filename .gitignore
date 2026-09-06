@@ -1,4 +1,9 @@
 node_modules
+.local/
+pnpm-lock.yaml
+yarn.lock
+bun.lock
+bun.lockb
 dist
 client/dist
 .tmp/
@@ -9,6 +14,7 @@ logs/
 backups/
 server/public
 tmp_*.txt
+/tmp-*
 ts-out.txt
 vite.config.ts.*
 *.tar.gz
@@ -16,6 +22,8 @@ vite.config.ts.*
 .env
 .env.*
 .env*.local
+!.env.example
+!.env.production.example
 
 # Capacitor native build artifacts
 android/.gradle/
@@ -37,6 +45,21 @@ playwright-report/
 
 # Private operator intake binaries and normalized evidence packages
 /artifacts/manual-intake/
+/artifacts/**/*.log
+/artifacts/**/browser-smoke-*-results.json
+/.visual/**/*.log
+/attached_assets/
+/audit_snapshot/
+/evidence/
+/batch.json
+/decisions.json
+/mealscout_bulk_truck_ingest_report_*.json
+/mealscout_conflict_resolver_report_*.json
+/mealscout_needs_review_*.json
+/MealScout_businesses_needing_review_*.txt
+/api_raw_call_*.json
+/api_raw_call_*.txt
+/scripts/tmp-*
 
 .env*.local
 

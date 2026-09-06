@@ -205,7 +205,7 @@ Fast targeted cleanup-chain tests:
 
 - `node scripts/mealscout-handoff-spine.contract.test.ts`
 - `node scripts/mealscout-production-readiness-gate.contract.test.ts`
-- `npx tsx scripts/admin-insurance-verification.contract.test.ts`
+- `node --import tsx scripts/admin-insurance-verification.contract.test.ts`
 - `node scripts/mealscout-growth-loop.contract.test.ts`
 - `node scripts/mealscout-one-market-launch-board.contract.test.ts`
 - `node scripts/mealscout-claim-pitch-flow.contract.test.ts`

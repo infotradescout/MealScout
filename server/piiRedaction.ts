@@ -193,6 +193,42 @@ export function redactIp(ip: string): string {
 }
 
 /**
+ * Keep request analytics useful without persisting credentials or attribution
+ * values that arrived in a URL query string or fragment.
+ */
+export function sanitizeRequestLogPath(rawUrl: unknown): string {
+  const raw = String(rawUrl || "/").trim();
+  if (!raw) return "/";
+
+  try {
+    const parsed = new URL(raw, "https://request-log.invalid");
+    return parsed.pathname || "/";
+  } catch {
+    const pathname = raw.split(/[?#]/, 1)[0]?.trim();
+    return pathname?.startsWith("/") ? pathname : "/";
+  }
+}
+
+/**
+ * Referrers can contain password-reset, verification, OAuth, and campaign
+ * values. Retain only the origin and pathname needed for traffic reporting.
+ */
+export function sanitizeRequestLogReferrer(rawReferrer: unknown): string | null {
+  const raw = String(rawReferrer || "").trim();
+  if (!raw) return null;
+
+  try {
+    const parsed = new URL(raw);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return null;
+    }
+    return `${parsed.origin}${parsed.pathname || "/"}`;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Create an audit log entry with redacted data
  */
 export function createRedactedAuditEntry(entry: {

@@ -2602,52 +2602,6 @@ export function registerUserAdminRoutes(
     },
   );
 
-  // OAuth configuration status check
-  app.get(
-    "/api/admin/oauth/status",
-    isAuthenticated,
-    isStaffOrAdmin,
-    async (req: any, res) => {
-      try {
-        const baseUrl = process.env.PUBLIC_BASE_URL || "http://localhost:5000";
-
-        const status = {
-          google: {
-            configured: !!(
-              process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
-            ),
-            clientIdPresent: !!process.env.GOOGLE_CLIENT_ID,
-            clientSecretPresent: !!process.env.GOOGLE_CLIENT_SECRET,
-            callbackUrls: {
-              customer: `${baseUrl}/api/auth/google/customer/callback`,
-              restaurant: `${baseUrl}/api/auth/google/restaurant/callback`,
-            },
-          },
-          facebook: {
-            configured: !!(
-              process.env.FACEBOOK_APP_ID && process.env.FACEBOOK_APP_SECRET
-            ),
-            appIdPresent: !!process.env.FACEBOOK_APP_ID,
-            appSecretPresent: !!process.env.FACEBOOK_APP_SECRET,
-            callbackUrl: `${baseUrl}/api/auth/facebook/callback`,
-          },
-          requiredUrls: {
-            privacyPolicy: `${baseUrl}/privacy-policy`,
-            dataDeletion: `${baseUrl}/data-deletion`,
-            termsOfService: `${baseUrl}/terms-of-service`,
-          },
-          baseUrl,
-          environment: process.env.NODE_ENV || "development",
-        };
-
-        res.json(status);
-      } catch (error) {
-        console.error("Error checking OAuth status:", error);
-        res.status(500).json({ error: "Failed to check OAuth status" });
-      }
-    },
-  );
-
   // Register verification admin routes
   registerVerificationAdminRoutes(app, { storage });
 

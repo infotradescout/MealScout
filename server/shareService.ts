@@ -8,6 +8,7 @@
  */
 
 import affiliateService from './affiliateService';
+import { resolveCanonicalShareOrigin } from "./shareMiddleware";
 
 interface ShareContext {
   userId: string;
@@ -21,20 +22,23 @@ interface ShareContext {
  * This happens transparently - no extra friction
  */
 export async function generateShareableLink(
-  baseUrl: string,
+  targetPath: string,
   context: ShareContext,
 ): Promise<{ url: string; code: string }> {
   // If no user, return original URL
   if (!context.userId) {
-    return { url: baseUrl, code: '' };
+    return { url: targetPath, code: '' };
   }
+
+  const publicOrigin = resolveCanonicalShareOrigin();
 
   // Create or get affiliate link
   const affiliateLink = await affiliateService.createAffiliateLink(
     context.userId,
     context.resourceType,
-    baseUrl,
+    targetPath,
     context.resourceId,
+    publicOrigin,
   );
 
   return {

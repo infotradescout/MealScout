@@ -46,6 +46,10 @@ import {
 } from "./services/publicStoryProjection";
 import { toPublicRestaurantListingWithVisibility } from "./publicProfiles/toPublicRestaurantListingWithVisibility";
 import { isPublicBusinessVisible } from "./utils/publicBusinessVisibility";
+import {
+  sanitizeRequestLogPath,
+  sanitizeRequestLogReferrer,
+} from "./piiRedaction";
 
 validateEnv();
 
@@ -652,7 +656,7 @@ const extractRestaurantEntity = (pathValue: string) => {
 app.use((req, res, next) => {
   const start = Date.now();
   res.on("finish", () => {
-    const pathValue = req.originalUrl || req.url || "";
+    const pathValue = sanitizeRequestLogPath(req.originalUrl || req.url || "/");
     if (
       pathValue.startsWith("/assets") ||
       pathValue.startsWith("/favicon") ||
@@ -699,8 +703,7 @@ app.use((req, res, next) => {
           ip: req.ip,
           userAgent: userAgent || null,
           metadata: {
-            referrer: req.get("referer") || null,
-            query: req.query || {},
+            referrer: sanitizeRequestLogReferrer(req.get("referer")),
           },
           createdAt: new Date(),
         })
