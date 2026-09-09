@@ -80,6 +80,7 @@ class InterceptedStripe {
   readonly refundByKey = new Map<string, string>();
   readonly reversalByKey = new Map<string, string>();
   readonly feeRefundByKey = new Map<string, string>();
+  readonly settlementBalances = new Map<string, { connected: number; platform: number }>();
   paymentIntentCreateCalls = 0;
   accountRetrieveCalls = 0;
   transferCreateCalls = 0;
@@ -87,6 +88,7 @@ class InterceptedStripe {
   failPaymentIntentCreateAfterPersist = false;
   failTransferCreateAfterPersist = false;
   failRefundCreateAfterPersist = false;
+  failFeeRefundCreateAfterPersist = false;
   connectReady = true;
 
   accounts = {
@@ -215,6 +217,11 @@ class InterceptedStripe {
       const key = clean(options.idempotencyKey);
       const existingId = this.reversalByKey.get(key);
       if (existingId) return this.reversalsById.get(existingId);
+      const balance = this.settlementBalances.get(transferId);
+      assert.ok(balance, "A destination transfer must have a tracked balance");
+      assert.ok(balance.connected >= params.amount, "Destination cannot fund the gross reversal before the fee is returned");
+      balance.connected -= params.amount;
+      balance.platform += params.amount;
       const id = `trr_fixture_${this.reversalByKey.size + 1}`;
       const reversal = {
         id,
@@ -251,6 +258,12 @@ class InterceptedStripe {
       const key = clean(options.idempotencyKey);
       const existingId = this.feeRefundByKey.get(key);
       if (existingId) return this.feeRefundsById.get(existingId);
+      const fee = this.feesById.get(feeId);
+      const charge = this.chargesById.get(fee?.charge);
+      const balance = this.settlementBalances.get(charge?.transfer);
+      assert.ok(balance, "The refunded fee must belong to a tracked destination charge");
+      balance.connected += params.amount;
+      balance.platform -= params.amount;
       const id = `fr_fixture_${this.feeRefundByKey.size + 1}`;
       const refund = {
         id,
@@ -262,6 +275,10 @@ class InterceptedStripe {
       };
       this.feeRefundsById.set(id, refund);
       this.feeRefundByKey.set(key, id);
+      if (this.failFeeRefundCreateAfterPersist) {
+        this.failFeeRefundCreateAfterPersist = false;
+        throw Object.assign(new Error("provider accepted fee refund before timeout"), { code: "api_connection_error" });
+      }
       return refund;
     };
 
@@ -278,6 +295,9 @@ class InterceptedStripe {
       if (existingId) return this.refundsById.get(existingId);
       const charge = this.chargesById.get(params.charge);
       if (!charge) throw new Error(`unknown refund charge ${params.charge}`);
+      const balance = this.settlementBalances.get(charge.transfer);
+      assert.ok(balance, "The customer refund must belong to a tracked destination charge");
+      balance.platform -= params.amount;
       const id = `re_fixture_${this.refundByKey.size + 1}`;
       const refund = {
         id,
@@ -329,6 +349,12 @@ class InterceptedStripe {
       metadata: {},
       created: Math.floor(Date.now() / 1000),
       reversed: false,
+    });
+    // Stripe moves the gross charge to the connected account and then returns
+    // the application fee to the platform. Processing fees are outside this model.
+    this.settlementBalances.set(transferId, {
+      connected: intent.amount - Number(intent.application_fee_amount || 0),
+      platform: Number(intent.application_fee_amount || 0),
     });
     if (feeId) {
       this.feesById.set(feeId, {
@@ -1577,6 +1603,16 @@ async function runFixture() {
   );
 
   stripe.succeedIntent(recovered.paymentIntentId!);
+  const destinationTransfer = stripe.transfersById.get(`tr_${recovered.paymentIntentId}`)!;
+  const capturedIntent = stripe.intents.get(recovered.paymentIntentId!)!;
+  assert.equal(destinationTransfer.amount, capturedIntent.amount);
+  destinationTransfer.amount -= capturedIntent.application_fee_amount;
+  await assert.rejects(
+    bookingService.createParkingPassPurchase(purchaseInput),
+    (error: any) => error?.code === "provider_settlement_mismatch",
+    "A net-host transfer must not be mistaken for the gross destination charge",
+  );
+  destinationTransfer.amount = capturedIntent.amount;
   const confirmed = await bookingService.createParkingPassPurchase(
     purchaseInput,
   );
@@ -1859,6 +1895,12 @@ async function runFixture() {
   assert.equal(stripe.refundsById.size, 1);
   assert.equal(stripe.reversalsById.size, 1);
   assert.equal(stripe.feeRefundsById.size, 1);
+  assert.equal([...stripe.reversalsById.values()][0].amount, 1110);
+  assert.equal([...stripe.feeRefundsById.values()][0].amount, 110);
+  assert.deepEqual(stripe.settlementBalances.get(destinationTransfer.id), {
+    connected: purchaseRow.rows[0].host_amount_cents - 1000,
+    platform: purchaseRow.rows[0].platform_fee_cents - 110,
+  }, "A partial refund leaves only the unrefunded lines' balances");
   const refundedLine = await pool.query(
     `select status, cash_refunded_cents, host_transfer_reversed_cents,
             application_fee_refunded_cents, settlement_state
@@ -2005,13 +2047,27 @@ async function runFixture() {
   assert.equal(firstDeadlineRecovery.failed, 1);
   assert.equal(firstDeadlineRecovery.cancelled, 0);
   assert.equal(stripe.refundByKey.size, refundObjectsBeforeDeadline + 1);
+  const feeRefundsBeforeDeadline = stripe.feeRefundByKey.size;
+  const reversalsBeforeDeadline = stripe.reversalByKey.size;
+  stripe.failFeeRefundCreateAfterPersist = true;
   const secondDeadlineRecovery =
     await bookingService.reconcileExpiredParkingPassArrivalChanges({
       stripe: stripe as any,
     });
-  assert.equal(secondDeadlineRecovery.cancelled, 1);
+  assert.equal(secondDeadlineRecovery.failed, 1);
+  assert.equal(secondDeadlineRecovery.cancelled, 0);
+  assert.equal(stripe.feeRefundByKey.size, feeRefundsBeforeDeadline + 1);
+  assert.equal(stripe.reversalByKey.size, reversalsBeforeDeadline);
+  const thirdDeadlineRecovery =
+    await bookingService.reconcileExpiredParkingPassArrivalChanges({ stripe: stripe as any });
+  assert.equal(thirdDeadlineRecovery.cancelled, 1);
+  assert.equal(stripe.feeRefundByKey.size, feeRefundsBeforeDeadline + 1);
+  assert.equal(stripe.reversalByKey.size, reversalsBeforeDeadline + 1);
   assert.equal(stripe.refundByKey.size, refundObjectsBeforeDeadline + 1);
   assert.equal(stripe.refundCreateCalls, refundCallsBeforeDeadline + 1);
+  assert.deepEqual(stripe.settlementBalances.get(destinationTransfer.id), {
+    connected: 0, platform: 0,
+  }, "Refund and fee-timeout recovery return the entire purchase without stranded host or platform funds");
   const deadlineParentRecovery =
     await eventMutationService.reconcileEventParticipationMutations({
       stripe: stripe as any,

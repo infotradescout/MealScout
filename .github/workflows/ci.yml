@@ -28,6 +28,20 @@ jobs:
       - name: Stripe Webhook Safety
         run: npm run test:stripe-webhook-safety
 
+      - name: Ordering and Marketplace Financial Safety
+        run: |
+          npm run test:ordering-truth
+          npm run test:integrated-marketplace
+
+      - name: Marketplace Provider Recovery on PostgreSQL 16
+        run: npm run test:integrated-marketplace:stateful
+
+      - name: Menu Creation and LISA Record Integrity
+        run: npm run test:menu-lisa
+
+      - name: Production Dependency Audit
+        run: npm audit --omit=dev
+
       - name: Consumer Entity Foundation Contract
         run: npm run test:consumer-entity-foundation
 
