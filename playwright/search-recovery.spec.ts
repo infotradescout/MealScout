@@ -3,6 +3,17 @@ import { test, expect } from "@playwright/test";
 const FRONTEND = process.env.FRONTEND_URL ?? "http://localhost:5174";
 
 test.describe("Search recovery flows", () => {
+  test.beforeEach(async ({ page }) => {
+    // These parallel search sources also control the loading state. Keep them
+    // deterministic so recovery is checked without waiting for a live backend.
+    await page.route("**/api/menus/local-items?*", (route) =>
+      route.fulfill({ json: { items: [] } }),
+    );
+    await page.route("**/api/restaurants/search?*", (route) =>
+      route.fulfill({ json: [] }),
+    );
+  });
+
   test("Did-you-mean updates query and emits telemetry", async ({ page }) => {
     const telemetryEvents: Array<{ eventName?: string; properties?: Record<string, unknown> }> = [];
     const waitForSearchResponse = (query: string) =>

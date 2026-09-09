@@ -6647,7 +6647,9 @@ function ScoutFallbackMarketNotice({
                 ? normalizedQuery
                   ? "Showing related picks from active areas"
                   : "Showing popular picks from active areas"
-                : `No related “${normalizedQuery}” picks are active right now`}
+                : normalizedQuery
+                  ? `No related “${normalizedQuery}” picks are active right now`
+                  : "Help bring your favorite food to the map"}
             </p>
             <p className="mt-0.5 text-xs font-semibold leading-relaxed text-[color:var(--text-secondary)]">
               {hasOneNearbyResult
@@ -6656,7 +6658,9 @@ function ScoutFallbackMarketNotice({
                 ? normalizedQuery
                   ? `These are farther away, may come from any active MealScout area, and clearly relate to “${normalizedQuery}.”`
                   : "These are farther away and come from MealScout areas with current activity."
-                : "Scout will not substitute unrelated food. Request your favorite place and we’ll add it to the review queue."}
+                : normalizedQuery
+                  ? "Request your favorite place for us to review, or try another search."
+                  : "Try another area, or request a restaurant or food truck you’d like to find here."}
             </p>
           </div>
           <button
