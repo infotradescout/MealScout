@@ -1,10 +1,12 @@
 import { DateTime } from "luxon";
-import { and, eq, gte, inArray, isNull, lte, or, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import {
   eventBookings,
   events,
   eventSeries,
   hosts,
+  parkingPassArrivalVersions,
+  parkingPassPurchases,
   truckManualSchedules,
   users,
 } from "@shared/schema";
@@ -14,7 +16,11 @@ import type {
   PublicTruckScheduleSummary,
 } from "@shared/publicProfiles";
 import { db } from "../db";
-import { resolveCityTimeZoneSync } from "./cityTimeZone";
+import {
+  normalizePersistedIanaTimeZone,
+  persistedVenueTimeZoneSql,
+  resolvePersistedEventServiceTimeZone,
+} from "./persistedServiceTimeZone";
 import {
   buildPublicProfilePath,
   resolvePublicProfileVisibility,
@@ -26,6 +32,10 @@ import {
 } from "./publicSlotGate";
 import { isPublicDiscoveryEligibleEntity } from "@shared/publicDiscoveryIntegrity";
 import { resolveCoordinatePair } from "@shared/consumerEntity";
+import {
+  isPublicPaidParticipationEligible,
+  publicPaidParticipationSqlCondition,
+} from "./publicParkingPassEligibility";
 
 export type TruckOperatingPlanRow = {
   restaurantId?: unknown;
@@ -34,8 +44,26 @@ export type TruckOperatingPlanRow = {
   eventId?: unknown;
   eventTitle?: unknown;
   eventDescription?: unknown;
+  eventStatus?: unknown;
   eventType?: unknown;
   eventRequiresPayment?: unknown;
+  eventParticipationSuppressedAt?: unknown;
+  seriesId?: unknown;
+  seriesStatus?: unknown;
+  seriesType?: unknown;
+  seriesParticipationSuppressedAt?: unknown;
+  purchaseId?: unknown;
+  purchaseStatus?: unknown;
+  purchaseSettlementStatus?: unknown;
+  settlementTopology?: unknown;
+  arrivalState?: unknown;
+  publicLocationConsentSnapshot?: unknown;
+  eventActiveMutationId?: unknown;
+  seriesActiveMutationId?: unknown;
+  bookingActiveMutationId?: unknown;
+  participationVisibilityState?: unknown;
+  eventParticipationVersion?: unknown;
+  bookingParticipationVersion?: unknown;
   date?: unknown;
   startTime?: unknown;
   endTime?: unknown;
@@ -61,6 +89,15 @@ export type TruckOperatingPlanRow = {
   mapEligible?: unknown;
   liveFeedEligible?: unknown;
   addressVisible?: unknown;
+  currentArrivalVersionId?: unknown;
+  currentArrivalVersionState?: unknown;
+  currentArrivalAcknowledgedAt?: unknown;
+  currentArrivalCity?: unknown;
+  currentArrivalStateCode?: unknown;
+  currentArrivalLatitude?: unknown;
+  currentArrivalLongitude?: unknown;
+  currentArrivalStartAt?: unknown;
+  currentArrivalEndAt?: unknown;
 };
 
 const HIDDEN_STATUSES = new Set([
@@ -107,23 +144,54 @@ const cleanTime = (value: unknown) => {
 };
 
 const resolveTimeZone = (row: TruckOperatingPlanRow) => {
-  const supplied = String(row.timezone || "").trim();
-  if (supplied) {
-    return DateTime.local().setZone(supplied).isValid ? supplied : null;
-  }
-  const city = String(row.city || "").trim();
-  const state = String(row.state || "").trim();
-  if (!city || !state) return null;
-  return resolveCityTimeZoneSync({
-    city,
-    state,
-  });
+  return normalizePersistedIanaTimeZone(row.timezone);
 };
 
 const normalizeSourceStatus = (value: unknown) =>
   String(value || "")
     .trim()
     .toLowerCase();
+
+export const publicParkingPassBookingSqlCondition =
+  publicPaidParticipationSqlCondition;
+export const publicPaidBookingSqlCondition =
+  publicPaidParticipationSqlCondition;
+
+const roundPublicCoordinate = (value: unknown) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? Number(parsed.toFixed(2)) : null;
+};
+
+const publicArrivalWindow = (input: {
+  startAt: unknown;
+  endAt: unknown;
+  timezone: string;
+}) => {
+  const start = toDate(input.startAt);
+  const end = toDate(input.endAt);
+  if (!start || !end || end <= start) return null;
+  const startLocal = DateTime.fromJSDate(start, { zone: "utc" })
+    .setZone(input.timezone)
+    .set({
+      minute: Math.floor(
+        DateTime.fromJSDate(start, { zone: "utc" })
+          .setZone(input.timezone).minute / 30,
+      ) * 30,
+      second: 0,
+      millisecond: 0,
+    });
+  const rawEnd = DateTime.fromJSDate(end, { zone: "utc" }).setZone(
+    input.timezone,
+  );
+  const endLocal = rawEnd
+    .set({ minute: 0, second: 0, millisecond: 0 })
+    .plus({ minutes: Math.ceil(rawEnd.minute / 30) * 30 });
+  return {
+    date: startLocal.toFormat("yyyy-LL-dd"),
+    startTime: startLocal.toFormat("HH:mm"),
+    endTime: endLocal.toFormat("HH:mm"),
+  };
+};
 
 const classifyStopStatus = (input: {
   startsAt: Date | null;
@@ -207,6 +275,10 @@ export function assembleTruckOperatingPlan(input: {
       const bookingStatus = normalizeSourceStatus(row.bookingStatus);
       if (row.sourceKind === "booking" && bookingStatus !== "confirmed") {
         return null;
+      }
+      if (row.sourceKind === "booking" && Boolean(row.eventRequiresPayment)) {
+        const paidBookingPublic = isPublicPaidParticipationEligible(row);
+        if (!paidBookingPublic) return null;
       }
       if (row.sourceKind === "manual" && row.isPublic !== true) return null;
       if (row.sourceKind === "manual" && row.liveFeedEligible === false) {
@@ -613,8 +685,40 @@ export async function loadTruckOperatingPlanRowsByRestaurantIds(
       eventId: events.id,
       eventTitle: events.name,
       eventDescription: events.description,
+      eventStatus: events.status,
       eventType: events.eventType,
       eventRequiresPayment: events.requiresPayment,
+      eventParticipationSuppressedAt: events.participationSuppressedAt,
+      seriesId: events.seriesId,
+      seriesStatus: eventSeries.status,
+      seriesType: eventSeries.seriesType,
+      seriesParticipationSuppressedAt:
+        eventSeries.participationSuppressedAt,
+      purchaseId: eventBookings.purchaseId,
+      purchaseStatus: parkingPassPurchases.status,
+      purchaseSettlementStatus: parkingPassPurchases.settlementStatus,
+      settlementTopology: eventBookings.settlementTopology,
+      arrivalState: eventBookings.arrivalState,
+      publicLocationConsentSnapshot:
+        eventBookings.publicLocationConsentSnapshot,
+      eventActiveMutationId: events.activeParticipationMutationId,
+      seriesActiveMutationId: eventSeries.activeParticipationMutationId,
+      bookingActiveMutationId: eventBookings.activeEventMutationId,
+      participationVisibilityState:
+        eventBookings.participationVisibilityState,
+      eventParticipationVersion: events.participationVersion,
+      bookingParticipationVersion:
+        eventBookings.eventParticipationVersion,
+      currentArrivalVersionId: eventBookings.currentArrivalVersionId,
+      currentArrivalVersionState: parkingPassArrivalVersions.state,
+      currentArrivalAcknowledgedAt:
+        parkingPassArrivalVersions.acknowledgedAt,
+      currentArrivalCity: parkingPassArrivalVersions.city,
+      currentArrivalStateCode: parkingPassArrivalVersions.stateCode,
+      currentArrivalLatitude: parkingPassArrivalVersions.latitude,
+      currentArrivalLongitude: parkingPassArrivalVersions.longitude,
+      currentArrivalStartAt: parkingPassArrivalVersions.startAt,
+      currentArrivalEndAt: parkingPassArrivalVersions.endAt,
       date: events.date,
       startTime: events.startTime,
       endTime: events.endTime,
@@ -631,6 +735,7 @@ export async function loadTruckOperatingPlanRowsByRestaurantIds(
       hostName: hosts.businessName,
       hostPublicProfileSettings: users.publicProfileSettings,
       timezone: eventSeries.timezone,
+      venueTimeZone: persistedVenueTimeZoneSql(hosts.city, hosts.state),
       updatedAt: eventBookings.updatedAt,
       lastConfirmedAt: eventBookings.bookingConfirmedAt,
       expiresAt: sql<Date | null>`null`,
@@ -645,11 +750,26 @@ export async function loadTruckOperatingPlanRowsByRestaurantIds(
     .innerJoin(events, eq(eventBookings.eventId, events.id))
     .innerJoin(hosts, eq(events.hostId, hosts.id))
     .innerJoin(users, eq(hosts.userId, users.id))
+    .leftJoin(
+      parkingPassPurchases,
+      eq(eventBookings.purchaseId, parkingPassPurchases.id),
+    )
+    .leftJoin(
+      parkingPassArrivalVersions,
+      and(
+        eq(
+          eventBookings.currentArrivalVersionId,
+          parkingPassArrivalVersions.id,
+        ),
+        eq(eventBookings.id, parkingPassArrivalVersions.bookingId),
+      ),
+    )
     .leftJoin(eventSeries, eq(events.seriesId, eventSeries.id))
     .where(
       and(
         bookingRestaurantScope,
         eq(eventBookings.status, "confirmed"),
+        publicParkingPassBookingSqlCondition,
         eq(users.isDisabled, false),
         sql`exists (
           select 1
@@ -661,7 +781,6 @@ export async function loadTruckOperatingPlanRowsByRestaurantIds(
             and operating_truck_owner.is_disabled = false
         )`,
         inArray(events.status, ["open", "booked", "filled"]),
-        or(isNull(events.requiresPayment), eq(events.requiresPayment, false)),
         gte(events.date, queryStart),
         lte(events.date, queryEnd),
       ),
@@ -670,8 +789,50 @@ export async function loadTruckOperatingPlanRowsByRestaurantIds(
       const { showAddress } = resolvePublicProfileVisibility(
         row.hostPublicProfileSettings,
       );
+      const timezone = resolvePersistedEventServiceTimeZone({
+        seriesId: row.seriesId,
+        seriesTimeZone: row.timezone,
+        venueTimeZone: (row as TruckOperatingPlanRow & {
+          venueTimeZone?: unknown;
+        }).venueTimeZone,
+      });
+      const paidDestinationBooking =
+        row.sourceKind === "booking" &&
+        Boolean(row.eventRequiresPayment) &&
+        Boolean(String(row.purchaseId || "").trim());
+      if (paidDestinationBooking) {
+        const city = String(row.currentArrivalCity || "").trim();
+        const state = String(row.currentArrivalStateCode || "").trim();
+        const window = timezone
+          ? publicArrivalWindow({
+              startAt: row.currentArrivalStartAt,
+              endAt: row.currentArrivalEndAt,
+              timezone,
+            })
+          : null;
+        return {
+          ...row,
+          date: window?.date || null,
+          startTime: window?.startTime || null,
+          endTime: window?.endTime || null,
+          timezone,
+          // Never serialize protected street/access/safety facts. Current
+          // consent permits only a recomputed coarse public place/time.
+          address: null,
+          city: showAddress ? city : null,
+          state: showAddress ? state : null,
+          latitude: showAddress
+            ? roundPublicCoordinate(row.currentArrivalLatitude)
+            : null,
+          longitude: showAddress
+            ? roundPublicCoordinate(row.currentArrivalLongitude)
+            : null,
+          addressVisible: showAddress,
+        };
+      }
       return {
         ...row,
+        timezone,
         address: showAddress ? row.address : null,
         latitude: showAddress ? row.latitude : null,
         longitude: showAddress ? row.longitude : null,
@@ -681,7 +842,6 @@ export async function loadTruckOperatingPlanRowsByRestaurantIds(
     .filter(
       (row: TruckOperatingPlanRow) =>
         String(row.eventType || "").trim().toLowerCase() !== "private_event" &&
-        !Boolean(row.eventRequiresPayment) &&
         isPublicDiscoveryEligibleEntity({ name: row.eventTitle, isActive: true }) &&
         isPublicDiscoveryEligibleEntity({ name: row.hostName, isActive: true }),
     );

@@ -45,7 +45,19 @@ assert.equal(
   2,
   "create and edit routes must share the same event-date input contract",
 );
-assert.match(routeSource, /date: parsed\.date,/);
+assert.match(
+  routeSource,
+  /const eventDateKey = dateKeyFromUnknown\(parsed\.date, "UTC"\);/,
+);
+assert.match(
+  routeSource,
+  /date: new Date\(`\$\{eventDateKey\}T00:00:00\.000Z`\),/,
+);
+assert.match(
+  routeSource,
+  /requireIdempotencyKey\(\{ scope: "event_coordinator_event_create" \}\)/,
+);
+assert.match(routeSource, /hardCapEnabled: parsed\.hardCapEnabled,/);
 assert.doesNotMatch(routeSource, /date: z\.string\(\)(?:\.min\(1\))?[,\.]/);
 
 console.log("event coordinator date normalization contract: PASS");

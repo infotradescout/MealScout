@@ -129,11 +129,15 @@ export function requireIdempotencyKey(options: Options) {
       res.on("finish", () => {
         const body = getCaptured();
         const bodyJson = body === undefined ? null : JSON.stringify(body);
+        const continuationRequired = Number(res.statusCode || 200) === 202;
+        const responseState = continuationRequired ? "processing" : "completed";
+        const responseLock = continuationRequired ? new Date() : lockedUntil;
         void db.execute(sql`
           UPDATE idempotency_keys
-          SET state = 'completed',
+          SET state = ${responseState},
               status_code = ${Number(res.statusCode || 200)},
               response_body = CASE WHEN ${bodyJson} IS NULL THEN NULL ELSE CAST(${bodyJson} AS jsonb) END,
+              locked_until = ${responseLock},
               expires_at = ${expiresAt},
               updated_at = now()
           WHERE scope = ${scope}
@@ -170,6 +174,10 @@ export function requireIdempotencyKey(options: Options) {
       });
       const getCaptured = captureResponseBody(res);
       res.on("finish", () => {
+        if (Number(res.statusCode || 200) === 202) {
+          localFallback.delete(localKey);
+          return;
+        }
         const current = localFallback.get(localKey);
         if (!current) return;
         current.state = "completed";

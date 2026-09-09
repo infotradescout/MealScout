@@ -8,6 +8,12 @@ export {
   truckParkingReportsRelations,
   insertParkingPassBlackoutDateSchema,
   parkingRoutePlans,
+  parkingPassPurchases,
+  parkingPassCancellationOperations,
+  parkingPassProviderOperations,
+  parkingPassProviderOperationSteps,
+  parkingPassCreditLedger,
+  parkingPassArrivalVersions,
 } from "./legacy";
 
 export type {
@@ -17,4 +23,16 @@ export type {
   TruckParkingReport,
   ParkingRoutePlan,
   InsertParkingRoutePlan,
+  ParkingPassPurchase,
+  InsertParkingPassPurchase,
+  ParkingPassCancellationOperation,
+  InsertParkingPassCancellationOperation,
+  ParkingPassProviderOperation,
+  InsertParkingPassProviderOperation,
+  ParkingPassProviderOperationStep,
+  InsertParkingPassProviderOperationStep,
+  ParkingPassCreditEntry,
+  InsertParkingPassCreditEntry,
+  ParkingPassArrivalVersion,
+  InsertParkingPassArrivalVersion,
 } from "./legacy";

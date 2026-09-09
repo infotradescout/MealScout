@@ -1,0 +1,54 @@
+{
+  "schemaVersion": "infinity.county-map-adoption.v1",
+  "protocolVersion": "1.0.0",
+  "canonicalId": "mealscout",
+  "productId": "mealscout",
+  "displayName": "MealScout",
+  "canRead": true,
+  "canWrite": true,
+  "eventNamespaces": [
+    "mealscout"
+  ],
+  "sample": {
+    "eventType": "mealscout.venue.updated",
+    "subjectType": "food-venue",
+    "data": {
+      "state": "verified",
+      "serviceMode": "pickup"
+    }
+  },
+  "readPurpose": "Resolve venue-local day, service area, capacity, demand, and fulfillment context.",
+  "writePurpose": "Publish governed venue, menu, schedule, demand, order-state, and outcome signals.",
+  "sensitivityRule": "Never publish customer addresses, order contents tied to identity, payment data, or unsupported operating claims.",
+  "source": "Infinity/contracts/county-map/product-profiles.v1.json",
+  "generatedFiles": [
+    "county-map-client.mjs",
+    "county-map-client.contract.test.mjs"
+  ],
+  "sourceDigests": {
+    "clientSha256": "6c336e2af2e8bf80226c826f9736b3f3c1e9f5e500d04d7d766070655f1af09d",
+    "testSha256": "8dc79edd409ce56122097ac73292101e4b65076a0de88b675f7010295dd638ac"
+  },
+  "environment": {
+    "baseUrl": "COUNTY_MAP_BASE_URL",
+    "productSecret": "COUNTY_MAP_PRODUCT_SECRET"
+  },
+  "proof": {
+    "adapterContract": "passed",
+    "runtimeWiring": "passed",
+    "liveConnection": "not_proven",
+    "runtimeProvedAt": "2026-09-02T22:09:54.335967-05:00",
+    "provedAt": "2026-09-02T22:10:16.033578-05:00",
+    "liveGatewayConnection": "passed",
+    "gatewayContractRead": "passed",
+    "gatewayWrite": "passed",
+    "gatewayCorrectionWrite": "passed",
+    "gatewayReadback": "passed",
+    "gatewayProvedAt": "2026-09-03T17:52:27.4257099Z",
+    "gatewayEndpoint": "https://script.google.com/macros/s/AKfycbxGb4QzbibvH2dZcp1gm9KEjnE5c6I_6aBh5dEVSQ7XAAFo2BvTpkey6ucMya7Cn9_NDA/exec",
+    "gatewayDeploymentId": "AKfycbxGb4QzbibvH2dZcp1gm9KEjnE5c6I_6aBh5dEVSQ7XAAFo2BvTpkey6ucMya7Cn9_NDA",
+    "gatewayProofEventId": "county-map-proof-mealscout-20260903T174426530Z",
+    "gatewayCorrectionEventId": "county-map-proof-mealscout-20260903T174426530Z-correction",
+    "deployedRuntimeConnection": "not_proven"
+  }
+}

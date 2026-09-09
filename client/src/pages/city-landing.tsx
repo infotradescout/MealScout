@@ -18,6 +18,7 @@ import { apiUrl } from "@/lib/api";
 import { resolveCanonicalShareUrl } from "@/lib/share";
 import { useAuth } from "@/hooks/useAuth";
 import { buildPublicProfilePath } from "@/lib/public-profile-path";
+import { eventNumericDateLabel } from "@/lib/event-date-labels";
 import {
   buildFoodTrucksCityCanonicalUrl,
   buildFoodTrucksCityPath,
@@ -465,7 +466,7 @@ export default function CityLanding() {
                     {event.name || "Local event"}
                   </div>
                   <div className="text-xs text-muted-foreground">
-                    {new Date(event.date).toLocaleDateString()}{" "}
+                    {eventNumericDateLabel(event.date)}{" "}
                     {event.startTime ? ` - ${event.startTime}` : ""}
                   </div>
                 </div>

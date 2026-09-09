@@ -2,7 +2,7 @@
  * Menu Builder — Business dashboard page
  * Allows restaurant/bar/truck owners to create and manage their online menus.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/useAuth";
@@ -146,6 +146,26 @@ interface OrderingReadiness {
     status: string;
     message: string;
   };
+}
+
+interface OrderingReviewStatus {
+  restaurant: {
+    id: string;
+    orderingApprovedAt?: string | null;
+    orderingAuthorityVersion: number;
+    pickupAcknowledgementMinutes?: number | null;
+  };
+  request?: {
+    id: string;
+    status: "pending" | "approved" | "rejected" | "superseded";
+    evidenceUrl: string;
+    acknowledgementMinutes: number;
+    rejectionReason?: string | null;
+    reviewNote?: string | null;
+    submittedAuthorityVersion: number;
+  } | null;
+  currentReadiness: OrderingReadiness;
+  reviewReadiness: OrderingReadiness;
 }
 
 // ──────────────────────────────── helpers ─────────────────────────────────────
@@ -1079,6 +1099,10 @@ function MenuEditor({
     isActive: menu.isActive,
   });
   const [savingSettings, setSavingSettings] = useState(false);
+  const [orderingEvidenceUrl, setOrderingEvidenceUrl] = useState("");
+  const [orderingAcknowledgementMinutes, setOrderingAcknowledgementMinutes] =
+    useState(10);
+  const orderingReviewIdempotencyKey = useRef<string | null>(null);
   const readinessQuery = useQuery<OrderingReadiness>({
     queryKey: ["/api/owner/restaurants", restaurantId, "ordering-readiness"],
     queryFn: async () => {
@@ -1095,6 +1119,81 @@ function MenuEditor({
     enabled: !!restaurantId,
   });
   const readiness = readinessQuery.data;
+  const orderingReviewQuery = useQuery<OrderingReviewStatus | null>({
+    queryKey: ["/api/restaurants", restaurantId, "ordering-review"],
+    queryFn: async () => {
+      const res = await fetch(
+        `/api/restaurants/${encodeURIComponent(restaurantId)}/ordering-review`,
+        { credentials: "include" },
+      );
+      if (res.status === 403 || res.status === 404) return null;
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data?.message || "Failed to load ordering review");
+      }
+      return data;
+    },
+    enabled: !!restaurantId,
+    retry: false,
+  });
+  const orderingReview = orderingReviewQuery.data;
+  useEffect(() => {
+    if (!orderingReview) return;
+    setOrderingEvidenceUrl(orderingReview.request?.evidenceUrl || "");
+    setOrderingAcknowledgementMinutes(
+      Number(
+        orderingReview.request?.acknowledgementMinutes ||
+          orderingReview.restaurant.pickupAcknowledgementMinutes ||
+          10,
+      ),
+    );
+  }, [orderingReview]);
+  const submitOrderingReview = useMutation({
+    mutationFn: async () => {
+      const key =
+        orderingReviewIdempotencyKey.current ||
+        (globalThis.crypto?.randomUUID?.() ??
+          `ordering-review-${restaurantId}-${Date.now()}`);
+      orderingReviewIdempotencyKey.current = key;
+      const res = await fetch(
+        `/api/restaurants/${encodeURIComponent(restaurantId)}/ordering-review`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+            "Idempotency-Key": key,
+          },
+          body: JSON.stringify({
+            evidenceUrl: orderingEvidenceUrl.trim(),
+            acknowledgementMinutes: orderingAcknowledgementMinutes,
+          }),
+        },
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data?.message || "Ordering review could not be submitted");
+      }
+      return data;
+    },
+    onSuccess: async () => {
+      orderingReviewIdempotencyKey.current = null;
+      await orderingReviewQuery.refetch();
+      await readinessQuery.refetch();
+      toast({
+        title: "Ordering review requested",
+        description:
+          "An administrator must make a separate decision against this exact readiness version.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Ordering review not submitted",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
   const startStripeOnboarding = useMutation({
     mutationFn: async () => {
       const res = await fetch(
@@ -1575,6 +1674,148 @@ function MenuEditor({
             ) : null}
           </div>
         </details>
+      ) : null}
+
+      {orderingReview ? (
+        <Card data-testid="owner-ordering-review">
+          <CardHeader>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <CardTitle className="text-base">Ordering review</CardTitle>
+                <CardDescription>
+                  Submit current evidence as the business owner. An
+                  administrator makes a separate decision against the exact
+                  readiness version shown here.
+                </CardDescription>
+              </div>
+              <Badge
+                variant={
+                  orderingReview.restaurant.orderingApprovedAt
+                    ? "default"
+                    : orderingReview.request?.status === "rejected"
+                      ? "destructive"
+                      : "secondary"
+                }
+              >
+                {orderingReview.restaurant.orderingApprovedAt
+                  ? "Ordering approved"
+                  : orderingReview.request?.status === "pending"
+                    ? "Admin review pending"
+                    : orderingReview.request?.status === "rejected"
+                      ? "Changes requested"
+                      : orderingReview.request?.status === "superseded"
+                        ? "Readiness changed — resubmit"
+                        : "Not submitted"}
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {orderingReview.request?.rejectionReason ? (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                <p className="font-semibold">Admin response</p>
+                <p className="mt-1 text-xs">
+                  {orderingReview.request.rejectionReason}
+                </p>
+              </div>
+            ) : null}
+            {orderingReview.request?.status === "pending" ? (
+              <div className="rounded-lg bg-muted/40 p-3 text-sm">
+                <p className="font-medium">Evidence under review</p>
+                <a
+                  className="mt-1 block break-all text-xs text-blue-700 underline"
+                  href={orderingReview.request.evidenceUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  {orderingReview.request.evidenceUrl}
+                </a>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Submitted authority version {orderingReview.request.submittedAuthorityVersion};
+                  current version {orderingReview.restaurant.orderingAuthorityVersion}.
+                </p>
+              </div>
+            ) : !orderingReview.restaurant.orderingApprovedAt ? (
+              <>
+                {!orderingReview.reviewReadiness.orderingEnabled ? (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+                    <p className="font-semibold">
+                      Resolve these blockers before requesting review
+                    </p>
+                    <ul className="mt-2 list-disc space-y-1 pl-5">
+                      {orderingReview.reviewReadiness.blockingReasons.map(
+                        (reason) => (
+                          <li key={reason}>{reason}</li>
+                        ),
+                      )}
+                    </ul>
+                  </div>
+                ) : null}
+                <div className="grid gap-4 sm:grid-cols-[1fr_180px]">
+                  <div className="space-y-2">
+                    <Label htmlFor="ordering-evidence-url">
+                      HTTPS evidence URL
+                    </Label>
+                    <Input
+                      id="ordering-evidence-url"
+                      type="url"
+                      value={orderingEvidenceUrl}
+                      onChange={(event) => {
+                        orderingReviewIdempotencyKey.current = null;
+                        setOrderingEvidenceUrl(event.target.value);
+                      }}
+                      placeholder="https://…"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="ordering-acknowledgement-minutes">
+                      Response deadline
+                    </Label>
+                    <Select
+                      value={String(orderingAcknowledgementMinutes)}
+                      onValueChange={(value) => {
+                        orderingReviewIdempotencyKey.current = null;
+                        setOrderingAcknowledgementMinutes(Number(value));
+                      }}
+                    >
+                      <SelectTrigger id="ordering-acknowledgement-minutes">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {[5, 10, 15, 20, 25, 30].map((minutes) => (
+                          <SelectItem key={minutes} value={String(minutes)}>
+                            {minutes} minutes
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <Button
+                  type="button"
+                  onClick={() => submitOrderingReview.mutate()}
+                  disabled={
+                    submitOrderingReview.isPending ||
+                    !orderingReview.reviewReadiness.orderingEnabled ||
+                    !/^https:\/\//i.test(orderingEvidenceUrl.trim())
+                  }
+                >
+                  {submitOrderingReview.isPending ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : null}
+                  {orderingReview.request?.status === "rejected" ||
+                  orderingReview.request?.status === "superseded"
+                    ? "Resubmit for review"
+                    : "Request ordering review"}
+                </Button>
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Current checkout eligibility still depends on live menu,
+                inventory, hours, pickup-location, and Stripe readiness checks.
+              </p>
+            )}
+          </CardContent>
+        </Card>
       ) : null}
 
       <details

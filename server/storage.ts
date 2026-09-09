@@ -140,8 +140,10 @@ import {
 } from "./services/businessTeamAccess";
 import { forwardGeocode } from "./utils/geocoding";
 import { isParkingPassPublicReady } from "./services/parkingPassQuality";
-import { resolveCityTimeZoneSync } from "./services/cityTimeZone";
+import { resolveCityTimeZoneStrict } from "./services/cityTimeZone";
 import { utcDateFromDateKey } from "./services/dateKeys";
+import { buildSlotDateTimes } from "./services/timeIntent";
+import { resolvePersistedEventServiceTimeZone } from "./services/persistedServiceTimeZone";
 import { isPublicBusinessVisible } from "./utils/publicBusinessVisibility";
 import { broadcastLisaClaim } from "./websocket";
 import { createAuthTokensRepository } from "./storage/authTokensRepository";
@@ -159,7 +161,10 @@ export interface IStorage {
   getHost(id: string): Promise<Host | undefined>;
   getHostByUserId(userId: string): Promise<Host | undefined>;
   ensureDraftParkingPassForHost(hostId: string): Promise<boolean>;
-  syncParkingPassSeriesFromHost(hostId: string): Promise<string | null>;
+  syncParkingPassSeriesFromHost(
+    hostId: string,
+    authority?: { actorUserId: string; requestId: string },
+  ): Promise<string | null>;
   getHostsByUserId(userId: string): Promise<Host[]>;
   getHostsByIds(hostIds: string[]): Promise<Host[]>;
   syncHostFromUserAddress(
@@ -194,7 +199,6 @@ export interface IStorage {
     userId: string,
   ): Promise<(Event & { interests: EventInterest[] })[]>;
   createEventInterest(interest: InsertEventInterest): Promise<EventInterest>;
-  updateEventInterestStatus(id: string, status: string): Promise<EventInterest>;
   getEventInterest(id: string): Promise<EventInterest | undefined>;
   getEventInterestByTruckId(
     eventId: string,
@@ -1061,6 +1065,7 @@ export class DatabaseStorage implements IStorage {
       `${has("name") ? `${q("name")} as "name"` : `null as "name"`}`,
       `${has("description") ? `${q("description")} as "description"` : `null as "description"`}`,
       `${has("status") ? `${q("status")} as "status"` : `null as "status"`}`,
+      `${has("timezone") ? `${q("timezone")} as "timezone"` : `null as "timezone"`}`,
       `${has("published_at") ? `${q("published_at")} as "publishedAt"` : `null as "publishedAt"`}`,
       `${has("default_start_time") ? `${q("default_start_time")} as "defaultStartTime"` : `null as "defaultStartTime"`}`,
       `${has("default_end_time") ? `${q("default_end_time")} as "defaultEndTime"` : `null as "defaultEndTime"`}`,
@@ -1185,23 +1190,20 @@ export class DatabaseStorage implements IStorage {
     return result.rows || [];
   }
 
-  private hasEventEnded(event: any): boolean {
-    const eventDate = event?.date ? new Date(event.date) : null;
-    if (!eventDate || !Number.isFinite(eventDate.getTime())) return false;
-
-    const endTime = String(event?.endTime || "").trim();
-    const match = endTime.match(/^(\d{1,2}):(\d{2})/);
-    if (match) {
-      const hour = Number(match[1]);
-      const minute = Number(match[2]);
-      if (Number.isFinite(hour) && Number.isFinite(minute)) {
-        eventDate.setHours(hour, minute, 0, 0);
-      }
-    } else {
-      eventDate.setHours(23, 59, 59, 999);
-    }
-
-    return eventDate.getTime() < Date.now();
+  private hasEventEnded(event: any, now = new Date()): boolean {
+    const timeZone = resolvePersistedEventServiceTimeZone({
+      seriesId: event?.seriesId,
+      seriesTimeZone: event?.series?.timezone,
+      venueTimeZone: event?.venueTimeZone,
+    });
+    if (!timeZone) return true;
+    const interval = buildSlotDateTimes({
+      timeZone,
+      date: event?.date,
+      startTime: String(event?.startTime || ""),
+      endTime: String(event?.endTime || ""),
+    });
+    return !interval || interval.endUtc.getTime() <= now.getTime();
   }
 
   private async selectHostsSafe(
@@ -1275,8 +1277,14 @@ export class DatabaseStorage implements IStorage {
     return shouldAssignAffiliateTagForUserType(userType);
   }
 
-  async syncParkingPassSeriesFromHost(hostId: string): Promise<string | null> {
-    return this.parkingPassRepository.syncParkingPassSeriesFromHost(hostId);
+  async syncParkingPassSeriesFromHost(
+    hostId: string,
+    authority?: { actorUserId: string; requestId: string },
+  ): Promise<string | null> {
+    return this.parkingPassRepository.syncParkingPassSeriesFromHost(
+      hostId,
+      authority,
+    );
   }
 
   async ensureDraftParkingPassesForHosts(): Promise<number> {
@@ -1643,14 +1651,14 @@ export class DatabaseStorage implements IStorage {
   async getAllUpcomingEvents(): Promise<
     (Event & { host: Host; series?: EventSeries | null })[]
   > {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const now = new Date();
+    const queryFloor = new Date(now);
+    queryFloor.setUTCDate(queryFloor.getUTCDate() - 2);
+    queryFloor.setUTCHours(0, 0, 0, 0);
 
     // Use a schema-safe projection so older DBs missing newer events columns
     // (for example `coordinator_user_id`) do not break map/discovery feeds.
-    const eventRows = (await this.selectUpcomingEventsSafe(today)).filter(
-      (event: any) => !this.hasEventEnded(event),
-    );
+    const eventRows = await this.selectUpcomingEventsSafe(queryFloor);
 
     const hostIds = Array.from(
       new Set<string>(
@@ -1663,6 +1671,50 @@ export class DatabaseStorage implements IStorage {
     const hostById = new Map<string, Host>(
       (hostRows || []).map((host) => [host.id, host]),
     );
+    const seriesIds = Array.from(
+      new Set<string>(
+        eventRows
+          .map((row: any) => String(row.seriesId || "").trim())
+          .filter(Boolean),
+      ),
+    );
+    const seriesRows = seriesIds.length
+      ? await this.selectEventSeriesSafe(
+          `where "id" = any($1::varchar[])`,
+          [seriesIds],
+        )
+      : [];
+    const seriesById = new Map<string, EventSeries>(
+      seriesRows.map((series: any) => [String(series.id), series as EventSeries]),
+    );
+    const nonSeriesHostIds = new Set(
+      eventRows
+        .filter((event: any) => !String(event.seriesId || "").trim())
+        .map((event: any) => String(event.hostId || "").trim())
+        .filter(Boolean),
+    );
+    const venueTimeZonePairs = await Promise.all(
+      Array.from(nonSeriesHostIds).map(async (hostId) => {
+        const host = hostById.get(hostId);
+        if (!host) return [hostId, null] as const;
+        try {
+          return [
+            hostId,
+            await resolveCityTimeZoneStrict({
+              city: host.city,
+              state: host.state,
+            }),
+          ] as const;
+        } catch (error) {
+          console.warn("getAllUpcomingEvents venue timezone unavailable", {
+            hostId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+          return [hostId, null] as const;
+        }
+      }),
+    );
+    const venueTimeZoneByHostId = new Map(venueTimeZonePairs);
     const stubHost = (id: string): Host =>
       ({
         id,
@@ -1691,26 +1743,22 @@ export class DatabaseStorage implements IStorage {
         updatedAt: null as any,
       }) as any;
 
-    return eventRows.map((event: any) => ({
-      ...(event as any),
-      host:
-        hostById.get(String(event.hostId || "")) ??
-        stubHost(String(event.hostId || "")),
-      series: null,
-    })) as any;
+    return eventRows
+      .map((event: any) => ({
+        ...(event as any),
+        host:
+          hostById.get(String(event.hostId || "")) ??
+          stubHost(String(event.hostId || "")),
+        series: seriesById.get(String(event.seriesId || "")) ?? null,
+        venueTimeZone: venueTimeZoneByHostId.get(String(event.hostId || "")) ?? null,
+      }))
+      .filter((event: any) => !this.hasEventEnded(event, now)) as any;
   }
 
   async createEventInterest(
     interest: InsertEventInterest,
   ): Promise<EventInterest> {
     return this.hostsEventsRepository.createEventInterest(interest);
-  }
-
-  async updateEventInterestStatus(
-    id: string,
-    status: string,
-  ): Promise<EventInterest> {
-    return this.hostsEventsRepository.updateEventInterestStatus(id, status);
   }
 
   async getEventInterest(id: string): Promise<EventInterest | undefined> {

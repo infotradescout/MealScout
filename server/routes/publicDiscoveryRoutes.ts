@@ -31,6 +31,7 @@ import {
   cities,
   deals,
   eventBookings,
+  eventSeries,
   events,
   hosts,
   menuCategories,
@@ -42,6 +43,7 @@ import {
   menus,
   merchantPromotionPartners,
   merchantPromotionPolicies,
+  parkingPassPurchases,
   requestLogs,
   restaurants,
   searchQueryEvents,
@@ -70,15 +72,22 @@ import {
   resolvePublicBusinessSlug,
   resolveUniqueCleanBusinessPathForEntity,
 } from "../publicProfiles/publicBusinessSlugResolver";
-import { buildPublicTruckOperatingPlan } from "../services/truckOperatingPlan";
+import {
+  buildPublicTruckOperatingPlan,
+  publicParkingPassBookingSqlCondition,
+} from "../services/truckOperatingPlan";
 import { createStructuredMenuRevision } from "../services/menuRevision";
 import {
   filterPublicConfirmedEventTrucks,
   loadConfirmedEventTrucks,
 } from "../services/confirmedEventTrucks";
-import { resolveCityTimeZoneSync } from "../services/cityTimeZone";
 import { buildSlotDateTimes } from "../services/timeIntent";
+import {
+  persistedVenueTimeZoneSql,
+  resolvePersistedEventServiceTimeZone,
+} from "../services/persistedServiceTimeZone";
 import { isSlotPublic } from "../services/publicSlotGate";
+import { loadPublicParkingPassProjections } from "../services/publicParkingPassProjection";
 import {
   canExposeAnonymousEventDetail,
   canExposeAnonymousEventFeedItem,
@@ -644,18 +653,27 @@ const buildPublicEventsPayload = async (input: {
     hostAddress: hosts.address,
     hostCity: hosts.city,
     hostState: hosts.state,
+    seriesId: events.seriesId,
+    seriesTimeZone: eventSeries.timezone,
+    venueTimeZone: persistedVenueTimeZoneSql(hosts.city, hosts.state),
   };
   const rows = input.restaurantId
     ? await db
         .select(publicEventFields)
         .from(eventBookings)
         .innerJoin(events, eq(eventBookings.eventId, events.id))
+        .leftJoin(eventSeries, eq(events.seriesId, eventSeries.id))
+        .leftJoin(
+          parkingPassPurchases,
+          eq(eventBookings.purchaseId, parkingPassPurchases.id),
+        )
         .leftJoin(hosts, eq(events.hostId, hosts.id))
         .leftJoin(users, eq(hosts.userId, users.id))
         .where(
           and(
             eq(eventBookings.truckId, input.restaurantId),
             eq(eventBookings.status, "confirmed"),
+            publicParkingPassBookingSqlCondition,
             isNotNull(eventBookings.bookingConfirmedAt),
             inArray(events.status, ["open", "booked", "filled"]),
             gte(events.date, queryStart),
@@ -664,6 +682,7 @@ const buildPublicEventsPayload = async (input: {
     : await db
         .select(publicEventFields)
         .from(events)
+        .leftJoin(eventSeries, eq(events.seriesId, eventSeries.id))
         .leftJoin(hosts, eq(events.hostId, hosts.id))
         .leftJoin(users, eq(hosts.userId, users.id))
         .where(
@@ -681,6 +700,16 @@ const buildPublicEventsPayload = async (input: {
       ),
     ),
   );
+  const paidProjectionByEvent = await loadPublicParkingPassProjections({
+    eventIds: Array.from(
+      new Set(
+        rows
+          .filter((row: any) => row.requiresPayment === true)
+          .map((row: any) => String(row.id || "").trim())
+          .filter(Boolean),
+      ),
+    ),
+  });
   const upcoming = rows
     .sort(
       (a: any, b: any) =>
@@ -690,15 +719,39 @@ const buildPublicEventsPayload = async (input: {
       const title = String(row.title || "").trim();
       const id = String(row.id || "").trim();
       if (!id || !title) return null;
-      const dateObj = row.date ? new Date(row.date as any) : null;
-      const startTime = String(row.startTime || "").trim();
-      const endTime = String(row.endTime || "").trim();
-      const timeZone = resolveCityTimeZoneSync({
-        city: row.hostCity || null,
-        state: row.hostState || null,
+      const paidProjection = row.requiresPayment === true
+        ? paidProjectionByEvent.get(id) || null
+        : null;
+      if (row.requiresPayment === true && !paidProjection) return null;
+      const dateObj = paidProjection
+        ? paidProjection.startsAt
+        : row.date
+          ? new Date(row.date as any)
+          : null;
+      let startTime = String(row.startTime || "").trim();
+      let endTime = String(row.endTime || "").trim();
+      const timeZone = resolvePersistedEventServiceTimeZone({
+        seriesId: row.seriesId,
+        seriesTimeZone: row.seriesTimeZone,
+        venueTimeZone: row.venueTimeZone,
       });
-      const interval =
-        dateObj && Number.isFinite(dateObj.getTime())
+      if (!timeZone) return null;
+      if (paidProjection) {
+        const formatter = new Intl.DateTimeFormat("en-US", {
+          timeZone,
+          hour: "2-digit",
+          minute: "2-digit",
+          hourCycle: "h23",
+        });
+        startTime = formatter.format(paidProjection.startsAt);
+        endTime = formatter.format(paidProjection.endsAt);
+      }
+      const interval = paidProjection
+        ? {
+            startUtc: paidProjection.startsAt,
+            endUtc: paidProjection.endsAt,
+          }
+        : dateObj && Number.isFinite(dateObj.getTime())
           ? buildSlotDateTimes({
               timeZone,
               date: dateObj,
@@ -761,7 +814,9 @@ const buildPublicEventsPayload = async (input: {
       const { showAddress } = resolvePublicProfileVisibility(
         row.hostPublicProfileSettings,
       );
-      const addressPublicLabel = showAddress
+      const addressPublicLabel = paidProjection
+        ? paidProjection.addressPublicLabel || ""
+        : showAddress
         ? [row.hostAddress, row.hostCity, row.hostState]
             .map((v) => String(v || "").trim())
             .filter(Boolean)
@@ -794,7 +849,10 @@ const buildPublicEventsPayload = async (input: {
         endsAt: interval.endUtc.toISOString(),
         dateLabel,
         timeWindowLabel,
-        locationName: String(row.hostName || "").trim() || null,
+        locationName:
+          paidProjection?.locationName ||
+          String(row.hostName || "").trim() ||
+          null,
         addressPublicLabel: addressPublicLabel || null,
         imageUrl: null,
         actionLabel,
@@ -2192,9 +2250,13 @@ export function registerPublicDiscoveryRoutes(app: Express) {
             hostAddress: hosts.address,
             hostCity: hosts.city,
             hostState: hosts.state,
+            seriesId: events.seriesId,
+            seriesTimeZone: eventSeries.timezone,
+            venueTimeZone: persistedVenueTimeZoneSql(hosts.city, hosts.state),
           })
           .from(events)
           .innerJoin(hosts, eq(events.hostId, hosts.id))
+          .leftJoin(eventSeries, eq(events.seriesId, eventSeries.id))
           .where(eq(events.id, id))
           .limit(1);
 
@@ -2238,10 +2300,14 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           .sort((left, right) => right.getTime() - left.getTime())[0];
         const freshnessSource =
           latestBookingConfirmation || row.lastConfirmedAt || row.updatedAt || row.date;
-        const timeZone = resolveCityTimeZoneSync({
-          city: row.hostCity || null,
-          state: row.hostState || null,
+        const timeZone = resolvePersistedEventServiceTimeZone({
+          seriesId: row.seriesId,
+          seriesTimeZone: row.seriesTimeZone,
+          venueTimeZone: row.venueTimeZone,
         });
+        if (!timeZone) {
+          return res.status(404).json({ message: "Entity not found" });
+        }
         const interval = buildSlotDateTimes({
           timeZone,
           date: row.date,
@@ -3390,9 +3456,13 @@ export function registerPublicDiscoveryRoutes(app: Express) {
             hostName: hosts.businessName,
             hostCity: hosts.city,
             hostState: hosts.state,
+            seriesId: events.seriesId,
+            seriesTimeZone: eventSeries.timezone,
+            venueTimeZone: persistedVenueTimeZoneSql(hosts.city, hosts.state),
           })
           .from(events)
           .innerJoin(hosts, eq(events.hostId, hosts.id))
+          .leftJoin(eventSeries, eq(events.seriesId, eventSeries.id))
           .where(eq(events.id, id))
           .limit(1);
 
@@ -3421,10 +3491,14 @@ export function registerPublicDiscoveryRoutes(app: Express) {
             String(row.id),
           ) || [],
         );
-        const eventTimeZone = resolveCityTimeZoneSync({
-          city: row.hostCity || null,
-          state: row.hostState || null,
+        const eventTimeZone = resolvePersistedEventServiceTimeZone({
+          seriesId: row.seriesId,
+          seriesTimeZone: row.seriesTimeZone,
+          venueTimeZone: row.venueTimeZone,
         });
+        if (!eventTimeZone) {
+          return res.status(404).json({ message: "Entity not found" });
+        }
         const eventInterval = buildSlotDateTimes({
           timeZone: eventTimeZone,
           date: row.date,

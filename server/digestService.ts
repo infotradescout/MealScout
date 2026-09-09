@@ -2,6 +2,16 @@ import { db } from "./db";
 import { events, hosts, telemetryEvents } from "@shared/schema";
 import { and, eq, gte, lt, sql } from "drizzle-orm";
 import { emailService } from "./emailService";
+import {
+  addDaysToDateKey,
+  dateKeyFromUnknown,
+  dateKeyInZone,
+  formatDateKeyForDisplay,
+  utcDateFromDateKey,
+} from "./services/dateKeys";
+import { resolveCityTimeZoneStrict } from "./services/cityTimeZone";
+import { loadPersistedEventServiceTimeZone } from "./services/persistedServiceTimeZone";
+import { deliverEventNotificationOnce } from "./services/eventNotificationDeliveryService";
 
 type WeeklyDigestPreferenceShape = {
   notifications?: {
@@ -26,16 +36,11 @@ export class DigestService {
     return DigestService.instance;
   }
 
-  async sendWeeklyDigests() {
+  async sendWeeklyDigests(options: { now?: Date } = {}) {
     console.log("[Digest] Starting weekly digest generation...");
 
     try {
-      const now = new Date();
-      const nextWeek = new Date(now);
-      nextWeek.setDate(now.getDate() + 7);
-
-      const weekNumber = this.getWeekNumber(now);
-      const idempotencyKey = `${now.getFullYear()}-W${weekNumber}`;
+      const now = options.now || new Date();
 
       const allHosts = await db.query.hosts.findMany({
         with: {
@@ -62,6 +67,18 @@ export class DigestService {
           continue;
         }
 
+        const hostTimeZone = await resolveCityTimeZoneStrict({
+          city: host.city,
+          state: host.state,
+        });
+        if (!hostTimeZone) {
+          skippedCount++;
+          continue;
+        }
+        const weekStartKey = dateKeyInZone(now, hostTimeZone);
+        const weekEndExclusiveKey = addDaysToDateKey(weekStartKey, 7);
+        const idempotencyKey = `${host.id}:${weekStartKey}`;
+
         const alreadySent = await db.query.telemetryEvents.findFirst({
           where: and(
             eq(telemetryEvents.eventName, "weekly_digest_sent"),
@@ -78,8 +95,8 @@ export class DigestService {
         const upcomingEvents = await db.query.events.findMany({
           where: and(
             eq(events.hostId, host.id),
-            gte(events.date, now),
-            lt(events.date, nextWeek),
+            gte(events.date, utcDateFromDateKey(weekStartKey)),
+            lt(events.date, utcDateFromDateKey(weekEndExclusiveKey)),
           ),
           with: {
             interests: true,
@@ -107,6 +124,13 @@ export class DigestService {
         }[] = [];
 
         for (const event of upcomingEvents) {
+          const eventTimeZone = await loadPersistedEventServiceTimeZone({
+            seriesId: event.seriesId,
+            city: host.city,
+            state: host.state,
+          });
+          const eventDateKey = dateKeyFromUnknown(event.date, "UTC");
+          if (!eventTimeZone || !eventDateKey) continue;
           const interests = event.interests || [];
           const pending = interests.filter((i: any) => i.status === "pending").length;
           const accepted = interests.filter((i: any) => i.status === "accepted").length;
@@ -115,7 +139,7 @@ export class DigestService {
 
           eventSummaries.push({
             name: event.name || "Event",
-            date: new Date(event.date).toLocaleDateString(),
+            date: formatDateKeyForDisplay(eventDateKey),
             accepted,
             max: event.maxTrucks,
           });
@@ -123,21 +147,57 @@ export class DigestService {
           if (accepted >= event.maxTrucks) {
             capacityAlerts.push({
               eventName: event.name || "Event",
-              date: new Date(event.date).toLocaleDateString(),
+              date: formatDateKeyForDisplay(eventDateKey),
               accepted,
               max: event.maxTrucks,
             });
           }
         }
 
-        await emailService.sendWeeklyDigest(hostEmail, {
+        const digestFacts = {
           hostName: host.businessName,
-          weekStart: now.toLocaleDateString(),
-          weekEnd: nextWeek.toLocaleDateString(),
+          weekStart: formatDateKeyForDisplay(weekStartKey),
+          weekEnd: formatDateKeyForDisplay(
+            addDaysToDateKey(weekEndExclusiveKey, -1),
+          ),
           events: eventSummaries,
           pendingCount: pendingInterestCount,
           capacityAlerts,
+        };
+        const subject = "Your MealScout week at a glance";
+        const html = `<p>Hi ${host.businessName},</p><p>Here is your summary for ${digestFacts.weekStart} through ${digestFacts.weekEnd}.</p><p>${pendingInterestCount} pending interest${pendingInterestCount === 1 ? "" : "s"}.</p><ul>${eventSummaries.map((event) => `<li>${event.date}: ${event.name} (${event.accepted}/${event.max})</li>`).join("")}</ul>`;
+        const delivery = await deliverEventNotificationOnce({
+          notificationKind: "weekly_host_digest",
+          subjectId: idempotencyKey,
+          recipientUserId: host.userId,
+          recipientEmail: hostEmail,
+          serviceTimeZone: hostTimeZone,
+          serviceDateKey: weekStartKey,
+          payload: {
+            version: "weekly-host-digest-v1",
+            hostId: host.id,
+            hostTimeZone,
+            weekStartKey,
+            weekEndExclusiveKey,
+            eventSummaries,
+            pendingInterestCount,
+            capacityAlerts,
+          },
+          send: (providerIdempotencyKey) =>
+            emailService.sendBasicEmailWithReceipt(
+              hostEmail,
+              subject,
+              html,
+              undefined,
+              "general",
+              providerIdempotencyKey,
+            ),
         });
+
+        if (delivery.status !== "provider_confirmed") {
+          skippedCount++;
+          continue;
+        }
 
         await db.insert(telemetryEvents).values({
           eventName: "weekly_digest_sent",
@@ -160,14 +220,6 @@ export class DigestService {
     } catch (error) {
       console.error("[Digest] Error generating weekly digests:", error);
     }
-  }
-
-  private getWeekNumber(d: Date): number {
-    const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-    const dayNum = date.getUTCDay() || 7;
-    date.setUTCDate(date.getUTCDate() + 4 - dayNum);
-    const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
-    return Math.ceil(((date.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
   }
 
   private isWeeklyDigestEnabledForUser(user: any): boolean {

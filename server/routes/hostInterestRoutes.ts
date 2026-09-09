@@ -1,9 +1,13 @@
 import type { Express } from "express";
 
-import { emailService } from "../emailService";
 import { storage } from "../storage";
 import { isAuthenticated } from "../unifiedAuth";
 import { canEmailForTopic } from "../utils/notificationPreferences";
+import { deliverInterestStatusEventNotification } from "../services/eventNotificationDeliveryService";
+import {
+  decideEventInterest,
+  EventInterestDecisionError,
+} from "../services/eventInterestDecisionService";
 
 type HostInterestRoutesDependencies = {
   getHostByUserId: (userId: string) => Promise<any>;
@@ -11,18 +15,7 @@ type HostInterestRoutesDependencies = {
     eventId: string,
     userId: string,
   ) => Promise<{ event: any; host?: any }>;
-  getInterestEventAndHostForUser: (
-    interestId: string,
-    userId: string,
-  ) => Promise<{ interest: any; event: any; host?: any }>;
   userOwnsEvent: (userId: string, host: any, event: any) => boolean;
-  computeAcceptedCount: (interests: any[]) => number;
-  shouldBlockAcceptance: (params: {
-    hardCapEnabled: boolean;
-    acceptedCount: number;
-    maxTrucks: number;
-  }) => boolean;
-  buildCapacityFullError: () => Record<string, any>;
   computeFillRate: (params: {
     acceptedCount: number;
     maxTrucks: number;
@@ -34,11 +27,7 @@ export function registerHostInterestRoutes(
   {
     getHostByUserId,
     getEventAndHostForUser,
-    getInterestEventAndHostForUser,
     userOwnsEvent,
-    computeAcceptedCount,
-    shouldBlockAcceptance,
-    buildCapacityFullError,
     computeFillRate,
   }: HostInterestRoutesDependencies,
 ) {
@@ -55,69 +44,20 @@ export function registerHostInterestRoutes(
           return res.status(400).json({ message: "Invalid status" });
         }
 
-        const { interest, event, host } = await getInterestEventAndHostForUser(
-          interestId,
-          userId,
-        );
-
-        if (!interest) {
-          return res.status(404).json({ message: "Interest not found" });
-        }
-
-        if (!event) {
-          return res.status(404).json({ message: "Event not found" });
-        }
-
-        if (!userOwnsEvent(userId, host, event)) {
-          return res
-            .status(403)
-            .json({ message: "Not authorized to manage this event" });
-        }
-
-        if (interest.status === status) {
-          return res.json(interest);
-        }
-
-        if (status === "accepted" && event.hardCapEnabled) {
-          const currentInterests = await storage.getEventInterestsByEventId(
-            event.id,
-          );
-          const acceptedCount = computeAcceptedCount(currentInterests);
-
-          if (
-            shouldBlockAcceptance({
-              hardCapEnabled: event.hardCapEnabled,
-              acceptedCount,
-              maxTrucks: event.maxTrucks,
-            })
-          ) {
-            await storage.createTelemetryEvent({
-              eventName: "interest_accept_blocked",
-              userId: req.user.id,
-              properties: {
-                eventId: event.id,
-                truckId: interest.truckId,
-                reason: "capacity_guard_limit_reached",
-                maxTrucks: event.maxTrucks,
-                acceptedCount,
-              },
-            });
-
-            return res.status(400).json(buildCapacityFullError());
-          }
-        }
-
-        const updatedInterest = await storage.updateEventInterestStatus(
+        const decision = await decideEventInterest({
           interestId,
           status,
-        );
+          actorUserId: userId,
+          actorRole: req.user.userType,
+        });
+        const interest = decision.interest;
+        const event = decision.event;
+        const host = decision.host;
+        if (decision.replayed) return res.json(interest);
 
         (async () => {
           try {
-            const allInterests = await storage.getEventInterestsByEventId(
-              event.id,
-            );
-            const acceptedCount = computeAcceptedCount(allInterests);
+            const acceptedCount = decision.acceptedCount;
             const isOverCap = acceptedCount >= event.maxTrucks;
 
             await storage.createTelemetryEvent({
@@ -147,13 +87,19 @@ export function registerHostInterestRoutes(
                 owner.email &&
                 canEmailForTopic((owner as any).accountSettings, "nearbyEvents")
               ) {
-                await emailService.sendInterestStatusUpdate(
-                  owner.email,
-                  truck.name,
-                  host!.businessName,
-                  new Date(event.date).toLocaleDateString(),
-                  status as "accepted" | "declined",
-                );
+                await deliverInterestStatusEventNotification({
+                  interestId: interest.id,
+                  eventId: event.id,
+                  eventDate: event.date,
+                  seriesId: event.seriesId,
+                  hostCity: host?.city,
+                  hostState: host?.state,
+                  recipientUserId: owner.id,
+                  recipientEmail: owner.email,
+                  truckName: truck.name,
+                  hostName: host.businessName,
+                  status: status as "accepted" | "declined",
+                });
               }
             }
           } catch (err) {
@@ -161,8 +107,28 @@ export function registerHostInterestRoutes(
           }
         })();
 
-        res.json(updatedInterest);
+        res.json(interest);
       } catch (error: any) {
+        if (error instanceof EventInterestDecisionError) {
+          if (error.code === "capacity_reached") {
+            await storage.createTelemetryEvent({
+              eventName: "interest_accept_blocked",
+              userId: req.user.id,
+              properties: {
+                reason: "capacity_guard_limit_reached",
+                ...error.details,
+              },
+            });
+          }
+          return res.status(error.statusCode).json({
+            message: error.message,
+            code:
+              error.code === "capacity_reached"
+                ? "CAPACITY_REACHED"
+                : error.code,
+            ...error.details,
+          });
+        }
         console.error("Error updating interest status:", error);
         res.status(500).json({ message: "Failed to update status" });
       }

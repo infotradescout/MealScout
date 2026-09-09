@@ -9,7 +9,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { format, isPast, isToday } from "date-fns";
 import { SEOHead } from "@/components/seo-head";
 import {
   Calendar,
@@ -37,6 +36,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { PENSACOLA_RADIATE_MARKETS } from "@/lib/launchMarkets";
+import { isDateOnlyBeforeToday } from "@/lib/date-only";
+import {
+  eventLongDateLabel,
+  eventSeriesRangeLabel,
+} from "@/lib/event-date-labels";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -105,6 +109,15 @@ const normalizeEvents = (items: any[]): EventItem[] => {
 const locationLabel = (host: Host) =>
   [host.city, host.state].filter(Boolean).join(", ") || host.address;
 
+export const isDiscoveryEventPast = (
+  event: Pick<EventItem, "date" | "series">,
+  now = new Date(),
+) =>
+  isDateOnlyBeforeToday(event.date, {
+    now,
+    timeZone: event.series?.timezone,
+  });
+
 // ---------------------------------------------------------------------------
 // EventCard — standalone event
 // ---------------------------------------------------------------------------
@@ -124,8 +137,7 @@ function EventCard({
   onInterest: (id: string) => void;
   onJoin: () => void;
 }) {
-  const eventDate = new Date(event.date);
-  const past = isPast(eventDate) && !isToday(eventDate);
+  const past = isDiscoveryEventPast(event);
 
   return (
     <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean overflow-hidden flex flex-col">
@@ -178,7 +190,7 @@ function EventCard({
           <div className="flex items-center gap-2">
             <Calendar className="h-4 w-4 shrink-0 text-[color:var(--accent-text)]" />
             <span className="font-medium text-[color:var(--text-primary)]">
-              {format(eventDate, "EEEE, MMMM d, yyyy")}
+              {eventLongDateLabel(event.date)}
             </span>
           </div>
           <div className="flex items-center gap-2">
@@ -324,8 +336,10 @@ function SeriesGroupCard({
                 <span>
                   {group.occurrences.length} date
                   {group.occurrences.length !== 1 ? "s" : ""} ·{" "}
-                  {format(new Date(group.earliestDate), "MMM d")} –{" "}
-                  {format(new Date(group.latestDate), "MMM d, yyyy")}
+                  {eventSeriesRangeLabel(
+                    group.earliestDate,
+                    group.latestDate,
+                  )}
                 </span>
               </div>
               {group.host.contactPhone && (
@@ -358,8 +372,7 @@ function SeriesGroupCard({
       {expanded && (
         <div className="divide-y divide-[color:var(--border-subtle)]">
           {group.occurrences.map((event) => {
-            const past =
-              isPast(new Date(event.date)) && !isToday(new Date(event.date));
+            const past = isDiscoveryEventPast(event);
             return (
               <div
                 key={event.id}
@@ -368,7 +381,7 @@ function SeriesGroupCard({
                 <div className="space-y-1 text-sm">
                   <div className="flex items-center gap-2 font-medium text-[color:var(--text-primary)]">
                     <Calendar className="h-4 w-4 text-[color:var(--accent-text)]" />
-                    {format(new Date(event.date), "EEEE, MMMM d, yyyy")}
+                    {eventLongDateLabel(event.date)}
                   </div>
                   <div className="flex items-center gap-2 text-[color:var(--text-secondary)]">
                     <Clock className="h-4 w-4 text-[color:var(--accent-text)]" />

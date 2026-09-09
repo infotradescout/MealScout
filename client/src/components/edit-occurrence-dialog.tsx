@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,6 +15,7 @@ import {
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle, Calendar } from "lucide-react";
 import { format } from "date-fns";
+import { localCalendarDate } from "@/lib/date-only";
 
 interface EditOccurrenceDialogProps {
   event: {
@@ -57,10 +58,18 @@ export function EditOccurrenceDialog({
   const [monthlyPrice, setMonthlyPrice] = useState("0.00");
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const mutationKeyRef = useRef<string | null>(null);
+  const mutationFingerprintRef = useRef<string | null>(null);
+  const mutationEventIdRef = useRef<string | null>(null);
 
   // Initialize form when event changes
   useEffect(() => {
     if (event) {
+      if (mutationEventIdRef.current !== event.id) {
+        mutationKeyRef.current = null;
+        mutationFingerprintRef.current = null;
+        mutationEventIdRef.current = event.id;
+      }
       setStartTime(event.startTime);
       setEndTime(event.endTime);
       setMaxTrucks(event.maxTrucks);
@@ -126,22 +135,33 @@ export function EditOccurrenceDialog({
       const breakfastCents = dollarsToCents(breakfastPrice);
       const lunchCents = dollarsToCents(lunchPrice);
       const dinnerCents = dollarsToCents(dinnerPrice);
+      const payload = {
+        startTime,
+        endTime,
+        maxTrucks,
+        hardCapEnabled,
+        breakfastPriceCents: breakfastCents,
+        lunchPriceCents: lunchCents,
+        dinnerPriceCents: dinnerCents,
+        weeklyPriceCents: autoWeekly ? null : dollarsToCents(weeklyPrice),
+        monthlyPriceCents: autoMonthly ? null : dollarsToCents(monthlyPrice),
+        applyToFuture: true,
+      };
+      const fingerprint = JSON.stringify(payload);
+      if (mutationFingerprintRef.current !== fingerprint) {
+        mutationFingerprintRef.current = fingerprint;
+        mutationKeyRef.current = crypto.randomUUID();
+      }
 
       const res = await fetch(`/api/hosts/parking-pass/${event.id}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          startTime,
-          endTime,
-          maxTrucks,
-          hardCapEnabled,
-          breakfastPriceCents: breakfastCents,
-          lunchPriceCents: lunchCents,
-          dinnerPriceCents: dinnerCents,
-          weeklyPriceCents: autoWeekly ? null : dollarsToCents(weeklyPrice),
-          monthlyPriceCents: autoMonthly ? null : dollarsToCents(monthlyPrice),
-          applyToFuture: true,
-        }),
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key":
+            mutationKeyRef.current ||
+            (mutationKeyRef.current = crypto.randomUUID()),
+        },
+        body: fingerprint,
       });
 
       if (!res.ok) {
@@ -149,6 +169,20 @@ export function EditOccurrenceDialog({
         throw new Error(data.message || "Failed to update parking pass listing");
       }
 
+      const data = await res.json();
+      if (
+        data?.participationMutation &&
+        data.participationMutation.status !== "converged"
+      ) {
+        onEventUpdated();
+        throw new Error(
+          data.participationMutation.failureMessage ||
+            "This change is safely hidden while participant remedies or notices finish. Retry with the same form submission.",
+        );
+      }
+
+      mutationKeyRef.current = null;
+      mutationFingerprintRef.current = null;
       onOpenChange(false);
       onEventUpdated();
     } catch (err: any) {
@@ -183,7 +217,7 @@ export function EditOccurrenceDialog({
             <Calendar className="h-4 w-4" />
             <AlertTitle>Part of Series: {seriesName}</AlertTitle>
             <AlertDescription>
-              Changes apply to <strong>{format(new Date(event.date), "MMMM d, yyyy")}</strong>{" "}
+              Changes apply to <strong>{format(localCalendarDate(event.date)!, "MMMM d, yyyy")}</strong>{" "}
               and future dates in this series.
             </AlertDescription>
           </Alert>
@@ -193,7 +227,7 @@ export function EditOccurrenceDialog({
           <div className="bg-[var(--bg-surface)] border rounded-md p-3 text-sm">
             <div className="flex items-center gap-2 text-[color:var(--text-muted)]">
               <Calendar className="h-4 w-4" />
-              <span className="font-medium">{format(new Date(event.date), "EEEE, MMMM d, yyyy")}</span>
+              <span className="font-medium">{format(localCalendarDate(event.date)!, "EEEE, MMMM d, yyyy")}</span>
             </div>
           </div>
 

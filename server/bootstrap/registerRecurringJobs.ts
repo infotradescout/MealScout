@@ -12,6 +12,13 @@ import { runMarketplaceHealthAudit } from "../marketplaceHealth";
 import { createIncident } from "../incidentManager";
 import { retryPickupOrderNotifications } from "../services/pickupOrderNotificationService";
 import { reconcileExpiredPickupOrderPayments } from "../services/pickupOrderPaymentExpiryService";
+import {
+  reconcileExpiredParkingPassArrivalChanges,
+  reconcilePendingParkingPassRefunds,
+} from "../services/parkingPassBookingService";
+import { reconcileEventParticipationMutations } from "../services/eventParticipationMutationService";
+import { reconcileEventSeriesPublications } from "../services/eventSeriesPublicationService";
+import { quarantineStaleSubmittedEventNotifications } from "../services/eventNotificationDeliveryService";
 
 export function registerRecurringJobs(): void {
   const verboseOpsCleanup =
@@ -195,6 +202,137 @@ export function registerRecurringJobs(): void {
       void runPickupPaymentExpiry();
       setInterval(runPickupPaymentExpiry, expiryIntervalMs);
     }, 60_000);
+  }
+
+  const enableParkingPassArrivalExpiry =
+    process.env.PARKING_PASS_ARRIVAL_EXPIRY_ENABLED !== "false";
+  if (enableParkingPassArrivalExpiry) {
+    const arrivalExpiryIntervalMs = 60 * 1000;
+    let arrivalExpiryRunActive = false;
+    const runParkingPassArrivalExpiry = async () => {
+      if (arrivalExpiryRunActive) return;
+      arrivalExpiryRunActive = true;
+      try {
+        const result = await reconcileExpiredParkingPassArrivalChanges();
+        if (result.examined > 0 || result.failed > 0) {
+          console.log(
+            `[parking-pass-arrival-expiry] examined=${result.examined} cancelled=${result.cancelled} failed=${result.failed}`,
+          );
+        }
+      } catch (error) {
+        console.warn(
+          "[parking-pass-arrival-expiry] reconciliation job failed (non-blocking):",
+          error instanceof Error ? error.message : String(error),
+        );
+      } finally {
+        arrivalExpiryRunActive = false;
+      }
+    };
+    setTimeout(() => {
+      void runParkingPassArrivalExpiry();
+      setInterval(runParkingPassArrivalExpiry, arrivalExpiryIntervalMs);
+    }, 60_000);
+  }
+
+  const enableParkingPassRefundReconciliation =
+    process.env.PARKING_PASS_REFUND_RECONCILIATION_ENABLED !== "false";
+  if (enableParkingPassRefundReconciliation) {
+    const refundIntervalMs = 2 * 60 * 1000;
+    let refundRunActive = false;
+    const runParkingPassRefundReconciliation = async () => {
+      if (refundRunActive) return;
+      refundRunActive = true;
+      try {
+        const result = await reconcilePendingParkingPassRefunds();
+        if (result.examined > 0 || result.failed > 0) {
+          console.log(
+            `[parking-pass-refunds] examined=${result.examined} succeeded=${result.succeeded} pending=${result.pending} failed=${result.failed}`,
+          );
+        }
+      } catch (error) {
+        console.warn(
+          "[parking-pass-refunds] reconciliation job failed (non-blocking):",
+          error instanceof Error ? error.message : String(error),
+        );
+      } finally {
+        refundRunActive = false;
+      }
+    };
+    setTimeout(() => {
+      void runParkingPassRefundReconciliation();
+      setInterval(runParkingPassRefundReconciliation, refundIntervalMs);
+    }, 90_000);
+  }
+
+  const enableEventParticipationMutationRecovery =
+    process.env.EVENT_PARTICIPATION_MUTATION_RECOVERY_ENABLED !== "false";
+  if (enableEventParticipationMutationRecovery) {
+    const recoveryIntervalMs = 60 * 1000;
+    let recoveryRunActive = false;
+    const runEventParticipationMutationRecovery = async () => {
+      if (recoveryRunActive) return;
+      recoveryRunActive = true;
+      try {
+        const result = await reconcileEventParticipationMutations();
+        if (result.examined > 0 || result.failed > 0) {
+          console.log(
+            `[event-participation-recovery] examined=${result.examined} converged=${result.converged} pending=${result.pending} failed=${result.failed}`,
+          );
+        }
+      } catch (error) {
+        console.warn(
+          "[event-participation-recovery] reconciliation job failed (non-blocking):",
+          error instanceof Error ? error.message : String(error),
+        );
+      } finally {
+        recoveryRunActive = false;
+      }
+    };
+    setTimeout(() => {
+      void runEventParticipationMutationRecovery();
+      setInterval(
+        runEventParticipationMutationRecovery,
+        recoveryIntervalMs,
+      );
+    }, 75_000);
+  }
+
+  const enableEventSeriesPublicationRecovery =
+    process.env.EVENT_SERIES_PUBLICATION_RECOVERY_ENABLED !== "false";
+  if (enableEventSeriesPublicationRecovery) {
+    const recoveryIntervalMs = 60 * 1000;
+    let recoveryRunActive = false;
+    const runEventSeriesPublicationRecovery = async () => {
+      if (recoveryRunActive) return;
+      recoveryRunActive = true;
+      try {
+        const [result, notificationResult] = await Promise.all([
+          reconcileEventSeriesPublications(),
+          quarantineStaleSubmittedEventNotifications(),
+        ]);
+        if (result.examined > 0 || result.failed > 0) {
+          console.log(
+            `[event-series-publication-recovery] examined=${result.examined} converged=${result.converged} pending=${result.pending} failed=${result.failed}`,
+          );
+        }
+        if (notificationResult.quarantined > 0) {
+          console.warn(
+            `[event-notification-recovery] quarantined_ambiguous=${notificationResult.quarantined}`,
+          );
+        }
+      } catch (error) {
+        console.warn(
+          "[event-series-publication-recovery] reconciliation job failed (non-blocking):",
+          error instanceof Error ? error.message : String(error),
+        );
+      } finally {
+        recoveryRunActive = false;
+      }
+    };
+    setTimeout(() => {
+      void runEventSeriesPublicationRecovery();
+      setInterval(runEventSeriesPublicationRecovery, recoveryIntervalMs);
+    }, 80_000);
   }
 
   // Perform database validation after server startup - non-blocking

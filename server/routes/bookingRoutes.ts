@@ -7,6 +7,9 @@ import {
   events,
   eventSeries,
   hosts,
+  parkingPassArrivalVersions,
+  parkingPassCancellationOperations,
+  parkingPassPurchases,
   restaurants,
   telemetryEvents,
   users,
@@ -16,9 +19,18 @@ import { isAuthenticated } from "../unifiedAuth";
 import { storage } from "../storage";
 import { emailService } from "../emailService";
 import { canEmailForTopic } from "../utils/notificationPreferences";
-import { resolveCityTimeZoneSync } from "../services/cityTimeZone";
+import { resolveCityTimeZoneStrict } from "../services/cityTimeZone";
 import { buildSlotDateTimes } from "../services/timeIntent";
-import { dateKeyInZone, utcDateFromDateKey } from "../services/dateKeys";
+import {
+  dateKeyFromUnknown,
+  dateKeyInZone,
+  utcDateFromDateKey,
+} from "../services/dateKeys";
+import {
+  normalizePersistedIanaTimeZone,
+  persistedVenueTimeZoneSql,
+  resolvePersistedEventServiceTimeZone,
+} from "../services/persistedServiceTimeZone";
 import Stripe from "stripe";
 import { isInternalTeamUserType } from "../roleAccess";
 import { isTruckOperatingPlanRowPublic } from "../services/truckOperatingPlan";
@@ -27,6 +39,15 @@ import { resolvePublicProfileVisibility } from "../publicProfiles/publicProfileU
 import { toPublicRestaurantListingWithVisibility } from "../publicProfiles/toPublicRestaurantListingWithVisibility";
 import { deriveProfileEvidenceQuarantineVisibility } from "../services/profileEvidenceQuarantine";
 import { isPublicBusinessVisible } from "../utils/publicBusinessVisibility";
+import {
+  acknowledgeProtectedParkingPassArrival,
+  cancelParkingPassLines,
+  correctProtectedParkingPassArrival,
+  getParkingPassCreditBalanceCents,
+  getProtectedParkingPassArrival,
+  ParkingPassBookingError,
+  serializeParkingPassCancellationOperation,
+} from "../services/parkingPassBookingService";
 
 const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY)
@@ -54,15 +75,42 @@ export function registerBookingRoutes(
   app: Express,
   { hasCompleteProfileAccess }: BookingRouteDependencies,
 ) {
-  const toDateKey = (value: unknown, timeZone?: string): string | null => {
-    if (value instanceof Date) {
-      const key = dateKeyInZone(value, timeZone || "America/Chicago");
-      return /^\d{4}-\d{2}-\d{2}$/.test(key) ? key : null;
+  const sendParkingPassError = (res: any, error: unknown) => {
+    if (error instanceof ParkingPassBookingError) {
+      return res.status(error.statusCode).json({
+        code: error.code,
+        message: error.message,
+        ...(error.details ? { details: error.details } : {}),
+      });
     }
-    const raw = String(value || "").trim();
-    if (!raw) return null;
-    const key = raw.includes("T") ? raw.split("T")[0] : raw;
-    return /^\d{4}-\d{2}-\d{2}$/.test(key) ? key : null;
+    console.error("[parking-pass] Route failed:", error);
+    return res.status(500).json({ message: "Parking Pass request failed" });
+  };
+
+  const bookingActor = async (req: any, bookingId: string) => {
+    const [booking] = await db
+      .select({ truckId: eventBookings.truckId })
+      .from(eventBookings)
+      .where(eq(eventBookings.id, bookingId))
+      .limit(1);
+    const canManageTruck = booking
+      ? await storage.verifyRestaurantOwnership(
+          booking.truckId,
+          req.user.id,
+          "manageParkingPass",
+        )
+      : false;
+    return {
+      userId: req.user.id,
+      userType: req.user?.userType,
+      canManageTruck,
+    };
+  };
+
+  const toDateKey = (value: unknown, timeZone?: string): string | null => {
+    const normalizedTimeZone = normalizePersistedIanaTimeZone(timeZone);
+    if (value instanceof Date && !normalizedTimeZone) return null;
+    return dateKeyFromUnknown(value, normalizedTimeZone || "UTC");
   };
 
   // Lookup booking state by Stripe PaymentIntent (used by the client to poll after payment confirmation).
@@ -95,6 +143,17 @@ export function registerBookingRoutes(
           return res.status(403).json({ message: "Not authorized" });
         }
 
+        const [purchase] = await db
+          .select()
+          .from(parkingPassPurchases)
+          .where(
+            and(
+              eq(parkingPassPurchases.stripePaymentIntentId, paymentIntentId),
+              eq(parkingPassPurchases.truckId, truckId),
+            ),
+          )
+          .limit(1);
+
         const rows: Array<{
           id: string;
           eventId: string;
@@ -122,6 +181,36 @@ export function registerBookingRoutes(
 
         if (rows.length === 0) {
           return res.json({ status: "pending", bookings: [] });
+        }
+
+        if (purchase) {
+          const operations = await db
+            .select()
+            .from(parkingPassCancellationOperations)
+            .where(
+              eq(parkingPassCancellationOperations.purchaseId, purchase.id),
+            )
+            .orderBy(desc(parkingPassCancellationOperations.createdAt));
+          return res.json({
+            purchaseId: purchase.id,
+            status: purchase.status,
+            settlementStatus: purchase.settlementStatus,
+            chargedAmountCents: purchase.chargedAmountCents,
+            refundedAmountCents: purchase.refundedAmountCents,
+            cancellationCreditIssuedCents:
+              purchase.cancellationCreditIssuedCents,
+            cancellationOperations: operations.map(
+              serializeParkingPassCancellationOperation,
+            ),
+            bookings: rows.map((row) => ({
+              id: row.id,
+              eventId: row.eventId,
+              status: row.status,
+              bookingConfirmedAt: row.bookingConfirmedAt,
+              cancelledAt: row.cancelledAt,
+              refundStatus: row.refundStatus,
+            })),
+          });
         }
 
         const hasConfirmed = rows.some((row) => row.status === "confirmed");
@@ -190,6 +279,45 @@ export function registerBookingRoutes(
           return res.status(403).json({ message: "Not authorized" });
         }
 
+        const [purchase] = await db
+          .select()
+          .from(parkingPassPurchases)
+          .where(
+            and(
+              eq(parkingPassPurchases.stripePaymentIntentId, paymentIntentId),
+              eq(parkingPassPurchases.truckId, truckId),
+            ),
+          )
+          .limit(1);
+        if (purchase) {
+          if (purchase.status === "confirmed") {
+            return res.status(409).json({
+              message:
+                "Payment already completed. Refresh before choosing a confirmed-booking cancellation remedy.",
+            });
+          }
+          const requestId = String(
+            req.headers["idempotency-key"] ||
+              req.body?.requestId ||
+              `checkout-cancel:${paymentIntentId}:${req.user.id}`,
+          ).trim();
+          const operation = await cancelParkingPassLines({
+            purchaseId: purchase.id,
+            requestId,
+            reason: "Checkout cancelled before payment capture",
+            actor: {
+              userId: req.user.id,
+              userType: req.user?.userType,
+              canManageTruck: isOwner,
+            },
+            stripe,
+          });
+          return res.json({
+            ok: true,
+            operation: serializeParkingPassCancellationOperation(operation),
+          });
+        }
+
         const rows: Array<{
           id: string;
           eventId: string;
@@ -219,104 +347,159 @@ export function registerBookingRoutes(
           return res.json({ ok: true });
         }
 
-        const hasConfirmed = rows.some((row) => row.status === "confirmed");
-        if (hasConfirmed) {
-          return res.status(409).json({
-            message: "Booking already confirmed and cannot be cancelled.",
-          });
-        }
-
-        const now = new Date();
-        const pendingRows = rows.filter((row) => row.status === "pending");
-        if (pendingRows.length === 0) {
-          // Nothing to cancel (already cancelled/credited/etc.). Idempotent success.
-          return res.json({ ok: true });
-        }
-
-        const accountIdFromRows =
-          rows.find((row) => Boolean(row.stripeTransferDestination))
-            ?.stripeTransferDestination ?? null;
-
-        let stripeAccountId: string | null = accountIdFromRows;
-        if (!stripeAccountId) {
-          const first = rows[0];
-          if (first?.hostId) {
-            const [host] = await db
-              .select({ stripeConnectAccountId: hosts.stripeConnectAccountId })
-              .from(hosts)
-              .where(eq(hosts.id, first.hostId));
-            stripeAccountId = host?.stripeConnectAccountId || null;
-          }
-        }
-
-        // Best effort cancel at Stripe so the user can't later complete the payment in another tab.
-        if (stripe) {
-          try {
-            const intent = await stripe.paymentIntents.retrieve(
-              paymentIntentId,
-              {},
-              stripeAccountId ? { stripeAccount: stripeAccountId } : undefined,
-            );
-            if (intent.status === "succeeded") {
-              return res.status(409).json({
-                message:
-                  "Payment already completed. Please wait for booking confirmation.",
-              });
-            }
-            if (intent.status !== "canceled") {
-              await stripe.paymentIntents.cancel(
-                paymentIntentId,
-                {},
-                stripeAccountId
-                  ? { stripeAccount: stripeAccountId }
-                  : undefined,
-              );
-            }
-          } catch (stripeError) {
-            console.error(
-              "Error cancelling PaymentIntent (continuing to release holds):",
-              stripeError,
-            );
-            // Continue; holds release is still valuable and webhook will no-op if payment never completes.
-          }
-        }
-
-        const holdIds = pendingRows.map((row) => row.id);
-        await db
-          .update(eventBookings)
-          .set({
-            status: "cancelled",
-            stripePaymentStatus: "cancelled",
-            cancelledAt: now,
-            cancellationReason: "Checkout cancelled",
-            updatedAt: now,
-          })
-          .where(inArray(eventBookings.id, holdIds));
-
-        // Best-effort: release any pending booking-fee promo reservation tied to this PaymentIntent.
-        try {
-          const userRecord = await storage.getUser(req.user.id);
-          const settings = (userRecord?.accountSettings as any) || {};
-          const promos = settings.promos || {};
-          const bookingFee10 = promos.bookingFee10 || {};
-          if (bookingFee10.pendingPaymentIntentId === paymentIntentId) {
-            promos.bookingFee10 = {
-              ...bookingFee10,
-              pendingPaymentIntentId: null,
-              pendingAt: null,
-            };
-            await storage.updateUser(req.user.id, {
-              accountSettings: { ...settings, promos } as any,
-            });
-          }
-        } catch {
-          // ignore
-        }
-
-        res.json({ ok: true });
+        return res.status(409).json({
+          code: "legacy_payment_state_unbound",
+          message:
+            "This historical checkout is not bound to a durable purchase aggregate. Its provider and capacity state must be reconciled before it can be closed.",
+        });
       } catch (error) {
         console.error("Error cancelling checkout:", error);
         res.status(500).json({ message: "Failed to cancel checkout" });
+      }
+    },
+  );
+
+  app.get(
+    "/api/parking-pass/credits/balance",
+    isAuthenticated,
+    async (req: any, res) => {
+      try {
+        const balanceCents = await getParkingPassCreditBalanceCents(
+          req.user.id,
+        );
+        res.json({
+          balanceCents,
+          restriction:
+            "May be applied only to MealScout platform fees on a future Parking Pass purchase.",
+        });
+      } catch (error) {
+        sendParkingPassError(res, error);
+      }
+    },
+  );
+
+  app.post(
+    "/api/parking-pass/purchases/:purchaseId/cancel",
+    isAuthenticated,
+    async (req: any, res) => {
+      try {
+        const purchaseId = String(req.params.purchaseId || "").trim();
+        const [purchase] = await db
+          .select({ truckId: parkingPassPurchases.truckId })
+          .from(parkingPassPurchases)
+          .where(eq(parkingPassPurchases.id, purchaseId))
+          .limit(1);
+        const canManageTruck = purchase
+          ? await storage.verifyRestaurantOwnership(
+              purchase.truckId,
+              req.user.id,
+              "manageParkingPass",
+            )
+          : false;
+        const operation = await cancelParkingPassLines({
+          purchaseId,
+          bookingLineIds: Array.isArray(req.body?.bookingLineIds)
+            ? req.body.bookingLineIds.map(String)
+            : undefined,
+          requestId: String(
+            req.headers["idempotency-key"] || req.body?.requestId || "",
+          ).trim(),
+          reason: String(req.body?.reason || "").trim(),
+          actor: {
+            userId: req.user.id,
+            userType: req.user?.userType,
+            canManageTruck,
+          },
+          stripe,
+        });
+        res.json({
+          operation: serializeParkingPassCancellationOperation(operation),
+        });
+      } catch (error) {
+        sendParkingPassError(res, error);
+      }
+    },
+  );
+
+  app.get(
+    "/api/bookings/:bookingId/arrival",
+    isAuthenticated,
+    async (req: any, res) => {
+      try {
+        const bookingId = String(req.params.bookingId || "").trim();
+        const actor = await bookingActor(req, bookingId);
+        res.json(await getProtectedParkingPassArrival(bookingId, actor));
+      } catch (error) {
+        sendParkingPassError(res, error);
+      }
+    },
+  );
+
+  app.post(
+    "/api/bookings/:bookingId/arrival/corrections",
+    isAuthenticated,
+    async (req: any, res) => {
+      try {
+        const bookingId = String(req.params.bookingId || "").trim();
+        const actor = await bookingActor(req, bookingId);
+        const parseOptionalDate = (value: unknown) => {
+          if (value === undefined || value === null || value === "") {
+            return undefined;
+          }
+          const date = new Date(String(value));
+          if (Number.isNaN(date.getTime())) {
+            throw new ParkingPassBookingError(
+              400,
+              "invalid_arrival_time",
+              "Arrival start and end must be valid timestamps.",
+            );
+          }
+          return date;
+        };
+        const version = await correctProtectedParkingPassArrival({
+          bookingId,
+          actor,
+          idempotencyKey: String(
+            req.headers["idempotency-key"] || req.body?.requestId || "",
+          ).trim(),
+          reason: String(req.body?.reason || ""),
+          patch: {
+            address: req.body?.address,
+            city: req.body?.city,
+            stateCode: req.body?.stateCode,
+            latitude: req.body?.latitude,
+            longitude: req.body?.longitude,
+            startAt: parseOptionalDate(req.body?.startAt),
+            endAt: parseOptionalDate(req.body?.endAt),
+            accessInstructions: req.body?.accessInstructions,
+            safetyInstructions: req.body?.safetyInstructions,
+          },
+        });
+        res.status(202).json({ version });
+      } catch (error) {
+        sendParkingPassError(res, error);
+      }
+    },
+  );
+
+  app.post(
+    "/api/bookings/:bookingId/arrival/:versionId/acknowledge",
+    isAuthenticated,
+    async (req: any, res) => {
+      try {
+        const bookingId = String(req.params.bookingId || "").trim();
+        const actor = await bookingActor(req, bookingId);
+        const version = await acknowledgeProtectedParkingPassArrival({
+          bookingId,
+          versionId: String(req.params.versionId || "").trim(),
+          actor,
+          idempotencyKey: String(
+            req.headers["idempotency-key"] || req.body?.requestId || "",
+          ).trim(),
+        });
+        res.json({ version });
+      } catch (error) {
+        sendParkingPassError(res, error);
       }
     },
   );
@@ -364,6 +547,10 @@ export function registerBookingRoutes(
           hostPriceCents: eventBookings.hostPriceCents,
           platformFeeCents: eventBookings.platformFeeCents,
           stripePaymentIntentId: eventBookings.stripePaymentIntentId,
+          purchaseId: eventBookings.purchaseId,
+          arrivalState: eventBookings.arrivalState,
+          currentArrivalVersionId: eventBookings.currentArrivalVersionId,
+          pendingArrivalVersionId: eventBookings.pendingArrivalVersionId,
           bookingConfirmedAt: eventBookings.bookingConfirmedAt,
           cancelledAt: eventBookings.cancelledAt,
           createdAt: eventBookings.createdAt,
@@ -390,6 +577,10 @@ export function registerBookingRoutes(
           hostPriceCents: b.hostPriceCents,
           platformFeeCents: b.platformFeeCents,
           stripePaymentIntentId: b.stripePaymentIntentId,
+          purchaseId: b.purchaseId,
+          arrivalState: b.arrivalState,
+          currentArrivalVersionId: b.currentArrivalVersionId,
+          pendingArrivalVersionId: b.pendingArrivalVersionId,
           bookingConfirmedAt: b.bookingConfirmedAt,
           cancelledAt: b.cancelledAt,
           createdAt: b.createdAt,
@@ -444,6 +635,10 @@ export function registerBookingRoutes(
           hostPriceCents: eventBookings.hostPriceCents,
           platformFeeCents: eventBookings.platformFeeCents,
           stripePaymentIntentId: eventBookings.stripePaymentIntentId,
+          purchaseId: eventBookings.purchaseId,
+          arrivalState: eventBookings.arrivalState,
+          currentArrivalVersionId: eventBookings.currentArrivalVersionId,
+          pendingArrivalVersionId: eventBookings.pendingArrivalVersionId,
           bookingConfirmedAt: eventBookings.bookingConfirmedAt,
           cancelledAt: eventBookings.cancelledAt,
           createdAt: eventBookings.createdAt,
@@ -470,6 +665,10 @@ export function registerBookingRoutes(
           hostPriceCents: b.hostPriceCents,
           platformFeeCents: b.platformFeeCents,
           stripePaymentIntentId: b.stripePaymentIntentId,
+          purchaseId: b.purchaseId,
+          arrivalState: b.arrivalState,
+          currentArrivalVersionId: b.currentArrivalVersionId,
+          pendingArrivalVersionId: b.pendingArrivalVersionId,
           bookingConfirmedAt: b.bookingConfirmedAt,
           cancelledAt: b.cancelledAt,
           createdAt: b.createdAt,
@@ -652,10 +851,17 @@ export function registerBookingRoutes(
         });
 
         const parsed = schema.parse(req.body);
-        const timeZone = resolveCityTimeZoneSync({
+        const timeZone = await resolveCityTimeZoneStrict({
           city: parsed.city || null,
           state: parsed.state || null,
         });
+        if (!timeZone) {
+          return res.status(409).json({
+            code: "venue_timezone_unavailable",
+            message:
+              "This manual stop needs one valid persisted city timezone before it can be scheduled.",
+          });
+        }
         const interval = buildSlotDateTimes({
           timeZone,
           date: parsed.date,
@@ -964,7 +1170,27 @@ export function registerBookingRoutes(
           bookingConfirmedAt: eventBookings.bookingConfirmedAt,
           createdAt: eventBookings.createdAt,
           slotType: eventBookings.slotType,
+          purchaseId: eventBookings.purchaseId,
+          settlementTopology: eventBookings.settlementTopology,
+          publicLocationConsentSnapshot:
+            eventBookings.publicLocationConsentSnapshot,
+          arrivalState: eventBookings.arrivalState,
+          currentArrivalVersionId: eventBookings.currentArrivalVersionId,
+          pendingArrivalVersionId: eventBookings.pendingArrivalVersionId,
+          purchaseStatus: parkingPassPurchases.status,
+          purchaseSettlementStatus: parkingPassPurchases.settlementStatus,
+          currentArrivalId: parkingPassArrivalVersions.id,
+          currentArrivalBookingId: parkingPassArrivalVersions.bookingId,
+          currentArrivalState: parkingPassArrivalVersions.state,
+          currentArrivalAddress: parkingPassArrivalVersions.address,
+          currentArrivalCity: parkingPassArrivalVersions.city,
+          currentArrivalStateCode: parkingPassArrivalVersions.stateCode,
+          currentArrivalStartAt: parkingPassArrivalVersions.startAt,
+          currentArrivalEndAt: parkingPassArrivalVersions.endAt,
+          currentArrivalAcknowledgedAt:
+            parkingPassArrivalVersions.acknowledgedAt,
           timezone: eventSeries.timezone,
+          venueTimeZone: persistedVenueTimeZoneSql(hosts.city, hosts.state),
           event: events,
           host: hosts,
           hostOwnerDisabled: users.isDisabled,
@@ -974,6 +1200,20 @@ export function registerBookingRoutes(
         .innerJoin(events, eq(eventBookings.eventId, events.id))
         .innerJoin(hosts, eq(events.hostId, hosts.id))
         .innerJoin(users, eq(hosts.userId, users.id))
+        .leftJoin(
+          parkingPassPurchases,
+          eq(eventBookings.purchaseId, parkingPassPurchases.id),
+        )
+        .leftJoin(
+          parkingPassArrivalVersions,
+          and(
+            eq(
+              parkingPassArrivalVersions.id,
+              eventBookings.currentArrivalVersionId,
+            ),
+            eq(parkingPassArrivalVersions.bookingId, eventBookings.id),
+          ),
+        )
         .leftJoin(eventSeries, eq(events.seriesId, eventSeries.id))
         .where(
           and(
@@ -992,11 +1232,15 @@ export function registerBookingRoutes(
           createdAt: eventInterests.createdAt,
           event: events,
           host: hosts,
+          seriesId: events.seriesId,
+          seriesTimeZone: eventSeries.timezone,
+          venueTimeZone: persistedVenueTimeZoneSql(hosts.city, hosts.state),
           hostOwnerDisabled: users.isDisabled,
           hostPublicProfileSettings: users.publicProfileSettings,
         })
         .from(eventInterests)
         .innerJoin(events, eq(eventInterests.eventId, events.id))
+        .leftJoin(eventSeries, eq(events.seriesId, eventSeries.id))
         .innerJoin(hosts, eq(events.hostId, hosts.id))
         .innerJoin(users, eq(hosts.userId, users.id))
         .where(
@@ -1021,6 +1265,21 @@ export function registerBookingRoutes(
         ) {
           return false;
         }
+        if (
+          row.event.requiresPayment &&
+          (row.currentArrivalId !== row.currentArrivalVersionId ||
+            row.currentArrivalBookingId !== row.bookingId ||
+            row.currentArrivalState !== "current" ||
+            !row.currentArrivalAcknowledgedAt)
+        ) {
+          return false;
+        }
+        const timeZone = resolvePersistedEventServiceTimeZone({
+          seriesId: row.event.seriesId,
+          seriesTimeZone: row.timezone,
+          venueTimeZone: row.venueTimeZone,
+        });
+        if (!timeZone) return false;
         return isTruckOperatingPlanRowPublic({
           sourceKind: "booking",
           stopId: row.bookingId,
@@ -1029,6 +1288,15 @@ export function registerBookingRoutes(
           endTime: row.event.endTime,
           sourceStatus: row.event.status,
           bookingStatus: row.status,
+          eventRequiresPayment: row.event.requiresPayment,
+          purchaseId: row.purchaseId,
+          purchaseStatus: row.purchaseStatus,
+          purchaseSettlementStatus: row.purchaseSettlementStatus,
+          settlementTopology: row.settlementTopology,
+          arrivalState: row.arrivalState,
+          publicLocationConsentSnapshot:
+            row.publicLocationConsentSnapshot,
+          addressVisible: true,
           isPublic: true,
           locationName: row.host.businessName,
           address: row.host.address,
@@ -1038,7 +1306,7 @@ export function registerBookingRoutes(
           longitude: (row.host as any).longitude,
           hostId: row.host.id,
           hostName: row.host.businessName,
-          timezone: row.timezone,
+          timezone: timeZone,
           updatedAt: row.createdAt,
           lastConfirmedAt: row.bookingConfirmedAt,
           mapEligible: true,
@@ -1051,25 +1319,103 @@ export function registerBookingRoutes(
           .filter((row: (typeof bookingRows)[number]) =>
             includePending ? true : isPublicBookingSlot(row),
           )
-          .map((row: (typeof bookingRows)[number]) => ({
+          .flatMap((row: (typeof bookingRows)[number]) => {
+            const paidAggregate = Boolean(
+              row.event.requiresPayment && row.purchaseId,
+            );
+            const paidArrivalReady = Boolean(
+              paidAggregate &&
+                row.status === "confirmed" &&
+                [
+                  "confirmed",
+                  "partially_cancelled",
+                  "partially_refunded",
+                ].includes(String(row.purchaseStatus || "")) &&
+                ["transferred_to_connect", "partially_reversed"].includes(
+                  String(row.purchaseSettlementStatus || ""),
+                ) &&
+                row.arrivalState === "acknowledged" &&
+                row.currentArrivalId === row.currentArrivalVersionId &&
+                row.currentArrivalBookingId === row.bookingId &&
+                row.currentArrivalState === "current" &&
+                row.currentArrivalAcknowledgedAt,
+            );
+            const timeZone = resolvePersistedEventServiceTimeZone({
+              seriesId: row.event.seriesId,
+              seriesTimeZone: row.timezone,
+              venueTimeZone: row.venueTimeZone,
+            });
+            if (!timeZone) return [];
+            const roundArrival = (value: Date, direction: "floor" | "ceil") => {
+              const rounded = new Date(value);
+              const minute = rounded.getUTCMinutes();
+              const nextMinute =
+                direction === "floor"
+                  ? minute < 30
+                    ? 0
+                    : 30
+                  : minute === 0 || minute === 30
+                    ? minute
+                    : minute < 30
+                      ? 30
+                      : 60;
+              rounded.setUTCMinutes(nextMinute, 0, 0);
+              return rounded;
+            };
+            const displayArrivalStart =
+              paidArrivalReady && row.currentArrivalStartAt
+                ? includePending
+                  ? row.currentArrivalStartAt
+                  : roundArrival(row.currentArrivalStartAt, "floor")
+                : null;
+            const displayArrivalEnd =
+              paidArrivalReady && row.currentArrivalEndAt
+                ? includePending
+                  ? row.currentArrivalEndAt
+                  : roundArrival(row.currentArrivalEndAt, "ceil")
+                : null;
+            const formatTime = (value: Date | null) =>
+              value
+                ? new Intl.DateTimeFormat("en-US", {
+                    timeZone,
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    hourCycle: "h23",
+                  }).format(value)
+                : null;
+            const publicArrivalLabel = [
+              row.currentArrivalCity,
+              row.currentArrivalStateCode,
+            ]
+              .filter(Boolean)
+              .join(", ");
+            return [{
             type: "booking",
             status: row.status,
             createdAt: row.createdAt,
             bookingConfirmedAt: row.bookingConfirmedAt,
             bookingId: row.bookingId,
             slotType: row.slotType,
+            ...(includePending
+              ? {
+                  purchaseId: row.purchaseId,
+                  arrivalState: row.arrivalState,
+                  currentArrivalVersionId: row.currentArrivalVersionId,
+                  pendingArrivalVersionId: row.pendingArrivalVersionId,
+                }
+              : {}),
             event: {
               id: row.event.id,
               date:
-                toDateKey(
-                  row.event.date,
-                  resolveCityTimeZoneSync({
-                    city: (row.host as any)?.city ?? null,
-                    state: (row.host as any)?.state ?? null,
-                  }),
-                ) ?? row.event.date,
-              startTime: row.event.startTime,
-              endTime: row.event.endTime,
+                (displayArrivalStart
+                  ? dateKeyInZone(displayArrivalStart, timeZone)
+                  : toDateKey(row.event.date, timeZone)) ?? row.event.date,
+              startTime: paidAggregate
+                ? formatTime(displayArrivalStart)
+                : row.event.startTime,
+              endTime: paidAggregate
+                ? formatTime(displayArrivalEnd)
+                : row.event.endTime,
               status: row.event.status,
               hostPriceCents: row.event.hostPriceCents,
               requiresPayment: row.event.requiresPayment,
@@ -1078,17 +1424,41 @@ export function registerBookingRoutes(
             host: {
               id: row.host.id,
               businessName: row.host.businessName,
-              address: row.host.address,
+              address: paidAggregate
+                ? paidArrivalReady
+                  ? includePending
+                    ? row.currentArrivalAddress
+                    : publicArrivalLabel || null
+                  : null
+                : row.host.address,
+              city: paidAggregate
+                ? paidArrivalReady
+                  ? row.currentArrivalCity
+                  : null
+                : (row.host as any).city,
+              state: paidAggregate
+                ? paidArrivalReady
+                  ? row.currentArrivalStateCode
+                  : null
+                : (row.host as any).state,
               locationType: row.host.locationType,
             },
-          })),
+            }];
+          }),
         ...acceptedInterestRows
           .filter(() => includePending)
           .filter(
             (row: (typeof acceptedInterestRows)[number]) =>
               !bookingEventIds.has(row.eventId),
           )
-          .map((row: (typeof acceptedInterestRows)[number]) => ({
+          .flatMap((row: (typeof acceptedInterestRows)[number]) => {
+            const timeZone = resolvePersistedEventServiceTimeZone({
+              seriesId: row.seriesId,
+              seriesTimeZone: row.seriesTimeZone,
+              venueTimeZone: row.venueTimeZone,
+            });
+            if (!timeZone) return [];
+            return [{
             type: "accepted_interest",
             status: row.status,
             createdAt: row.createdAt,
@@ -1097,10 +1467,7 @@ export function registerBookingRoutes(
               date:
                 toDateKey(
                   row.event.date,
-                  resolveCityTimeZoneSync({
-                    city: (row.host as any)?.city ?? null,
-                    state: (row.host as any)?.state ?? null,
-                  }),
+                  timeZone,
                 ) ?? row.event.date,
               startTime: row.event.startTime,
               endTime: row.event.endTime,
@@ -1114,7 +1481,8 @@ export function registerBookingRoutes(
               address: row.host.address,
               locationType: row.host.locationType,
             },
-          })),
+          }];
+          }),
       ];
 
       const manualEntries = await storage.getTruckManualSchedules(truckId);
@@ -1148,7 +1516,12 @@ export function registerBookingRoutes(
         .filter(() => includePending || truck.ownerDisabled === false)
         .filter((entry) => entry.isPublic)
         .filter((entry) => (includePending ? true : isPublicManualSlot(entry)))
-        .map((entry) => ({
+        .flatMap((entry) => {
+          const timeZone = normalizePersistedIanaTimeZone(
+            (entry as any).timezone,
+          );
+          if (!timeZone) return [];
+          return [{
           type: "manual",
           status: "manual",
           createdAt: entry.createdAt,
@@ -1157,10 +1530,7 @@ export function registerBookingRoutes(
             date:
               toDateKey(
                 entry.date,
-                resolveCityTimeZoneSync({
-                  city: (entry as any)?.city ?? null,
-                  state: (entry as any)?.state ?? null,
-                }),
+                timeZone,
               ) ?? entry.date,
             startTime: entry.startTime,
             endTime: entry.endTime,
@@ -1171,7 +1541,8 @@ export function registerBookingRoutes(
             notes: entry.notes,
             lastConfirmedAt: (entry as any).lastConfirmedAt ?? null,
           },
-        }));
+          }];
+        });
 
       const combined = [...schedule, ...manualSchedule].sort((a, b) => {
         const dateA =

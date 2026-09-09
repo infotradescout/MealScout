@@ -12,6 +12,10 @@ import {
   ConsumerCollectionShell,
 } from "@/components/consumer-collection-shell";
 import { SEOHead } from "@/components/seo-head";
+import {
+  eventClockLabel,
+  eventShortDateLabel,
+} from "@/lib/event-date-labels";
 
 type PublicEvent = {
   id: string;
@@ -34,23 +38,13 @@ type PublicEvent = {
 };
 
 const formatEventDate = (value?: string | null) => {
-  if (!value) return null;
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return null;
-  return date.toLocaleDateString("en-US", {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-  });
+  const label = eventShortDateLabel(value);
+  return label || null;
 };
 
 const formatEventTime = (value?: string | null) => {
-  if (!value) return null;
-  const [hours, minutes] = value.split(":");
-  const hour = Number(hours);
-  if (!Number.isFinite(hour)) return value;
-  const suffix = hour >= 12 ? "PM" : "AM";
-  return `${hour % 12 || 12}:${minutes || "00"} ${suffix}`;
+  const label = eventClockLabel(value);
+  return label || null;
 };
 
 const getLocationLabel = (event: PublicEvent) => {

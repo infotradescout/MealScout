@@ -1,9 +1,18 @@
 import { and, asc, eq, inArray, isNotNull } from "drizzle-orm";
-import { eventBookings, restaurants, users } from "@shared/schema";
+import {
+  eventBookings,
+  events,
+  hosts,
+  parkingPassPurchases,
+  restaurants,
+  users,
+} from "@shared/schema";
 import { db } from "../db";
 import { publicTruckClassificationWhere } from "../seo/publicTruckClassification";
 import { isPublicRestaurantIndexable } from "../seo/publicRestaurantIndexability";
 import { projectPublicRestaurantMedia } from "../publicProfiles/toPublicRestaurantProfile";
+import { resolvePublicProfileVisibility } from "../publicProfiles/publicProfileUtils";
+import { publicParkingPassBookingSqlCondition } from "./truckOperatingPlan";
 
 export type ConfirmedEventTruck = {
   bookingId: string;
@@ -34,6 +43,7 @@ export async function loadConfirmedEventTrucks(eventIds: string[]) {
     .select({
       bookingId: eventBookings.id,
       eventId: eventBookings.eventId,
+      hostId: events.hostId,
       truckId: restaurants.id,
       name: restaurants.name,
       cuisineType: restaurants.cuisineType,
@@ -52,12 +62,18 @@ export async function loadConfirmedEventTrucks(eventIds: string[]) {
       websiteUrl: restaurants.websiteUrl,
     })
     .from(eventBookings)
+    .innerJoin(events, eq(eventBookings.eventId, events.id))
+    .leftJoin(
+      parkingPassPurchases,
+      eq(eventBookings.purchaseId, parkingPassPurchases.id),
+    )
     .innerJoin(restaurants, eq(eventBookings.truckId, restaurants.id))
     .innerJoin(users, eq(restaurants.ownerId, users.id))
     .where(
       and(
         inArray(eventBookings.eventId, ids),
         eq(eventBookings.status, "confirmed"),
+        publicParkingPassBookingSqlCondition,
         isNotNull(eventBookings.bookingConfirmedAt),
         eq(restaurants.isActive, true),
         eq(users.isDisabled, false),
@@ -73,7 +89,39 @@ export async function loadConfirmedEventTrucks(eventIds: string[]) {
       asc(eventBookings.id),
     );
 
+  const hostIds: string[] = Array.from(
+    new Set<string>(
+      rows
+        .map((row: { hostId: unknown }) => String(row.hostId || "").trim())
+        .filter(Boolean),
+    ),
+  );
+  const hostAuthorityRows = hostIds.length
+    ? await db
+        .select({
+          hostId: hosts.id,
+          ownerDisabled: users.isDisabled,
+          publicProfileSettings: users.publicProfileSettings,
+        })
+        .from(hosts)
+        .innerJoin(users, eq(hosts.userId, users.id))
+        .where(inArray(hosts.id, hostIds))
+    : [];
+  const publicHostIds = new Set(
+    hostAuthorityRows
+      .filter(
+        (row: {
+          ownerDisabled: boolean | null;
+          publicProfileSettings: unknown;
+        }) =>
+          row.ownerDisabled === false &&
+          resolvePublicProfileVisibility(row.publicProfileSettings).showAddress,
+      )
+      .map((row: { hostId: unknown }) => String(row.hostId)),
+  );
+
   for (const row of rows) {
+    if (!publicHostIds.has(String(row.hostId))) continue;
     const eventId = String(row.eventId);
     const existing = byEvent.get(eventId) || [];
     if (existing.some((truck) => truck.truckId === String(row.truckId))) {

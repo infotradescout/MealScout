@@ -26,6 +26,10 @@ const hostEarningsSource = readFileSync(
   "server/hostEarningsService.ts",
   "utf8",
 );
+const parkingPassServiceSource = readFileSync(
+  "server/services/parkingPassBookingService.ts",
+  "utf8",
+);
 
 function requireIncludes(snippet: string, label = snippet) {
   assert.ok(source.includes(snippet), `Missing idempotency guard: ${label}`);
@@ -72,24 +76,32 @@ requireIncludes(
   "failed booking update is restricted to pending rows",
 );
 
-// Single-event booking payment: explicit idempotent skip when already
-// confirmed, plus a PaymentIntent match check and replay reconciliation for
-// the host earnings ledger.
+// Every new paid event/Parking Pass webhook first enters the canonical
+// purchase aggregate. Historical rows without that binding are quarantined;
+// they never recreate the old local confirmation/earnings mutation.
 requireIncludes(
-  '// Idempotent',
-  "single-event booking idempotency comment",
+  "await confirmParkingPassPurchaseFromIntent(paymentIntent, stripe)",
+  "canonical Parking Pass confirmation adapter",
 );
 requireIncludes(
-  "bookingIntentId !== paymentIntent.id",
-  "single-event booking stored-intent mismatch guard",
+  "if (parkingPassPurchase.handled) break;",
+  "canonical Parking Pass confirmation owns bound intents",
 );
 requireIncludes(
-  'if (booking.status === "confirmed") {',
-  "single-event booking already-confirmed skip",
+  "expectedIntentId && expectedIntentId !== paymentIntent.id",
+  "legacy single-event stored-intent mismatch guard",
 );
 requireIncludes(
-  "recordHostBookingEarnings",
-  "single-event booking replay host-earnings reconciliation",
+  'stripePaymentStatus: "reconciliation_required"',
+  "legacy paid booking is quarantined",
+);
+requireIncludes(
+  'settlementState: "action_required"',
+  "legacy paid booking requires reconciliation",
+);
+assert.ok(
+  !source.includes("recordHostBookingEarnings"),
+  "Destination-charge Parking Pass webhooks must not enter the legacy earnings ledger",
 );
 assert.ok(
   hostEarningsSource.includes(".onConflictDoNothing();"),
@@ -102,52 +114,31 @@ assert.ok(
   "Host earnings inserts must not name a conflict target that cannot infer migration 074's partial unique index",
 );
 
-// Parking Pass booking payment: an `alreadyProcessed` check keyed on
-// confirmed status or credited cancellation, followed by idempotent
-// reconciliation before the replay is acknowledged.
-requireIncludes(
-  'const alreadyProcessed = intentRows.some(',
-  "parking pass alreadyProcessed guard",
+assert.ok(
+  parkingPassServiceSource.includes(".for(\"update\")") &&
+    parkingPassServiceSource.includes(
+      "purchase.stripePaymentIntentId !== intent.id",
+    ) &&
+    parkingPassServiceSource.includes(
+      "providerOperation.providerPaymentIntentId !== intent.id",
+    ),
+  "Canonical confirmation must lock and bind the purchase, provider operation, and PaymentIntent",
+);
+assert.ok(
+  parkingPassServiceSource.includes("purchase.paidAt &&") &&
+    parkingPassServiceSource.includes("return { status: purchase.status, replay: true }"),
+  "Canonical confirmation must converge terminal webhook replay",
+);
+assert.ok(
+  parkingPassServiceSource.includes(
+    "pg_advisory_xact_lock(hashtext(${`parking_pass_spot:",
+  ),
+  "Canonical confirmation must serialize spot assignment per event",
 );
 requireIncludes(
-  "if (alreadyProcessed) {",
-  "parking pass alreadyProcessed early exit",
+  "await recordParkingPassPaymentFailureFromIntent(cancelledIntent",
+  "canonical final PaymentIntent cancellation adapter",
 );
-
-// Concurrent-delivery protection: Stripe's documented at-least-once
-// delivery (including near-simultaneous retries) means two deliveries of
-// the same event can race inside the same process. The credit-issuance
-// path takes a Postgres advisory lock keyed on the PaymentIntent id and
-// re-checks terminal state inside the lock before issuing credit again.
-requireIncludes(
-  "pg_advisory_xact_lock(hashtext(${`payment_intent_credit:",
-  "credit-issuance advisory lock keyed on PaymentIntent id",
-);
-requireIncludes(
-  "eq(creditLedger.sourceId, paymentIntent.id)",
-  "credit issuance reuses the PaymentIntent as its idempotency reference",
-);
-requireIncludes(
-  "Skipping duplicate credit issuance for PaymentIntent",
-  "credit-issuance duplicate-skip log",
-);
-requireIncludes(
-  "await reconcileHostEarnings(intentRows);",
-  "replayed parking pass reconciles host earnings before acknowledgment",
-);
-requireIncludes(
-  "await reconcileCommittedCreditDebit();",
-  "replayed parking pass reconciles the committed credit debit",
-);
-
-// Spot assignment: also advisory-locked per event id, and booking row
-// upserts use onConflictDoNothing so a race can't create two confirmed rows
-// for the same event/truck pair.
-requireIncludes(
-  "pg_advisory_xact_lock(hashtext(${`parking_pass_spot:",
-  "spot-assignment advisory lock keyed on event id",
-);
-requireIncludes(".onConflictDoNothing()", "booking upsert onConflictDoNothing");
 
 // Pickup-order payouts settle before a pending order is confirmed. Stripe
 // receives a stable idempotency key, preventing a second transfer if the first
@@ -221,9 +212,13 @@ assert.ok(
 [
   "throw pickupError;",
   "throw supplierError;",
-  "throw bookingError;",
 ].forEach((snippet) =>
   requireIncludes(snippet, `primary processing failure propagation: ${snippet}`),
+);
+requireCountAtLeast(
+  "throw error;",
+  2,
+  "canonical booking success/failure processing errors propagate",
 );
 requireIncludes(
   "await db.transaction(async (tx: any)",

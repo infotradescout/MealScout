@@ -39,9 +39,11 @@ import {
   isParkingPassPublicReady,
 } from "../services/parkingPassQuality";
 import { ensureParkingPassEventRow } from "../services/parkingPassVirtual";
-import { resolveCityTimeZoneSync } from "../services/cityTimeZone";
+import { resolveCityTimeZoneStrict } from "../services/cityTimeZone";
 import { buildSlotDateTimes } from "../services/timeIntent";
-import { utcDateFromDateKey } from "../services/dateKeys";
+import { evaluateParkingPassBookingTime } from "../services/parkingPassServiceTime";
+import { loadPersistedEventServiceTimeZone } from "../services/persistedServiceTimeZone";
+import { dateKeyFromUnknown, utcDateFromDateKey } from "../services/dateKeys";
 import { resolveStoredFoodBusinessType } from "@shared/businessTypes";
 import {
   debitCredit,
@@ -84,6 +86,10 @@ import {
 } from "@shared/consumerEntity";
 import { resolvePublicProfileVisibility } from "../publicProfiles/publicProfileUtils";
 import { resolvePublicHostProximityCoordinates } from "../services/publicHostProximityProjection";
+import {
+  createParkingPassPurchase,
+  ParkingPassBookingError,
+} from "../services/parkingPassBookingService";
 
 const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY)
@@ -1322,7 +1328,7 @@ async function getManualSchedules(params: { userId: string; truckId: string }) {
 /**
  * Create or update a manual parking schedule entry for a truck
  */
-async function upsertManualSchedule(params: {
+export async function upsertManualSchedule(params: {
   userId: string;
   truckId: string;
   scheduleId?: string;
@@ -1378,10 +1384,17 @@ async function upsertManualSchedule(params: {
           error: "Missing required fields for create: date, startTime, endTime, address",
         };
       }
-      const timeZone = resolveCityTimeZoneSync({
+      const timeZone = await resolveCityTimeZoneStrict({
         city: String(params.city || truck.city || "").trim(),
         state: String(params.state || truck.state || "").trim(),
       });
+      if (!timeZone) {
+        return {
+          success: false,
+          error:
+            "This manual stop needs one valid persisted city timezone before it can be scheduled",
+        };
+      }
       const interval = buildSlotDateTimes({
         timeZone,
         date: params.date,
@@ -1438,9 +1451,26 @@ async function upsertManualSchedule(params: {
       };
     }
 
+    const timeZone = await resolveCityTimeZoneStrict({
+      city: String(
+        params.city !== undefined ? params.city : existing.city || "",
+      ).trim(),
+      state: String(
+        params.state !== undefined ? params.state : existing.state || "",
+      ).trim(),
+    });
+    if (!timeZone) {
+      return {
+        success: false,
+        error:
+          "This manual stop needs one valid persisted city timezone before it can be updated",
+      };
+    }
+
     const updates: Record<string, any> = {
       updatedAt: new Date(),
       lastConfirmedAt: new Date(),
+      timezone: timeZone,
     };
     if (params.date !== undefined) {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(String(params.date))) {
@@ -1456,13 +1486,6 @@ async function upsertManualSchedule(params: {
     if (params.state !== undefined) updates.state = toNullableTrimmedText(params.state);
     if (params.notes !== undefined) updates.notes = toNullableTrimmedText(params.notes);
     if (params.isPublic !== undefined) updates.isPublic = asBoolean(params.isPublic);
-    if (params.city !== undefined || params.state !== undefined) {
-      updates.timezone = resolveCityTimeZoneSync({
-        city: String(params.city || existing.city || "").trim(),
-        state: String(params.state || existing.state || "").trim(),
-      });
-    }
-
     const [updated] = await db
       .update(truckManualSchedules)
       .set(updates)
@@ -1522,6 +1545,7 @@ async function bookParkingSpot(params: {
   eventId?: string;
   passId?: string;
   spotId?: string;
+  idempotencyKey?: string;
 }) {
   try {
     const eventId = String(
@@ -1576,13 +1600,6 @@ async function bookParkingSpot(params: {
         error: "Event is not available for booking",
       };
     }
-    if (new Date(event.date) < new Date()) {
-      return {
-        success: false,
-        error: "Event has already passed",
-      };
-    }
-
     const hostRows = await db
       .select()
       .from(hosts)
@@ -1595,6 +1612,37 @@ async function bookParkingSpot(params: {
         error: "Host not found",
       };
     }
+    const eventTimeZone = await loadPersistedEventServiceTimeZone({
+      seriesId: event.seriesId,
+      city: host.city,
+      state: host.state,
+    });
+    if (!eventTimeZone) {
+      return {
+        success: false,
+        httpStatus: 409,
+        error: "This venue does not have a valid persisted service timezone yet",
+      };
+    }
+    const eventTiming = evaluateParkingPassBookingTime({
+      timeZone: eventTimeZone,
+      date: event.date,
+      startTime: String(event.startTime || ""),
+      endTime: String(event.endTime || ""),
+      policy: "until_service_end",
+    });
+    if (eventTiming.reason === "invalid_interval") {
+      return {
+        success: false,
+        error: "Event service hours are invalid",
+      };
+    }
+    if (!eventTiming.eligible) {
+      return {
+        success: false,
+        error: "Event has already passed",
+      };
+    }
     if (!stripe) {
       return {
         success: false,
@@ -1603,161 +1651,62 @@ async function bookParkingSpot(params: {
       };
     }
 
-    const hostPriceCents = Number(event.hostPriceCents || 0);
-    const PLATFORM_FEE = 1000;
-    const totalCents = hostPriceCents + PLATFORM_FEE;
-    const hostStripeAccountId =
+    const hostPaymentsReady = Boolean(
       host.stripeConnectAccountId &&
-      host.stripeChargesEnabled &&
-      host.stripePayoutsEnabled &&
-      host.stripeOnboardingCompleted
-        ? host.stripeConnectAccountId
-        : null;
-
-    const booking = await db.transaction(async (tx: any) => {
-      await tx.execute(
-        sql`SELECT pg_advisory_xact_lock(hashtext(${`parking_pass_event:${event.id}`}))`,
-      );
-
-      const [lockedEvent] = await tx
-        .select({ maxTrucks: events.maxTrucks, status: events.status })
-        .from(events)
-        .where(eq(events.id, event.id))
-        .limit(1);
-      if (!lockedEvent || lockedEvent.status !== "open") {
-        throw Object.assign(new Error("Event is not available for booking"), {
-          statusCode: 409,
-        });
-      }
-
-      const [existing] = await tx
-        .select({ id: eventBookings.id, status: eventBookings.status })
-        .from(eventBookings)
-        .where(
-          and(eq(eventBookings.eventId, event.id), eq(eventBookings.truckId, params.truckId)),
-        )
-        .limit(1);
-      if (existing?.status === "confirmed") {
-        throw Object.assign(new Error("This spot is already booked"), {
-          statusCode: 409,
-        });
-      }
-      if (existing?.status === "pending") {
-        throw Object.assign(new Error("A pending booking already exists"), {
-          statusCode: 409,
-        });
-      }
-      if (existing?.status === "cancelled" || existing?.status === "refunded") {
-        throw Object.assign(
-          new Error(
-            "This booking was previously closed. Refresh the listing and try again.",
-          ),
-          {
-            statusCode: 409,
-          },
-        );
-      }
-
-      const [countRow] = await tx
-        .select({ count: sql<number>`count(*)` })
-        .from(eventBookings)
-        .where(
-          and(
-            eq(eventBookings.eventId, event.id),
-            inArray(eventBookings.status, ["pending", "confirmed"]),
-          ),
-        );
-      const reservedCount = Number(countRow?.count || 0);
-      if (reservedCount >= Number(lockedEvent.maxTrucks || 0)) {
-        throw Object.assign(new Error("Event is fully booked"), { statusCode: 409 });
-      }
-
-      const [createdBooking] = await tx
-        .insert(eventBookings)
-        .values({
-          eventId: event.id,
-          truckId: params.truckId,
-          hostId: event.hostId,
-          hostPriceCents,
-          platformFeeCents: PLATFORM_FEE,
-          totalCents,
-          status: "pending",
-          stripeApplicationFeeAmount: hostStripeAccountId ? PLATFORM_FEE : null,
-          stripeTransferDestination: hostStripeAccountId,
-        })
-        .returning();
-      return createdBooking;
-    });
-
-    let paymentIntent: Stripe.PaymentIntent;
-    try {
-      const intentParams: Stripe.PaymentIntentCreateParams = {
-        amount: totalCents,
-        currency: "usd",
-        metadata: {
-          bookingId: booking.id,
-          eventId: event.id,
-          hostId: event.hostId,
-          truckId: params.truckId,
-          userId: params.userId,
-          hostPriceCents: String(hostPriceCents),
-          platformFeeCents: String(PLATFORM_FEE),
-          totalCents: String(totalCents),
-          hostPaymentMode: hostStripeAccountId ? "destination_charge" : "platform_hold",
-        },
-      };
-      if (hostStripeAccountId) {
-        intentParams.application_fee_amount = PLATFORM_FEE;
-        intentParams.transfer_data = {
-          destination: hostStripeAccountId,
-        };
-      }
-      paymentIntent = await stripe.paymentIntents.create(intentParams);
-    } catch (stripeError: any) {
-      await db
-        .update(eventBookings)
-        .set({
-          status: "cancelled",
-          cancelledAt: new Date(),
-          cancellationReason: "payment_pending_manual_review: Payment setup failed",
-          stripePaymentStatus: "payment_pending",
-          updatedAt: new Date(),
-        })
-        .where(eq(eventBookings.id, booking.id));
+        host.stripeChargesEnabled &&
+        host.stripePayoutsEnabled &&
+        host.stripeOnboardingCompleted,
+    );
+    if (!hostPaymentsReady) {
       return {
         success: false,
-        httpStatus: 202,
-        data: {
-          paymentPending: true,
-          bookingId: booking.id,
-          message: "Your spot request was received. We'll send payment instructions.",
-        },
+        httpStatus: 409,
+        error:
+          "This host must finish Stripe onboarding with charges and payouts enabled before paid booking.",
       };
     }
-
-    await db
-      .update(eventBookings)
-      .set({
-        stripePaymentIntentId: paymentIntent.id,
-        updatedAt: new Date(),
-      })
-      .where(eq(eventBookings.id, booking.id));
-
+    const idempotencyKey = String(params.idempotencyKey || "").trim();
+    if (idempotencyKey.length < 8) {
+      return {
+        success: false,
+        httpStatus: 400,
+        error: "A stable idempotencyKey is required for Parking Pass booking.",
+      };
+    }
+    const hostPriceCents = Number(event.hostPriceCents || 0);
+    const PLATFORM_FEE = 1000;
+    const purchase = await createParkingPassPurchase({
+      purchaserUserId: params.userId,
+      truckId: params.truckId,
+      hostId: event.hostId,
+      idempotencyKey,
+      lines: [
+        {
+          eventId: event.id,
+          hostPriceCents,
+          platformFeeCents: PLATFORM_FEE,
+          slotType: "daily",
+        },
+      ],
+      stripe,
+      metadata: { eventId: event.id, adapter: "action_api" },
+    });
     return {
       success: true,
       data: {
-        bookingId: booking.id,
-        clientSecret: paymentIntent.client_secret,
-        paymentIntentId: paymentIntent.id,
-        hostPaymentsReady: !!hostStripeAccountId,
-        totalCents,
-        breakdown: {
-          hostPrice: hostPriceCents,
-          platformFee: PLATFORM_FEE,
-        },
+        ...purchase,
+        bookingId: purchase.bookingIds[0],
       },
     };
   } catch (error: any) {
+    if (error instanceof ParkingPassBookingError) {
+      return {
+        success: false,
+        httpStatus: error.statusCode,
+        error: error.message,
+        data: error.details,
+      };
+    }
     const statusCode = Number(error?.statusCode);
     if (Number.isFinite(statusCode) && statusCode >= 400) {
       return {
@@ -2083,10 +2032,13 @@ async function getParkingPassSpots(params: {
           maxTrucks: Number(event?.maxTrucks ?? 1) || 1,
           startTime: String(event?.startTime || "").trim() || null,
           endTime: String(event?.endTime || "").trim() || null,
-          nextDate: event?.date
-            ? new Date(event.date).toISOString().slice(0, 10)
-            : null,
-          paymentsEnabled: Boolean(event?.paymentsEnabled),
+          nextDate: dateKeyFromUnknown(event?.date, "UTC"),
+          paymentsEnabled: Boolean(
+            host?.stripeConnectAccountId &&
+              host?.stripeOnboardingCompleted === true &&
+              host?.stripeChargesEnabled === true &&
+              host?.stripePayoutsEnabled === true,
+          ),
           distanceKm,
         }),
       );
@@ -2494,7 +2446,11 @@ export function createActionApiRouter(
         result = await deleteManualSchedule(params || {});
         break;
       case "BOOK_PARKING_SPOT":
-        result = await bookParkingSpot(params || {});
+        result = await bookParkingSpot({
+          ...(params || {}),
+          idempotencyKey:
+            params?.idempotencyKey || req.headers["idempotency-key"],
+        });
         break;
       case "REDEEM_CREDITS":
         result = await redeemCredits(params || {});

@@ -1,9 +1,19 @@
 import { db } from './db';
-import { events, hosts, restaurants, eventInterests, users } from '@shared/schema';
-import { and, eq, gte, lte, isNull, sql } from 'drizzle-orm';
+import { events, hosts, restaurants, eventInterests, eventSeries, users } from '@shared/schema';
+import { and, eq, gte, lte, sql } from 'drizzle-orm';
 import { emailService } from './emailService';
 import auditLogger from './auditLogger';
 import { canEmailForTopic } from './utils/notificationPreferences';
+import {
+  addDaysToDateKey,
+  dateKeyFromUnknown,
+  dateKeyInZone,
+  formatDateKeyForDisplay,
+  utcDateFromDateKey,
+} from './services/dateKeys';
+import { buildSlotDateTimes } from './services/timeIntent';
+import { loadPersistedEventServiceTimeZone } from './services/persistedServiceTimeZone';
+import { deliverEventNotificationOnce } from './services/eventNotificationDeliveryService';
 
 const UNBOOKED_EVENT_RADIUS_KM = Number(
   process.env.UNBOOKED_EVENT_NOTIFICATION_RADIUS_KM || 25,
@@ -41,7 +51,7 @@ function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number) {
  * 3. Sends notification emails to truck owners
  * 4. Marks event as notified to prevent duplicate notifications
  */
-export async function notifyUnbookedEvents(): Promise<{
+export async function notifyUnbookedEvents(options: { now?: Date } = {}): Promise<{
   eventsProcessed: number;
   trucksNotified: number;
   errors: number;
@@ -59,28 +69,36 @@ export async function notifyUnbookedEvents(): Promise<{
     // 1. Status is "open" (not booked, cancelled, or completed)
     // 2. Event date is between now and 48 hours from now
     // 3. No notification sent yet (we'll track this via a new field or by checking if we've already run)
-    const now = new Date();
+    const now = options.now || new Date();
     const bufferEnd = new Date(now.getTime() + 48 * 60 * 60 * 1000); // 48 hours from now
+    // Date-only rows are calendar keys, not instants. Query a deliberately
+    // broad UTC-key envelope, then decide the exact 48-hour window from each
+    // event's persisted venue timezone and service start time.
+    const utcTodayKey = dateKeyInZone(now, 'UTC');
+    const envelopeStart = utcDateFromDateKey(addDaysToDateKey(utcTodayKey, -1));
+    const envelopeEnd = utcDateFromDateKey(addDaysToDateKey(utcTodayKey, 3));
 
     const upcomingUnbookedEvents = await db
       .select({
         event: events,
         host: hosts,
+        seriesTimeZone: eventSeries.timezone,
       })
       .from(events)
       .innerJoin(hosts, eq(events.hostId, hosts.id))
+      .leftJoin(eventSeries, eq(eventSeries.id, events.seriesId))
       .where(
         and(
           eq(events.status, 'open'),
-          gte(events.date, now),
-          lte(events.date, bufferEnd),
+          gte(events.date, envelopeStart),
+          lte(events.date, envelopeEnd),
           eq(events.eventType, 'event')
         )
       );
 
     console.log(`[EventNotificationCron] Found ${upcomingUnbookedEvents.length} unbooked events within 48-hour buffer`);
 
-    for (const { event, host } of upcomingUnbookedEvents) {
+    for (const { event, host, seriesTimeZone } of upcomingUnbookedEvents) {
       try {
         if (event.unbookedNotificationSentAt) {
           auditLogger.info('Unbooked event notification skipped', {
@@ -91,31 +109,41 @@ export async function notifyUnbookedEvents(): Promise<{
           continue;
         }
 
+        const serviceTimeZone = await loadPersistedEventServiceTimeZone({
+          seriesId: event.seriesId,
+          city: host.city,
+          state: host.state,
+        });
+        const eventDateKey = dateKeyFromUnknown(event.date, 'UTC');
+        const interval = serviceTimeZone && eventDateKey
+          ? buildSlotDateTimes({
+              timeZone: serviceTimeZone,
+              date: eventDateKey,
+              startTime: event.startTime,
+              endTime: event.endTime,
+            })
+          : null;
+        if (
+          !serviceTimeZone ||
+          !eventDateKey ||
+          !interval ||
+          interval.startUtc.getTime() <= now.getTime() ||
+          interval.startUtc.getTime() > bufferEnd.getTime()
+        ) {
+          auditLogger.info('Unbooked event notification skipped', {
+            eventId: event.id,
+            reason: serviceTimeZone ? 'outside_exact_service_window' : 'time_authority_unavailable',
+            seriesTimeZone,
+          });
+          continue;
+        }
+
         const hostLat = toNumber(host.latitude);
         const hostLng = toNumber(host.longitude);
         if (hostLat == null || hostLng == null) {
           auditLogger.info('Unbooked event notification skipped', {
             eventId: event.id,
             reason: 'missing_host_coordinates',
-          });
-          continue;
-        }
-
-        const [claimed] = await db
-          .update(events)
-          .set({ unbookedNotificationSentAt: now })
-          .where(
-            and(
-              eq(events.id, event.id),
-              isNull(events.unbookedNotificationSentAt),
-            ),
-          )
-          .returning({ id: events.id });
-
-        if (!claimed) {
-          auditLogger.info('Unbooked event notification skipped', {
-            eventId: event.id,
-            reason: 'already_claimed',
           });
           continue;
         }
@@ -170,11 +198,13 @@ export async function notifyUnbookedEvents(): Promise<{
           return haversineKm(hostLat, hostLng, truckLat, truckLng) <= UNBOOKED_EVENT_RADIUS_KM;
         });
           
+          let eventNeedsRetry = false;
           // Notify each truck owner
           for (const truck of trucksToNotify) {
             try {
               if (truck.ownerEmail) {
-                await sendUnbookedEventNotification(
+                const delivery = await sendUnbookedEventNotification(
+                  truck.ownerId,
                   truck.ownerEmail,
                   truck.ownerFirstName || 'Truck Owner',
                   {
@@ -185,17 +215,32 @@ export async function notifyUnbookedEvents(): Promise<{
                     startTime: event.startTime,
                     endTime: event.endTime,
                     eventId: event.id,
-                  }
+                    serviceTimeZone,
+                    eventDateKey,
+                  },
                 );
-                stats.trucksNotified++;
+                if (delivery?.status === 'provider_confirmed') {
+                  stats.trucksNotified++;
+                } else if (delivery?.status !== 'ambiguous') {
+                  eventNeedsRetry = true;
+                  stats.errors++;
+                }
               }
             } catch (emailError) {
               console.error(`[EventNotificationCron] Failed to notify truck ${truck.id}:`, emailError);
+              eventNeedsRetry = true;
               stats.errors++;
             }
           }
         
         stats.eventsProcessed++;
+
+        if (!eventNeedsRetry) {
+          await db
+            .update(events)
+            .set({ unbookedNotificationSentAt: now })
+            .where(eq(events.id, event.id));
+        }
 
         // Audit log
         auditLogger.info('Unbooked event notification sent', {
@@ -224,6 +269,7 @@ export async function notifyUnbookedEvents(): Promise<{
  * Send email notification to truck owner about unbooked event opportunity
  */
 async function sendUnbookedEventNotification(
+  recipientUserId: string,
   email: string,
   ownerName: string,
   eventDetails: {
@@ -234,16 +280,13 @@ async function sendUnbookedEventNotification(
     startTime: string;
     endTime: string;
     eventId: string;
+    serviceTimeZone: string;
+    eventDateKey: string;
   }
-): Promise<void> {
+): Promise<any> {
   const subject = `🚚 Food Truck Opportunity Available - ${eventDetails.hostName}`;
   
-  const formattedDate = new Date(eventDetails.eventDate).toLocaleDateString('en-US', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  });
+  const formattedDate = formatDateKeyForDisplay(eventDetails.eventDateKey);
 
   const html = `
     <!DOCTYPE html>
@@ -330,7 +373,33 @@ async function sendUnbookedEventNotification(
     </html>
   `;
 
-  await emailService.sendBasicEmail(email, subject, html);
+  return deliverEventNotificationOnce({
+    notificationKind: 'unbooked_event_48h',
+    subjectId: eventDetails.eventId,
+    recipientUserId,
+    recipientEmail: email,
+    serviceTimeZone: eventDetails.serviceTimeZone,
+    serviceDateKey: eventDetails.eventDateKey,
+    payload: {
+      version: 'unbooked-event-notice-v1',
+      eventId: eventDetails.eventId,
+      dateKey: eventDetails.eventDateKey,
+      timeZone: eventDetails.serviceTimeZone,
+      hostName: eventDetails.hostName,
+      eventName: eventDetails.eventName,
+      startTime: eventDetails.startTime,
+      endTime: eventDetails.endTime,
+    },
+    send: (idempotencyKey) =>
+      emailService.sendBasicEmailWithReceipt(
+        email,
+        subject,
+        html,
+        undefined,
+        'marketing',
+        idempotencyKey,
+      ),
+  });
 }
 
 /**

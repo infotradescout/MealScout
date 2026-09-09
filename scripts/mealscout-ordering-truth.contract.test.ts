@@ -1225,9 +1225,10 @@ const checks: Array<[string, () => void]> = [
       assert.match(paymentRoutes, /pickupAcknowledgementMinutes/);
       assert.match(notificationService, /customerResponseWindow/);
       assert.match(ownerOrders, /Start preparation/);
-      assert.match(paymentRoutes, /eq\(restaurants\.isVerified, true\)/);
-      assert.match(paymentRoutes, /users\.emailVerified/);
-      assert.match(paymentRoutes, /users\.isDisabled/);
+      assert.match(paymentRoutes, /buildOrderingReadiness/);
+      assert.match(menuRoutes, /isVerified: restaurants\.isVerified/);
+      assert.match(menuRoutes, /ownerEmailVerified: users\.emailVerified/);
+      assert.match(menuRoutes, /ownerIsDisabled: users\.isDisabled/);
       assert.match(
         storageSource,
         /isVerified: false,[\s\S]*buildRestaurantOrderingAuthorityRevocation\(\)/,

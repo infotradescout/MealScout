@@ -63,6 +63,14 @@ import {
 import { MapErrorBoundary } from "@/components/maps/map-error-boundary";
 import { GOOGLE_MAPS_WEB_API_KEY } from "@/lib/mapProvider";
 import { apiUrl } from "@/lib/api";
+import {
+  eventCardWhenLabel,
+  eventServiceDateKey,
+  eventServicePhaseLabel,
+  isEventAuthoritativelyOpenNow,
+  isEventOnAuthoritativeVenueDay,
+  type PublicEventServicePhase,
+} from "@/lib/event-date-labels";
 import { toast } from "@/hooks/use-toast";
 import { buildPublicProfilePath } from "@/lib/public-profile-path";
 import type {
@@ -224,7 +232,14 @@ interface EventSummary {
   title?: string | null;
   name?: string | null;
   startsAt?: string | null;
+  date?: string | null;
   startTime?: string | null;
+  endTime?: string | null;
+  serviceTimezone?: string | null;
+  serviceDateKey?: string | null;
+  servicePhase?: PublicEventServicePhase | null;
+  serviceStartsAtUtc?: string | null;
+  serviceEndsAtUtc?: string | null;
   venueName?: string | null;
   locationName?: string | null;
   imageUrl?: string | null;
@@ -1782,10 +1797,10 @@ function buildCravingBoardItems({
       href: `/events/${event.id}`,
       imageUrl: event.imageUrl || event.heroImageUrl || null,
       meta: formatEventStartLabel(event) || "Event",
-      reason: "Happening today",
+      reason: eventServicePhaseLabel(event) || "Event",
       freshnessMeta: {
         kind: "event",
-        startsAt: event.startsAt,
+        startsAt: eventServiceDateKey(event),
         startTime: event.startTime,
         updatedAt: readStringField(event, ["updatedAt", "lastUpdatedAt"]),
       },
@@ -1807,15 +1822,8 @@ function getFreshnessTimeLabel(meta: FreshnessMeta): string | null {
 }
 
 function formatEventStartLabel(event: EventSummary): string | null {
-  const raw = event.startsAt || event.startTime;
-  if (!raw) return null;
-  const time = new Date(raw).getTime();
-  if (!Number.isFinite(time)) return null;
-  return new Date(time).toLocaleString(undefined, {
-    weekday: "short",
-    hour: "numeric",
-    minute: "2-digit",
-  });
+  const label = eventCardWhenLabel(event);
+  return label || null;
 }
 
 function buildLocalActivityItems({
@@ -1909,7 +1917,7 @@ function buildLocalActivityItems({
   for (const event of events.slice(0, 4)) {
     const freshnessMeta: FreshnessMeta = {
       kind: "event",
-      startsAt: event.startsAt,
+      startsAt: eventServiceDateKey(event),
       startTime: event.startTime,
       updatedAt: readStringField(event, ["updatedAt", "lastUpdatedAt"]),
       confirmedAt: readStringField(event, ["confirmedAt", "lastConfirmedAt"]),
@@ -1917,7 +1925,7 @@ function buildLocalActivityItems({
     items.push({
       id: `event-${event.id}`,
       type: "event",
-      title: "Event today",
+      title: eventServicePhaseLabel(event) || "Event",
       subtitle: [
         event.title || event.name,
         event.venueName || event.locationName,
@@ -2393,7 +2401,7 @@ function shiftCenterForRightQuadrant(
    PAGE
    ============================================================ */
 
-export default function ExplorePreview() {
+export default function LegacyExplorePreview() {
   const { user } = useAuth();
   const authEffectiveLocationContext = useMemo(
     () =>
@@ -3564,13 +3572,14 @@ export default function ExplorePreview() {
 
   const eventMarkers = useMemo<MapAdapterMarker[]>(() => {
     return visibleEvents
+      .filter(isEventOnAuthoritativeVenueDay)
       .map((e) => {
         const lat = e.latitude ?? e.lat ?? e.venueLat;
         const lng = e.longitude ?? e.lng ?? e.venueLng;
         if (typeof lat !== "number" || typeof lng !== "number") return null;
         const freshnessMeta: FreshnessMeta = {
           kind: "event",
-          startsAt: e.startsAt,
+          startsAt: eventServiceDateKey(e),
           startTime: e.startTime,
           updatedAt: readStringField(e, ["updatedAt", "lastUpdatedAt"]),
           confirmedAt: readStringField(e, ["confirmedAt", "lastConfirmedAt"]),
@@ -5834,13 +5843,7 @@ function ScoutImmediateCompactCard({
 
   const event = item.event;
   const title = event.title || event.name || "Food event";
-  const start = event.startsAt || event.startTime;
-  const startLabel = start
-    ? new Date(start).toLocaleDateString(undefined, {
-        month: "short",
-        day: "numeric",
-      })
-    : null;
+  const startLabel = eventCardWhenLabel(event) || null;
   return (
     <CompactDecisionCardShell
       href={`/events?eventId=${encodeURIComponent(String(event.id))}`}
@@ -7308,7 +7311,7 @@ function SceneMixedFeedCard({ item }: { item: CravingBoardItem }) {
         : item.kind === "Deal"
           ? "Deal today"
           : item.kind === "Event"
-            ? "Event today"
+            ? item.reason || "Event"
             : "Restaurant";
   const freshnessMeta = item.freshnessMeta || { kind: "restaurant" as const };
   const badges = [item.reason, ...getOperationalBadges(freshnessMeta)]
@@ -8624,23 +8627,22 @@ function EventCard({
 }) {
   const title = event.title || event.name || "Event";
   const venue = event.venueName || event.locationName || "";
-  const start = event.startsAt || event.startTime;
-  const startLabel = start
-    ? new Date(start).toLocaleString(undefined, {
-        weekday: "short",
-        hour: "numeric",
-        minute: "2-digit",
-      })
-    : "";
+  const startLabel = eventCardWhenLabel(event);
   const img = event.heroImageUrl || event.imageUrl;
   const freshnessMeta: FreshnessMeta = {
     kind: "event",
-    startsAt: event.startsAt,
+    startsAt: eventServiceDateKey(event),
     startTime: event.startTime,
     updatedAt: readStringField(event, ["updatedAt", "lastUpdatedAt"]),
     confirmedAt: readStringField(event, ["confirmedAt", "lastConfirmedAt"]),
   };
-  const badges = getOperationalBadges(freshnessMeta).slice(0, 2);
+  const badges = [
+    eventServicePhaseLabel(event),
+    ...getOperationalBadges(freshnessMeta),
+  ]
+    .filter((label): label is string => Boolean(label))
+    .filter((label, index, all) => all.indexOf(label) === index)
+    .slice(0, 2);
   const canEdit = isOwnedByCurrentUser(event, currentUserId);
   const actions = canEdit
     ? [
@@ -9438,23 +9440,15 @@ function OpenNowSection({
   menuPreviewByRestaurantId: Map<string, MenuPreviewItem[]>;
   relationshipSnapshot: RestaurantRelationshipSnapshot;
 }) {
-  const todaysEvents = useMemo(() => {
-    const now = new Date();
-    const startOfTomorrow = new Date(now);
-    startOfTomorrow.setHours(24, 0, 0, 0);
-    return events.filter((e) => {
-      const raw = e.startsAt || e.startTime;
-      if (!raw) return true; // unknown start → still surface (likely current)
-      const t = new Date(raw).getTime();
-      if (!Number.isFinite(t)) return true;
-      return t < startOfTomorrow.getTime();
-    });
-  }, [events]);
+  const openEvents = useMemo(
+    () => events.filter(isEventAuthoritativelyOpenNow),
+    [events],
+  );
 
   const hasAnyContent =
     liveTrucks.length > 0 ||
     restaurants.length > 0 ||
-    todaysEvents.length > 0 ||
+    openEvents.length > 0 ||
     deals.length > 0;
 
   // While loading and no content yet, show skeletons
@@ -9483,7 +9477,7 @@ function OpenNowSection({
   if (hasAnyContent) {
     const liveCount = liveTrucks.length;
     const restaurantCount = restaurants.length;
-    const eventsCount = todaysEvents.length;
+    const eventsCount = openEvents.length;
     const dealsCount = deals.length;
     const summaryBits = [
       restaurantCount > 0
@@ -9541,7 +9535,7 @@ function OpenNowSection({
                 />
               </li>
             ))}
-            {todaysEvents.slice(0, 6).map((ev) => (
+            {openEvents.slice(0, 6).map((ev) => (
               <li
                 key={`event-${ev.id}`}
                 className="shrink-0 w-[230px] sm:w-[260px]"

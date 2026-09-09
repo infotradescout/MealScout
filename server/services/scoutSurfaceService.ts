@@ -33,8 +33,12 @@ import { publicStoryPublicationWhere } from "./publicStoryProjection";
 import { deriveProfileEvidenceQuarantineVisibility } from "./profileEvidenceQuarantine";
 import { computeParkingPassQualityFlags } from "./parkingPassQuality";
 import { canExposeAnonymousEventListItem } from "../publicProfiles/publicEventDetailAccess";
-import { resolveCityTimeZoneSync } from "./cityTimeZone";
 import { buildSlotDateTimes } from "./timeIntent";
+import { dateKeyFromUnknown, dateKeyInZone } from "./dateKeys";
+import {
+  persistedVenueTimeZoneSql,
+  resolvePersistedEventServiceTimeZone,
+} from "./persistedServiceTimeZone";
 
 type BuildScoutSurfaceInput = {
   lat?: number;
@@ -229,14 +233,12 @@ const isTruckServingNow = (truck: any): boolean => {
   );
 };
 
-const isToday = (value: unknown): boolean => {
-  const date = value ? new Date(value as any) : null;
-  if (!date || Number.isNaN(date.getTime())) return false;
-  const now = new Date();
-  return (
-    now.getFullYear() === date.getFullYear() &&
-    now.getMonth() === date.getMonth() &&
-    now.getDate() === date.getDate()
+const isToday = (value: unknown, timeZone: unknown): boolean => {
+  const zone = String(timeZone || "").trim();
+  if (!zone) return false;
+  const eventDateKey = dateKeyFromUnknown(value, "UTC");
+  return Boolean(
+    eventDateKey && eventDateKey === dateKeyInZone(new Date(), zone),
   );
 };
 
@@ -641,6 +643,7 @@ export async function buildScoutSurface(
         event: events,
         host: hosts,
         series: eventSeries,
+        venueTimeZone: persistedVenueTimeZoneSql(hosts.city, hosts.state),
         hostOwnerDisabled: users.isDisabled,
         hostPublicProfileSettings: users.publicProfileSettings,
       })
@@ -661,6 +664,7 @@ export async function buildScoutSurface(
           ...row.event,
           host: row.host,
           series: row.series,
+          venueTimeZone: row.venueTimeZone,
           hostOwnerDisabled: row.hostOwnerDisabled,
           hostPublicProfileSettings: row.hostPublicProfileSettings,
         })),
@@ -726,16 +730,25 @@ export async function buildScoutSurface(
       showAddress: visibility.showAddress,
     });
     if (!coordinates) return [];
+    const timeZone = resolvePersistedEventServiceTimeZone({
+      seriesId: event.seriesId,
+      seriesTimeZone: event.series?.timezone,
+      venueTimeZone: event.venueTimeZone,
+    });
+    if (!timeZone) return [];
     const interval = buildSlotDateTimes({
-      timeZone: resolveCityTimeZoneSync({
-        city: host.city || null,
-        state: host.state || null,
-      }),
+      timeZone,
       date: event.date,
       startTime: String(event.startTime || ""),
       endTime: String(event.endTime || ""),
     });
     if (!interval || interval.endUtc.getTime() <= Date.now()) return [];
+    if (
+      String(event.activeParticipationMutationId || "").trim() ||
+      String(event.series?.activeParticipationMutationId || "").trim()
+    ) {
+      return [];
+    }
     const requiresPayment = event.requiresPayment === true;
     const publicFreeEvent = canExposeAnonymousEventListItem({
       eventType: event.eventType,
@@ -765,6 +778,10 @@ export async function buildScoutSurface(
     if (!publicFreeEvent && !parkingPassBookable) return [];
     return [{
       ...event,
+      serviceTimeZone: timeZone,
+      serviceStartsAt: interval.startUtc.toISOString(),
+      serviceEndsAt: interval.endUtc.toISOString(),
+      serviceDateKey: dateKeyFromUnknown(event.date, "UTC"),
       parkingPassBookable,
       host: host
         ? {
@@ -1168,7 +1185,10 @@ export async function buildScoutSurface(
       continue;
     }
 
-    const today = isToday((event as any)?.date);
+    const today = isToday(
+      (event as any)?.date,
+      (event as any)?.serviceTimeZone,
+    );
     const requiresPayment = Boolean((event as any)?.requiresPayment);
 
     const baseEventCard: ScoutSurfaceCard = {
@@ -1197,7 +1217,14 @@ export async function buildScoutSurface(
       },
       score: (today ? 72 : 54) - Math.min(18, Number(distanceMiles || 0) * 1.8),
       source: "event",
-      metadata: { lat: coords.lat, lng: coords.lng },
+      metadata: {
+        lat: coords.lat,
+        lng: coords.lng,
+        timeZone: (event as any)?.serviceTimeZone,
+        dateKey: (event as any)?.serviceDateKey,
+        startsAt: (event as any)?.serviceStartsAt,
+        endsAt: (event as any)?.serviceEndsAt,
+      },
     };
 
     if (today && !requiresPayment) {
@@ -1239,6 +1266,10 @@ export async function buildScoutSurface(
         metadata: {
           lat: coords.lat,
           lng: coords.lng,
+          timeZone: (event as any)?.serviceTimeZone,
+          dateKey: (event as any)?.serviceDateKey,
+          startsAt: (event as any)?.serviceStartsAt,
+          endsAt: (event as any)?.serviceEndsAt,
           eventId,
           hostId,
           locationId: hostId,

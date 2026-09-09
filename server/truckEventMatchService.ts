@@ -13,6 +13,12 @@ import { db } from "./db";
 import { restaurants, users, telemetryEvents } from "@shared/schema";
 import { and, eq, ilike, or, sql } from "drizzle-orm";
 import { emailService } from "./emailService";
+import {
+  dateKeyFromUnknown,
+  formatDateKeyForDisplay,
+} from "./services/dateKeys";
+import { normalizePersistedIanaTimeZone } from "./services/persistedServiceTimeZoneRules";
+import { deliverEventNotificationOnce } from "./services/eventNotificationDeliveryService";
 
 type SeriesInfo = {
   id: string;
@@ -22,6 +28,7 @@ type SeriesInfo = {
   endDate: Date;
   defaultStartTime: string;
   defaultEndTime: string;
+  timezone: string;
 };
 
 type HostInfo = {
@@ -102,13 +109,19 @@ export async function notifyNearbyTrucksOfNewSeries(
       if (!isNotifEnabled(owner.accountSettings)) continue;
 
       try {
-        await sendMatchEmail(
+        const delivery = await sendMatchEmail(
+          truck.ownerId,
           owner.email,
           owner.firstName,
           truck.name,
           series,
           host,
         );
+
+        if (delivery?.status !== "provider_confirmed") {
+          if (delivery?.status !== "ambiguous") errors++;
+          continue;
+        }
 
         await db.insert(telemetryEvents).values({
           eventName: "truck_series_match_sent",
@@ -281,29 +294,27 @@ export async function notifyNearbyTrucksOfEventRequest(
 }
 
 async function sendMatchEmail(
+  recipientUserId: string,
   to: string,
   firstName: string | null,
   truckName: string,
   series: SeriesInfo,
   host: HostInfo,
-): Promise<boolean> {
+): Promise<any> {
   const name = firstName || truckName || "Food Truck Owner";
   const location = host.state
     ? `${host.city}, ${host.state}`
     : (host.city ?? "your area");
-  const startDateLabel = new Date(series.startDate).toLocaleDateString(
-    "en-US",
-    {
-      month: "long",
-      day: "numeric",
-      year: "numeric",
-    },
-  );
-  const endDateLabel = new Date(series.endDate).toLocaleDateString("en-US", {
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  });
+  const timeZone = normalizePersistedIanaTimeZone(series.timezone);
+  const startDateKey = dateKeyFromUnknown(series.startDate, "UTC");
+  const endDateKey = dateKeyFromUnknown(series.endDate, "UTC");
+  if (!timeZone || !startDateKey || !endDateKey) {
+    throw new Error(
+      "Series match notification requires stored timezone and date keys.",
+    );
+  }
+  const startDateLabel = formatDateKeyForDisplay(startDateKey);
+  const endDateLabel = formatDateKeyForDisplay(endDateKey);
 
   const html = `<!DOCTYPE html>
 <html lang="en">
@@ -339,10 +350,32 @@ async function sendMatchEmail(
 </html>`;
 
   const text = `Hey ${name}! ${host.businessName} posted a new event in ${location}: "${series.name}" (${startDateLabel} – ${endDateLabel}, ${series.defaultStartTime}–${series.defaultEndTime}). View it: https://www.mealscout.us/truck/discovery`;
-  return emailService.sendBasicEmail(
-    to,
-    `🚚 New event opportunity for your truck in ${location}`,
-    html,
-    text,
-  );
+  const subject = `🚚 New event opportunity for your truck in ${location}`;
+  return deliverEventNotificationOnce({
+    notificationKind: "truck_series_match",
+    subjectId: series.id,
+    recipientUserId,
+    recipientEmail: to,
+    serviceTimeZone: timeZone,
+    serviceDateKey: startDateKey,
+    payload: {
+      version: "truck-series-match-v1",
+      seriesId: series.id,
+      startDateKey,
+      endDateKey,
+      timeZone,
+      truckName,
+      hostName: host.businessName,
+      location,
+    },
+    send: (idempotencyKey) =>
+      emailService.sendBasicEmailWithReceipt(
+        to,
+        subject,
+        html,
+        text,
+        "marketing",
+        idempotencyKey,
+      ),
+  });
 }

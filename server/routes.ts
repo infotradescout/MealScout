@@ -4,13 +4,9 @@ import Stripe from "stripe";
 import {
   getHostByUserId,
   getEventAndHostForUser,
-  getInterestEventAndHostForUser,
   userOwnsEvent,
 } from "./services/hostOwnership";
 import {
-  computeAcceptedCount,
-  shouldBlockAcceptance,
-  buildCapacityFullError,
   computeFillRate,
 } from "./services/interestDecision";
 import { registerHostRoutes } from "./routes/hostRoutes";
@@ -62,6 +58,7 @@ import { registerStripeWebhookRoutes } from "./routes/stripeWebhookRoutes";
 import { registerTruckClaimRoutes } from "./routes/truckClaimRoutes";
 import { registerMenuRoutes } from "./routes/menuRoutes";
 import { registerPickupOrderRoutes } from "./routes/pickupOrderRoutes";
+import { registerMealScoutCountyMapRoutes } from "./routes/countyMapRuntimeRoutes";
 import { registerRestaurantPaymentRoutes } from "./routes/restaurantPaymentRoutes";
 import { registerMerchantPromotionRoutes } from "./routes/merchantPromotionRoutes";
 import { registerMerchantDeliveryRoutes } from "./routes/merchantDeliveryRoutes";
@@ -163,11 +160,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerHostInterestRoutes(app, {
     getHostByUserId,
     getEventAndHostForUser,
-    getInterestEventAndHostForUser,
     userOwnsEvent,
-    computeAcceptedCount,
-    shouldBlockAcceptance,
-    buildCapacityFullError,
     computeFillRate,
   });
 
@@ -202,6 +195,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerRestaurantPaymentRoutes(app, { stripe });
   registerMenuRoutes(app);
   registerPickupOrderRoutes(app);
+  registerMealScoutCountyMapRoutes(app);
   registerHiringRoutes(app, { hasCompleteProfileAccess });
 
   // Admin API endpoints

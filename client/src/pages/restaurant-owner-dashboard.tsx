@@ -35,6 +35,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { eventShortDateLabel } from "@/lib/event-date-labels";
 import {
   resolveCanonicalShareUrl,
   resolveCanonicalShareUrlSync,
@@ -4912,9 +4913,9 @@ export default function RestaurantOwnerDashboard() {
                           const canCancel =
                             booking.status === "pending" ||
                             booking.status === "confirmed";
-                          const eventDate = booking.event?.date
-                            ? new Date(booking.event.date)
-                            : null;
+                          const eventDateLabel = booking.event?.date
+                            ? eventShortDateLabel(booking.event.date)
+                            : "";
 
                           return (
                             <div
@@ -4946,11 +4947,11 @@ export default function RestaurantOwnerDashboard() {
                                       <span>{booking.event.host.address}</span>
                                     </div>
                                   ) : null}
-                                  {eventDate ? (
+                                  {eventDateLabel ? (
                                     <div className="flex items-center gap-2 text-sm text-stone-600">
                                       <Clock className="h-4 w-4" />
                                       <span>
-                                        {format(eventDate, "EEE, MMM d")}
+                                        {eventDateLabel}
                                         {booking.event?.startTime
                                           ? ` at ${booking.event.startTime}`
                                           : ""}

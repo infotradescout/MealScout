@@ -4,6 +4,7 @@ import { and, desc, eq, gt, isNull, or, sql } from "drizzle-orm";
 import { db } from "../db";
 import {
   deals,
+  eventSeries,
   events,
   hosts,
   menus,
@@ -20,7 +21,10 @@ import {
   filterPublicConfirmedEventTrucks,
   loadConfirmedEventTrucks,
 } from "../services/confirmedEventTrucks";
-import { resolveCityTimeZoneSync } from "../services/cityTimeZone";
+import {
+  persistedVenueTimeZoneSql,
+  resolvePersistedEventServiceTimeZone,
+} from "../services/persistedServiceTimeZone";
 import { buildSlotDateTimes } from "../services/timeIntent";
 import { isSlotPublic } from "../services/publicSlotGate";
 import { canExposeAnonymousEventDetail } from "../publicProfiles/publicEventDetailAccess";
@@ -767,14 +771,18 @@ async function eventPage(baseUrl: string, eventId: string) {
       status: events.status,
       requiresPayment: events.requiresPayment,
       updatedAt: events.updatedAt,
+      seriesId: events.seriesId,
+      seriesTimeZone: eventSeries.timezone,
       hostId: events.hostId,
       hostName: hosts.businessName,
       hostCity: hosts.city,
       hostState: hosts.state,
+      venueTimeZone: persistedVenueTimeZoneSql(hosts.city, hosts.state),
     })
     .from(events)
     .innerJoin(hosts, eq(events.hostId, hosts.id))
     .innerJoin(users, eq(hosts.userId, users.id))
+    .leftJoin(eventSeries, eq(events.seriesId, eventSeries.id))
     .where(and(eq(events.id, eventId), eq(users.isDisabled, false)))
     .limit(1);
   if (!row || row.eventType === "private_event" || row.requiresPayment) {
@@ -791,10 +799,12 @@ async function eventPage(baseUrl: string, eventId: string) {
       [],
   );
   const primaryTruck = confirmedTrucks[0] || null;
-  const timeZone = resolveCityTimeZoneSync({
-    city: row.hostCity || null,
-    state: row.hostState || null,
+  const timeZone = resolvePersistedEventServiceTimeZone({
+    seriesId: row.seriesId,
+    seriesTimeZone: row.seriesTimeZone,
+    venueTimeZone: row.venueTimeZone,
   });
+  if (!timeZone) return null;
   const eventInterval = buildSlotDateTimes({
     timeZone,
     date: row.date,

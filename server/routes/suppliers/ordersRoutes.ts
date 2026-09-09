@@ -13,6 +13,10 @@ import { isAuthenticated } from "../../unifiedAuth";
 import { distributedRateLimit } from "../../middleware/distributedRateLimit";
 import { requireIdempotencyKey } from "../../middleware/idempotency";
 import type { SupplierOrdersRouteDeps } from "./shared";
+import {
+  isNormalizedProduction,
+  isTruthyFinancialTestFlag,
+} from "@shared/financialTestSafety";
 
 const createSupplierOrderLimiter = distributedRateLimit({
   scope: "supplier_orders_create",
@@ -63,6 +67,19 @@ export function registerSupplierOrdersRoutes(
             .min(1),
         });
         const parsed = schema.parse(req.body || {});
+        const bypassStripe =
+          isTruthyFinancialTestFlag(process.env.MEALSCOUT_BYPASS_STRIPE) ||
+          isTruthyFinancialTestFlag(process.env.MEALSCOUT_TEST_MODE);
+        if (
+          parsed.paymentMethod === "stripe" &&
+          bypassStripe &&
+          isNormalizedProduction(process.env.NODE_ENV)
+        ) {
+          return res.status(503).json({
+            code: "production_provider_bypass_forbidden",
+            message: "Test payment bypass is disabled in production.",
+          });
+        }
 
         const truckRestaurantId = String(parsed.truckRestaurantId || "").trim();
         if (truckRestaurantId) {
@@ -121,10 +138,6 @@ export function registerSupplierOrdersRoutes(
         const platformFeeCents = feeModel ? feeModel.platformFeeCents : 0;
         const stripeFeeEstimateCents = feeModel ? feeModel.stripeFeeEstimateCents : 0;
         const totalCents = feeModel ? feeModel.totalCents : supplierGrossCents;
-
-        const bypassStripe =
-          String(process.env.MEALSCOUT_BYPASS_STRIPE || "").toLowerCase() === "true" ||
-          String(process.env.MEALSCOUT_TEST_MODE || "").toLowerCase() === "true";
 
         if (parsed.paymentMethod === "stripe" && !stripe && !bypassStripe) {
           return res.status(500).json({ message: "Stripe not configured" });

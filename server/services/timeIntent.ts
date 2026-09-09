@@ -1,4 +1,5 @@
 import { DateTime, Interval } from "luxon";
+import { dateKeyFromUnknown, dateKeyInZone } from "./dateKeys";
 
 export type TimeIntent =
   | "now"
@@ -118,18 +119,7 @@ export function buildSlotDateTimes(params: {
     return null;
   }
 
-  const dateKey = (() => {
-    const raw = params.date as any;
-    if (raw instanceof Date) {
-      const iso = raw.toISOString();
-      const key = iso.split("T")[0];
-      return /^\d{4}-\d{2}-\d{2}$/.test(key) ? key : null;
-    }
-    const text = String(raw || "").trim();
-    if (!text) return null;
-    const key = text.includes("T") ? text.split("T")[0] : text;
-    return /^\d{4}-\d{2}-\d{2}$/.test(key) ? key : null;
-  })();
+  const dateKey = dateKeyFromUnknown(params.date, params.timeZone);
   if (!dateKey) return null;
 
   // IMPORTANT: treat schedule date as a *local calendar day* for the target timezone.
@@ -145,4 +135,62 @@ export function buildSlotDateTimes(params: {
   }
   if (end <= start) return null;
   return { startUtc: start.toUTC().toJSDate(), endUtc: end.toUTC().toJSDate() };
+}
+
+export type ServiceIntervalPhase =
+  | "future_date"
+  | "before_start"
+  | "in_service"
+  | "ended"
+  | "invalid";
+
+/**
+ * Classify a date-only service interval in the venue's timezone. The schedule
+ * day is never treated as a UTC-midnight instant; only the constructed start
+ * and end values are true instants.
+ */
+export function classifyServiceInterval(params: {
+  timeZone: string;
+  date: Date | string;
+  startTime: string;
+  endTime: string;
+  now?: Date;
+}): {
+  phase: ServiceIntervalPhase;
+  dateKey: string | null;
+  localTodayKey: string | null;
+  startUtc: Date | null;
+  endUtc: Date | null;
+} {
+  const dateKey = dateKeyFromUnknown(params.date, params.timeZone);
+  const now = params.now ?? new Date();
+  const localTodayKey = Number.isFinite(now.getTime())
+    ? dateKeyInZone(now, params.timeZone)
+    : null;
+  const interval = buildSlotDateTimes(params);
+  if (!dateKey || !localTodayKey || !interval) {
+    return {
+      phase: "invalid",
+      dateKey,
+      localTodayKey,
+      startUtc: null,
+      endUtc: null,
+    };
+  }
+  const nowMs = now.getTime();
+  const phase: ServiceIntervalPhase =
+    dateKey > localTodayKey
+      ? "future_date"
+      : nowMs < interval.startUtc.getTime()
+        ? "before_start"
+        : nowMs < interval.endUtc.getTime()
+          ? "in_service"
+          : "ended";
+  return {
+    phase,
+    dateKey,
+    localTodayKey,
+    startUtc: interval.startUtc,
+    endUtc: interval.endUtc,
+  };
 }

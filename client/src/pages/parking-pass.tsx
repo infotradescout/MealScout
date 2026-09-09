@@ -71,6 +71,14 @@ import {
 } from "@/lib/parkingPassOwnerNavigation";
 import { formatRelativeTime } from "@/lib/relative-time";
 import {
+  compareDateOnly,
+  dateOnlyKey,
+  formatDateOnly,
+  localCalendarDate,
+  localDateTimeFromDateKey,
+  todayDateOnlyKey,
+} from "@/lib/date-only";
+import {
   ParkingScheduleCalendar,
   type ParkingScheduleItem,
 } from "@/components/parking-schedule-calendar";
@@ -235,6 +243,10 @@ interface TruckScheduleEntry {
   createdAt?: string;
   bookingConfirmedAt?: string | null;
   bookingId?: string;
+  purchaseId?: string | null;
+  arrivalState?: string | null;
+  currentArrivalVersionId?: string | null;
+  pendingArrivalVersionId?: string | null;
   slotType?: string | null;
   event?: {
     id: string;
@@ -261,6 +273,20 @@ interface TruckScheduleEntry {
     state?: string | null;
     notes?: string | null;
   };
+}
+
+interface HostArrivalBooking {
+  id: string;
+  status: string;
+  purchaseId?: string | null;
+  arrivalState?: string | null;
+  pendingArrivalVersionId?: string | null;
+  event?: {
+    date?: string;
+    startTime?: string;
+    endTime?: string;
+  };
+  truck?: { name?: string };
 }
 
 interface TruckParkingReport {
@@ -726,25 +752,11 @@ const buildHostAddress = (host?: Host | null) => {
 };
 
 const getListingDateKey = (value: string) => {
-  const raw = String(value || "").trim();
-  if (!raw) return "";
-  if (raw.includes("T")) {
-    const key = raw.split("T")[0];
-    if (/^\d{4}-\d{2}-\d{2}$/.test(key)) return key;
-  }
-  const parsed = new Date(raw);
-  if (Number.isNaN(parsed.getTime())) return "";
-  return format(parsed, "yyyy-MM-dd");
+  return dateOnlyKey(value) || "";
 };
 
 const buildDateTimeFromKey = (date: string | Date, time: string) => {
-  const dateKey =
-    typeof date === "string" ? getListingDateKey(date) : format(date, "yyyy-MM-dd");
-  const match = String(time || "").match(/^(\d{1,2}):(\d{2})/);
-  if (!dateKey || !match) return null;
-  const parsed = new Date(`${dateKey}T00:00:00`);
-  parsed.setHours(Number(match[1]), Number(match[2]), 0, 0);
-  return Number.isFinite(parsed.getTime()) ? parsed : null;
+  return localDateTimeFromDateKey(date, time);
 };
 
 function isSlotBookableByTime(
@@ -752,15 +764,9 @@ function isSlotBookableByTime(
   slotType: (typeof PARKING_PASS_SLOT_TYPES)[number],
   now = new Date(),
 ) {
-  const listingDate = new Date(listing.date);
-  const listingDayStart = new Date(listingDate);
-  listingDayStart.setHours(0, 0, 0, 0);
-
-  const todayStart = new Date(now);
-  todayStart.setHours(0, 0, 0, 0);
-
-  if (listingDayStart < todayStart) return false;
-  if (listingDayStart > todayStart) return true;
+  const dateComparison = compareDateOnly(listing.date, now);
+  if (dateComparison < 0) return false;
+  if (dateComparison > 0) return true;
 
   const window = getSlotWindowMinutesWithCleanup(
     slotType,
@@ -901,6 +907,15 @@ export default function ParkingPassPage() {
   const [hosts, setHosts] = useState<Host[]>([]);
   const [selectedHostId, setSelectedHostId] = useState<string>("");
   const [host, setHost] = useState<Host | null>(null);
+  const {
+    data: hostArrivalBookings = [],
+    refetch: refetchHostArrivalBookings,
+  } = useQuery<HostArrivalBooking[]>({
+    queryKey: ["/api/bookings/my-host"],
+    enabled: isAuthenticated && hasHostProfile,
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
   const [spotImageFile, setSpotImageFile] = useState<File | null>(null);
   const [isUploadingSpotImage, setIsUploadingSpotImage] = useState(false);
   const [amenities, setAmenities] = useState<Record<string, boolean>>({
@@ -993,7 +1008,7 @@ export default function ParkingPassPage() {
     if (dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)) {
       return dateParam;
     }
-    return format(new Date(), "yyyy-MM-dd");
+    return todayDateOnlyKey();
   });
   const [selectedSlotsByListing, setSelectedSlotsByListing] = useState<
     Record<string, string[]>
@@ -1029,6 +1044,22 @@ export default function ParkingPassPage() {
     "all" | OperatorSupportKind
   >("all");
   const journeyOriginInitializedRef = useRef(false);
+  const arrivalMutationKeysRef = useRef(new Map<string, string>());
+  const cancellationMutationKeysRef = useRef(new Map<string, string>());
+  const listingMutationRequestRef = useRef<{
+    fingerprint: string;
+    key: string;
+  } | null>(null);
+  const stableArrivalMutationKey = (identity: string) => {
+    const existing = arrivalMutationKeysRef.current.get(identity);
+    if (existing) return existing;
+    const created =
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `arrival-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    arrivalMutationKeysRef.current.set(identity, created);
+    return created;
+  };
   useEffect(() => {
     if (journeyOriginInitializedRef.current) return;
     const latitude = parseCoord(effectiveLocationContext?.latitude);
@@ -1201,7 +1232,7 @@ export default function ParkingPassPage() {
   );
   const geocodeInFlight = useRef(false);
   const [scheduleForm, setScheduleForm] = useState({
-    date: format(new Date(), "yyyy-MM-dd"),
+    date: todayDateOnlyKey(),
     startTime: "",
     endTime: "",
     locationName: "",
@@ -1346,23 +1377,73 @@ export default function ParkingPassPage() {
 
   const handleCancelBooking = async (bookingId: string) => {
     if (!bookingId || !truckId) return;
-    if (!window.confirm("Cancel this booking? This cannot be undone.")) {
+    if (
+      !window.confirm(
+        "Cancel this booked line? Before start, truck-team cancellation returns the full line value as non-cash credit restricted to future Parking Pass platform fees. After start, there is no remedy.",
+      )
+    ) {
       return;
     }
 
     setCancelingBookingId(bookingId);
     try {
+      const requestId =
+        cancellationMutationKeysRef.current.get(bookingId) ||
+        (globalThis.crypto?.randomUUID?.() ??
+          `booking-cancel-${bookingId}-${Date.now()}`);
+      cancellationMutationKeysRef.current.set(bookingId, requestId);
       const res = await fetch(apiUrl(`/api/bookings/${bookingId}/cancel`), {
         method: "POST",
         credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": requestId,
+        },
+        body: JSON.stringify({
+          reason: "Truck team cancelled this Parking Pass line",
+        }),
       });
+      const data = await res.json().catch(() => null);
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.message || "Failed to cancel booking");
+        throw new Error(data?.message || "Failed to cancel booking");
       }
+      const remedy = String(
+        data?.remedy || data?.operation?.remedy || "",
+      );
+      const operationStatus = String(data?.operation?.status || "");
+      const finalStatuses = new Set([
+        "provider_confirmed",
+        "credit_issued",
+        "released",
+        "no_remedy",
+      ]);
+      if (finalStatuses.has(operationStatus)) {
+        cancellationMutationKeysRef.current.delete(bookingId);
+      }
+      const remedyCopy: Record<string, string> = {
+        restricted_credit:
+          "The full line value was issued as non-cash credit restricted to platform fees on a future Parking Pass.",
+        cash_refund:
+          operationStatus === "provider_confirmed"
+            ? "Stripe confirmed the cash refund to the original payment method."
+            : operationStatus === "failed_action_required"
+              ? "Provider confirmation is incomplete. No additional refund request was created. Retry this same cancellation or contact support."
+              : "The refund, exact host transfer reversal, and application-fee adjustment are still processing. They are not shown as complete yet.",
+        none: "The line had already started, so the voluntary cancellation has no refund or credit remedy.",
+        release: "The unpaid checkout reservation was released.",
+      };
+      const actionRequired = operationStatus === "failed_action_required";
+      const processing = ["pending", "processing"].includes(operationStatus);
       toast({
-        title: "Booking cancelled",
-        description: "Your parking pass booking has been cancelled.",
+        title: actionRequired
+          ? "Cancellation needs review"
+          : processing
+            ? "Cancellation processing"
+            : "Booking cancelled",
+        description:
+          remedyCopy[remedy] ||
+          "The current cancellation state is available in your booking details.",
+        variant: actionRequired ? "destructive" : undefined,
       });
       await reloadBookedSchedule(truckId, { silent: true });
     } catch (error: any) {
@@ -1373,6 +1454,143 @@ export default function ParkingPassPage() {
       });
     } finally {
       setCancelingBookingId(null);
+    }
+  };
+
+  const handleReviewArrivalChange = async (
+    bookingId: string,
+    pendingArrivalVersionId: string,
+  ) => {
+    try {
+      const arrivalRes = await fetch(
+        apiUrl(`/api/bookings/${encodeURIComponent(bookingId)}/arrival`),
+        { credentials: "include" },
+      );
+      const arrival = await arrivalRes.json().catch(() => null);
+      if (!arrivalRes.ok || !arrival?.proposed) {
+        throw new Error(arrival?.message || "Arrival change is unavailable.");
+      }
+      if (arrival.proposed.id !== pendingArrivalVersionId) {
+        throw new Error("A newer arrival change is waiting. Refresh and try again.");
+      }
+      const proposed = arrival.proposed;
+      const details = [
+        proposed.address,
+        [proposed.city, proposed.stateCode].filter(Boolean).join(", "),
+        `${new Date(proposed.startAt).toLocaleString()} - ${new Date(
+          proposed.endAt,
+        ).toLocaleString()}`,
+        proposed.accessInstructions
+          ? `Access: ${proposed.accessInstructions}`
+          : null,
+        proposed.safetyInstructions
+          ? `Safety: ${proposed.safetyInstructions}`
+          : null,
+        proposed.reason ? `Reason: ${proposed.reason}` : null,
+      ]
+        .filter(Boolean)
+        .join("\n");
+      if (!window.confirm(`Acknowledge this protected arrival change?\n\n${details}`)) {
+        return;
+      }
+      const acknowledgeRes = await fetch(
+        apiUrl(
+          `/api/bookings/${encodeURIComponent(
+            bookingId,
+          )}/arrival/${encodeURIComponent(pendingArrivalVersionId)}/acknowledge`,
+        ),
+        {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Idempotency-Key": stableArrivalMutationKey(
+              `ack:${bookingId}:${pendingArrivalVersionId}`,
+            ),
+          },
+        },
+      );
+      const result = await acknowledgeRes.json().catch(() => null);
+      if (!acknowledgeRes.ok) {
+        throw new Error(result?.message || "Arrival acknowledgment failed.");
+      }
+      arrivalMutationKeysRef.current.delete(
+        `ack:${bookingId}:${pendingArrivalVersionId}`,
+      );
+      toast({
+        title: "Arrival change acknowledged",
+        description:
+          "This booking can return to eligible schedule, map, and pickup surfaces.",
+      });
+      if (truckId) {
+        await reloadBookedSchedule(truckId, { silent: true });
+      }
+    } catch (error) {
+      toast({
+        title: "Could not acknowledge arrival change",
+        description:
+          error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleProposeArrivalCorrection = async (bookingId: string) => {
+    try {
+      const arrivalRes = await fetch(
+        apiUrl(`/api/bookings/${encodeURIComponent(bookingId)}/arrival`),
+        { credentials: "include" },
+      );
+      const arrival = await arrivalRes.json().catch(() => null);
+      if (!arrivalRes.ok || !arrival?.current) {
+        throw new Error(arrival?.message || "Booked arrival details are unavailable.");
+      }
+      if (arrival.arrivalState === "arrival_change_pending") {
+        throw new Error(
+          "The truck team must acknowledge the current proposal before another change.",
+        );
+      }
+      const address = window.prompt(
+        "Correct booked arrival address:",
+        arrival.current.address,
+      );
+      if (!address) return;
+      const reason = window.prompt(
+        "Explain why this booked arrival fact changed (at least 10 characters):",
+      );
+      if (!reason || reason.trim().length < 10) return;
+      const correctionIdentity = `correct:${bookingId}:${address.trim()}:${reason.trim()}`;
+      const correctionRes = await fetch(
+        apiUrl(
+          `/api/bookings/${encodeURIComponent(bookingId)}/arrival/corrections`,
+        ),
+        {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+            "Idempotency-Key": stableArrivalMutationKey(correctionIdentity),
+          },
+          body: JSON.stringify({ address: address.trim(), reason: reason.trim() }),
+        },
+      );
+      const result = await correctionRes.json().catch(() => null);
+      if (!correctionRes.ok) {
+        throw new Error(result?.message || "Arrival correction failed.");
+      }
+      arrivalMutationKeysRef.current.delete(correctionIdentity);
+      toast({
+        title: "Arrival correction sent",
+        description:
+          "Public stop, map, and pickup eligibility is suppressed until the truck team acknowledges this protected version.",
+      });
+      await refetchHostArrivalBookings();
+    } catch (error) {
+      toast({
+        title: "Could not correct arrival",
+        description:
+          error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
     }
   };
   useEffect(() => {
@@ -1560,7 +1778,8 @@ export default function ParkingPassPage() {
 
     const run = async () => {
       try {
-        let status: "pending" | "confirmed" | "credited" = "pending";
+        let status: "pending" | "confirmed" | "credited" | "refunded" =
+          "pending";
         if (intentId) {
           const res = await fetch(apiUrl(`/api/bookings/payment-intent/${encodeURIComponent(
               intentId,
@@ -1570,10 +1789,18 @@ export default function ParkingPassPage() {
             const data = await res.json();
             if (data?.status === "confirmed") status = "confirmed";
             if (data?.status === "credited") status = "credited";
+            if (data?.status === "refunded") status = "refunded";
           }
         }
 
-        if (status === "credited") {
+        if (status === "refunded") {
+          toast({
+            title: "Booking could not be served",
+            description:
+              "The full payment is being returned to the original payment method through Stripe, including the platform fee.",
+            variant: "destructive",
+          });
+        } else if (status === "credited") {
           toast({
             title: "Booking Unavailable",
             description:
@@ -2246,6 +2473,8 @@ export default function ParkingPassPage() {
           slotLabel: entry.slotType ? formatSlotLabel(entry.slotType) : null,
           isPublic: true,
           bookingId: entry.bookingId,
+          arrivalState: entry.arrivalState,
+          pendingArrivalVersionId: entry.pendingArrivalVersionId,
           hostId: entry.host?.id,
           locationName: entry.host?.businessName,
           address: entry.host?.address,
@@ -2274,9 +2503,8 @@ export default function ParkingPassPage() {
     }));
 
     return [...bookingItems, ...manualItems].sort((a, b) => {
-      const dateA = new Date(a.date).getTime();
-      const dateB = new Date(b.date).getTime();
-      if (dateA !== dateB) return dateA - dateB;
+      const dateOrder = compareDateOnly(a.date, b.date);
+      if (dateOrder !== 0) return dateOrder;
       return (a.startTime || "").localeCompare(b.startTime || "");
     });
   }, [bookedSchedule, manualSchedules]);
@@ -2331,10 +2559,7 @@ export default function ParkingPassPage() {
   const handleOpenReport = (item: ParkingScheduleItem) => {
     if (!item.reportKey) return;
     const existing = reportByKey.get(item.reportKey);
-    const dateKey =
-      typeof item.date === "string"
-        ? item.date.split("T")[0]
-        : format(item.date, "yyyy-MM-dd");
+    const dateKey = dateOnlyKey(item.date) || todayDateOnlyKey();
     setReportDraft({
       date: dateKey,
       sourceType: item.type === "booking" ? "booking" : "manual",
@@ -3073,15 +3298,12 @@ export default function ParkingPassPage() {
   const hasActiveHostPass = hostPassListings.some((item) => {
     if (!item.requiresPayment) return false;
     if (!hasPassPricing(item)) return false;
-    const itemDate = new Date(item.date);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    return itemDate >= today;
+    return compareDateOnly(item.date, new Date()) >= 0;
   });
 
   const groupParkingPassListings = (items: HostPassListing[]) => {
-    const sorted = [...items].sort(
-      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
+    const sorted = [...items].sort((a, b) =>
+      compareDateOnly(a.date, b.date),
     );
     const grouped = new Map<string, HostPassListing>();
     sorted.forEach((item) => {
@@ -3093,18 +3315,17 @@ export default function ParkingPassPage() {
     return Array.from(grouped.values());
   };
 
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
-
   const upcomingListings = groupParkingPassListings(
     hostPassListings.filter(
-      (event) => event.requiresPayment && new Date(event.date) >= todayStart,
+      (event) =>
+        event.requiresPayment && compareDateOnly(event.date, new Date()) >= 0,
     ),
   );
 
   const pastListings = groupParkingPassListings(
     hostPassListings.filter(
-      (event) => event.requiresPayment && new Date(event.date) < todayStart,
+      (event) =>
+        event.requiresPayment && compareDateOnly(event.date, new Date()) < 0,
     ),
   );
 
@@ -3162,27 +3383,42 @@ export default function ParkingPassPage() {
     }
 
     try {
+      const payload = {
+        hostId: selectedHostId,
+        daysOfWeek,
+        startTime: finalStartTime,
+        endTime: finalEndTime,
+        maxTrucks: Number(maxTrucks),
+        hardCapEnabled,
+        requiresPayment: true,
+        breakfastPriceCents: breakfast ? breakfast * 100 : 0,
+        lunchPriceCents: lunch ? lunch * 100 : 0,
+        dinnerPriceCents: dinner ? dinner * 100 : 0,
+        ...(weeklyOverrideValue !== null
+          ? { weeklyPriceCents: weeklyOverrideValue * 100 }
+          : {}),
+        ...(monthlyOverrideValue !== null
+          ? { monthlyPriceCents: monthlyOverrideValue * 100 }
+          : {}),
+      };
+      const fingerprint = JSON.stringify(payload);
+      if (listingMutationRequestRef.current?.fingerprint !== fingerprint) {
+        listingMutationRequestRef.current = {
+          fingerprint,
+          key:
+            typeof crypto !== "undefined" &&
+            typeof crypto.randomUUID === "function"
+              ? crypto.randomUUID()
+              : `listing-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        };
+      }
       const res = await fetch(apiUrl("/api/hosts/parking-pass"), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          hostId: selectedHostId,
-          daysOfWeek,
-          startTime: finalStartTime,
-          endTime: finalEndTime,
-          maxTrucks: Number(maxTrucks),
-          hardCapEnabled,
-          requiresPayment: true,
-          breakfastPriceCents: breakfast ? breakfast * 100 : 0,
-          lunchPriceCents: lunch ? lunch * 100 : 0,
-          dinnerPriceCents: dinner ? dinner * 100 : 0,
-          ...(weeklyOverrideValue !== null
-            ? { weeklyPriceCents: weeklyOverrideValue * 100 }
-            : {}),
-          ...(monthlyOverrideValue !== null
-            ? { monthlyPriceCents: monthlyOverrideValue * 100 }
-            : {}),
-        }),
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": listingMutationRequestRef.current.key,
+        },
+        body: fingerprint,
       });
 
       if (!res.ok) {
@@ -3190,9 +3426,20 @@ export default function ParkingPassPage() {
         throw new Error(data.message || "Failed to create listing");
       }
 
-      const newListing = await res.json();
+      const response = await res.json();
+      const newListing = response?.occurrences ?? response;
       const newListings = Array.isArray(newListing) ? newListing : [newListing];
       setHostPassListings((current) => [...current, ...newListings]);
+      if (
+        response?.participationMutation &&
+        response.participationMutation.status !== "converged"
+      ) {
+        throw new Error(
+          response.participationMutation.failureMessage ||
+            "This listing change is hidden while participant remedies or notices finish. Retry the same submission to continue recovery.",
+        );
+      }
+      listingMutationRequestRef.current = null;
       setIsCreating(false);
       setDaysOfWeek([]);
       setStartTime(defaultHostStartTime);
@@ -3249,6 +3496,15 @@ export default function ParkingPassPage() {
         title: "Location unavailable",
         description:
           "That location is currently unavailable. Pick another open location.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!platformPaymentsReady || listing.paymentsEnabled !== true) {
+      toast({
+        title: "Host payment setup incomplete",
+        description:
+          "This host must finish Stripe Connect onboarding with charges and payouts enabled before paid booking.",
         variant: "destructive",
       });
       return;
@@ -3476,7 +3732,9 @@ export default function ParkingPassPage() {
     }
   };
 
-  const handleSuccess = (outcome: "confirmed" | "pending" | "credited") => {
+  const handleSuccess = (
+    outcome: "confirmed" | "pending" | "credited" | "refunded",
+  ) => {
     const bookedListing = selectedListing;
     const bookedSlots = [...selectedSlotTypes];
     if (selectedListing) {
@@ -3495,13 +3753,13 @@ export default function ParkingPassPage() {
       setSelectedSlotTypes([]);
     }
 
-    const shouldReloadSchedule = outcome !== "credited";
+    const shouldReloadSchedule = !["credited", "refunded"].includes(outcome);
     const shouldShare = outcome === "confirmed";
 
     if (shouldShare && bookedListing) {
       const hostName = bookedListing.host?.businessName || "a host location";
       const dateLabel = format(
-        new Date(`${bookedListing.date}T00:00:00`),
+        localCalendarDate(bookedListing.date)!,
         "EEE, MMM d",
       );
       const slotLabel = bookedSlots.length
@@ -3803,7 +4061,9 @@ export default function ParkingPassPage() {
     const fullKeys = Array.from(byKey.entries())
       .filter(([, listing]) => !hasAvailability(listing))
       .map(([key]) => key);
-    return fullKeys.map((key) => new Date(`${key}T00:00:00`));
+    return fullKeys
+      .map((key) => localCalendarDate(key))
+      .filter((date): date is Date => Boolean(date));
   }, [activeLocation]);
 
   const activeListingForDate = activeLocation
@@ -4095,7 +4355,7 @@ export default function ParkingPassPage() {
     journeyVisibleSupport,
   ]);
   const selectedDateLabel = format(
-    new Date(`${selectedDate}T00:00:00`),
+    localCalendarDate(selectedDate)!,
     "EEE, MMM d",
   );
   const selectedDateAvailable = Boolean(activeListingForDate);
@@ -4511,10 +4771,10 @@ export default function ParkingPassPage() {
 
   const cartTotals = getCartTotals();
   const hasCartTotal = cartItems.length > 0 && cartTotals.totalCents > 0;
-  const todayDateKey = useMemo(() => format(new Date(), "yyyy-MM-dd"), []);
+  const todayDateKey = useMemo(() => todayDateOnlyKey(), []);
 
-  // Trucks pay MealScout (platform payments). Hosts can optionally enable Stripe Connect payouts (cashout).
-  // If host payouts aren't configured, host earnings are held as credit.
+  // Paid Parking Pass checkout requires both the platform and the destination
+  // host's fully ready Stripe Connect account.
   const platformPaymentsReady =
     stripeConfig?.paymentsReady ??
     (isStripeConfigLoading ? true : Boolean(import.meta.env.VITE_STRIPE_PUBLIC_KEY));
@@ -4542,16 +4802,10 @@ export default function ParkingPassPage() {
     if (!listingHasAvailability(listing)) return false;
     if (!listing) return false;
 
-    const listingDate = new Date(listing.date);
-    const listingDayStart = new Date(listingDate);
-    listingDayStart.setHours(0, 0, 0, 0);
-
     const now = new Date();
-    const todayStart = new Date(now);
-    todayStart.setHours(0, 0, 0, 0);
-
-    if (listingDayStart < todayStart) return false;
-    if (listingDayStart > todayStart) return true;
+    const dateComparison = compareDateOnly(listing.date, now);
+    if (dateComparison < 0) return false;
+    if (dateComparison > 0) return true;
 
     // Same-day rule: keep day selectable until the 3rd meal window (dinner) starts.
     const [dinnerHour, dinnerMinute] = PARKING_PASS_MEAL_WINDOWS.dinner.start
@@ -5032,9 +5286,12 @@ export default function ParkingPassPage() {
                         : "border-amber-200 bg-amber-50 text-amber-800"
                     }`}
                   >
-                    {host.stripeConnectAccountId && host.stripePayoutsEnabled
-                      ? "Payouts enabled"
-                      : "Payouts not enabled"}
+                    {host.stripeConnectAccountId &&
+                    host.stripeOnboardingCompleted &&
+                    host.stripeChargesEnabled &&
+                    host.stripePayoutsEnabled
+                      ? "Paid booking ready"
+                      : "Paid booking unavailable"}
                   </span>
                 ) : null}
               </div>
@@ -5052,7 +5309,10 @@ export default function ParkingPassPage() {
                     });
                     const flags = Array.from(uniqueFlags.values());
                     const payoutsEnabled = Boolean(
-                      host.stripeConnectAccountId && host.stripePayoutsEnabled,
+                      host.stripeConnectAccountId &&
+                        host.stripeOnboardingCompleted &&
+                        host.stripeChargesEnabled &&
+                        host.stripePayoutsEnabled,
                     );
                     const hasSpotPhoto = Boolean(host.spotImageUrl);
                     const hasAddress = Boolean(
@@ -5094,9 +5354,7 @@ export default function ParkingPassPage() {
                       { ok: hasSpotPhoto, label: "Spot photo uploaded" },
                       {
                         ok: payoutsEnabled,
-                        label:
-                          "Host payouts enabled (optional — bookings work without this)",
-                        optional: true,
+                        label: "Stripe Connect charges and payouts ready",
                       },
                     ] as { ok: boolean; label: string; optional?: boolean }[];
                     const total = checklist.length;
@@ -5219,9 +5477,10 @@ export default function ParkingPassPage() {
                     Payments
                   </p>
                   <p className="text-xs text-slate-500">
-                    Stripe payouts are optional. Trucks can still book your
-                    Parking Pass listings; if payouts are disabled, your
-                    earnings are held as credit until you enable payouts.
+                    Paid Parking Pass checkout uses one Stripe destination
+                    charge. Your Connect onboarding, charges, and payouts must
+                    all be ready before trucks can book; Stripe then manages the
+                    bank payout from your connected account.
                   </p>
                 </div>
 
@@ -5247,21 +5506,25 @@ export default function ParkingPassPage() {
                     </div>
 
                     {host.stripeConnectAccountId &&
+                    host.stripeOnboardingCompleted &&
+                    host.stripeChargesEnabled &&
                     host.stripePayoutsEnabled ? (
                       <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
                         <p className="font-semibold">Host payouts</p>
                         <p className="text-xs opacity-90">
-                          Enabled. You can cash out automatically.
+                          Ready. New booking charges settle directly to this
+                          connected account and Stripe manages bank payouts.
                         </p>
                       </div>
                     ) : (
                       <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-3">
                         <p className="text-sm font-semibold text-amber-900">
-                          Host payouts are not enabled yet.
+                          Paid booking is not enabled yet.
                         </p>
                         <p className="text-xs text-amber-800">
-                          Finish Stripe onboarding to enable cashout. This does
-                          not block listing visibility or bookings.
+                          Finish Stripe onboarding and wait for both charges and
+                          payouts to be enabled. Listings may remain visible,
+                          but checkout stays unavailable until then.
                         </p>
                         <div className="flex flex-wrap gap-2">
                           <Button
@@ -5284,6 +5547,69 @@ export default function ParkingPassPage() {
                     )}
                   </div>
                 )}
+                {hostArrivalBookings.some(
+                  (booking) =>
+                    booking.purchaseId && booking.status === "confirmed",
+                ) ? (
+                  <div className="rounded-xl border border-slate-200 bg-white/70 p-4 space-y-3">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-900">
+                        Protected booked arrival
+                      </p>
+                      <p className="text-xs text-slate-600">
+                        Correct a material booked fact here. The exact address
+                        remains limited to booked parties and staff; public stop,
+                        map, and pickup eligibility pauses until the truck team
+                        acknowledges the new version.
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      {hostArrivalBookings
+                        .filter(
+                          (booking) =>
+                            booking.purchaseId &&
+                            booking.status === "confirmed",
+                        )
+                        .slice(0, 12)
+                        .map((booking) => (
+                          <div
+                            key={booking.id}
+                            className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-slate-50 p-3 text-xs"
+                          >
+                            <div>
+                              <p className="font-semibold text-slate-900">
+                                {booking.truck?.name || "Booked truck"}
+                              </p>
+                              <p className="text-slate-600">
+                                {booking.event?.date
+                                  ? formatDateOnly(booking.event.date)
+                                  : "Booked date"}{" "}
+                                · {booking.arrivalState === "arrival_change_pending"
+                                  ? "Waiting for truck acknowledgment"
+                                  : "Current version acknowledged"}
+                              </p>
+                            </div>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={
+                                booking.arrivalState ===
+                                "arrival_change_pending"
+                              }
+                              onClick={() =>
+                                handleProposeArrivalCorrection(booking.id)
+                              }
+                            >
+                              {booking.arrivalState ===
+                              "arrival_change_pending"
+                                ? "Acknowledgment pending"
+                                : "Correct arrival"}
+                            </Button>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                ) : null}
               </div>
             )}
           {topTab === "host" &&
@@ -5368,7 +5694,7 @@ export default function ParkingPassPage() {
                             onChange={(event) =>
                               setBlackoutDateInput(event.target.value)
                             }
-                            min={format(new Date(), "yyyy-MM-dd")}
+                            min={todayDateOnlyKey()}
                             disabled={!hasActiveParkingPass}
                           />
                           <Button
@@ -5406,10 +5732,10 @@ export default function ParkingPassPage() {
                                 className="rounded-full border border-[color:var(--status-warning)]/30 bg-orange-50 px-3 py-1 text-xs text-orange-900 hover:bg-orange-100"
                                 disabled={
                                   isSavingBlackout ||
-                                  dateKey <= format(new Date(), "yyyy-MM-dd")
+                                  dateKey <= todayDateOnlyKey()
                                 }
                               >
-                                {format(new Date(dateKey), "MMM d, yyyy")}{" "}
+                                {format(localCalendarDate(dateKey)!, "MMM d, yyyy")}{" "}
                                 (remove)
                               </button>
                             ))}
@@ -6301,10 +6627,10 @@ export default function ParkingPassPage() {
                               <div className="flex items-start gap-4 sm:items-center sm:gap-6">
                                 <div className="flex flex-col items-center justify-center w-16 h-16 bg-rose-50 rounded-lg text-rose-700">
                                   <span className="text-xs font-bold uppercase">
-                                    {format(new Date(listing.date), "MMM")}
+                                    {format(localCalendarDate(listing.date)!, "MMM")}
                                   </span>
                                   <span className="text-2xl font-bold">
-                                    {format(new Date(listing.date), "d")}
+                                    {format(localCalendarDate(listing.date)!, "d")}
                                   </span>
                                 </div>
 
@@ -6398,10 +6724,10 @@ export default function ParkingPassPage() {
                               <div className="flex items-start gap-4 sm:items-center sm:gap-6">
                                 <div className="flex flex-col items-center justify-center w-16 h-16 bg-slate-200 rounded-lg text-[color:var(--text-muted)]">
                                   <span className="text-xs font-bold uppercase">
-                                    {format(new Date(listing.date), "MMM")}
+                                    {format(localCalendarDate(listing.date)!, "MMM")}
                                   </span>
                                   <span className="text-2xl font-bold">
-                                    {format(new Date(listing.date), "d")}
+                                    {format(localCalendarDate(listing.date)!, "d")}
                                   </span>
                                 </div>
 
@@ -6864,6 +7190,7 @@ export default function ParkingPassPage() {
                   allowManualEdits={hasProfileTruckTools}
                   onDeleteManual={handleDeleteSchedule}
                   onCancelBooking={handleCancelBooking}
+                  onReviewArrivalChange={handleReviewArrivalChange}
                   cancelingBookingId={cancelingBookingId}
                   reportLookup={reportLookup}
                   onAddReport={handleOpenReport}
@@ -8025,7 +8352,8 @@ export default function ParkingPassPage() {
                                   ),
                                 ).sort();
                                 const paymentsReady = Boolean(
-                                  platformPaymentsReady,
+                                  platformPaymentsReady &&
+                                    bookingListing?.paymentsEnabled === true,
                                 );
                                 const bookings = Array.isArray(
                                   bookingListing?.bookings,
@@ -8098,7 +8426,7 @@ export default function ParkingPassPage() {
                                     {displayListing && (
                                       <p className="text-[color:var(--text-muted)]">
                                         {format(
-                                          new Date(displayListing.date),
+                                          localCalendarDate(displayListing.date)!,
                                           "EEE, MMM d",
                                         )}{" "}
                                         -{" "}
@@ -8134,7 +8462,7 @@ export default function ParkingPassPage() {
                                                 }}
                                               >
                                                 {format(
-                                                  new Date(`${dateKey}T00:00:00`),
+                                                  localCalendarDate(dateKey)!,
                                                   "EEE M/d",
                                                 )}
                                               </Button>
@@ -8153,9 +8481,7 @@ export default function ParkingPassPage() {
                                       <p className="text-[11px] text-amber-700">
                                         {group.key === activeLocationKey
                                           ? `No slots on ${format(
-                                              new Date(
-                                                `${selectedDate}T00:00:00`,
-                                              ),
+                                              localCalendarDate(selectedDate)!,
                                               "EEE, MMM d",
                                             )}.`
                                           : "No open dates right now."}
@@ -8492,7 +8818,10 @@ export default function ParkingPassPage() {
                             null;
                           const bookingListing =
                             listingForDate || displayListing;
-                          const paymentsReady = Boolean(platformPaymentsReady);
+                          const paymentsReady = Boolean(
+                            platformPaymentsReady &&
+                              bookingListing?.paymentsEnabled === true,
+                          );
                           const slotOptions = listingForDate
                             ? buildSlotOptions(listingForDate)
                             : [];
@@ -8519,7 +8848,9 @@ export default function ParkingPassPage() {
                             listingHasAvailability(listingForDate),
                           );
                           const bookingModeLabel = canStartTruckCheckout
-                            ? hasAvailability && listingForDate?.status === "open"
+                            ? !paymentsReady
+                              ? "Host payment setup incomplete"
+                              : hasAvailability && listingForDate?.status === "open"
                               ? "Bookable"
                               : listingForDate
                                 ? "Requestable"
@@ -8578,7 +8909,7 @@ export default function ParkingPassPage() {
                                   <div className="text-xs text-[color:var(--text-muted)]">
                                     {displayListing
                                       ? format(
-                                          new Date(displayListing.date),
+                                          localCalendarDate(displayListing.date)!,
                                           "EEE, MMM d",
                                         )
                                       : "No dates listed"}
@@ -8626,7 +8957,7 @@ export default function ParkingPassPage() {
                                     {groupDateKeys.slice(0, 14).map((key) => (
                                       <option key={key} value={key}>
                                         {format(
-                                          new Date(`${key}T00:00:00`),
+                                          localCalendarDate(key)!,
                                           "EEE, MMM d",
                                         )}
                                       </option>
@@ -8855,7 +9186,10 @@ export default function ParkingPassPage() {
                           group.listings[0] ||
                           null;
                         const bookingListing = listingForDate || displayListing;
-                        const paymentsReady = Boolean(platformPaymentsReady);
+                        const paymentsReady = Boolean(
+                          platformPaymentsReady &&
+                            bookingListing?.paymentsEnabled === true,
+                        );
                         const slotOptions = listingForDate
                           ? buildSlotOptions(listingForDate)
                           : [];
@@ -8883,7 +9217,9 @@ export default function ParkingPassPage() {
                           listingHasAvailability(listingForDate),
                         );
                         const bookingModeLabel = canStartTruckCheckout
-                          ? hasAvailability && listingForDate?.status === "open"
+                          ? !paymentsReady
+                            ? "Host payment setup incomplete"
+                            : hasAvailability && listingForDate?.status === "open"
                             ? "Bookable"
                             : listingForDate
                               ? "Requestable"
@@ -8940,7 +9276,7 @@ export default function ParkingPassPage() {
                                 <p className="text-xs text-[color:var(--text-muted)]">
                                   {displayListing
                                     ? format(
-                                        new Date(displayListing.date),
+                                        localCalendarDate(displayListing.date)!,
                                         "EEE, MMM d",
                                       )
                                     : "No dates listed"}
@@ -8988,7 +9324,7 @@ export default function ParkingPassPage() {
                                   {groupDateKeys.slice(0, 14).map((key) => (
                                     <option key={key} value={key}>
                                       {format(
-                                        new Date(`${key}T00:00:00`),
+                                        localCalendarDate(key)!,
                                         "EEE, MMM d",
                                       )}
                                     </option>
@@ -9244,7 +9580,7 @@ export default function ParkingPassPage() {
                             </div>
                             <p>
                               {format(
-                                new Date(item.listing.date),
+                                localCalendarDate(item.listing.date)!,
                                 "EEE, MMM d",
                               )}{" "}
                               - {item.slotTypes.join(", ")}
@@ -9510,7 +9846,7 @@ export default function ParkingPassPage() {
                                       className="h-8 px-2 text-[11px]"
                                     >
                                       {format(
-                                        new Date(`${selectedDate}T00:00:00`),
+                                        localCalendarDate(selectedDate)!,
                                         "EEE, MMM d",
                                       )}
                                     </Button>
@@ -9522,7 +9858,7 @@ export default function ParkingPassPage() {
                                     <DatePickerCalendar
                                       mode="single"
                                       selected={
-                                        new Date(`${selectedDate}T00:00:00`)
+                                        localCalendarDate(selectedDate)!
                                       }
                                       onSelect={(value) => {
                                         if (!value) return;
@@ -9552,7 +9888,7 @@ export default function ParkingPassPage() {
                               ) : (
                                 <span>
                                   {format(
-                                    new Date(`${selectedDate}T00:00:00`),
+                                    localCalendarDate(selectedDate)!,
                                     "EEE, MMM d",
                                   )}
                                 </span>
@@ -9751,7 +10087,7 @@ export default function ParkingPassPage() {
             selectedDates={selectedListing?.date ? [selectedListing.date] : []}
             eventDetails={{
               name: "Parking Pass",
-              date: format(new Date(selectedListing.date), "MMMM d, yyyy"),
+              date: formatDateOnly(selectedListing.date),
               startTime: selectedListing.startTime,
               endTime: selectedListing.endTime,
               hostName: selectedListing.host.businessName,

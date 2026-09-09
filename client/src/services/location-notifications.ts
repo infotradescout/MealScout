@@ -1,4 +1,5 @@
 import { apiRequest } from "@/lib/queryClient";
+import { eventNotificationWhenLabel } from "@/lib/event-date-labels";
 
 export interface NotificationSettings {
   enabled: boolean;
@@ -426,9 +427,7 @@ class LocationNotificationService {
   }) {
     if (Notification.permission !== "granted") return;
 
-    const when = `${new Date(event.date).toLocaleDateString()} • ${
-      event.startTime
-    } - ${event.endTime}`;
+    const when = eventNotificationWhenLabel(event);
 
     const title = "📅 Food truck event near you";
     const bodyLines = [

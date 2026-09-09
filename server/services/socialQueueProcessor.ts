@@ -77,7 +77,7 @@ export async function runSocialQueueProcessor(limit = 25) {
     if (lockAcquired && pool) {
       await pool
         .query("select pg_advisory_unlock($1)", [SOCIAL_QUEUE_LOCK_KEY])
-        .catch((error) => {
+        .catch((error: any) => {
           console.error("[social-queue] failed to release advisory lock:", error);
         });
     }

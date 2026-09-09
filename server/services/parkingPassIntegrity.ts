@@ -1,12 +1,14 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "../db";
 import { storage } from "../storage";
-import { eventSeries, hosts } from "@shared/schema";
+import { eventBookings, eventSeries, events, hosts } from "@shared/schema";
 import { PARKING_PASS_MEAL_WINDOWS } from "@shared/parkingPassSlots";
 import { computeParkingPassQualityFlags } from "./parkingPassQuality";
 
 type IntegrityOptions = {
   dryRun?: boolean;
+  actorUserId?: string;
+  requestId?: string;
 };
 
 export async function runParkingPassIntegrity(options?: IntegrityOptions) {
@@ -85,7 +87,36 @@ export async function runParkingPassIntegrity(options?: IntegrityOptions) {
     if (Object.keys(next).length > 0) {
       next.updatedAt = new Date();
       if (!dryRun) {
-        await db.update(eventSeries).set(next).where(eq(eventSeries.id, series.id));
+        const [participation] = await db
+          .select({ count: sql<number>`count(*)::int` })
+          .from(eventBookings)
+          .innerJoin(events, eq(events.id, eventBookings.eventId))
+          .where(
+            and(
+              eq(events.seriesId, series.id),
+              inArray(eventBookings.status, ["pending", "confirmed"]),
+            ),
+          );
+        if (Number(participation?.count || 0) > 0) {
+          const actorUserId = String(options?.actorUserId || "").trim();
+          if (actorUserId) {
+            const { updatedAt: _updatedAt, ...seriesUpdates } = next;
+            const { updateCoordinatedSeries } = await import(
+              "./eventParticipationMutationService"
+            );
+            await updateCoordinatedSeries({
+              seriesId: series.id,
+              actor: { userId: actorUserId },
+              requestId: `${String(options?.requestId || "parking-pass-integrity").trim()}:${series.id}:v${Number(series.participationVersion || 0)}`,
+              updates: seriesUpdates,
+            });
+          }
+        } else {
+          await db
+            .update(eventSeries)
+            .set(next)
+            .where(eq(eventSeries.id, series.id));
+        }
       }
       if ("defaultStartTime" in next || "defaultEndTime" in next || "defaultMaxTrucks" in next) {
         updatedDefaults += 1;

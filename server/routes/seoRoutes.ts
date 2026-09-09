@@ -18,20 +18,26 @@ import {
   cities,
   deals,
   eventBookings,
+  eventSeries,
   events,
   hosts,
+  parkingPassPurchases,
   restaurants,
   suppliers,
   users,
   videoStories,
 } from "@shared/schema";
 import { getIndexNowConfig } from "../services/indexNow";
-import { resolveCityTimeZoneSync } from "../services/cityTimeZone";
 import { buildSlotDateTimes } from "../services/timeIntent";
+import {
+  persistedVenueTimeZoneSql,
+  resolvePersistedEventServiceTimeZone,
+} from "../services/persistedServiceTimeZone";
 import { dateKeyInZone } from "../services/dateKeys";
 import { isSlotPublic } from "../services/publicSlotGate";
 import {
   buildPublicTruckOperatingPlans,
+  publicParkingPassBookingSqlCondition,
 } from "../services/truckOperatingPlan";
 import {
   publicSeoActiveTodayStop,
@@ -612,6 +618,12 @@ export function registerSeoRoutes(
                 eventRequiresPayment: events.requiresPayment,
                 cityName: hosts.city,
                 hostState: hosts.state,
+                seriesId: events.seriesId,
+                seriesTimeZone: eventSeries.timezone,
+                venueTimeZone: persistedVenueTimeZoneSql(
+                  hosts.city,
+                  hosts.state,
+                ),
                 eventDate: events.date,
                 eventStartTime: events.startTime,
                 eventEndTime: events.endTime,
@@ -620,6 +632,7 @@ export function registerSeoRoutes(
               })
               .from(eventBookings)
               .innerJoin(events, eq(eventBookings.eventId, events.id))
+              .leftJoin(eventSeries, eq(events.seriesId, eventSeries.id))
               .innerJoin(hosts, eq(events.hostId, hosts.id))
               .innerJoin(restaurants, eq(eventBookings.truckId, restaurants.id))
               .where(
@@ -672,10 +685,12 @@ export function registerSeoRoutes(
           ) {
             continue;
           }
-          const timeZone = resolveCityTimeZoneSync({
-            city: row.cityName || null,
-            state: row.hostState || null,
+          const timeZone = resolvePersistedEventServiceTimeZone({
+            seriesId: row.seriesId,
+            seriesTimeZone: row.seriesTimeZone,
+            venueTimeZone: row.venueTimeZone,
           });
+          if (!timeZone) continue;
           const interval = buildSlotDateTimes({
             timeZone,
             date: row.eventDate,
@@ -850,16 +865,25 @@ export function registerSeoRoutes(
           eventRequiresPayment: events.requiresPayment,
           hostCity: hosts.city,
           hostState: hosts.state,
+          seriesId: events.seriesId,
+          seriesTimeZone: eventSeries.timezone,
+          venueTimeZone: persistedVenueTimeZoneSql(hosts.city, hosts.state),
           bookingConfirmedAt: eventBookings.bookingConfirmedAt,
         })
         .from(eventBookings)
         .innerJoin(events, eq(eventBookings.eventId, events.id))
+        .leftJoin(eventSeries, eq(events.seriesId, eventSeries.id))
+        .leftJoin(
+          parkingPassPurchases,
+          eq(eventBookings.purchaseId, parkingPassPurchases.id),
+        )
         .innerJoin(hosts, eq(events.hostId, hosts.id))
         .innerJoin(restaurants, eq(eventBookings.truckId, restaurants.id))
         .innerJoin(users, eq(restaurants.ownerId, users.id))
         .where(
           and(
             eq(eventBookings.status, "confirmed"),
+            publicParkingPassBookingSqlCondition,
             isNotNull(eventBookings.bookingConfirmedAt),
             inArray(events.status, ["open", "booked", "filled"]),
             eq(restaurants.isActive, true),
@@ -895,10 +919,12 @@ export function registerSeoRoutes(
             ) {
               return [];
             }
-            const timeZone = resolveCityTimeZoneSync({
-              city: row.hostCity || null,
-              state: row.hostState || null,
+            const timeZone = resolvePersistedEventServiceTimeZone({
+              seriesId: row.seriesId,
+              seriesTimeZone: row.seriesTimeZone,
+              venueTimeZone: row.venueTimeZone,
             });
+            if (!timeZone) return [];
             const interval = buildSlotDateTimes({
               timeZone,
               date: row.eventDate,
@@ -1106,11 +1132,15 @@ export function registerSeoRoutes(
           eventEndTime: events.endTime,
           hostCity: hosts.city,
           hostState: hosts.state,
+          seriesId: events.seriesId,
+          seriesTimeZone: eventSeries.timezone,
+          venueTimeZone: persistedVenueTimeZoneSql(hosts.city, hosts.state),
           bookingConfirmedAt: eventBookings.bookingConfirmedAt,
           updatedAt: events.updatedAt,
         })
         .from(eventBookings)
         .innerJoin(events, eq(eventBookings.eventId, events.id))
+        .leftJoin(eventSeries, eq(events.seriesId, eventSeries.id))
         .innerJoin(hosts, eq(events.hostId, hosts.id))
         .innerJoin(restaurants, eq(eventBookings.truckId, restaurants.id))
         .innerJoin(users, eq(restaurants.ownerId, users.id))
@@ -1155,10 +1185,12 @@ export function registerSeoRoutes(
         ) {
           return false;
         }
-        const timeZone = resolveCityTimeZoneSync({
-          city: row.hostCity || null,
-          state: row.hostState || null,
+        const timeZone = resolvePersistedEventServiceTimeZone({
+          seriesId: row.seriesId,
+          seriesTimeZone: row.seriesTimeZone,
+          venueTimeZone: row.venueTimeZone,
         });
+        if (!timeZone) return false;
         const interval = buildSlotDateTimes({
           timeZone,
           date: row.eventDate,

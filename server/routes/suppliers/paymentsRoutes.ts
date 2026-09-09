@@ -10,6 +10,10 @@ import { distributedRateLimit } from "../../middleware/distributedRateLimit";
 import { requireIdempotencyKey } from "../../middleware/idempotency";
 import { decideSupplierIntentHandling } from "../../utils/supplierPaymentIntent";
 import type { SupplierPaymentsRouteDeps } from "./shared";
+import {
+  isProductionFinancialTestPromo,
+  isTruthyFinancialTestFlag,
+} from "@shared/financialTestSafety";
 
 const supplierPayIntentLimiter = distributedRateLimit({
   scope: "supplier_order_pay_intent",
@@ -40,6 +44,25 @@ export function registerSupplierPaymentRoutes(
     supplierPayIntentLimiter,
     async (req: any, res) => {
       try {
+        const methodSchema = z.object({
+          paymentMethod: z.enum(["ach", "card"]).optional(),
+          promoCode: z.string().max(64).optional(),
+        });
+        const parsed = methodSchema.parse(req.body || {});
+        const normalizedPromoCode = String(parsed.promoCode || "")
+          .trim()
+          .toUpperCase();
+        if (
+          isProductionFinancialTestPromo({
+            nodeEnv: process.env.NODE_ENV,
+            promoCode: normalizedPromoCode,
+          })
+        ) {
+          return res.status(403).json({
+            code: "production_test_promo_forbidden",
+            message: "Test payment promo codes are disabled in production.",
+          });
+        }
         if (!stripe)
           return res.status(500).json({ message: "Stripe not configured" });
 
@@ -163,24 +186,17 @@ export function registerSupplierPaymentRoutes(
           });
         }
 
-        const methodSchema = z.object({
-          paymentMethod: z.enum(["ach", "card"]).optional(),
-          promoCode: z.string().max(64).optional(),
-        });
-        const parsed = methodSchema.parse(req.body || {});
-
         const testModeEnabled =
-          String(process.env.MEALSCOUT_TEST_MODE || "").toLowerCase() ===
-            "true" || process.env.NODE_ENV !== "production";
+          isTruthyFinancialTestFlag(process.env.MEALSCOUT_TEST_MODE) ||
+          String(process.env.NODE_ENV || "").trim().toLowerCase() !==
+            "production";
         const testPromosRequireAdmin =
           String(
             process.env.MEALSCOUT_TEST_PROMOS_REQUIRE_ADMIN || "",
           ).toLowerCase() === "true";
-        const normalizedPromoCode = String(parsed.promoCode || "")
-          .trim()
-          .toUpperCase();
-        const isTestDollarPromo =
-          normalizedPromoCode === "TEST1" || normalizedPromoCode === "FREE100";
+        const isTestDollarPromo = ["TEST1", "FREE100"].includes(
+          normalizedPromoCode,
+        );
         const isAdminUser = [
           "admin",
           "duper_admin",

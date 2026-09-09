@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { generateItemListSchema } from "@/lib/schema-helpers";
 import { formatRelativeTime } from "@/lib/relative-time";
-import { parseISO } from "date-fns";
+import { eventNumericDateLabel } from "@/lib/event-date-labels";
 
 type TimeKey = "now" | "breakfast" | "lunch" | "dinner" | "tonight" | "this-weekend";
 
@@ -199,12 +199,7 @@ export default function CityDiscoveryPage() {
 
                         <div className="mt-2 flex flex-col gap-2">
                           {(truck.schedules || []).slice(0, 3).map((s: any, idx: number) => {
-                              const dateText = s.date
-                              ? (String(s.date).includes("T")
-                                  ? new Date(s.date)
-                                  : parseISO(String(s.date))
-                                ).toLocaleDateString()
-                              : "";
+                            const dateText = eventNumericDateLabel(s.date);
                             const place = s.locationName || "Location";
                             const time = s.startTime && s.endTime ? `${s.startTime}–${s.endTime}` : "";
                             const confirmedAgo =

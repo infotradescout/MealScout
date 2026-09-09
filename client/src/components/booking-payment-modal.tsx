@@ -19,6 +19,7 @@ import PaymentBrowserGate from "@/components/payment-browser-gate";
 import { isPaymentHostileBrowser } from "@/lib/inAppBrowser";
 import { apiUrl } from "@/lib/api";
 import { getStripePromise } from "@/lib/stripeClient";
+import { formatDateOnly } from "@/lib/date-only";
 
 const buildTimeStripePublicKey = import.meta.env.VITE_STRIPE_PUBLIC_KEY || "";
 
@@ -72,7 +73,9 @@ interface BookingPaymentModalProps {
       summary: string;
     };
   };
-  onSuccess: (result: { outcome: "confirmed" | "pending" | "credited" }) => void;
+  onSuccess: (result: {
+    outcome: "confirmed" | "pending" | "credited" | "refunded";
+  }) => void;
 }
 
 interface PaymentFormProps {
@@ -88,7 +91,9 @@ interface PaymentFormProps {
     promoDiscount?: number;
     promoCode?: string;
   };
-  onSuccess: (outcome: "confirmed" | "pending" | "credited") => void;
+  onSuccess: (
+    outcome: "confirmed" | "pending" | "credited" | "refunded",
+  ) => void;
   onCancel: () => void;
 }
 
@@ -127,6 +132,7 @@ function PaymentForm({
           const data = await res.json();
           if (data?.status === "confirmed") return "confirmed" as const;
           if (data?.status === "credited") return "credited" as const;
+          if (data?.status === "refunded") return "refunded" as const;
         }
       } catch {
         // ignore transient network issues; keep polling
@@ -172,6 +178,16 @@ function PaymentForm({
             variant: "destructive",
           });
           onSuccess("credited");
+          return;
+        }
+        if (status === "refunded") {
+          toast({
+            title: "Booking could not be served",
+            description:
+              "The full payment is being returned to the original payment method through Stripe, including the platform fee.",
+            variant: "destructive",
+          });
+          onSuccess("refunded");
           return;
         }
 
@@ -273,7 +289,11 @@ function PaymentForm({
 
       {/* Terms Notice */}
       <p className="text-xs text-[color:var(--text-muted)] text-center">
-        By confirming payment, you acknowledge bookings are non-refundable once confirmed.
+        Cancel before a booked line starts to receive its full line value as
+        non-cash credit, usable only against MealScout platform fees on a future
+        Parking Pass. After start, voluntary cancellation has no remedy.
+        Technical or host cancellation of a future non-service line is returned
+        to the original card through Stripe.
       </p>
     </form>
   );
@@ -311,7 +331,7 @@ export function BookingPaymentModal({
     buildTimeStripePublicKey,
   );
   const [isStripeConfigLoading, setIsStripeConfigLoading] = useState(false);
-  // true = host has Stripe Connect ready; false = payment held on platform, host payout deferred
+  // Canonical paid checkout is available only while destination Connect is ready.
   const [hostPaymentsReady, setHostPaymentsReady] = useState<boolean | null>(null);
   const cancelOnInitiateRef = useRef(false);
   const idempotencyKeyRef = useRef<string | null>(null);
@@ -381,12 +401,12 @@ export function BookingPaymentModal({
 
   const loadCreditBalance = async () => {
     try {
-      const res = await fetch(apiUrl("/api/payout/balance"), {
+      const res = await fetch(apiUrl("/api/parking-pass/credits/balance"), {
         credentials: "include",
       });
       if (!res.ok) return;
       const data = await res.json();
-      setCreditBalance(Number(data.balance || 0));
+      setCreditBalance(Number(data.balanceCents || 0) / 100);
     } catch (error) {
       console.error("Failed to load credit balance:", error);
     }
@@ -546,7 +566,9 @@ export function BookingPaymentModal({
     }
   };
 
-  const handleSuccess = (outcome: "confirmed" | "pending" | "credited") => {
+  const handleSuccess = (
+    outcome: "confirmed" | "pending" | "credited" | "refunded",
+  ) => {
     handleClose();
     onSuccess({ outcome });
   };
@@ -590,7 +612,7 @@ export function BookingPaymentModal({
               <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-3 text-sm text-[color:var(--text-secondary)]">
                 <p className="font-semibold text-[color:var(--text-primary)]">{eventDetails.hostName}</p>
                 <p className="text-xs text-[color:var(--text-muted)]">
-                  {eventDetails.date} · {eventDetails.startTime} - {eventDetails.endTime}
+                  {formatDateOnly(eventDetails.date) || eventDetails.date} · {eventDetails.startTime} - {eventDetails.endTime}
                 </p>
                 {eventDetails.slotSummary ? (
                   <p className="mt-1 text-xs text-[color:var(--text-muted)]">
@@ -731,10 +753,11 @@ export function BookingPaymentModal({
           </div>
         ) : null}
 
-        {clientSecret && hostPaymentsReady === false ? (
+        {clientSecret && hostPaymentsReady === true ? (
           <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs text-blue-900">
-            <strong>Note:</strong> Your booking is guaranteed. If payout routing is still finalizing,
-            MealScout will securely process this payment and complete settlement automatically.
+            This checkout is a destination charge. The host share settles to
+            the host&apos;s connected account; it is not added to MealScout&apos;s
+            legacy payout balance.
           </div>
         ) : null}
 

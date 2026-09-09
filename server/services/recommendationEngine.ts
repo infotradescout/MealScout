@@ -5,18 +5,19 @@ import {
   gte,
   inArray,
   isNotNull,
-  isNull,
   lte,
-  or,
   sql,
 } from "drizzle-orm";
 
 import { db } from "../db";
 import { storage } from "../storage";
 import { getPrivateBehaviorScoresForRestaurants } from "./privateBehaviorScoreService";
-import { events, hosts, restaurants, users } from "@shared/schema";
+import { eventSeries, events, hosts, restaurants, users } from "@shared/schema";
 import { loadConfirmedEventTrucks } from "./confirmedEventTrucks";
-import { resolveCityTimeZoneSync } from "./cityTimeZone";
+import {
+  persistedVenueTimeZoneSql,
+  resolvePersistedEventServiceTimeZone,
+} from "./persistedServiceTimeZone";
 import { buildSlotDateTimes } from "./timeIntent";
 import { dateKeyInZone } from "./dateKeys";
 import { isSlotPublic } from "./publicSlotGate";
@@ -25,6 +26,7 @@ import { filterProjectedPublicNearbyRestaurantRows } from "./publicRestaurantSea
 import { resolvePublicHostProximityCoordinates } from "./publicHostProximityProjection";
 import { deriveProfileEvidenceQuarantineVisibility } from "./profileEvidenceQuarantine";
 import { isPublicBusinessVisible } from "../utils/publicBusinessVisibility";
+import { publicEventParticipationSqlCondition } from "./publicParkingPassEligibility";
 
 export type RecommendationEntityType =
   | "truck"
@@ -343,11 +345,14 @@ export async function buildLocalRecommendations(
         startTime: events.startTime,
         endTime: events.endTime,
         status: events.status,
+        seriesId: events.seriesId,
+        seriesTimeZone: eventSeries.timezone,
         updatedAt: events.updatedAt,
         lastConfirmedAt: events.lastConfirmedAt,
         hostName: hosts.businessName,
         hostCity: hosts.city,
         hostState: hosts.state,
+        venueTimeZone: persistedVenueTimeZoneSql(hosts.city, hosts.state),
         hostLat: hosts.latitude,
         hostLng: hosts.longitude,
         hostUserId: hosts.userId,
@@ -356,11 +361,12 @@ export async function buildLocalRecommendations(
       .from(events)
       .innerJoin(hosts, eq(events.hostId, hosts.id))
       .innerJoin(users, eq(hosts.userId, users.id))
+      .leftJoin(eventSeries, eq(events.seriesId, eventSeries.id))
       .where(
         and(
           isNotNull(events.hostId),
           inArray(events.status, ["open", "booked", "filled"]),
-          or(eq(events.requiresPayment, false), isNull(events.requiresPayment)),
+          publicEventParticipationSqlCondition,
           gte(events.date, new Date(Date.now() - 24 * 60 * 60 * 1000)),
           lte(events.date, new Date(Date.now() + 24 * 60 * 60 * 1000)),
           eq(users.isDisabled, false),
@@ -665,10 +671,12 @@ export async function buildLocalRecommendations(
     );
     if (!Number.isFinite(distanceMiles) || distanceMiles > radiusKm * 0.621371)
       continue;
-    const timeZone = resolveCityTimeZoneSync({
-      city: eventRow.hostCity || null,
-      state: eventRow.hostState || null,
+    const timeZone = resolvePersistedEventServiceTimeZone({
+      seriesId: eventRow.seriesId,
+      seriesTimeZone: eventRow.seriesTimeZone,
+      venueTimeZone: eventRow.venueTimeZone,
     });
+    if (!timeZone) continue;
     const interval = buildSlotDateTimes({
       timeZone,
       date: eventRow.date,

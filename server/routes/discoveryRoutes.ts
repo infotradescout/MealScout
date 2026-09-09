@@ -1,13 +1,20 @@
 import type { Express } from "express";
 import { db } from "../db";
-import { cities, eventBookings, events, hosts, restaurants, truckManualSchedules, users } from "@shared/schema";
+import { cities, eventBookings, eventSeries, events, hosts, parkingPassPurchases, restaurants, truckManualSchedules, users } from "@shared/schema";
 import { and, eq, gte, ilike, inArray, isNotNull, lte, or, sql } from "drizzle-orm";
 import { buildSlotDateTimes, intervalOverlaps, resolveTimeIntent, type TimeIntent } from "../services/timeIntent";
 import { getPublicSlotGateConfigFromEnv, isSlotPublic, type PublicSlot } from "../services/publicSlotGate";
-import { resolveCityTimeZone, usStateToTimeZone } from "../services/cityTimeZone";
-import { dateKeyInZone } from "../services/dateKeys";
+import { dateKeyFromUnknown, dateKeyInZone } from "../services/dateKeys";
+import {
+  normalizePersistedIanaTimeZone,
+  persistedVenueTimeZoneSql,
+  resolvePersistedEventServiceTimeZone,
+} from "../services/persistedServiceTimeZone";
 import { assertPublicResponseSafe } from "../publicProfiles";
-import { isTruckOperatingPlanRowPublic } from "../services/truckOperatingPlan";
+import {
+  isTruckOperatingPlanRowPublic,
+  publicParkingPassBookingSqlCondition,
+} from "../services/truckOperatingPlan";
 import { resolvePublicProfileVisibility } from "../publicProfiles/publicProfileUtils";
 import { resolvePublicHostProximityCoordinates } from "../services/publicHostProximityProjection";
 import { deriveProfileEvidenceQuarantineVisibility } from "../services/profileEvidenceQuarantine";
@@ -47,15 +54,13 @@ function makeEntitySlug(name: unknown, id: unknown): string {
   return slug ? `${slug}--${rawId}` : rawId;
 }
 
-function toDateKey(value: unknown, timeZone?: string): string | null {
-  if (value instanceof Date) {
-    const key = dateKeyInZone(value, timeZone || "America/Chicago");
-    return /^\d{4}-\d{2}-\d{2}$/.test(key) ? key : null;
-  }
-  const raw = String(value || "").trim();
-  if (!raw) return null;
-  const key = raw.includes("T") ? raw.split("T")[0] : raw;
-  return /^\d{4}-\d{2}-\d{2}$/.test(key) ? key : null;
+function toDateKey(value: unknown): string | null {
+  // `events.date` and `truck_manual_schedules.date` are persisted calendar
+  // dates. PostgreSQL can return them as UTC-midnight Date objects, but that
+  // does not turn them into instants that should be converted through a venue
+  // timezone. Preserve the stored key and use the venue zone only when the
+  // local service interval is composed below.
+  return dateKeyFromUnknown(value, "UTC");
 }
 
 
@@ -443,7 +448,10 @@ export function registerDiscoveryRoutes(app: Express) {
       const [city] = await db.select().from(cities).where(eq(cities.slug, citySlug)).limit(1);
       if (!city) return res.status(404).json({ message: "City not found" });
 
-      const timeZone = String(city.timezone || "").trim() || usStateToTimeZone(city.state);
+      const timeZone = normalizePersistedIanaTimeZone(city.timezone);
+      if (!timeZone) {
+        return res.status(404).json({ message: "City timezone unavailable" });
+      }
       const now = new Date();
       const intent = timeKeyToIntent(timeKey);
       const window = resolveTimeIntent({ timeZone, intent, now });
@@ -499,6 +507,12 @@ export function registerDiscoveryRoutes(app: Express) {
                 endTime: events.endTime,
                 name: events.name,
                 status: events.status,
+                seriesId: events.seriesId,
+                seriesTimeZone: eventSeries.timezone,
+                venueTimeZone: persistedVenueTimeZoneSql(
+                  hosts.city,
+                  hosts.state,
+                ),
                 lastConfirmedAt: eventBookings.bookingConfirmedAt,
                 updatedAt: eventBookings.updatedAt,
                 truckId: restaurants.id,
@@ -517,11 +531,18 @@ export function registerDiscoveryRoutes(app: Express) {
               })
               .from(eventBookings)
               .innerJoin(events, eq(eventBookings.eventId, events.id))
+              .innerJoin(hosts, eq(events.hostId, hosts.id))
+              .leftJoin(eventSeries, eq(events.seriesId, eventSeries.id))
+              .leftJoin(
+                parkingPassPurchases,
+                eq(eventBookings.purchaseId, parkingPassPurchases.id),
+              )
               .innerJoin(restaurants, eq(eventBookings.truckId, restaurants.id))
               .innerJoin(users, eq(restaurants.ownerId, users.id))
               .where(
                 and(
                   eq(eventBookings.status, "confirmed"),
+                  publicParkingPassBookingSqlCondition,
                   isNotNull(eventBookings.bookingConfirmedAt),
                   inArray(events.hostId, hostIds),
                   inArray(events.status, ["open", "booked", "filled"]),
@@ -610,13 +631,14 @@ export function registerDiscoveryRoutes(app: Express) {
         truckId: string;
         truckName: string;
         cuisineType: string | null;
-        date: Date;
+        date: string;
         startTime: string;
         endTime: string;
         lastConfirmedAtUtc: Date;
         locationName: string | null;
         address: string | null;
         hostId?: string | null;
+        timeZone: string;
       }> = [];
 
       for (const row of eventRows as any[]) {
@@ -644,18 +666,27 @@ export function registerDiscoveryRoutes(app: Express) {
           continue;
         }
         const host = hostById.get(String(row.hostId));
+        const rowTimeZone = resolvePersistedEventServiceTimeZone({
+          seriesId: row.seriesId,
+          seriesTimeZone: row.seriesTimeZone,
+          venueTimeZone: row.venueTimeZone,
+        });
+        if (!rowTimeZone) continue;
+        const rowDateKey = toDateKey(row.date);
+        if (!rowDateKey) continue;
         items.push({
           kind: "booking",
           truckId: String(row.truckId),
           truckName: String(row.truckName || "Food truck"),
           cuisineType: row.cuisineType ? String(row.cuisineType) : null,
-          date: new Date(row.date),
+          date: rowDateKey,
           startTime: String(row.startTime || ""),
           endTime: String(row.endTime || ""),
           lastConfirmedAtUtc: new Date(row.lastConfirmedAt),
           locationName: host?.businessName ? String(host.businessName) : row.name ? String(row.name) : null,
           address: host?.address ? String(host.address) : null,
           hostId: String(row.hostId || ""),
+          timeZone: rowTimeZone,
         });
       }
 
@@ -712,23 +743,31 @@ export function registerDiscoveryRoutes(app: Express) {
         ) {
           continue;
         }
+        const rowDateKey = toDateKey(row.date);
+        if (!rowDateKey) continue;
         items.push({
           kind: "manual",
           truckId: String(row.truckId),
           truckName: String(row.truckName || "Food truck"),
           cuisineType: row.cuisineType ? String(row.cuisineType) : null,
-          date: new Date(row.date),
+          date: rowDateKey,
           startTime: String(row.startTime || ""),
           endTime: String(row.endTime || ""),
           lastConfirmedAtUtc: new Date(row.lastConfirmedAt || row.updatedAt || row.date || Date.now()),
           locationName: row.locationName ? String(row.locationName) : null,
           address: row.address ? String(row.address) : null,
+          timeZone: normalizePersistedIanaTimeZone(row.timezone)!,
         });
       }
 
       const filtered = items.filter((item) => {
+        const itemWindow = resolveTimeIntent({
+          timeZone: item.timeZone,
+          intent,
+          now,
+        });
         const dt = buildSlotDateTimes({
-          timeZone,
+          timeZone: item.timeZone,
           date: item.date,
           startTime: item.startTime,
           endTime: item.endTime,
@@ -758,8 +797,8 @@ export function registerDiscoveryRoutes(app: Express) {
         return intervalOverlaps({
           startUtc: dt.startUtc,
           endUtc: dt.endUtc,
-          otherStartUtc: window.startUtc,
-          otherEndUtc: window.endUtc,
+          otherStartUtc: itemWindow.startUtc,
+          otherEndUtc: itemWindow.endUtc,
         });
       });
 
@@ -798,9 +837,7 @@ export function registerDiscoveryRoutes(app: Express) {
             : null;
         const schedule = {
           kind: row.kind,
-          date:
-            toDateKey(row.date, timeZone) ??
-            dateKeyInZone(new Date(row.date), timeZone),
+          date: row.date,
           startTime: row.startTime,
           endTime: row.endTime,
           lastConfirmedAt: row.lastConfirmedAtUtc.toISOString(),
@@ -859,6 +896,7 @@ export function registerDiscoveryRoutes(app: Express) {
           state: hosts.state,
           latitude: hosts.latitude,
           longitude: hosts.longitude,
+          venueTimeZone: persistedVenueTimeZoneSql(hosts.city, hosts.state),
           updatedAt: hosts.updatedAt,
           publicProfileSettings: users.publicProfileSettings,
         })
@@ -868,8 +906,16 @@ export function registerDiscoveryRoutes(app: Express) {
         .limit(1);
 
       if (!host) return res.status(404).json({ message: "Location not found" });
+      if (
+        !resolvePublicProfileVisibility(host.publicProfileSettings).showAddress
+      ) {
+        return res.status(404).json({ message: "Location not found" });
+      }
 
-      const timeZone = await resolveCityTimeZone({ city: host.city, state: host.state });
+      const timeZone = normalizePersistedIanaTimeZone(host.venueTimeZone);
+      if (!timeZone) {
+        return res.status(404).json({ message: "Location timezone unavailable" });
+      }
       const now = new Date();
       const intent = timeKeyToIntent(timeKey);
       const window = resolveTimeIntent({ timeZone, intent, now });
@@ -886,6 +932,8 @@ export function registerDiscoveryRoutes(app: Express) {
           endTime: events.endTime,
           name: events.name,
           status: events.status,
+          seriesId: events.seriesId,
+          seriesTimeZone: eventSeries.timezone,
           lastConfirmedAt: eventBookings.bookingConfirmedAt,
           updatedAt: eventBookings.updatedAt,
           truckId: restaurants.id,
@@ -902,11 +950,17 @@ export function registerDiscoveryRoutes(app: Express) {
         })
         .from(eventBookings)
         .innerJoin(events, eq(eventBookings.eventId, events.id))
+        .leftJoin(eventSeries, eq(events.seriesId, eventSeries.id))
+        .leftJoin(
+          parkingPassPurchases,
+          eq(eventBookings.purchaseId, parkingPassPurchases.id),
+        )
         .innerJoin(restaurants, eq(eventBookings.truckId, restaurants.id))
         .innerJoin(users, eq(restaurants.ownerId, users.id))
         .where(
           and(
             eq(eventBookings.status, "confirmed"),
+            publicParkingPassBookingSqlCondition,
             isNotNull(eventBookings.bookingConfirmedAt),
             eq(events.hostId, hostId),
             inArray(events.status, ["open", "booked", "filled"]),
@@ -970,9 +1024,22 @@ export function registerDiscoveryRoutes(app: Express) {
         ) {
           continue;
         }
+        const rowTimeZone = resolvePersistedEventServiceTimeZone({
+          seriesId: row.seriesId,
+          seriesTimeZone: row.seriesTimeZone,
+          venueTimeZone: host.venueTimeZone,
+        });
+        if (!rowTimeZone) continue;
+        const rowDateKey = toDateKey(row.date);
+        if (!rowDateKey) continue;
+        const rowWindow = resolveTimeIntent({
+          timeZone: rowTimeZone,
+          intent,
+          now,
+        });
         const dt = buildSlotDateTimes({
-          timeZone,
-          date: new Date(row.date),
+          timeZone: rowTimeZone,
+          date: rowDateKey,
           startTime: String(row.startTime || ""),
           endTime: String(row.endTime || ""),
         });
@@ -999,8 +1066,8 @@ export function registerDiscoveryRoutes(app: Express) {
           !intervalOverlaps({
             startUtc: dt.startUtc,
             endUtc: dt.endUtc,
-            otherStartUtc: window.startUtc,
-            otherEndUtc: window.endUtc,
+            otherStartUtc: rowWindow.startUtc,
+            otherEndUtc: rowWindow.endUtc,
           })
         ) {
           continue;
@@ -1012,9 +1079,7 @@ export function registerDiscoveryRoutes(app: Express) {
         const truckPath = `/truck/${encodeURIComponent(makeEntitySlug(truckName, truckId))}`;
         const schedule = {
           kind: "booking" as const,
-          date:
-            toDateKey(row.date, timeZone) ??
-            dateKeyInZone(new Date(row.date), timeZone),
+          date: rowDateKey,
           startTime: String(row.startTime || ""),
           endTime: String(row.endTime || ""),
           lastConfirmedAt: slot.lastConfirmedAtUtc.toISOString(),

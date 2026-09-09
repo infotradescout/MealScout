@@ -2,25 +2,29 @@ import type { Express } from "express";
 import { z } from "zod";
 import { storage } from "../storage";
 import { emailService } from "../emailService";
-import { db } from "../db";
-import {
-  events,
-  eventSeries,
-  insertEventSeriesSchema,
-  type InsertEvent,
-} from "@shared/schema";
+import { insertEventSeriesSchema } from "@shared/schema";
 import { isAuthenticated } from "../unifiedAuth";
 import { getHostByUserId, userOwnsSeries } from "../services/hostOwnership";
+import { assertMaxSpan180Days } from "../services/openCallSeries";
 import {
-  assertMaxSpan180Days,
-  generateOccurrences,
-  filterFutureOccurrences,
-} from "../services/openCallSeries";
-import { dateKeyInZone } from "../services/dateKeys";
-import { eq } from "drizzle-orm";
+  dateKeyFromUnknown,
+  dateKeyInZone,
+  utcDateFromDateKey,
+} from "../services/dateKeys";
 import { isParkingPassPublicReady } from "../services/parkingPassQuality";
 import { notifyNearbyTrucksOfNewSeries } from "../truckEventMatchService";
 import { canEmailForTopic } from "../utils/notificationPreferences";
+import { requireIdempotencyKey } from "../middleware/idempotency";
+import {
+  cancelCoordinatedSeries,
+  EventParticipationMutationError,
+} from "../services/eventParticipationMutationService";
+import {
+  EventSeriesPublicationError,
+  publishEventSeriesDurably,
+} from "../services/eventSeriesPublicationService";
+import { resolveCityTimeZoneStrict } from "../services/cityTimeZone";
+import { normalizePersistedIanaTimeZone } from "../services/persistedServiceTimeZoneRules";
 
 const isEmailChannelEnabled = (accountSettings: unknown) => {
   const settings =
@@ -69,14 +73,29 @@ export function registerOpenCallSeriesRoutes(app: Express) {
           return res.status(404).json({ message: "Host profile not found" });
         }
 
+        const venueTimeZone = await resolveCityTimeZoneStrict({
+          city: host.city,
+          state: host.state,
+        });
+        if (!venueTimeZone) {
+          return res.status(409).json({
+            code: "venue_timezone_unavailable",
+            message:
+              "This venue needs one unambiguous persisted city timezone before an event series can be created.",
+          });
+        }
         const parsed = insertEventSeriesSchema.parse({
           ...req.body,
           hostId: host.id,
           coordinatorUserId: req.user.id,
+          // Request-supplied timezone is never authority for a new series.
+          timezone: venueTimeZone,
         });
 
         // Validation: End date must be after start date
-        if (new Date(parsed.endDate) <= new Date(parsed.startDate)) {
+        const startDateKey = dateKeyFromUnknown(parsed.startDate, "UTC");
+        const endDateKey = dateKeyFromUnknown(parsed.endDate, "UTC");
+        if (!startDateKey || !endDateKey || endDateKey <= startDateKey) {
           return res
             .status(400)
             .json({ message: "End date must be after start date" });
@@ -84,8 +103,8 @@ export function registerOpenCallSeriesRoutes(app: Express) {
 
         // Validation: Max 180 days recurrence span
         assertMaxSpan180Days(
-          new Date(parsed.startDate),
-          new Date(parsed.endDate),
+          utcDateFromDateKey(startDateKey),
+          utcDateFromDateKey(endDateKey),
         );
 
         // Validation: End time > Start time
@@ -137,6 +156,7 @@ export function registerOpenCallSeriesRoutes(app: Express) {
   app.post(
     "/api/hosts/event-series/:seriesId/publish",
     isAuthenticated,
+    requireIdempotencyKey({ scope: "host_event_series_publication" }),
     async (req: any, res) => {
       try {
         const { seriesId } = req.params;
@@ -154,14 +174,18 @@ export function registerOpenCallSeriesRoutes(app: Express) {
             .json({ message: "Not authorized to publish this series" });
         }
 
-        if (series.status === "published") {
-          return res
-            .status(400)
-            .json({ message: "Series is already published" });
+        const seriesTimeZone = normalizePersistedIanaTimeZone(series.timezone);
+        const startDateKey = dateKeyFromUnknown(series.startDate, "UTC");
+        const endDateKey = dateKeyFromUnknown(series.endDate, "UTC");
+        if (!seriesTimeZone || !startDateKey || !endDateKey) {
+          return res.status(409).json({
+            code: "event_series_time_authority_unavailable",
+            message:
+              "This series does not have authoritative timezone and date boundaries.",
+          });
         }
-
-        const startDate = new Date(series.startDate);
-        const endDate = new Date(series.endDate);
+        const startDate = utcDateFromDateKey(startDateKey);
+        const endDate = utcDateFromDateKey(endDateKey);
 
         if (series.seriesType === "parking_pass") {
           const publicReady = isParkingPassPublicReady({
@@ -186,32 +210,23 @@ export function registerOpenCallSeriesRoutes(app: Express) {
           }
         }
 
-        // Generate occurrence events based on recurrence rule
-        // For MVP: Support simple weekly recurrence
-        const occurrences: InsertEvent[] = generateOccurrences({
-          startDate,
-          endDate,
-          recurrenceRule: series.recurrenceRule,
-          defaults: {
-            hostId: series.hostId,
-            coordinatorUserId: series.coordinatorUserId ?? req.user.id,
-            seriesId: series.id,
-            name: series.name,
-            description: series.description,
-            startTime: series.defaultStartTime,
-            endTime: series.defaultEndTime,
-            maxTrucks: series.defaultMaxTrucks,
-            hardCapEnabled: series.defaultHardCapEnabled,
-          },
+        // Persist the parent and complete frozen child set before any event is
+        // inserted. Children remain private drafts through interruption and
+        // become visible together in one guarded final transaction.
+        const publication = await publishEventSeriesDurably({
+          seriesId,
+          actorUserId: userId,
+          requestId: String(req.headers["idempotency-key"] || "").trim(),
         });
-
-        // Batch insert occurrences
-        for (const occurrence of occurrences) {
-          await storage.createEvent(occurrence);
+        if (!publication) {
+          throw new EventSeriesPublicationError(
+            409,
+            "event_series_publication_unavailable",
+            "The durable publication operation is unavailable.",
+          );
         }
-
-        // Mark series as published
-        const publishedSeries = await storage.publishEventSeries(seriesId);
+        const publishedSeries = publication.series || series;
+        const publicationStatus = String(publication.operation.status || "");
 
         // Telemetry
         await storage.createTelemetryEvent({
@@ -219,21 +234,28 @@ export function registerOpenCallSeriesRoutes(app: Express) {
           userId: req.user.id,
           properties: {
             seriesId: publishedSeries.id,
-            occurrencesGenerated: occurrences.length,
+            occurrencesGenerated: publication.occurrencesGenerated,
+            publicationOperationId: publication.operation.id,
+            publicationStatus,
           },
         });
 
         // Notify nearby trucks about the new series (fire-and-forget, only for event/open_call types)
-        if (series.seriesType !== "parking_pass" && host) {
+        if (
+          publicationStatus === "converged" &&
+          series.seriesType !== "parking_pass" &&
+          host
+        ) {
           void notifyNearbyTrucksOfNewSeries(
             {
               id: publishedSeries.id,
               name: series.name,
               description: series.description,
-              startDate: new Date(series.startDate),
-              endDate: new Date(series.endDate),
+              startDate,
+              endDate,
               defaultStartTime: series.defaultStartTime,
               defaultEndTime: series.defaultEndTime,
+              timezone: seriesTimeZone,
             },
             {
               businessName: host.businessName,
@@ -244,12 +266,32 @@ export function registerOpenCallSeriesRoutes(app: Express) {
           );
         }
 
-        res.json({
-          series: publishedSeries,
-          occurrencesGenerated: occurrences.length,
-        });
+        res
+          .status(
+            publicationStatus === "converged" ? 200 : 202,
+          )
+          .json({
+            series: publishedSeries,
+            occurrencesGenerated: publication.occurrencesGenerated,
+            publicationOperation: publication.operation,
+            publicationChildren: publication.children,
+          });
       } catch (error: any) {
         console.error("Error publishing event series:", error);
+        if (error instanceof EventSeriesPublicationError) {
+          return res.status(error.statusCode).json({
+            message: error.message,
+            code: error.code,
+            details: error.details,
+          });
+        }
+        if (error instanceof EventParticipationMutationError) {
+          return res.status(error.statusCode).json({
+            message: error.message,
+            code: error.code,
+            details: error.details,
+          });
+        }
         res.status(500).json({ message: "Failed to publish event series" });
       }
     },
@@ -307,6 +349,7 @@ export function registerOpenCallSeriesRoutes(app: Express) {
   app.post(
     "/api/hosts/event-series/:seriesId/cancel",
     isAuthenticated,
+    requireIdempotencyKey({ scope: "host_event_series_cancellation" }),
     async (req: any, res) => {
       try {
         const { seriesId } = req.params;
@@ -324,123 +367,18 @@ export function registerOpenCallSeriesRoutes(app: Express) {
             .json({ message: "Not authorized to cancel this series" });
         }
 
-        if (series.status === "closed") {
-          return res
-            .status(400)
-            .json({ message: "Series is already cancelled" });
-        }
-
-        // Get all occurrences for this series
-        const allOccurrences = await storage.getEventsBySeriesId(seriesId);
-
-        // Filter to future occurrences only
-        const futureOccurrences = filterFutureOccurrences(
-          allOccurrences,
-          new Date(),
+        const result = await cancelCoordinatedSeries({
+          seriesId,
+          actor: { userId },
+          requestId: String(req.headers["idempotency-key"] || "").trim(),
+        });
+        const mutationStatus = String(result.fanout.mutation.status || "");
+        const notificationChildren = result.fanout.children.filter(
+          (child: any) => child.childKind === "notification",
         );
-
-        if (futureOccurrences.length === 0) {
-          return res
-            .status(400)
-            .json({ message: "No future occurrences to cancel" });
-        }
-
-        // Collect all affected trucks (interested + accepted)
-        const affectedTrucks = new Map<
-          string,
-          { truckId: string; dates: string[] }
-        >();
-
-        for (const occurrence of futureOccurrences) {
-          const interests = await storage.getEventInterestsByEventId(
-            occurrence.id,
-          );
-
-          for (const interest of interests) {
-            if (
-              interest.status === "pending" ||
-              interest.status === "accepted"
-            ) {
-              const key = interest.truckId;
-              if (!affectedTrucks.has(key)) {
-                affectedTrucks.set(key, {
-                  truckId: interest.truckId,
-                  dates: [],
-                });
-              }
-              affectedTrucks
-                .get(key)!
-                .dates.push(
-                  dateKeyInZone(
-                    occurrence.date,
-                    String(series.timezone || "America/Chicago"),
-                  ),
-                );
-            }
-          }
-        }
-
-        // Cancel all future occurrences
-        for (const occurrence of futureOccurrences) {
-          await db
-            .update(events)
-            .set({ status: "cancelled", updatedAt: new Date() })
-            .where(eq(events.id, occurrence.id));
-        }
-
-        // Mark series as closed
-        await db
-          .update(eventSeries)
-          .set({ status: "closed", updatedAt: new Date() })
-          .where(eq(eventSeries.id, seriesId));
-
-        // Send notifications (fire and forget)
-        (async () => {
-          try {
-            for (const [, { truckId, dates }] of Array.from(affectedTrucks)) {
-              const truck = await storage.getRestaurant(truckId);
-              if (truck) {
-                const owner = await storage.getUser(truck.ownerId);
-                if (
-                  owner &&
-                  owner.email &&
-                  canEmailForTopic((owner as any).accountSettings, "nearbyEvents")
-                ) {
-                  await emailService.sendSeriesCancellationNotification(
-                    owner.email,
-                    truck.name,
-                    series.name,
-                    dates,
-                  );
-                }
-              }
-            }
-
-            if (series.coordinatorUserId) {
-              const coordinator = await storage.getUser(
-                series.coordinatorUserId,
-              );
-              if (
-                coordinator?.email &&
-                isEmailChannelEnabled((coordinator as any).accountSettings) &&
-                isCoordinatorUpdatesTopicEnabled(
-                  (coordinator as any).accountSettings,
-                )
-              ) {
-                const occurrenceCount = futureOccurrences.length;
-                await emailService.sendBasicEmail(
-                  coordinator.email,
-                  `Series update: ${series.name} was cancelled`,
-                  `<p>Your event series <strong>${series.name}</strong> was cancelled.</p><p>${occurrenceCount} future occurrence(s) were closed.</p>`,
-                  `Your event series "${series.name}" was cancelled. ${occurrenceCount} future occurrence(s) were closed.`,
-                  "general",
-                );
-              }
-            }
-          } catch (err) {
-            console.error("Failed to send cancellation notifications:", err);
-          }
-        })();
+        const futureOccurrencesCancelled = result.eventResults.filter(
+          (occurrence: any) => occurrence.status === "cancelled",
+        ).length;
 
         // Telemetry
         await storage.createTelemetryEvent({
@@ -448,18 +386,35 @@ export function registerOpenCallSeriesRoutes(app: Express) {
           userId: req.user.id,
           properties: {
             seriesId,
-            futureOccurrencesCancelled: futureOccurrences.length,
-            trucksNotified: affectedTrucks.size,
+            mutationId: result.fanout.mutation.id,
+            mutationStatus,
+            futureOccurrencesCancelled,
+            participantNoticesConverged: notificationChildren.filter(
+              (child: any) => child.status === "converged",
+            ).length,
           },
         });
 
-        res.json({
-          message: "Series cancelled successfully",
-          futureOccurrencesCancelled: futureOccurrences.length,
-          trucksNotified: affectedTrucks.size,
+        res.status(mutationStatus === "converged" ? 200 : 202).json({
+          message:
+            mutationStatus === "converged"
+              ? "Series cancellation converged."
+              : "Series cancellation is suppressed and still needs remedy or notification recovery.",
+          futureOccurrencesCancelled,
+          participantNotices: notificationChildren.length,
+          mutation: result.fanout.mutation,
+          children: result.fanout.children,
+          operations: result.fanout.operations,
         });
       } catch (error: any) {
         console.error("Error cancelling series:", error);
+        if (error instanceof EventParticipationMutationError) {
+          return res.status(error.statusCode).json({
+            message: error.message,
+            code: error.code,
+            details: error.details,
+          });
+        }
         res.status(500).json({ message: "Failed to cancel series" });
       }
     },

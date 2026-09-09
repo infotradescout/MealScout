@@ -19,6 +19,7 @@ import PaymentBrowserGate from "@/components/payment-browser-gate";
 import { isPaymentHostileBrowser } from "@/lib/inAppBrowser";
 import { apiUrl } from "@/lib/api";
 import { getStripePromise } from "@/lib/stripeClient";
+import { formatDateOnly } from "@/lib/date-only";
 
 const buildTimeStripePublicKey = import.meta.env.VITE_STRIPE_PUBLIC_KEY || "";
 
@@ -500,7 +501,7 @@ export function EventBookingModal({
                 </p>
                 <p className="text-xs text-[color:var(--text-muted)]">
                   {eventDetails.name && `${eventDetails.name} · `}
-                  {eventDetails.date} · {eventDetails.startTime}–
+                  {formatDateOnly(eventDetails.date) || eventDetails.date} · {eventDetails.startTime}–
                   {eventDetails.endTime}
                 </p>
                 <p className="mt-1 text-xs text-[color:var(--text-muted)]">

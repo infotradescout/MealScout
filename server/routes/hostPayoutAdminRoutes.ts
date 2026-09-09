@@ -5,11 +5,18 @@ import Stripe from "stripe";
 import { db } from "../db";
 import { isAdmin, isAuthenticated } from "../unifiedAuth";
 import {
-  hostEarningsLedger,
   hostPayoutRequests,
   hosts,
+  legacyPayoutProviderOperations,
   users,
 } from "@shared/schema";
+import { requireIdempotencyKey } from "../middleware/idempotency";
+import {
+  executeLegacyPayoutTransfer,
+  getLegacyPayoutProviderOperation,
+  LegacyPayoutProviderError,
+  serializeLegacyPayoutProviderOperation,
+} from "../services/legacyPayoutProviderService";
 
 const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY)
@@ -19,6 +26,9 @@ const VALID_STATUSES = [
   "all",
   "pending",
   "approved",
+  "processing",
+  "transferred_to_connect",
+  "failed",
   "paid",
   "rejected",
   "cancelled",
@@ -82,6 +92,7 @@ const sanitizeCSV = (value: any): string => {
 };
 
 export function registerHostPayoutAdminRoutes(app: Express) {
+  const adminVisibleLegacyPayout = sql`coalesce(${hostPayoutRequests.fundingTopology}, 'unclassified') <> 'destination_charge'`;
   app.get(
     "/api/admin/host-payout-requests",
     isAuthenticated,
@@ -109,10 +120,14 @@ export function registerHostPayoutAdminRoutes(app: Express) {
           .select({
             pending: sql<number>`coalesce(sum(case when ${hostPayoutRequests.status} = 'pending' then 1 else 0 end), 0)`,
             approved: sql<number>`coalesce(sum(case when ${hostPayoutRequests.status} = 'approved' then 1 else 0 end), 0)`,
+            processing: sql<number>`coalesce(sum(case when ${hostPayoutRequests.status} = 'processing' then 1 else 0 end), 0)`,
+            transferred: sql<number>`coalesce(sum(case when ${hostPayoutRequests.status} in ('paid', 'transferred_to_connect') then 1 else 0 end), 0)`,
+            failed: sql<number>`coalesce(sum(case when ${hostPayoutRequests.status} = 'failed' then 1 else 0 end), 0)`,
             paid: sql<number>`coalesce(sum(case when ${hostPayoutRequests.status} = 'paid' then 1 else 0 end), 0)`,
             rejected: sql<number>`coalesce(sum(case when ${hostPayoutRequests.status} = 'rejected' then 1 else 0 end), 0)`,
           })
-          .from(hostPayoutRequests);
+          .from(hostPayoutRequests)
+          .where(adminVisibleLegacyPayout);
 
         const countQuery = db
           .select({ count: sql<number>`count(*)` })
@@ -120,9 +135,9 @@ export function registerHostPayoutAdminRoutes(app: Express) {
           .leftJoin(hosts, eq(hostPayoutRequests.hostId, hosts.id))
           .leftJoin(users, eq(hostPayoutRequests.userId, users.id));
 
-        if (whereClause) {
-          countQuery.where(whereClause as any);
-        }
+        countQuery.where(
+          and(adminVisibleLegacyPayout, whereClause as any) as any,
+        );
 
         const [countRow] = await countQuery;
         const filteredTotal = Number(countRow?.count || 0);
@@ -134,6 +149,22 @@ export function registerHostPayoutAdminRoutes(app: Express) {
             userId: hostPayoutRequests.userId,
             amountCents: hostPayoutRequests.amountCents,
             status: hostPayoutRequests.status,
+            fundingTopology: hostPayoutRequests.fundingTopology,
+            eligibilityState: hostPayoutRequests.eligibilityState,
+            eligibleAmountSnapshotCents:
+              hostPayoutRequests.eligibleAmountSnapshotCents,
+            providerTransferId: hostPayoutRequests.providerTransferId,
+            providerOperationId: legacyPayoutProviderOperations.id,
+            providerOperationRequestId:
+              legacyPayoutProviderOperations.requestId,
+            providerOperationStatus: legacyPayoutProviderOperations.status,
+            providerOperationErrorCode:
+              legacyPayoutProviderOperations.providerErrorCode,
+            providerOperationErrorMessage:
+              legacyPayoutProviderOperations.providerErrorMessage,
+            providerOperationIdempotencyExpiresAt:
+              legacyPayoutProviderOperations.idempotencyExpiresAt,
+            quarantineReason: hostPayoutRequests.quarantineReason,
             notes: hostPayoutRequests.notes,
             reviewedByUserId: hostPayoutRequests.reviewedByUserId,
             reviewedByEmail: sql<string>`(select u.email from users u where u.id = ${hostPayoutRequests.reviewedByUserId} limit 1)`,
@@ -150,13 +181,20 @@ export function registerHostPayoutAdminRoutes(app: Express) {
           .from(hostPayoutRequests)
           .leftJoin(hosts, eq(hostPayoutRequests.hostId, hosts.id))
           .leftJoin(users, eq(hostPayoutRequests.userId, users.id))
+          .leftJoin(
+            legacyPayoutProviderOperations,
+            eq(
+              legacyPayoutProviderOperations.payoutRequestId,
+              hostPayoutRequests.id,
+            ),
+          )
           .orderBy(desc(hostPayoutRequests.createdAt))
           .limit(pageSize)
           .offset((page - 1) * pageSize);
 
-        if (whereClause) {
-          rowsQuery.where(whereClause as any);
-        }
+        rowsQuery.where(
+          and(adminVisibleLegacyPayout, whereClause as any) as any,
+        );
 
         const rows = await rowsQuery;
 
@@ -165,6 +203,9 @@ export function registerHostPayoutAdminRoutes(app: Express) {
           totals: {
             pending: Number(totalsRow?.pending || 0),
             approved: Number(totalsRow?.approved || 0),
+            processing: Number(totalsRow?.processing || 0),
+            transferred: Number(totalsRow?.transferred || 0),
+            failed: Number(totalsRow?.failed || 0),
             paid: Number(totalsRow?.paid || 0),
             rejected: Number(totalsRow?.rejected || 0),
           },
@@ -198,6 +239,7 @@ export function registerHostPayoutAdminRoutes(app: Express) {
     "/api/admin/host-payout-requests/:requestId",
     isAuthenticated,
     isAdmin,
+    requireIdempotencyKey({ scope: "admin_legacy_host_payout" }),
     async (req: any, res) => {
       try {
         const requestId = String(req.params.requestId || "").trim();
@@ -222,6 +264,48 @@ export function registerHostPayoutAdminRoutes(app: Express) {
           });
         }
 
+        if (nextStatus === "paid") {
+          try {
+            const result = await executeLegacyPayoutTransfer({
+              payoutRequestId: requestId,
+              actorUserId: String(req.user?.id || "").trim(),
+              requestId: String(req.headers["idempotency-key"] || "").trim(),
+              stripe,
+            });
+            const { getHostEarningsSummary } =
+              await import("../hostEarningsService");
+            const summary = await getHostEarningsSummary(result.request.hostId);
+            return res.json({
+              ok: true,
+              request: result.request,
+              operation: serializeLegacyPayoutProviderOperation(
+                result.operation,
+              ),
+              summary,
+            });
+          } catch (error: any) {
+            if (error instanceof LegacyPayoutProviderError) {
+              const operation = await getLegacyPayoutProviderOperation(requestId);
+              return res
+                .status(
+                  operation && operation.status === "action_required"
+                    ? 202
+                    : error.statusCode,
+                )
+                .json({
+                  ok: false,
+                  message: error.message,
+                  code: error.code,
+                  details: error.details,
+                  operation: operation
+                    ? serializeLegacyPayoutProviderOperation(operation)
+                    : null,
+                });
+            }
+            throw error;
+          }
+        }
+
         const [existing] = await db
           .select()
           .from(hostPayoutRequests)
@@ -232,21 +316,15 @@ export function registerHostPayoutAdminRoutes(app: Express) {
           return res.status(404).json({ message: "Payout request not found" });
         }
 
-        if (existing.status === "paid") {
+        if (["paid", "transferred_to_connect"].includes(existing.status)) {
           return res.status(400).json({
-            message: "Paid requests cannot be modified",
+            message: "Transferred requests cannot be modified",
           });
         }
 
         if (nextStatus === "approved" && existing.status !== "pending") {
           return res.status(400).json({
             message: "Only pending requests can be approved",
-          });
-        }
-
-        if (nextStatus === "paid" && existing.status !== "approved") {
-          return res.status(400).json({
-            message: "Only approved requests can be marked paid",
           });
         }
 
@@ -269,95 +347,88 @@ export function registerHostPayoutAdminRoutes(app: Express) {
         }
 
         const now = new Date();
-        const [updated] = await db
-          .update(hostPayoutRequests)
-          .set({
-            status: nextStatus,
-            notes: notes ?? existing.notes ?? null,
-            reviewedByUserId: req.user?.id || null,
-            reviewedAt: now,
-            paidAt: nextStatus === "paid" ? now : existing.paidAt,
-            updatedAt: now,
-          })
-          .where(eq(hostPayoutRequests.id, requestId))
-          .returning();
-
-        if (nextStatus === "paid") {
-          // Attempt Stripe Connect transfer if the host has a connected account
-          let stripeTransferId: string | null = null;
-          let stripeTransferError: string | null = null;
-          if (stripe) {
-            const [hostRow] = await db
-              .select({
-                stripeConnectAccountId: hosts.stripeConnectAccountId,
-                stripePayoutsEnabled: hosts.stripePayoutsEnabled,
-                stripeChargesEnabled: hosts.stripeChargesEnabled,
+        const updated =
+          nextStatus === "approved"
+            ? await db.transaction(async (tx: any) => {
+                await tx.execute(
+                  sql`SELECT pg_advisory_xact_lock(hashtext(${`host_payout:${existing.hostId}`}))`,
+                );
+                const [locked] = await tx
+                  .select()
+                  .from(hostPayoutRequests)
+                  .where(eq(hostPayoutRequests.id, requestId))
+                  .limit(1)
+                  .for("update");
+                if (!locked || locked.status !== "pending") {
+                  throw Object.assign(
+                    new Error("Only a current pending request can be approved."),
+                    { statusCode: 409 },
+                  );
+                }
+                if (locked.fundingTopology === "destination_charge") {
+                  throw Object.assign(
+                    new Error(
+                      "Destination-charge funds settle directly to Connect and cannot be approved as a legacy payout.",
+                    ),
+                    { statusCode: 409 },
+                  );
+                }
+                const { getHostEarningsSummary } =
+                  await import("../hostEarningsService");
+                const summary = await getHostEarningsSummary(
+                  locked.hostId,
+                  tx,
+                );
+                const ownCommitted =
+                  locked.fundingTopology === "legacy_platform_hold" &&
+                  locked.eligibilityState === "eligible_legacy"
+                    ? locked.amountCents
+                    : 0;
+                const eligibleCapacity =
+                  summary.availableCents + ownCommitted;
+                if (
+                  locked.amountCents <= 0 ||
+                  locked.amountCents > eligibleCapacity
+                ) {
+                  throw Object.assign(
+                    new Error(
+                      "Current eligible legacy platform-held funds do not cover this request.",
+                    ),
+                    { statusCode: 409 },
+                  );
+                }
+                const [approved] = await tx
+                  .update(hostPayoutRequests)
+                  .set({
+                    status: "approved",
+                    fundingTopology: "legacy_platform_hold",
+                    eligibilityState: "eligible_legacy",
+                    eligibleAmountSnapshotCents: eligibleCapacity,
+                    quarantineReason: null,
+                    notes: notes ?? locked.notes ?? null,
+                    reviewedByUserId: req.user?.id || null,
+                    reviewedAt: now,
+                    paidAt: locked.paidAt,
+                    updatedAt: now,
+                  })
+                  .where(eq(hostPayoutRequests.id, requestId))
+                  .returning();
+                return approved;
               })
-              .from(hosts)
-              .where(eq(hosts.id, existing.hostId))
-              .limit(1);
-
-            const connectAccountId = hostRow?.stripeConnectAccountId;
-            const payoutsEnabled = Boolean(hostRow?.stripePayoutsEnabled);
-
-            if (connectAccountId && payoutsEnabled) {
-              try {
-                const transfer = await stripe.transfers.create({
-                  amount: Math.abs(Number(existing.amountCents || 0)),
-                  currency: "usd",
-                  destination: connectAccountId,
-                  description: `MealScout host payout — request ${existing.id}`,
-                  metadata: {
-                    payoutRequestId: existing.id,
-                    hostId: existing.hostId,
-                    adminUserId: String((req as any).user?.id || ""),
-                  },
-                });
-                stripeTransferId = transfer.id;
-                console.log(
-                  `[host-payout] Stripe transfer ${transfer.id} created for request ${existing.id} → ${connectAccountId}`,
-                );
-              } catch (transferErr: unknown) {
-                // Log but do not block the status update — admin can retry manually
-                stripeTransferError =
-                  transferErr instanceof Error
-                    ? transferErr.message
-                    : String(transferErr);
-                console.error(
-                  `[host-payout] Stripe transfer failed for request ${existing.id}:`,
-                  stripeTransferError,
-                );
-              }
-            } else {
-              console.log(
-                `[host-payout] Host ${existing.hostId} has no Connect account or payouts not enabled — skipping transfer, manual payout required`,
-              );
-            }
-          }
-
-          await db.insert(hostEarningsLedger).values({
-            hostId: existing.hostId,
-            bookingId: null,
-            stripePaymentIntentId: stripeTransferId,
-            entryType: "payout",
-            sourceType: "host_payout_request",
-            amountCents: -Math.abs(Number(existing.amountCents || 0)),
-            description: stripeTransferId
-              ? `Host payout via Stripe Connect transfer ${stripeTransferId} (${existing.id})`
-              : stripeTransferError
-                ? `Host payout processed manually — Stripe transfer failed: ${stripeTransferError} (${existing.id})`
-                : `Host payout processed manually — no Connect account (${existing.id})`,
-            createdAt: now,
-          });
-
-          // Update the payout request with the transfer ID for audit trail
-          if (stripeTransferId) {
-            await db
-              .update(hostPayoutRequests)
-              .set({ notes: `stripe_transfer:${stripeTransferId}` })
-              .where(eq(hostPayoutRequests.id, existing.id));
-          }
-        }
+            : (
+                await db
+                  .update(hostPayoutRequests)
+                  .set({
+                    status: nextStatus,
+                    notes: notes ?? existing.notes ?? null,
+                    reviewedByUserId: req.user?.id || null,
+                    reviewedAt: now,
+                    paidAt: existing.paidAt,
+                    updatedAt: now,
+                  })
+                  .where(eq(hostPayoutRequests.id, requestId))
+                  .returning()
+              )[0];
 
         const { getHostEarningsSummary } =
           await import("../hostEarningsService");
@@ -366,7 +437,7 @@ export function registerHostPayoutAdminRoutes(app: Express) {
         res.json({ ok: true, request: updated, summary });
       } catch (error: any) {
         console.error("Failed to update host payout request:", error);
-        res.status(500).json({
+        res.status(Number(error?.statusCode) || 500).json({
           ok: false,
           message: error?.message || "Failed to update host payout request",
         });
@@ -388,6 +459,12 @@ export function registerHostPayoutAdminRoutes(app: Express) {
             hostId: hostPayoutRequests.hostId,
             amountCents: hostPayoutRequests.amountCents,
             status: hostPayoutRequests.status,
+            fundingTopology: hostPayoutRequests.fundingTopology,
+            eligibilityState: hostPayoutRequests.eligibilityState,
+            eligibleAmountSnapshotCents:
+              hostPayoutRequests.eligibleAmountSnapshotCents,
+            providerTransferId: hostPayoutRequests.providerTransferId,
+            quarantineReason: hostPayoutRequests.quarantineReason,
             notes: hostPayoutRequests.notes,
             reviewedByUserId: hostPayoutRequests.reviewedByUserId,
             reviewedByEmail: sql<string>`(select u.email from users u where u.id = ${hostPayoutRequests.reviewedByUserId} limit 1)`,
@@ -406,13 +483,13 @@ export function registerHostPayoutAdminRoutes(app: Express) {
           .leftJoin(users, eq(hostPayoutRequests.userId, users.id))
           .orderBy(desc(hostPayoutRequests.createdAt));
 
-        if (whereClause) {
-          rowsQuery.where(whereClause as any);
-        }
+        rowsQuery.where(
+          and(adminVisibleLegacyPayout, whereClause as any) as any,
+        );
 
         const rows = await rowsQuery;
         const header =
-          "Request ID,Host ID,Host Name,Requester Email,Amount USD,Status,Requested At,Reviewed At,Reviewed By,Paid At,Address,Notes\n";
+          "Request ID,Host ID,Host Name,Requester Email,Amount USD,Status,Funding Topology,Eligibility State,Eligible Snapshot USD,Provider Transfer ID,Quarantine Reason,Requested At,Reviewed At,Reviewed By,Paid At,Address,Notes\n";
 
         const csvRows = rows
           .map((row: (typeof rows)[number]) => {
@@ -428,6 +505,13 @@ export function registerHostPayoutAdminRoutes(app: Express) {
               sanitizeCSV(row.requesterEmail || ""),
               sanitizeCSV(amountUsd),
               sanitizeCSV(row.status || ""),
+              sanitizeCSV(row.fundingTopology || "unclassified"),
+              sanitizeCSV(row.eligibilityState || "requires_revalidation"),
+              sanitizeCSV(
+                (Number(row.eligibleAmountSnapshotCents || 0) / 100).toFixed(2),
+              ),
+              sanitizeCSV(row.providerTransferId || ""),
+              sanitizeCSV(row.quarantineReason || ""),
               sanitizeCSV(
                 row.createdAt ? new Date(row.createdAt).toISOString() : "",
               ),

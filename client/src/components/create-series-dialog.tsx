@@ -34,6 +34,13 @@ import { AlertCircle, Calendar, Check } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
 import { format } from "date-fns";
+import {
+  addDaysToDateOnlyKey,
+  dateOnlyKey,
+  localCalendarDate,
+  todayDateOnlyKey,
+  weekdayForDateOnlyKey,
+} from "@/lib/date-only";
 
 interface CreateSeriesDialogProps {
   open: boolean;
@@ -95,8 +102,8 @@ export function CreateSeriesDialog({ open, onOpenChange, onSeriesCreated }: Crea
           name,
           description,
           timezone,
-          startDate: new Date(startDate).toISOString(),
-          endDate: new Date(endDate).toISOString(),
+          startDate: `${dateOnlyKey(startDate)}T00:00:00.000Z`,
+          endDate: `${dateOnlyKey(endDate)}T00:00:00.000Z`,
           recurrenceRule,
           defaultStartTime,
           defaultEndTime,
@@ -126,8 +133,7 @@ export function CreateSeriesDialog({ open, onOpenChange, onSeriesCreated }: Crea
   const generatePreview = (series: any) => {
     // Client-side preview generation (mirrors server logic)
     const occurrences: any[] = [];
-    const start = new Date(series.startDate);
-    const end = new Date(series.endDate);
+    const start = localCalendarDate(series.startDate)!;
 
     if (series.recurrenceRule && series.recurrenceRule.startsWith("WEEKLY:")) {
       const daysStr = series.recurrenceRule.split(":")[1];
@@ -136,18 +142,19 @@ export function CreateSeriesDialog({ open, onOpenChange, onSeriesCreated }: Crea
       };
       const days = daysStr.split(",").map((d: string) => dayMap[d]).filter((d: number) => d !== undefined);
 
-      let currentDate = new Date(start);
-      while (currentDate <= end) {
-        if (days.includes(currentDate.getDay())) {
+      let currentDateKey = dateOnlyKey(series.startDate)!;
+      const endDateKey = dateOnlyKey(series.endDate)!;
+      while (currentDateKey <= endDateKey) {
+        if (days.includes(weekdayForDateOnlyKey(currentDateKey)!)) {
           occurrences.push({
-            date: new Date(currentDate),
+            date: localCalendarDate(currentDateKey),
             startTime: series.defaultStartTime,
             endTime: series.defaultEndTime,
             maxTrucks: series.defaultMaxTrucks,
             hardCapEnabled: series.defaultHardCapEnabled,
           });
         }
-        currentDate.setDate(currentDate.getDate() + 1);
+        currentDateKey = addDaysToDateOnlyKey(currentDateKey, 1)!;
       }
     } else {
       occurrences.push({
@@ -171,6 +178,9 @@ export function CreateSeriesDialog({ open, onOpenChange, onSeriesCreated }: Crea
     try {
       const res = await fetch(`/api/hosts/event-series/${seriesId}/publish`, {
         method: "POST",
+        headers: {
+          "Idempotency-Key": `publish-event-series:${seriesId}`,
+        },
       });
 
       if (!res.ok) {
@@ -280,7 +290,7 @@ export function CreateSeriesDialog({ open, onOpenChange, onSeriesCreated }: Crea
                     type="date"
                     value={startDate}
                     onChange={(e) => setStartDate(e.target.value)}
-                    min={new Date().toISOString().split("T")[0]}
+                    min={todayDateOnlyKey()}
                     required
                   />
                 </div>
@@ -292,7 +302,7 @@ export function CreateSeriesDialog({ open, onOpenChange, onSeriesCreated }: Crea
                     type="date"
                     value={endDate}
                     onChange={(e) => setEndDate(e.target.value)}
-                    min={startDate || new Date().toISOString().split("T")[0]}
+                    min={startDate || todayDateOnlyKey()}
                     required
                   />
                   <p className="text-xs text-slate-500">Maximum 180 days from start date</p>
