@@ -446,8 +446,7 @@ export function PublicProfileMenu({
             </Link>
           ) : (
             <span className="w-full text-[color:var(--profile-muted)]">
-              {profile.ordering?.unavailableReason ||
-                "Online ordering is not available right now."}
+              Online ordering is unavailable right now. You can still browse the menu.
             </span>
           )}
         </div>

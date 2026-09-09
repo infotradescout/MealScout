@@ -2210,7 +2210,9 @@ async function retrieveDestinationSettlementIdentity(
     : null;
   if (
     destination !== destinationFromIntent(intent) ||
-    transfer.amount !== intent.amount - Number(intent.application_fee_amount || 0) ||
+    // Destination charges transfer the gross charge; the application fee is
+    // returned to the platform as a separate movement.
+    transfer.amount !== intent.amount ||
     clean(transfer.currency) !== clean(intent.currency) ||
     (Number(intent.application_fee_amount || 0) > 0 &&
       (!applicationFee ||
@@ -3566,11 +3568,6 @@ export async function cancelParkingPassLines(
                 expectedAmountCents: cashRefundCents,
                 expectedApplicationFeeCents: 0,
               },
-              {
-                stepType: "transfer_reversal",
-                expectedAmountCents: hostReversalCents,
-                expectedApplicationFeeCents: 0,
-              },
               ...(applicationFeeRefundCents > 0
                 ? [
                     {
@@ -3581,6 +3578,11 @@ export async function cancelParkingPassLines(
                     },
                   ]
                 : []),
+              {
+                stepType: "transfer_reversal",
+                expectedAmountCents: cashRefundCents,
+                expectedApplicationFeeCents: 0,
+              },
             ];
       await tx.insert(parkingPassProviderOperationSteps).values(
         stepSpecs.map((step, index) => ({
@@ -4600,6 +4602,40 @@ async function executeCashRefundSaga(input: {
     string,
     typeof parkingPassProviderOperationSteps.$inferSelect
   >(steps.map((step) => [step.stepType, step]));
+  const expectedSteps = [
+    { type: "cash_refund", amount: cashCents, fee: 0 },
+    ...(feeCents > 0
+      ? [{ type: "application_fee_refund", amount: feeCents, fee: feeCents }]
+      : []),
+    { type: "transfer_reversal", amount: cashCents, fee: 0 },
+  ];
+  // Steps are immutable. In particular, never replay an older net-transfer
+  // reversal using the same provider key with a new gross amount.
+  if (
+    steps.length !== expectedSteps.length ||
+    expectedSteps.some((expected, index) => {
+      const step = steps[index];
+      return !step ||
+        step.stepType !== expected.type ||
+        step.stepOrder !== index + 1 ||
+        step.expectedAmountCents !== expected.amount ||
+        step.expectedApplicationFeeCents !== expected.fee ||
+        step.expectedCurrency !== input.purchase.currency ||
+        step.expectedPaymentIntentId !== input.purchase.stripePaymentIntentId ||
+        step.expectedChargeId !== input.purchase.stripeChargeId ||
+        step.expectedDestinationAccountId !== input.purchase.stripeDestinationAccountId ||
+        step.requestDigest !== operation.requestDigest ||
+        step.allocationDigest !== operation.allocationDigest ||
+        step.policyTrigger !== operation.policyTrigger;
+    })
+  ) {
+    await markCancellationProviderActionRequired({
+      operationId: operation.id,
+      code: "refund_step_identity_mismatch",
+      message: "The stored refund steps require reconciliation before provider effects can resume.",
+    });
+    return;
+  }
   const lineDigest = stableDigest(lineIds);
   const metadata = {
     parkingPassPurchaseId: input.purchase.id,
@@ -4674,7 +4710,7 @@ async function executeCashRefundSaga(input: {
       input.purchase.stripeTransferId,
     );
     if (
-      transfer.amount !== input.purchase.hostAmountCents ||
+      transfer.amount !== input.purchase.chargedAmountCents ||
       clean(transfer.currency) !== input.purchase.currency ||
       stripeObjectId(transfer.destination) !==
         input.purchase.stripeDestinationAccountId
@@ -4789,75 +4825,7 @@ async function executeCashRefundSaga(input: {
       return;
     }
 
-    const reversalStep = stepByType.get("transfer_reversal");
-    if (!reversalStep) throw new Error("Transfer reversal provider step is missing.");
-    let reversal: Stripe.TransferReversal | null =
-      reversalStep.providerTransferReversalId
-        ? await input.stripe.transfers.retrieveReversal(
-            input.purchase.stripeTransferId,
-            reversalStep.providerTransferReversalId,
-          )
-        : null;
-    if (!reversal && reversalStep.status !== "prepared") {
-      const matches = await input.stripe.transfers.listReversals(
-        input.purchase.stripeTransferId,
-        { limit: 100 },
-      );
-      const exact = matches.data.filter(
-        (candidate) =>
-          clean(candidate.metadata?.providerStepId) === reversalStep.id,
-      );
-      if (exact.length > 1) {
-        throw new ParkingPassBookingError(
-          409,
-          "transfer_reversal_ambiguous",
-          "Multiple transfer reversals match one durable step.",
-        );
-      }
-      reversal = exact[0] || null;
-    }
-    if (!reversal) {
-      ensureWithinProviderRetention();
-      await markSubmitted(reversalStep);
-      reversal = await input.stripe.transfers.createReversal(
-        input.purchase.stripeTransferId,
-        {
-          amount: reversalStep.expectedAmountCents,
-          metadata: { ...metadata, providerStepId: reversalStep.id },
-        },
-        { idempotencyKey: reversalStep.idempotencyKey },
-      );
-    }
-    if (
-      reversal.amount !== reversalStep.expectedAmountCents ||
-      clean(reversal.currency) !== reversalStep.expectedCurrency ||
-      stripeObjectId(reversal.transfer) !== input.purchase.stripeTransferId ||
-      clean(reversal.metadata?.providerStepId) !== reversalStep.id ||
-      clean(reversal.metadata?.requestDigest) !== reversalStep.requestDigest ||
-      clean(reversal.metadata?.allocationDigest) !==
-        reversalStep.allocationDigest ||
-      clean(reversal.metadata?.sortedLineDigest) !== lineDigest ||
-      clean(reversal.metadata?.policyTrigger) !==
-        clean(reversalStep.policyTrigger)
-    ) {
-      throw new ParkingPassBookingError(
-        409,
-        "transfer_reversal_mismatch",
-        "Stripe transfer reversal does not match the selected host allocation.",
-      );
-    }
-    await db
-      .update(parkingPassProviderOperationSteps)
-      .set({
-        status: "provider_confirmed",
-        providerObjectId: reversal.id,
-        providerTransferId: input.purchase.stripeTransferId,
-        providerTransferReversalId: reversal.id,
-        confirmedAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(eq(parkingPassProviderOperationSteps.id, reversalStep.id));
-
+    // Return the exact fee first so the destination can fund the gross reversal.
     let applicationFeeRefundId: string | null = null;
     const feeStep = stepByType.get("application_fee_refund");
     if (feeStep) {
@@ -4930,6 +4898,77 @@ async function executeCashRefundSaga(input: {
         .where(eq(parkingPassProviderOperationSteps.id, feeStep.id));
     }
 
+
+    const reversalStep = stepByType.get("transfer_reversal");
+    if (!reversalStep) throw new Error("Transfer reversal provider step is missing.");
+    let reversal: Stripe.TransferReversal | null =
+      reversalStep.providerTransferReversalId
+        ? await input.stripe.transfers.retrieveReversal(
+            input.purchase.stripeTransferId,
+            reversalStep.providerTransferReversalId,
+          )
+        : null;
+    if (!reversal && reversalStep.status !== "prepared") {
+      const matches = await input.stripe.transfers.listReversals(
+        input.purchase.stripeTransferId,
+        { limit: 100 },
+      );
+      const exact = matches.data.filter(
+        (candidate) =>
+          clean(candidate.metadata?.providerStepId) === reversalStep.id,
+      );
+      if (exact.length > 1) {
+        throw new ParkingPassBookingError(
+          409,
+          "transfer_reversal_ambiguous",
+          "Multiple transfer reversals match one durable step.",
+        );
+      }
+      reversal = exact[0] || null;
+    }
+    if (!reversal) {
+      ensureWithinProviderRetention();
+      await markSubmitted(reversalStep);
+      reversal = await input.stripe.transfers.createReversal(
+        input.purchase.stripeTransferId,
+        {
+          amount: reversalStep.expectedAmountCents,
+          metadata: { ...metadata, providerStepId: reversalStep.id },
+        },
+        { idempotencyKey: reversalStep.idempotencyKey },
+      );
+    }
+    if (
+      reversal.amount !== reversalStep.expectedAmountCents ||
+      clean(reversal.currency) !== reversalStep.expectedCurrency ||
+      stripeObjectId(reversal.transfer) !== input.purchase.stripeTransferId ||
+      clean(reversal.metadata?.providerStepId) !== reversalStep.id ||
+      clean(reversal.metadata?.requestDigest) !== reversalStep.requestDigest ||
+      clean(reversal.metadata?.allocationDigest) !==
+        reversalStep.allocationDigest ||
+      clean(reversal.metadata?.sortedLineDigest) !== lineDigest ||
+      clean(reversal.metadata?.policyTrigger) !==
+        clean(reversalStep.policyTrigger)
+    ) {
+      throw new ParkingPassBookingError(
+        409,
+        "transfer_reversal_mismatch",
+        "Stripe transfer reversal does not match the selected gross charge allocation.",
+      );
+    }
+    await db
+      .update(parkingPassProviderOperationSteps)
+      .set({
+        status: "provider_confirmed",
+        providerObjectId: reversal.id,
+        providerTransferId: input.purchase.stripeTransferId,
+        providerTransferReversalId: reversal.id,
+        confirmedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(parkingPassProviderOperationSteps.id, reversalStep.id));
+
+
     await db.transaction(async (tx: any) => {
       const [lockedOperation] = await tx
         .select()
@@ -4972,7 +5011,7 @@ async function executeCashRefundSaga(input: {
         finalReversalStep.providerTransferId !==
           input.purchase.stripeTransferId ||
         finalReversalStep.providerTransferReversalId !== reversal.id ||
-        finalReversalStep.expectedAmountCents !== hostCents ||
+        finalReversalStep.expectedAmountCents !== cashCents ||
         finalReversalStep.expectedCurrency !== input.purchase.currency ||
         finalReversalStep.requestDigest !== operation.requestDigest ||
         finalReversalStep.allocationDigest !== operation.allocationDigest ||

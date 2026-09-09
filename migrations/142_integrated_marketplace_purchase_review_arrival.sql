@@ -2129,7 +2129,7 @@ BEGIN
                      AND reversal_step.step_type = 'transfer_reversal'
                      AND reversal_step.status = 'provider_confirmed'
                      AND reversal_step.expected_amount_cents
-                           = cancellation.expected_host_reversal_cents
+                           = cancellation.expected_cash_refund_cents
                      AND reversal_step.provider_transfer_reversal_id IS NOT NULL
                 )
                 AND (

@@ -323,7 +323,7 @@ class InterceptedStripe {
     this.transfersById.set(transferId, {
       id: transferId,
       object: "transfer",
-      amount: intent.amount - intent.application_fee_amount,
+      amount: intent.amount,
       currency: intent.currency,
       destination: intent.transfer_data.destination,
       metadata: {},

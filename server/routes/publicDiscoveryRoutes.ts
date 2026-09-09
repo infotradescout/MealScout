@@ -1463,16 +1463,14 @@ const buildClaimedWebsiteTruth = async (row: any, menuPayload: any) => {
       unavailableReason:
         pickupEnabled || deliveryEnabled
           ? null
-          : readiness.blockingReasons.join(", ") ||
-            "Online ordering is not available",
+          : "Online ordering is unavailable right now. You can still browse the menu.",
     },
     fulfillment: {
       pickup: {
         enabled: pickupEnabled,
         unavailableReason: pickupEnabled
           ? null
-          : readiness.blockingReasons.join(", ") ||
-            "Pickup ordering is not available",
+          : "Pickup ordering is unavailable right now.",
       },
       delivery: {
         configured: Boolean(delivery?.configured),
