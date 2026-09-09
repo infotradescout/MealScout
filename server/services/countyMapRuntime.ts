@@ -1,5 +1,4 @@
 import { createHash } from "node:crypto";
-// @ts-expect-error The generated County-map adapter intentionally ships as ESM JavaScript.
 import {
   buildCountyMapEvent,
   createCountyMapClient,
