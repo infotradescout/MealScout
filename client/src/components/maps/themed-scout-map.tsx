@@ -9,7 +9,8 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import maplibregl, {
+import * as maplibregl from "maplibre-gl";
+import {
   type Map as MaplibreMap,
   type StyleSpecification,
 } from "maplibre-gl";

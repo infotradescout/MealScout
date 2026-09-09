@@ -8,8 +8,8 @@ import { chromium, expect, type Route } from "@playwright/test";
 // Rendered client proof only. All API responses are synthetic, all non-local
 // requests are blocked, and no application server or database is started.
 const root = resolve(import.meta.dirname, "..");
-const build = resolve(root, "client/dist");
-assert.ok(existsSync(resolve(build, "index.html")), "Build the client before this check");
+const build = resolve(root, process.env.MEALSCOUT_CLIENT_BUILD_DIR || "dist/public");
+assert.ok(existsSync(resolve(build, "index.html")), "Run npm run build before this check");
 const output = resolve(root, "artifacts/menu-lisa-browser");
 mkdirSync(output, { recursive: true });
 const app = express();
