@@ -5,10 +5,13 @@ not a production release or acceptance of the entire inherited implementation.
 Draft [PR #376](https://github.com/infotradescout/MealScout/pull/376) is the review surface.
 Lane: `critical-bug-fix`.
 
-Application source reference: `5df8d2a919d826ada0e054ba4e56811f74b7b76a`.
+Application source reference: `51e18632e5acff0adfe529c263f3e4b2c6e0c772`.
 The [validation manifest](evidence/production-recovery-2026-09-12/validation.json)
 records individual results, log hashes and their dates. Later commits containing
 only this report and its evidence do not change the application source.
+The complete browser matrix used client source `5df8d2a`; subsequent repairs
+changed backend lifecycle code and test tooling. Final typecheck, build, financial,
+ordering and PostgreSQL stateful results include those backend repairs.
 
 ## Scope and source
 
@@ -31,6 +34,17 @@ claim its changes are part of #376.
   plans with incompatible amounts require intervention before any provider effect.
   The stateful provider fixture models connected and platform balances, retry recovery,
   and partial refunds. Its balances explicitly exclude Stripe processing fees.
+- Serialize restricted-credit cancellation finalization and reload its operation
+  before posting credit. Identical concurrent retries must update the purchase's
+  credited total once, matching its single ledger credit.
+- Apply delayed Stripe status responses only when the restaurant's owner, account
+  and Connect generation still match. Return a stale-refresh response when payment
+  setup changed while waiting for Stripe.
+- Reject Parking Pass series at the free-event publication boundary, including
+  recovery of older unfinished operations. Paid series publication through this
+  endpoint is unavailable; the fix does not implement a paid recurrence workflow.
+  Serialize publication row locks and preserve terminal states during concurrent
+  resumes, interruptions and recovery failures.
 - Align public ordering status with operational readiness and use an honest
   unavailable message. Preserve ownership, payment and fulfillment checks.
 - Reject unavailable parking-pass listings before generating fallback map pins.
@@ -45,6 +59,10 @@ claim its changes are part of #376.
 - Add missing financial, ordering, menu, dependency and smoke checks to CI. Repair
   obsolete test fixtures and assertions to follow the canonical booking service and
   venue-day filters without relaxing payment or visibility rules.
+- Add native PostgreSQL 16 support to the existing migration acceptance harness.
+  It owns a new temporary loopback cluster, ignores ambient connection settings,
+  and stops only its own cluster. CI retains the Docker transport and fetches the
+  historical writer revision required by the acceptance test.
 - Update vulnerable npm dependencies, including MapLibre, and adapt its imports.
   Remove the obsolete pnpm lockfile: CI, Render, Vercel and local documentation now
   consistently use root `npm ci` and `package-lock.json`. The empty client lockfile
@@ -67,21 +85,21 @@ these checks. GitHub's configured Vercel integration creates branch previews.
 | Root npm installation | Fresh isolated `npm ci` earlier in recovery; final `npm ci --ignore-scripts --dry-run` passes |
 | Dependency advisory audit | Final `npm audit` reports zero known vulnerabilities across production and development dependencies |
 | TypeScript and production build | `npm run check` and `npm run build` pass after final runtime and CSS changes |
-| Browser journeys | Final matrix: 169/170 pass across desktop Chrome, Firefox, WebKit, mobile Chrome and mobile WebKit. The remaining supplier case could not load a local React asset (`ERR_CONNECTION_FAILED`); five consecutive focused reruns pass. The complete matrix is not reported as green. All About layout and map cases pass in this matrix. |
+| Browser journeys | Full matrix: 170/170 pass across desktop Chrome, Firefox, WebKit, mobile Chrome and mobile WebKit, using the built client and synthetic APIs. This includes About layout, map, and supplier-route checks. |
 | Menu creation/LISA | 30 checks pass; built-client desktop/mobile retry, reload, receipt integrity and unavailable-storage cases pass with synthetic APIs |
 | Marketplace and payment checks | Integrated marketplace, ordering truth, Stripe webhook safety, public-data boundary, SEO and Render migration-gate suites pass |
 | PostgreSQL provider recovery | Full stateful suite passes on a fresh native PostgreSQL 16.14 fixture after applying migrations 090 and 142; external providers are simulated |
+| Migration 142 acceptance | The dedicated acceptance command passes APPLY, REPLAY, CONTAINMENT, concurrency and dump/restore on an owned native PostgreSQL 16.15 cluster. It rejects net-transfer refund evidence and accepts matching gross-transfer evidence. A repeat with deliberately invalid ambient PostgreSQL connection settings also passes. Docker transport remains unexecuted locally. |
 | Discovery and existing CI contracts | 25 remaining CI suites pass after repairing two stale assertions; capacity, parking host truth and County Map checks also pass |
 | Critical-route failure detection | Seven behavior checks pass, including stale/uninitialized health and read-only scheduled refreshes |
+| Built-server watchdog boot | Actual built server starts unavailable, automatically probes six real local HTTP endpoints, and reports the empty fixture map as degraded. No scheduled alert is sent. This uses a fresh disposable database and no provider credentials. |
 | Mobile/store metadata | Mobile-readiness and strict store-metadata checks pass; these do not establish app-store acceptance |
-| Independent financial challenge | Two concrete destination-settlement/refund findings were corrected and re-reviewed; this is not a full-branch review or live provider acceptance |
+| Independent financial and lifecycle challenge | Corrected settlement/refund identity, restricted-credit double counting, stale Connect refresh writes and unsafe publication/retry paths. Credit concurrency regression reproduces 2300 before the fix and 1150 afterward on real PostgreSQL; the full stateful suite passes. Eight Connect refresh cases and focused publication cases pass with isolated adapters. This is a bounded review, not full-branch or live provider acceptance. |
 
-Earlier browser runs exposed real Safari overflow and a local-server connection
-failure. The overflow repairs were retained; a focused five-run search repetition
-passed. The final supplier trace also identifies a failed local asset connection,
-before React initialized, rather than a tested role redirect. Its focused reruns
-passed without changing the role routing or assertion. A clean whole-workflow run
-on a stable CI host is still required; passing reruns do not erase the failed run.
+Earlier browser runs exposed real Safari overflow and local asset connection
+failures. The overflow repairs were retained. Following focused reruns, the complete
+170-test matrix passed without changing role routing or weakening assertions.
+Earlier failed logs remain in the evidence history. GitHub CI has not executed.
 
 Raw logs, screenshots, original-WIP snapshot and SHA-256 evidence are retained at
 `D:\ms-production-recovery-20260909\evidence`. They are local evidence, not GitHub CI
@@ -94,9 +112,10 @@ from fixture pass counts.
    “The job was not started because your account is locked due to a billing issue.”
    Restore account execution and run the complete configured workflow on the reviewed
    candidate. The Vercel preview status does not replace backend or migration CI.
-2. Docker's Linux engine is unavailable on this machine. Native PostgreSQL stateful
-   proof does not establish the dedicated Docker/PostgreSQL-16 migration acceptance
-   command or its concurrency and constraint checks. Run that gate before release.
+2. Docker's Linux engine is unavailable on this machine. The dedicated migration
+   acceptance command now has a native PostgreSQL 16 transport and has passed all
+   its SQL, concurrency and restore checks locally. Run the configured Docker
+   transport in CI as well; local native proof does not establish CI execution.
 3. Validate the financial path against an explicitly designated Stripe test environment
    and authenticated business journeys. The original large implementation and migration
    need human review beyond the bounded independent challenge performed here.
