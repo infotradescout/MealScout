@@ -96,6 +96,7 @@ import {
 import {
   getScoutHostParkingCopy,
   getScoutParkingInventoryStatus,
+  isScoutParkingPassListingVisible,
   type ScoutParkingInventoryStatus,
 } from "@/lib/scoutParkingPassTruth";
 import { toast } from "@/hooks/use-toast";
@@ -3232,7 +3233,7 @@ export default function ExplorePreview() {
       });
       if (!response.ok) return [];
       const data = await response.json();
-      return Array.isArray(data) ? data : [];
+      return Array.isArray(data) ? data.filter(isScoutParkingPassListingVisible) : [];
     },
     staleTime: 60_000,
     retry: false,
