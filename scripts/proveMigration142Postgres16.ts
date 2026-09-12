@@ -7,6 +7,10 @@ import {
   writeFileSync,
 } from "node:fs";
 import { resolve } from "node:path";
+import { startNativePostgres16 } from "./nativePostgres16Fixture";
+
+const nativeBinDirectory = process.argv.find(arg => arg.startsWith("--native-pg-bin="))?.slice("--native-pg-bin=".length);
+let nativeFixture: Awaited<ReturnType<typeof startNativePostgres16>> | undefined;
 
 const dockerCandidates = [
   process.env.DOCKER_BIN,
@@ -27,16 +31,33 @@ const migration = readFileSync(
 
 type DockerResult = ReturnType<typeof spawnSync>;
 
-const docker = (args: string[], input?: string): DockerResult =>
-  spawnSync(dockerBin, args, {
+const nativeCommand = (args: string[]) => {
+  assert.equal(args[0], "exec", "Native fixture only accepts database commands");
+  const containerIndex = args.indexOf(containerName);
+  assert.ok(containerIndex > 0, "Missing owned fixture command target");
+  const applicationName = args.find(arg => arg.startsWith("PGAPPNAME="))?.slice("PGAPPNAME=".length);
+  return { program: args[containerIndex + 1], args: args.slice(containerIndex + 2), applicationName };
+};
+
+const fixture = (args: string[], input?: string): DockerResult => {
+  if (nativeFixture) {
+    const command = nativeCommand(args);
+    return nativeFixture.run(command.program, command.args, input, command.applicationName);
+  }
+  return spawnSync(dockerBin, args, {
     cwd: process.cwd(),
     encoding: "utf8",
     input,
     maxBuffer: 20 * 1024 * 1024,
   });
+};
 
-const dockerAsync = (args: string[], input: string) =>
-  new Promise<{ status: number; stdout: string; stderr: string }>((resolveRun) => {
+const fixtureAsync = (args: string[], input: string) => {
+  if (nativeFixture) {
+    const command = nativeCommand(args);
+    return nativeFixture.runAsync(command.program, command.args, input, command.applicationName);
+  }
+  return new Promise<{ status: number; stdout: string; stderr: string }>((resolveRun) => {
     const child = spawn(dockerBin, args, {
       cwd: process.cwd(),
       env: process.env,
@@ -57,6 +78,7 @@ const dockerAsync = (args: string[], input: string) =>
     });
     child.stdin.end(input);
   });
+};
 
 const describeFailure = (label: string, result: DockerResult) => {
   const output = `${result.stdout || ""}\n${result.stderr || ""}`.trim();
@@ -68,7 +90,7 @@ const describeFailure = (label: string, result: DockerResult) => {
 };
 
 const sql = (statement: string, label: string) => {
-  const result = docker(
+  const result = fixture(
     [
       "exec",
       "-i",
@@ -90,7 +112,7 @@ const sql = (statement: string, label: string) => {
 };
 
 const scalar = (statement: string, label: string) => {
-  const result = docker(
+  const result = fixture(
     [
       "exec",
       "-i",
@@ -116,7 +138,7 @@ const expectSqlFailure = (
   statement: string,
   expected: RegExp,
 ) => {
-  const result = docker(
+  const result = fixture(
     [
       "exec",
       "-i",
@@ -521,33 +543,31 @@ let started = false;
 let baselineWriterPath = "";
 let baselineRunnerPath = "";
 try {
-  const start = docker([
-    "run",
-    "-d",
-    "--rm",
-    "--name",
-    containerName,
-    "-p",
-    "127.0.0.1::5432",
-    "-e",
-    `POSTGRES_PASSWORD=${password}`,
-    "postgres:16-alpine",
-  ]);
-  if (start.status !== 0) describeFailure("start PostgreSQL 16 container", start);
-  started = true;
+  if (nativeBinDirectory) {
+    nativeFixture = await startNativePostgres16(nativeBinDirectory, password);
+  } else {
+    const start = fixture([
+      "run", "-d", "--rm", "--name", containerName,
+      "-p", "127.0.0.1::5432", "-e", `POSTGRES_PASSWORD=${password}`,
+      "postgres:16-alpine",
+    ]);
+    if (start.status !== 0) describeFailure("start PostgreSQL 16 container", start);
+    started = true;
+  }
 
   let stableReadyProbes = 0;
   let observedFinalStartup = false;
   for (let attempt = 0; attempt < 160; attempt += 1) {
-    const logs = docker(["logs", containerName]);
-    const logText = `${logs.stdout || ""}\n${logs.stderr || ""}`;
+    const logs = nativeFixture ? undefined : fixture(["logs", containerName]);
+    const logText = `${logs?.stdout || ""}\n${logs?.stderr || ""}`;
     const readyLogCount = (
       logText.match(/database system is ready to accept connections/gi) || []
     ).length;
     observedFinalStartup =
-      /PostgreSQL init process complete; ready for start up\./i.test(logText) &&
-      readyLogCount >= 2;
-    const probe = docker([
+      Boolean(nativeFixture) ||
+      (/PostgreSQL init process complete; ready for start up\./i.test(logText) &&
+      readyLogCount >= 2);
+    const probe = fixture([
       "exec",
       containerName,
       "psql",
@@ -597,7 +617,7 @@ try {
   sql(migrationTransaction, "apply migration 142");
   sql(seedDestinationPurchase, "seed canonical destination purchase");
 
-  const firstConcurrentPurchase = dockerAsync(
+  const firstConcurrentPurchase = fixtureAsync(
     [
       "exec",
       "-e",
@@ -655,7 +675,7 @@ try {
     true,
     "first concurrent purchase did not reach its held transaction",
   );
-  const secondConcurrentPurchase = dockerAsync(
+  const secondConcurrentPurchase = fixtureAsync(
     [
       "exec",
       "-e",
@@ -765,14 +785,15 @@ try {
   // that old Drizzle path against the migrated disposable database. Live
   // participating supply must be fenced, while the identical old writer may
   // still normalize supply that is proven empty.
-  const portResult = docker(["port", containerName, "5432/tcp"]);
-  if (portResult.status !== 0) {
-    describeFailure("read disposable PostgreSQL port", portResult);
+  let mappedPort = nativeFixture ? String(nativeFixture.port) : undefined;
+  if (!nativeFixture) {
+    const portResult = fixture(["port", containerName, "5432/tcp"]);
+    if (portResult.status !== 0) {
+      describeFailure("read disposable PostgreSQL port", portResult);
+    }
+    mappedPort = String(portResult.stdout || "").trim().match(/:(\d+)$/)?.[1];
   }
-  const mappedPort = String(portResult.stdout || "")
-    .trim()
-    .match(/:(\d+)$/)?.[1];
-  assert.ok(mappedPort, "Docker did not expose the disposable PostgreSQL port");
+  assert.ok(mappedPort, "Fixture did not expose the disposable PostgreSQL port");
   const baselineSourceResult = spawnSync(
     "git",
     [
@@ -1005,6 +1026,103 @@ try {
      );`,
     /financial identity does not match selected lines/i,
   );
+  // Both transactions leave the original fixture intact for restore assertions.
+  // Only the provider transfer reversal varies; local host accounting stays net.
+  const refundProofTransaction = (reversalCents: number) => `
+BEGIN;
+UPDATE parking_pass_purchases
+   SET stripe_payment_intent_id = 'pi_m142_refund', stripe_charge_id = 'ch_m142_refund'
+ WHERE id = 'purchase-1';
+INSERT INTO parking_pass_cancellation_operations (
+  id, purchase_id, request_id, idempotency_key, booking_line_ids,
+  request_digest, allocation_digest, actor_snapshot, policy_facts,
+  actor_type, actor_user_id, reason, policy_trigger, remedy,
+  amount_cents, expected_payment_intent_id, expected_charge_id,
+  expected_currency, expected_cash_refund_cents, expected_host_reversal_cents,
+  expected_application_fee_refund_cents, expected_destination_account_id, status
+) VALUES (
+  'm142-refund-cancellation', 'purchase-1', 'm142-refund-request',
+  'm142-refund-cancellation-key', '["booking-1"]'::jsonb,
+  'm142-refund-digest', 'allocation-digest-1',
+  '{"actorType":"admin","actorUserId":"admin-1"}'::jsonb,
+  '{"technicalNonService":true}'::jsonb,
+  'admin', 'admin-1', 'Migration gross reversal regression',
+  'technical_non_service', 'cash_refund', 1150,
+  'pi_m142_refund', 'ch_m142_refund', 'usd', 1150, 1000, 150,
+  'acct_host_1', 'processing'
+);
+INSERT INTO parking_pass_provider_operations (
+  id, purchase_id, cancellation_operation_id, operation_kind, request_id,
+  idempotency_key, request_digest, policy_trigger, actor_type, actor_user_id,
+  sorted_line_ids, allocation_digest, expected_payment_intent_id, expected_charge_id,
+  expected_currency, expected_amount_cents, expected_host_amount_cents,
+  expected_application_fee_cents, expected_destination_account_id,
+  provider_payment_intent_id, provider_charge_id, provider_transfer_id,
+  provider_application_fee_id, idempotency_expires_at
+) VALUES (
+  'm142-refund-provider', 'purchase-1', 'm142-refund-cancellation',
+  'selected_line_refund', 'm142-refund-provider-request', 'm142-refund-provider-key',
+  'm142-refund-digest', 'technical_non_service', 'admin', 'admin-1',
+  '["booking-1"]'::jsonb, 'allocation-digest-1', 'pi_m142_refund', 'ch_m142_refund',
+  'usd', 1150, 1000, 150, 'acct_host_1', 'pi_m142_refund', 'ch_m142_refund',
+  'tr_m142_refund', 'fee_m142_refund', now() + interval '24 hours'
+);
+INSERT INTO parking_pass_provider_operation_steps (
+  id, operation_id, step_type, step_order, status, idempotency_key,
+  request_digest, allocation_digest, policy_trigger, expected_payment_intent_id,
+  expected_charge_id, expected_currency, expected_amount_cents,
+  expected_destination_account_id, expected_application_fee_cents,
+  provider_payment_intent_id, provider_charge_id, provider_transfer_id,
+  provider_transfer_reversal_id, provider_application_fee_id,
+  provider_application_fee_refund_id, provider_refund_id
+)
+SELECT 'm142-refund-step-' || fixture.kind, operation.id, fixture.kind,
+  fixture.ordinal, 'provider_confirmed', 'm142-refund-step-key-' || fixture.kind,
+  operation.request_digest, operation.allocation_digest, operation.policy_trigger,
+  operation.expected_payment_intent_id, operation.expected_charge_id,
+  operation.expected_currency, fixture.amount, operation.expected_destination_account_id,
+  operation.expected_application_fee_cents, operation.provider_payment_intent_id,
+  operation.provider_charge_id, operation.provider_transfer_id,
+  CASE WHEN fixture.kind = 'transfer_reversal' THEN 'trr_m142_refund' END,
+  operation.provider_application_fee_id,
+  CASE WHEN fixture.kind = 'application_fee_refund' THEN 'fr_m142_refund' END,
+  CASE WHEN fixture.kind = 'cash_refund' THEN 're_m142_refund' END
+FROM parking_pass_provider_operations operation
+CROSS JOIN (VALUES ('cash_refund', 1, 1150), ('application_fee_refund', 2, 150),
+  ('transfer_reversal', 3, ${reversalCents})) AS fixture(kind, ordinal, amount)
+WHERE operation.id = 'm142-refund-provider';
+UPDATE parking_pass_provider_operations SET status = 'provider_confirmed'
+ WHERE id = 'm142-refund-provider';
+UPDATE event_bookings SET status = 'refunded', refund_amount_cents = 1150,
+  cash_refunded_cents = 1150, host_transfer_reversed_cents = 1000,
+  application_fee_refunded_cents = 150, settlement_state = 'provider_confirmed'
+ WHERE id = 'booking-1';
+DO $assert$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM event_bookings WHERE id = 'booking-1'
+    AND status = 'refunded' AND cash_refunded_cents = 1150
+    AND host_transfer_reversed_cents = 1000 AND application_fee_refunded_cents = 150
+    AND settlement_state = 'provider_confirmed') THEN
+    RAISE EXCEPTION 'gross refund proof did not finalize the booking';
+  END IF;
+END
+$assert$;
+ROLLBACK;
+`;
+  expectSqlFailure(
+    "net-only transfer reversal cannot finalize cash refund",
+    refundProofTransaction(1000),
+    /paid-line cancellation\/refund requires durable remedy proof/i,
+  );
+  sql(refundProofTransaction(1150), "gross transfer reversal finalizes cash refund");
+  assert.equal(
+    scalar(`SELECT concat_ws(':', status, cash_refunded_cents,
+      host_transfer_reversed_cents, application_fee_refunded_cents)
+      FROM event_bookings WHERE id = 'booking-1';`, "verify refund regression rollback"),
+    "pending:0:0:0",
+  );
+  console.log("migration142 refund proof: net reversal rejected, gross reversal accepted");
+
   expectSqlFailure(
     "event mutation target rewrite",
     `UPDATE event_participation_mutations
@@ -1138,8 +1256,8 @@ try {
     /ordering approval requires a current pending review request/i,
   );
 
-  const dumpPath = "/tmp/mealscout-migration142.dump";
-  const dump = docker([
+  const dumpPath = nativeFixture ? resolve(nativeFixture.directory, "migration142.dump") : "/tmp/mealscout-migration142.dump";
+  const dump = fixture([
     "exec",
     containerName,
     "pg_dump",
@@ -1152,7 +1270,7 @@ try {
   ]);
   if (dump.status !== 0) describeFailure("dump migration 142 fixture", dump);
   sql("CREATE DATABASE migration142_restore;", "create restore database");
-  const restore = docker([
+  const restore = fixture([
     "exec",
     containerName,
     "pg_restore",
@@ -1165,7 +1283,7 @@ try {
     dumpPath,
   ]);
   if (restore.status !== 0) describeFailure("restore migration 142 fixture", restore);
-  const replayRestored = docker(
+  const replayRestored = fixture(
     [
       "exec",
       "-i",
@@ -1185,7 +1303,7 @@ try {
   if (replayRestored.status !== 0) {
     describeFailure("replay migration 142 after restore", replayRestored);
   }
-  const restoredFacts = docker([
+  const restoredFacts = fixture([
     "exec",
     containerName,
     "psql",
@@ -1207,7 +1325,7 @@ try {
     describeFailure("read restored migration 142 facts", restoredFacts);
   }
   assert.equal(String(restoredFacts.stdout || "").trim(), "2:2:1");
-  const restoredContainment = docker([
+  const restoredContainment = fixture([
     "exec",
     containerName,
     "psql",
@@ -1237,17 +1355,22 @@ try {
   console.log("migration142-postgres16: CONTAINMENT PASS");
   console.log("migration142-postgres16: RESTORE PASS");
 } finally {
-  for (const path of [baselineRunnerPath, baselineWriterPath]) {
-    if (path && existsSync(path)) unlinkSync(path);
-  }
-  if (started) {
-    const stop = docker(["stop", "-t", "2", containerName]);
-    if (stop.status !== 0) {
-      console.warn(
-        `warning: disposable PostgreSQL container cleanup failed: ${String(
-          stop.stderr || stop.stdout || "unknown Docker error",
-        ).trim()}`,
-      );
+  try {
+    for (const path of [baselineRunnerPath, baselineWriterPath]) {
+      if (path && existsSync(path)) unlinkSync(path);
+    }
+  } finally {
+    if (nativeFixture) {
+      nativeFixture.stop();
+    } else if (started) {
+      const stop = fixture(["stop", "-t", "2", containerName]);
+      if (stop.status !== 0) {
+        console.warn(
+          `warning: disposable PostgreSQL container cleanup failed: ${String(
+            stop.stderr || stop.stdout || "unknown Docker error",
+          ).trim()}`,
+        );
+      }
     }
   }
 }

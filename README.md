@@ -45,6 +45,21 @@ npm run build
 npm run test:flows:e2e
 ```
 
+Migration 142 acceptance defaults to a disposable PostgreSQL 16 Docker container:
+```bash
+npm run test:migration-142-postgres16
+```
+When Docker is unavailable, the identical assertions can run with a complete native
+PostgreSQL 16 binary distribution (`postgres`, `initdb`, `pg_ctl`, `psql`, `pg_dump`,
+and `pg_restore`):
+```bash
+npm run test:migration-142-postgres16 -- --native-pg-bin="C:/PostgreSQL/16/bin"
+```
+The native option creates its own new cluster, binds only to loopback, ignores
+ambient PostgreSQL connection settings, and stops the cluster on completion.
+It never accepts an existing database URL or data directory. Temporary cluster
+files and diagnostic logs are retained at the path printed by the runner.
+
 License
 MIT
 

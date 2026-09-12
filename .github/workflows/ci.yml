@@ -39,6 +39,11 @@ jobs:
       - name: Marketplace Provider Recovery on PostgreSQL 16
         run: npm run test:integrated-marketplace:stateful
 
+      - name: Migration 142 Apply, Containment, Concurrency and Restore
+        run: |
+          git fetch --no-tags --depth=1 origin 6128fbc9539c27d70f937a7ffa1d619bf819c7b3
+          npm run test:migration-142-postgres16
+
       - name: Menu Creation and LISA Record Integrity
         run: npm run test:menu-lisa
 
