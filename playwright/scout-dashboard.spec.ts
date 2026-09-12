@@ -225,6 +225,16 @@ test.describe("Scout local dashboard", () => {
     await expect(page.getByTestId("scout-map-container")).toBeVisible();
   });
 
+  test("anonymous map expansion survives unavailable discovery feeds", async ({ page }) => {
+    await page.route("**/api/**", (route) => route.fulfill({
+      status: new URL(route.request().url()).pathname === "/api/auth/user" ? 401 : 404,
+      json: { message: "Unavailable fixture" },
+    }));
+    await page.goto(`${FRONTEND}/scout`, { waitUntil: "domcontentloaded" });
+    await page.getByRole("button", { name: "Expand map", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Collapse map and return to discover" })).toBeVisible();
+  });
+
   test("Scout renders map preview without Google script", async ({ page }) => {
     await page.goto(`${FRONTEND}/scout`, { waitUntil: "domcontentloaded" });
 

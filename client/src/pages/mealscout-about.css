@@ -1976,6 +1976,22 @@
 }
 
 @media (max-width: 760px) {
+  .ms-about-audience-grid,
+  .ms-about-answers {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ms-about-audience-card,
+  .ms-about-glossary,
+  .ms-about-faq {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .ms-about-audience-card > a {
+    max-width: 100%;
+  }
+
   .ms-about {
     font-size: 15px;
   }

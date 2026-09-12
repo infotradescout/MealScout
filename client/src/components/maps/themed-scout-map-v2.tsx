@@ -807,7 +807,7 @@ export function ThemedScoutMapV2({
           height: 100% !important;
         }
       `}</style>
-      <div className="absolute bottom-1 right-1 z-10 rounded px-1.5 py-0.5 text-[10px] leading-tight" style={{ background: "rgba(255,255,255,0.94)", color: "#18212f" }} aria-label="Map data attribution">
+      <div className="absolute bottom-9 right-1 z-10 rounded px-1.5 py-0.5 text-[10px] leading-tight" style={{ background: "rgba(255,255,255,0.94)", color: "#18212f" }} aria-label="Map data attribution">
         {cartoKey ? <><a className="underline" href="https://carto.com/attributions" target="_blank" rel="noopener noreferrer">© CARTO</a> · </> : null}
         <a className="underline" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OpenStreetMap</a> contributors
       </div>
