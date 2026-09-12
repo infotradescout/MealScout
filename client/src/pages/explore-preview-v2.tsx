@@ -5695,12 +5695,6 @@ export default function ExplorePreview() {
                           onMarkerTap={handlePreviewMarkerTap}
                         />
                       </Suspense>
-                      {(!hasMapKey || googleMapFailed) && (
-                        <div className="pointer-events-none absolute left-1/2 top-1/2 z-10 max-w-[18rem] -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-[#211710]/92 px-5 py-4 text-center text-sm font-bold text-orange-50 ring-1 ring-white/12 backdrop-blur-xl">
-                          Full pan and zoom are loading. You can still browse
-                          nearby food.
-                        </div>
-                      )}
                     </>
                   ) : (
                     <HeroMapFallback
@@ -5726,7 +5720,7 @@ export default function ExplorePreview() {
                 type="button"
                 onClick={collapseScoutMap}
                 aria-label="Collapse map and return to discover"
-                className="absolute z-30 right-4 top-[calc(env(safe-area-inset-top)+0.75rem)] inline-flex h-12 items-center gap-2 rounded-full bg-[#1b120d]/92 px-4 font-black text-orange-50 ring-1 ring-white/14 backdrop-blur-md transition-colors hover:bg-[#2a1b13]"
+                className="scout-map-panel absolute z-30 right-4 top-[calc(env(safe-area-inset-top)+0.75rem)] inline-flex h-12 items-center gap-2 rounded-full px-4 font-black text-orange-50 ring-1 ring-white/14 backdrop-blur-md transition-colors"
                 style={{
                   boxShadow: "0 12px 30px rgba(154,72,18,0.18)",
                 }}
@@ -9428,7 +9422,7 @@ function CollapsedMapPinCard({
 
   return (
     <div
-      className="absolute left-3 right-3 bottom-16 z-20 rounded-2xl bg-[#0f1017]/88 px-3 py-3 text-white ring-1 ring-white/10 backdrop-blur-xl"
+      className="scout-map-panel absolute left-3 right-3 bottom-16 z-20 rounded-2xl px-3 py-3 text-white ring-1 ring-white/10 backdrop-blur-xl"
       style={{ boxShadow: "0 16px 36px rgba(0,0,0,0.48)" }}
     >
       <div className="flex items-start justify-between gap-3">
@@ -11521,7 +11515,7 @@ function MapPlaceCard({
       <div
         data-scout-map-card-kind="host"
         data-parking-truth={marker.parkingStatus || "host"}
-        className="absolute left-3 right-3 bottom-[calc(env(safe-area-inset-bottom)+7.25rem)] z-30 rounded-2xl bg-[#1b1008]/94 p-3 text-white ring-1 ring-amber-300/45 backdrop-blur-xl"
+        className="scout-map-panel absolute left-3 right-3 bottom-[calc(env(safe-area-inset-bottom)+7.25rem)] z-30 rounded-2xl p-3 text-white ring-1 ring-amber-300/45 backdrop-blur-xl sm:max-w-lg"
         style={{
           boxShadow:
             "0 18px 54px rgba(0,0,0,0.58), 0 0 22px rgba(245,158,11,0.2)",
@@ -11636,7 +11630,7 @@ function MapPlaceCard({
 
   return (
     <div
-      className="absolute left-4 right-4 bottom-[calc(env(safe-area-inset-bottom)+7.25rem)] z-30 rounded-3xl bg-[#120805]/88 p-4 text-white ring-1 ring-orange-300/40 backdrop-blur-xl"
+      className="scout-map-panel absolute left-4 right-4 bottom-[calc(env(safe-area-inset-bottom)+7.25rem)] z-30 rounded-3xl p-4 text-white ring-1 ring-orange-300/40 backdrop-blur-xl sm:max-w-lg"
       style={{
         boxShadow:
           "0 22px 70px rgba(0,0,0,0.62), 0 0 24px rgba(255,90,47,0.18)",
@@ -11784,8 +11778,8 @@ function MapLayerToggles({
   ];
 
   return (
-    <div className="absolute left-3 right-3 top-[calc(env(safe-area-inset-top)+4.7rem)] z-20 overflow-x-auto atmo-hide-scrollbar sm:left-4 sm:right-auto sm:w-[360px]">
-      <div className="flex w-max gap-1 rounded-full bg-[#120805]/66 p-1 text-[10px] font-black uppercase tracking-wide text-white/70 ring-1 ring-white/10 backdrop-blur-xl">
+    <div className="absolute left-3 right-32 top-[calc(env(safe-area-inset-top)+0.75rem)] z-20 overflow-x-auto atmo-hide-scrollbar sm:left-4 sm:right-auto sm:w-[360px]">
+      <div className="scout-map-panel flex w-max gap-1 rounded-full p-1 text-[10px] font-black uppercase tracking-wide text-white/70 ring-1 ring-white/10 backdrop-blur-xl">
         {options.map((option) => {
           const isActive = layers[option.id];
           return (
@@ -11850,7 +11844,7 @@ function ScoutMapHud({
   return (
     <div className="pointer-events-none absolute left-3 right-3 top-[calc(env(safe-area-inset-top)+4.25rem)] z-20 sm:left-4 sm:right-auto sm:w-[360px]">
       <div
-        className="pointer-events-auto rounded-2xl bg-[#120805]/88 p-3 text-white ring-1 ring-orange-200/40 backdrop-blur-xl"
+        className="scout-map-panel pointer-events-auto rounded-2xl p-3 text-white ring-1 ring-orange-200/40 backdrop-blur-xl"
         style={{
           boxShadow:
             "0 18px 54px rgba(0,0,0,0.52), 0 0 26px rgba(255,90,47,0.2)",

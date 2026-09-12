@@ -40,6 +40,14 @@ async function mockScoutUser(page: any) {
 }
 
 async function mockScoutFeeds(page: any) {
+  // Synthetic tile keeps the regression suite independent of public tile
+  // servers and their usage quotas. Rendered provider checks run separately.
+  await page.route("https://tile.openstreetmap.org/**", (route: any) =>
+    route.fulfill({
+      contentType: "image/png",
+      body: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=", "base64"),
+    }),
+  );
   await page.route("**/api/trucks/live?*", async (route: any) => {
     await route.fulfill({
       status: 200,

@@ -27,20 +27,20 @@ interface ThemedScoutMapV2Props {
   interactive?: boolean;
 }
 
+const cartoKey = String(import.meta.env.VITE_CARTO_BASEMAP_KEY || "").trim();
+const tileUrls = cartoKey
+  ? [`https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png?key=${encodeURIComponent(cartoKey)}`]
+  : ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"];
+
 const MINI_MAP_STYLE: StyleSpecification = {
   version: 8,
   sources: {
     "carto-light": {
       type: "raster",
-      tiles: [
-        "https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png",
-        "https://b.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png",
-        "https://c.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png",
-        "https://d.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png",
-      ],
+      tiles: tileUrls,
       tileSize: 256,
-      attribution:
-        'Map tiles © <a href="https://carto.com/attributions" target="_blank" rel="noopener noreferrer">CARTO</a>, data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a>',
+      maxzoom: cartoKey ? 20 : 19,
+      attribution: `${cartoKey ? '© <a href="https://carto.com/attributions">CARTO</a> · ' : ''}© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors`,
     },
   },
   layers: [
@@ -807,9 +807,10 @@ export function ThemedScoutMapV2({
           height: 100% !important;
         }
       `}</style>
-      <span className="sr-only" aria-label="Map data attribution">
-        Map tiles © CARTO. Data © OpenStreetMap contributors.
-      </span>
+      <div className="absolute bottom-1 right-1 z-10 rounded px-1.5 py-0.5 text-[10px] leading-tight" style={{ background: "rgba(255,255,255,0.94)", color: "#18212f" }} aria-label="Map data attribution">
+        {cartoKey ? <><a className="underline" href="https://carto.com/attributions" target="_blank" rel="noopener noreferrer">© CARTO</a> · </> : null}
+        <a className="underline" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OpenStreetMap</a> contributors
+      </div>
     </div>
   );
 }
