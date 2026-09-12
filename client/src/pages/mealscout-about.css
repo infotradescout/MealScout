@@ -815,6 +815,8 @@
   align-items: center;
   gap: 8px;
   width: max-content;
+  max-width: 100%;
+  overflow-wrap: anywhere;
   border-bottom: 1px solid currentColor;
   padding-bottom: 2px;
   font-size: 13px;
