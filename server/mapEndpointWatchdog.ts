@@ -100,7 +100,7 @@ const lastAlertAtByKey = new Map<string, number>();
 let lastSnapshot: WatchdogSnapshot = {
   ts: new Date(0).toISOString(),
   reason: "init",
-  ok: true,
+  ok: false,
   checks: [],
   alertsSent: 0,
   alertFailures: 0,
@@ -338,7 +338,10 @@ async function sendAlertEmail(check: EndpointCheckResult) {
   return { sent, failed };
 }
 
-export async function runMapEndpointWatchdog(reason = "scheduled") {
+export async function runMapEndpointWatchdog(
+  reason = "scheduled",
+  options: { sendAlerts?: boolean } = {},
+) {
   const since = new Date(Date.now() - MAP_ALERT_WINDOW_MINUTES * 60 * 1000);
   const checks: EndpointCheckResult[] = [];
   let alertsSent = 0;
@@ -404,7 +407,7 @@ export async function runMapEndpointWatchdog(reason = "scheduled") {
 
     checks.push(check);
 
-    if (status !== "ok") {
+    if (status !== "ok" && options.sendAlerts !== false) {
       const alertKey = `${spec.id}:${reasons.sort().join("|")}`;
       if (shouldSendAlert(alertKey)) {
         const alertResult = await sendAlertEmail(check);
@@ -427,5 +430,37 @@ export async function runMapEndpointWatchdog(reason = "scheduled") {
 }
 
 export function getMapEndpointWatchdogSnapshot() {
+  if (lastSnapshot.checks.length === 0) return lastSnapshot;
+  if (Date.now() - Date.parse(lastSnapshot.ts) > 10 * 60 * 1000) {
+    return { ...lastSnapshot, ok: false, reason: "stale" };
+  }
   return lastSnapshot;
+}
+
+let watchdogStarted = false;
+let watchdogRunning = false;
+
+export function startMapEndpointWatchdog() {
+  if (watchdogStarted) return;
+  watchdogStarted = true;
+  const refresh = async () => {
+    if (watchdogRunning) return;
+    watchdogRunning = true;
+    try {
+      // Scheduled health snapshots only read endpoints and request metrics.
+      // Explicit admin runs retain the existing alert-email behavior.
+      await runMapEndpointWatchdog("scheduled", { sendAlerts: false });
+    } catch (error) {
+      lastSnapshot = {
+        ...lastSnapshot,
+        ok: false,
+        reason: "refresh_failed",
+      };
+      console.warn("[endpoint-watchdog] refresh failed:", error instanceof Error ? error.message : String(error));
+    } finally {
+      watchdogRunning = false;
+    }
+  };
+  setTimeout(() => { void refresh(); }, 15_000).unref();
+  setInterval(() => { void refresh(); }, 5 * 60 * 1000).unref();
 }

@@ -19,8 +19,10 @@ import {
 import { reconcileEventParticipationMutations } from "../services/eventParticipationMutationService";
 import { reconcileEventSeriesPublications } from "../services/eventSeriesPublicationService";
 import { quarantineStaleSubmittedEventNotifications } from "../services/eventNotificationDeliveryService";
+import { startMapEndpointWatchdog } from "../mapEndpointWatchdog";
 
 export function registerRecurringJobs(): void {
+  startMapEndpointWatchdog();
   const verboseOpsCleanup =
     String(process.env.OPS_CLEANUP_VERBOSE || "")
       .trim()
