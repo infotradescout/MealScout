@@ -23,16 +23,19 @@ Active docs and maintenance
 - `EMBED_CONTRACT.md` and `API_ACTIONS.md` - TradeScout integration contracts; modify only through an explicitly reviewed compatibility or security change
 
 Local prerequisites
-- Node.js 20-24
+- Node.js 24 LTS (`.node-version` and `.nvmrc`)
 - Git
 - Both `node`/`npm` and `git` available on your shell `PATH`
 
 Quick start (dev)
 ```bash
-npm install
+npm ci
 npm run dev:server
 npm run dev
 ```
+
+Use npm from the repository root. `package-lock.json` is the supported dependency
+lockfile used by CI, Render, and Vercel; do not generate a second package-manager lockfile.
 
 Useful commands
 ```bash

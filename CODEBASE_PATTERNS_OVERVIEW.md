@@ -225,7 +225,7 @@ async markRecommendationClicked(recommendationId: string): Promise<void>
 ### Build Configuration
 - **Backend**: Express.js server (TypeScript)
 - **Frontend**: Vite (vite.config.ts), React 18+
-- **Package manager**: pnpm (pnpm-lock.yaml)
+- **Package manager**: npm (`package-lock.json`); run `npm ci` from the repository root, as CI, Render, and Vercel do.
 - **Schemas**: TypeScript generation via Drizzle Kit
 
 ### Environment Variables (drizzle.config.ts)

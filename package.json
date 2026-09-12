@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "type": "module",
   "engines": {
-    "node": ">=20 <25"
+    "node": "24.x"
   },
   "license": "MIT",
   "scripts": {
