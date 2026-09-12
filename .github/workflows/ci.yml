@@ -28,6 +28,9 @@ jobs:
       - name: Stripe Webhook Safety
         run: npm run test:stripe-webhook-safety
 
+      - name: Critical Health Smoke Failure Detection
+        run: npm run test:critical-smoke
+
       - name: Ordering and Marketplace Financial Safety
         run: |
           npm run test:ordering-truth

@@ -137,6 +137,7 @@
     "test:flows": "tsx scripts/userFlows.ts",
     "test:flows:with-server": "node scripts/testFlowsWithServer.mjs",
     "smoke:critical": "node scripts/smokeCriticalRoutes.mjs",
+    "test:critical-smoke": "node --test scripts/smoke-critical-routes.behavior.test.mjs",
     "smoke:scout-surface": "node scripts/smokeScoutSurface.mjs",
     "gate:prelaunch": "node scripts/preLaunchGate.mjs",
     "gate:production": "node scripts/productionReadinessGate.mjs",

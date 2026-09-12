@@ -18,7 +18,7 @@ const checks = [
   { name: "Login page", path: "/login", expect: apiOnly ? [200, 404] : [200] },
   { name: "Map page", path: "/map", expect: apiOnly ? [200, 404] : [200] },
   { name: "API health", path: "/api/health", expect: [200] },
-  { name: "Critical endpoint health", path: "/health/critical-endpoints", expect: [200, 503] },
+  { name: "Critical endpoint health", path: "/health/critical-endpoints", expect: [200] },
   { name: "Auth user", path: "/api/auth/user", expect: [200, 401] },
   { name: "Host profile status", path: "/api/hosts/me", expect: [200, 401] },
   { name: "Map locations", path: "/api/map/locations", expect: [200] },
@@ -41,6 +41,7 @@ const run = async () => {
       const response = await fetch(url, {
         method: "GET",
         redirect: "follow",
+        signal: AbortSignal.timeout(10000),
         headers: { Accept: "application/json,text/html;q=0.9,*/*;q=0.8" },
       });
       const ok = check.expect.includes(response.status);
@@ -59,7 +60,8 @@ const run = async () => {
 
   if (failed > 0) {
     console.error(`Smoke checks failed: ${failed}`);
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
 
   console.log("Smoke checks passed.");
