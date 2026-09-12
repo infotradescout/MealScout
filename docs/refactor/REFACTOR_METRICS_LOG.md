@@ -4,6 +4,7 @@ Record one entry before merge and one entry after deploy verification for each r
 
 | Date | PR | Phase/Lane | Snapshot | Auth Success Rate | Booking Completion Rate | Payment Success Rate | Mobile Route Latency (Core Screens) | Ordering Gate Success/Failure | App Boot Success | Error Volume | Notes |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 2026-09-12 | [#376](https://github.com/infotradescout/MealScout/pull/376) | critical-bug-fix | before | Not measured | Not measured | Not measured | Not measured | Not measured | Backend readiness responds ready; full boot not established | Not measured | [Recovery evidence and release blockers](../PRODUCTION_RECOVERY_2026-09-12.md). Candidate remains a draft; local fixture passes are not production rates. Critical watchdog evidence is uninitialized. After-deploy snapshot remains pending release. |
 | 2026-04-14 | TBD | phase-0-freeze | before | TBD | TBD | TBD | TBD | TBD | TBD | TBD | Baseline start |
 | 2026-04-14 | TBD | phase-2-route-composition | before | TBD | TBD | TBD | TBD | TBD | TBD | TBD | Route-composition extraction prep (`server/routes.ts` helper extraction) |
 | 2026-04-14 | TBD | phase-2-route-composition | after | TBD | TBD | TBD | TBD | TBD | TBD | TBD | `npm run check` passed; runtime metrics collection pending deploy dashboard pull |
