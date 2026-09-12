@@ -6,6 +6,10 @@ const repository = readFileSync(
   "utf8",
 );
 const bookingRoute = readFileSync("server/routes/hostRoutes.ts", "utf8");
+const bookingService = readFileSync(
+  "server/services/parkingPassBookingService.ts",
+  "utf8",
+);
 const liveConcurrencyTest = readFileSync(
   "scripts/testParkingPassBookingConcurrency.ts",
   "utf8",
@@ -32,30 +36,44 @@ assert.doesNotMatch(
   "Syncing an existing series must preserve its explicit legacy capacity override.",
 );
 
-const transactionStart = bookingRoute.indexOf(
-  "insertedHolds = await db.transaction",
+assert.match(
+  bookingRoute,
+  /const purchaseResult = await createParkingPassPurchase\(/,
+  "The Parking Pass route must delegate holds to the canonical purchase transaction.",
 );
-const rowLock = bookingRoute.indexOf("for update", transactionStart);
-const capacityCount = bookingRoute.indexOf(
-  'inArray(eventBookings.status, ["confirmed", "pending"])',
+const purchaseStart = bookingService.indexOf("export async function createParkingPassPurchase(");
+assert.ok(purchaseStart >= 0, "The canonical purchase entrypoint must exist.");
+const purchaseEnd = bookingService.indexOf("\nexport ", purchaseStart + 1);
+const purchase = bookingService.slice(purchaseStart, purchaseEnd < 0 ? undefined : purchaseEnd);
+const transactionStart = purchase.indexOf("const created = await db.transaction");
+const eventSelection = purchase.indexOf(".where(inArray(events.id, selectedEventIds))", transactionStart);
+const rowLock = purchase.indexOf('.for("update")', eventSelection);
+const capacityCount = purchase.indexOf(
+  'inArray(eventBookings.status, ["pending", "confirmed"])',
   rowLock,
 );
-const capacityGuard = bookingRoute.indexOf(
-  "hardCapEnabled && reservedCount >= maxSpots",
+const capacityGuard = purchase.indexOf(
+  "if (!capacityDecision.allowed)",
   capacityCount,
 );
-const pendingInsert = bookingRoute.indexOf(
+const pendingInsert = purchase.indexOf(
   ".insert(eventBookings)",
   capacityGuard,
 );
 
 assert.ok(transactionStart >= 0, "Booking holds must run in a transaction.");
 assert.ok(
-  transactionStart < rowLock &&
+  transactionStart < eventSelection &&
+    eventSelection < rowLock &&
     rowLock < capacityCount &&
     capacityCount < capacityGuard &&
     capacityGuard < pendingInsert,
   "The event row must be locked before counting pending/confirmed holds and inserting the next hold.",
+);
+assert.match(
+  purchase.slice(capacityCount, capacityGuard),
+  /evaluatePaidLineReservation\(\{\s*hardCapEnabled: Boolean\(event\.hardCapEnabled\),\s*reservedCount,\s*maxTrucks,/,
+  "Capacity must be evaluated from the locked event and current reservation count.",
 );
 assert.match(
   liveConcurrencyTest,
