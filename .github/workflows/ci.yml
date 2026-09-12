@@ -105,6 +105,9 @@ jobs:
       - name: Event Date Normalization Contract
         run: npm run test:event-date-normalization
 
+      - name: Parking Schedule Calendar Local Dates
+        run: npm run test:parking-schedule-calendar
+
       - name: Action Availability Contract
         run: npm run test:action-availability
 
