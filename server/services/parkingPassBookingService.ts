@@ -3650,6 +3650,25 @@ export async function cancelParkingPassLines(
       await tx.execute(
         sql`SELECT pg_advisory_xact_lock(hashtext(${`parking_credit:${purchase.purchaserUserId}`}))`,
       );
+      // Match cancellation preparation's serialization before locking its rows.
+      // The operation snapshot above can predate another retry's finalization.
+      await tx.execute(
+        sql`SELECT pg_advisory_xact_lock(hashtext(${`parking_pass_cancel:${purchase.id}`}))`,
+      );
+      const [currentOperation] = await tx
+        .select()
+        .from(parkingPassCancellationOperations)
+        .where(eq(parkingPassCancellationOperations.id, operation.id))
+        .limit(1)
+        .for("update");
+      if (currentOperation?.status === "credit_issued") return;
+      if (!currentOperation || currentOperation.status !== "processing") {
+        throw new ParkingPassBookingError(
+          409,
+          "cancellation_operation_not_processing",
+          "The cancellation is no longer awaiting credit issuance.",
+        );
+      }
       const completedAt = new Date();
       for (const line of selectedLines) {
         await tx

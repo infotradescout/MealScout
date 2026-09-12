@@ -747,8 +747,23 @@ export function registerRestaurantPaymentRoutes(
         }
 
         const account = await stripe.accounts.retrieve(accountId);
+        // The provider read can overlap ownership transfer or reconnection.
+        // Apply its result only to the exact lifecycle that requested it.
+        const currentConnectIdentity = and(
+          eq(restaurants.id, restaurant.id),
+          eq(restaurants.ownerId, restaurant.ownerId),
+          eq(restaurants.stripeConnectAccountId, accountId),
+          eq(
+            restaurants.stripeConnectGeneration,
+            restaurant.stripeConnectGeneration,
+          ),
+        );
+        const staleRefresh = () => res.status(409).json({
+          code: "STRIPE_CONNECT_STATUS_STALE",
+          message: "Payment setup changed during this refresh. Refresh again to load its current status.",
+        });
         if ("deleted" in account && account.deleted) {
-          await db
+          const [updated] = await db
             .update(restaurants)
             .set({
               stripeConnectAccountId: null,
@@ -758,7 +773,9 @@ export function registerRestaurantPaymentRoutes(
               stripePayoutsEnabled: false,
               updatedAt: new Date(),
             })
-            .where(eq(restaurants.id, restaurant.id));
+            .where(currentConnectIdentity)
+            .returning({ id: restaurants.id });
+          if (!updated) return staleRefresh();
           return res.json({
             connected: false,
             chargesEnabled: false,
@@ -776,7 +793,7 @@ export function registerRestaurantPaymentRoutes(
             ? "active"
             : "pending";
 
-        await db
+        const [updated] = await db
           .update(restaurants)
           .set({
             stripeConnectStatus: connectStatus,
@@ -785,7 +802,9 @@ export function registerRestaurantPaymentRoutes(
             stripePayoutsEnabled: payoutsEnabled,
             updatedAt: new Date(),
           })
-          .where(eq(restaurants.id, restaurant.id));
+          .where(currentConnectIdentity)
+          .returning({ id: restaurants.id });
+        if (!updated) return staleRefresh();
 
         return res.json({
           connected: true,

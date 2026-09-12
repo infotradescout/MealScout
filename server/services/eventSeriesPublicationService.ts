@@ -268,6 +268,16 @@ function assertInitiationAuthority(input: {
   }
 }
 
+function assertFreeSeriesPublication(series: { seriesType: string }) {
+  if (series.seriesType === "parking_pass") {
+    throw new EventSeriesPublicationError(
+      409,
+      "parking_pass_publication_requires_paid_workflow",
+      "This action cannot publish Parking Pass series. Use Parking Pass setup to create paid listings.",
+    );
+  }
+}
+
 function frozenOccurrencesForSeries(
   series: typeof eventSeries.$inferSelect,
   now: Date,
@@ -397,6 +407,7 @@ export async function prepareEventSeriesPublication(input: {
       );
     }
     assertInitiationAuthority({ actorUserId, series, host });
+    assertFreeSeriesPublication(series);
 
     const existing = await tx
       .select()
@@ -562,6 +573,7 @@ async function convergePublicationChild(input: {
   childId: string;
 }) {
   return db.transaction(async (tx: any) => {
+    await lockPublicationSeries(tx, input.operationId);
     const [parent] = await tx
       .select()
       .from(eventSeriesPublicationOperations)
@@ -646,8 +658,24 @@ async function convergePublicationChild(input: {
   });
 }
 
+async function lockPublicationSeries(tx: any, operationId: string) {
+  const [identity] = await tx
+    .select({ seriesId: eventSeriesPublicationOperations.seriesId })
+    .from(eventSeriesPublicationOperations)
+    .where(eq(eventSeriesPublicationOperations.id, operationId))
+    .limit(1);
+  if (identity) {
+    // Preparation takes this same lock before locking the series and parent.
+    // Read only the immutable series identity before joining that lock order.
+    await tx.execute(
+      sql`SELECT pg_advisory_xact_lock(hashtext(${`event_series_publication:${identity.seriesId}`}))`,
+    );
+  }
+}
+
 async function finalizeEventSeriesPublication(operationId: string) {
   return db.transaction(async (tx: any) => {
+    await lockPublicationSeries(tx, operationId);
     await tx.execute(
       sql`SELECT pg_advisory_xact_lock(hashtext(${`event_series_publication_finalize:${operationId}`}))`,
     );
@@ -816,31 +844,53 @@ export async function resumeEventSeriesPublication(input: {
       "Publication operation identity is required.",
     );
   }
-  const [parent] = await db
-    .select()
-    .from(eventSeriesPublicationOperations)
-    .where(eq(eventSeriesPublicationOperations.id, operationId))
-    .limit(1);
-  if (!parent) {
-    throw new EventSeriesPublicationError(
-      404,
-      "event_series_publication_not_found",
-      "Publication operation not found.",
-    );
-  }
-  if (parent.status === "converged") {
+  const parent = await db.transaction(async (tx: any) => {
+    await lockPublicationSeries(tx, operationId);
+    const [locked] = await tx
+      .select()
+      .from(eventSeriesPublicationOperations)
+      .where(eq(eventSeriesPublicationOperations.id, operationId))
+      .limit(1)
+      .for("update");
+    if (!locked) {
+      throw new EventSeriesPublicationError(
+        404,
+        "event_series_publication_not_found",
+        "Publication operation not found.",
+      );
+    }
+    const [series] = await tx
+      .select({ seriesType: eventSeries.seriesType })
+      .from(eventSeries)
+      .where(eq(eventSeries.id, locked.seriesId))
+      .limit(1)
+      .for("update");
+    if (!series) {
+      throw new EventSeriesPublicationError(
+        409,
+        "event_series_publication_series_missing",
+        "The publication series is unavailable.",
+      );
+    }
+    // Older unfinished operations may contain free children for a paid series.
+    // Do not let replay or background recovery publish that frozen payload.
+    assertFreeSeriesPublication(series);
+    if (["converged", "failed"].includes(locked.status)) return locked;
+    await tx
+      .update(eventSeriesPublicationOperations)
+      .set({
+        status: "processing",
+        attemptCount: sql`${eventSeriesPublicationOperations.attemptCount} + 1` as any,
+        failureCode: null,
+        failureMessage: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(eventSeriesPublicationOperations.id, operationId));
+    return locked;
+  });
+  if (["converged", "failed"].includes(parent.status)) {
     return serializeEventSeriesPublication(operationId);
   }
-  await db
-    .update(eventSeriesPublicationOperations)
-    .set({
-      status: "processing",
-      attemptCount: sql`${eventSeriesPublicationOperations.attemptCount} + 1` as any,
-      failureCode: null,
-      failureMessage: null,
-      updatedAt: new Date(),
-    })
-    .where(eq(eventSeriesPublicationOperations.id, operationId));
   const children = await db
     .select()
     .from(eventSeriesPublicationChildren)
@@ -863,7 +913,14 @@ export async function resumeEventSeriesPublication(input: {
           recoveryRequestedAt: new Date(),
           updatedAt: new Date(),
         })
-        .where(eq(eventSeriesPublicationOperations.id, operationId));
+        .where(
+          and(
+            eq(eventSeriesPublicationOperations.id, operationId),
+            inArray(eventSeriesPublicationOperations.status, [
+              "prepared", "processing", "action_required",
+            ]),
+          ),
+        );
       throw new EventSeriesPublicationError(
         503,
         "event_series_publication_interrupted",
@@ -977,7 +1034,15 @@ export async function reconcileEventSeriesPublications(input?: {
           recoveryClaimedBy: null,
           updatedAt: new Date(),
         })
-        .where(eq(eventSeriesPublicationOperations.id, operationId));
+        .where(
+          and(
+            eq(eventSeriesPublicationOperations.id, operationId),
+            eq(eventSeriesPublicationOperations.recoveryClaimedBy, workerId),
+            inArray(eventSeriesPublicationOperations.status, [
+              "prepared", "processing", "action_required",
+            ]),
+          ),
+        );
       continue;
     }
     await db

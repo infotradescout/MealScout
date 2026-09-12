@@ -2986,6 +2986,100 @@ async function runFixture() {
     /outside frozen target scope|child set is already frozen/i,
   );
 
+  // Force both retries past preparation before either can finalize the credit.
+  // A separate provider fixture keeps earlier payment-count assertions unchanged.
+  await pool.query(`
+    insert into users (id, email, user_type, is_disabled, public_profile_settings)
+    values ('fixture-credit-host-owner', 'credit-host@fixture.invalid', 'host', false, '{}'::jsonb);
+    insert into hosts
+      (id, user_id, business_name, address, city, state, location_type,
+       latitude, longitude, stripe_connect_account_id,
+       stripe_onboarding_completed, stripe_charges_enabled, stripe_payouts_enabled)
+    values ('fixture-credit-host', 'fixture-credit-host-owner', 'Credit Fixture Host',
+      '10 Credit Fixture Way', 'Austin', 'TX', 'venue', 30.2672, -97.7431,
+      'acct_fixture_credit_host', true, true, true);
+    insert into events
+      (id, host_id, name, event_type, date, start_time, end_time,
+       max_trucks, status, hard_cap_enabled, requires_payment, host_price_cents)
+    values ('fixture-credit-retry', 'fixture-credit-host', 'Credit retry', 'parking_pass',
+      '2099-06-01', '10:00', '14:00', 2, 'open', true, true, 1000)
+  `);
+  const creditStripe = new InterceptedStripe("credit-retry");
+  const creditPurchaseInput = {
+    purchaserUserId: "fixture-truck-owner",
+    truckId: "fixture-truck",
+    hostId: "fixture-credit-host",
+    idempotencyKey: "fixture-credit-retry-purchase-v1",
+    lines: [{ eventId: "fixture-credit-retry", hostPriceCents: 1000,
+      platformFeeCents: 150, slotType: "daily" }],
+    stripe: creditStripe as any,
+  };
+  const creditPrepared = await bookingService.createParkingPassPurchase(creditPurchaseInput);
+  creditStripe.succeedIntent(creditPrepared.paymentIntentId!);
+  const creditConfirmed = await bookingService.createParkingPassPurchase(creditPurchaseInput);
+  const creditCancelInput = {
+    purchaseId: creditConfirmed.purchaseId,
+    bookingLineIds: creditConfirmed.bookingIds,
+    requestId: "fixture-credit-retry-cancellation-v1",
+    reason: "Truck voluntarily cancels a future booking",
+    actor: { userId: "fixture-truck-owner" },
+    stripe: creditStripe as any,
+  };
+  const creditLock = await pool.connect();
+  const creditLockKey = "parking_credit:fixture-truck-owner";
+  let creditAttempts: Promise<PromiseSettledResult<any>[]> | undefined;
+  let blockedFinalizers = 0;
+  try {
+    const holder = await creditLock.query(
+      "select pg_backend_pid() as pid, pg_advisory_lock(hashtext($1))",
+      [creditLockKey],
+    );
+    creditAttempts = Promise.allSettled([
+      bookingService.cancelParkingPassLines(creditCancelInput),
+      bookingService.cancelParkingPassLines(creditCancelInput),
+    ]);
+    const deadline = Date.now() + 10_000;
+    while (Date.now() < deadline) {
+      const waiting = await pool.query(
+        `select count(*)::int as count from pg_stat_activity
+          where datname = current_database()
+            and wait_event_type = 'Lock' and wait_event = 'advisory'
+            and $1::int = any(pg_blocking_pids(pid))`,
+        [holder.rows[0].pid],
+      );
+      blockedFinalizers = waiting.rows[0].count;
+      if (blockedFinalizers === 2) break;
+      await new Promise(resolveWait => setTimeout(resolveWait, 25));
+    }
+  } finally {
+    await creditLock.query("select pg_advisory_unlock(hashtext($1))", [creditLockKey]);
+    creditLock.release();
+  }
+  const creditResults = await creditAttempts!;
+  assert.equal(blockedFinalizers, 2, "Both retries must reach the held credit lock before release");
+  assert.equal(creditResults.every(result => result.status === "fulfilled"), true,
+    JSON.stringify(creditResults.map(result => result.status === "rejected" ? String(result.reason) : result.value.status)));
+  const creditOperations = creditResults.map(result => (result as PromiseFulfilledResult<any>).value);
+  assert.equal(creditOperations[0].id, creditOperations[1].id);
+  assert.equal(creditOperations[0].status, "credit_issued");
+  assert.equal(creditOperations[1].status, "credit_issued");
+  const creditFacts = await pool.query(`
+    select purchase.cancellation_credit_issued_cents as aggregate_credit,
+      (select count(*)::int from parking_pass_credit_ledger ledger
+        where ledger.purchase_id = purchase.id and ledger.entry_type = 'cancellation_credit') as ledger_count,
+      (select sum(amount_cents)::int from parking_pass_credit_ledger ledger
+        where ledger.purchase_id = purchase.id and ledger.entry_type = 'cancellation_credit'
+          and ledger.state = 'posted') as ledger_credit,
+      (select sum(cancellation_credit_issued_cents)::int from event_bookings booking
+        where booking.purchase_id = purchase.id) as booking_credit
+    from parking_pass_purchases purchase where purchase.id = $1
+  `, [creditConfirmed.purchaseId]);
+  assert.deepEqual(creditFacts.rows[0], {
+    aggregate_credit: 1150, ledger_count: 1, ledger_credit: 1150, booking_credit: 1150,
+  });
+  assert.equal(creditStripe.refundCreateCalls, 0, "Restricted credit must not issue a cash refund");
+  console.log("restricted-credit concurrency: two blocked retries issued exactly one credit");
+
   const destinationLedgerCount = await pool.query(
     `select count(*)::int as count from host_earnings_ledger
       where settlement_topology = 'destination_charge'
