@@ -71,6 +71,36 @@ try {
   for (const script of ["test:parking-schedule-calendar", "test:critical-smoke", "test:ordering-truth", "test:integrated-marketplace", "test:stripe-webhook-safety", "test:menu-lisa"]) {
     await run(script, "npm", ["run", script]);
   }
+  await run("browser-tooling", process.execPath, ["node_modules/playwright/cli.js", "install", "chromium", "firefox", "webkit"]);
+  const browserLibraries = await prepareRecoveryBrowserLibraries(tooling, run);
+  report.browserLibraries = { packages: browserLibraries.packages, downloaded: browserLibraries.downloaded, systemPackageInstall: false };
+  report.webkitBundledLibraries = linkRecoveryWebkitLibraries(tooling, env.PLAYWRIGHT_BROWSERS_PATH, browserLibraries.env.LD_LIBRARY_PATH.split(":"));
+  console.log(`RECOVERY_WEBKIT_BUNDLED_LIBRARIES ${JSON.stringify(report.webkitBundledLibraries)}`);
+  await run("browser-prerequisites-with-owned-libraries", process.execPath, ["scripts/recoveryBrowserPrerequisites.mjs", tooling], browserLibraries.env);
+  const browserPrerequisites = JSON.parse(readFileSync(join(tooling, "browser-prerequisites.json"), "utf8"));
+  assert.equal(browserPrerequisites.actualGlesDlopen, true);
+  report.browserPrerequisites = browserPrerequisites;
+  const express = (await import("express")).default;
+  const app = express();
+  app.get("/__recovery/browser-preflight", (_request, response) => response.type("html").send("<!doctype html><h1>MealScout isolated browser preflight</h1>"));
+  app.use("/api", (_request, response) => response.status(404).json({ error: "Static proof has no application API" }));
+  app.use(express.static(resolve("dist/public")));
+  app.get("*", (_request, response) => response.sendFile(resolve("dist/public/index.html")));
+  server = await new Promise((done, reject) => {
+    const owned = app.listen(0, "127.0.0.1", () => done(owned));
+    owned.once("error", reject);
+  });
+  const browserJson = resolve("test-results/recovery-browser.json");
+  const browserEnv = {
+    FRONTEND_URL: `http://127.0.0.1:${server.address().port}`,
+    PLAYWRIGHT_JSON_OUTPUT_FILE: browserJson,
+    DEBUG: "pw:browser",
+    ...browserLibraries.env,
+    // Only after the canonical checker and actual GLES loader both ran. This
+    // adapts its system-cache assumption; every real browser test still runs.
+    ...(browserPrerequisites.adaptSystemCacheCheck ? { PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS: "1" } : {}),
+  };
+  await run("webkit-loopback-navigation-preflight", process.execPath, ["scripts/recoveryWebkitPreflight.mjs"], browserEnv);
   // The npm server-only distribution omits psql and dump/restore. Build the
   // complete upstream release in an owned prefix; never install system packages.
   const archive = join(tooling, "postgresql-16.14.tar.gz");
@@ -90,33 +120,7 @@ try {
   await run("historical-writer-source", "git", ["fetch", "--no-tags", "--depth=1", "https://github.com/infotradescout/MealScout.git", historicalWriter]);
   await run("migration142-native-postgres16", process.execPath, ["--import", "tsx", "scripts/proveMigration142Postgres16.ts", `--native-pg-bin=${nativeBin}`]);
   await run("stateful-marketplace-native-postgres16", process.execPath, ["--import", "tsx", "scripts/recoveryNativePostgres16.mjs", nativeBin]);
-  await run("browser-tooling", process.execPath, ["node_modules/playwright/cli.js", "install", "chromium", "firefox", "webkit"]);
-  const browserLibraries = await prepareRecoveryBrowserLibraries(tooling, run);
-  report.browserLibraries = { packages: browserLibraries.packages, downloaded: browserLibraries.downloaded, systemPackageInstall: false };
-  report.webkitBundledLibraries = linkRecoveryWebkitLibraries(tooling, env.PLAYWRIGHT_BROWSERS_PATH, browserLibraries.env.LD_LIBRARY_PATH.split(":"));
-  console.log(`RECOVERY_WEBKIT_BUNDLED_LIBRARIES ${JSON.stringify(report.webkitBundledLibraries)}`);
-  await run("browser-prerequisites-with-owned-libraries", process.execPath, ["scripts/recoveryBrowserPrerequisites.mjs", tooling], browserLibraries.env);
-  const browserPrerequisites = JSON.parse(readFileSync(join(tooling, "browser-prerequisites.json"), "utf8"));
-  assert.equal(browserPrerequisites.actualGlesDlopen, true);
-  report.browserPrerequisites = browserPrerequisites;
-  const express = (await import("express")).default;
-  const app = express();
-  app.use("/api", (_request, response) => response.status(404).json({ error: "Static proof has no application API" }));
-  app.use(express.static(resolve("dist/public")));
-  app.get("*", (_request, response) => response.sendFile(resolve("dist/public/index.html")));
-  server = await new Promise((done, reject) => {
-    const owned = app.listen(0, "127.0.0.1", () => done(owned));
-    owned.once("error", reject);
-  });
-  const browserJson = resolve("test-results/recovery-browser.json");
-  await run("credential-free-browser-matrix", "npm", ["run", "test:flows:e2e:no-creds", "--", "--reporter=line,json"], {
-    FRONTEND_URL: `http://127.0.0.1:${server.address().port}`,
-    PLAYWRIGHT_JSON_OUTPUT_FILE: browserJson,
-    ...browserLibraries.env,
-    // Only after the canonical checker and actual GLES loader both ran. This
-    // adapts its system-cache assumption; every real browser test still runs.
-    ...(browserPrerequisites.adaptSystemCacheCheck ? { PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS: "1" } : {}),
-  });
+  await run("credential-free-browser-matrix", "npm", ["run", "test:flows:e2e:no-creds", "--", "--reporter=line,json"], browserEnv);
   const browser = JSON.parse(readFileSync(browserJson, "utf8"));
   assert.equal(browser.stats.unexpected, 0);
   assert.equal(browser.stats.flaky, 0);
