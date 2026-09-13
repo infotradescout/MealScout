@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { prepareRecoveryBrowserLibraries } from "./recoveryBrowserLibraries.mjs";
+import { linkRecoveryWebkitLibraries } from "./recoveryWebkitLibraries.mjs";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 process.chdir(root);
@@ -92,6 +93,8 @@ try {
   await run("browser-tooling", process.execPath, ["node_modules/playwright/cli.js", "install", "chromium", "firefox", "webkit"]);
   const browserLibraries = await prepareRecoveryBrowserLibraries(tooling, run);
   report.browserLibraries = { packages: browserLibraries.packages, downloaded: browserLibraries.downloaded, systemPackageInstall: false };
+  report.webkitBundledLibraries = linkRecoveryWebkitLibraries(tooling, env.PLAYWRIGHT_BROWSERS_PATH, browserLibraries.env.LD_LIBRARY_PATH.split(":"));
+  console.log(`RECOVERY_WEBKIT_BUNDLED_LIBRARIES ${JSON.stringify(report.webkitBundledLibraries)}`);
   await run("browser-prerequisites-with-owned-libraries", process.execPath, ["scripts/recoveryBrowserPrerequisites.mjs", tooling], browserLibraries.env);
   const browserPrerequisites = JSON.parse(readFileSync(join(tooling, "browser-prerequisites.json"), "utf8"));
   assert.equal(browserPrerequisites.actualGlesDlopen, true);
