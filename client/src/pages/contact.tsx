@@ -58,12 +58,12 @@ export default function Contact() {
   const supportEmail = "support@mealscout.us";
 
   const quickHelp = [
-    "How do I get started?",
-    "How do parking passes work?",
-    "Where do I manage my profile?",
-    "How do events work?",
-    "How do affiliate links work?",
-    "Report a problem"
+    { label: "How do I get started?", href: "/how-it-works" },
+    { label: "How do parking passes work?", href: "/parking-pass" },
+    { label: "Where do I manage my profile?", href: "/profile" },
+    { label: "How do events work?", href: "/for-events" },
+    { label: "How do affiliate links work?", href: "/faq" },
+    { label: "Report a problem", href: `mailto:${supportEmail}?subject=Report%20a%20problem` }
   ];
 
   return (
@@ -146,13 +146,14 @@ export default function Contact() {
               <CardContent>
                 <div className="space-y-3">
                   {quickHelp.map((topic, index) => (
-                    <button
-                      key={index}
-                      className="w-full text-left p-3 rounded-lg bg-[var(--bg-surface)] hover:bg-[color:var(--accent-text)]/10 hover:text-[color:var(--accent-text)] transition-colors text-sm"
+                    <a
+                      key={topic.href}
+                      href={topic.href}
+                      className="block w-full text-left p-3 rounded-lg bg-[var(--bg-surface)] hover:bg-[color:var(--accent-text)]/10 hover:text-[color:var(--accent-text)] transition-colors text-sm"
                       data-testid={`button-quick-help-${index}`}
                     >
-                      {topic}
-                    </button>
+                      {topic.label}
+                    </a>
                   ))}
                 </div>
               </CardContent>
@@ -203,6 +204,5 @@ export default function Contact() {
     </div>
   );
 }
-
 
 

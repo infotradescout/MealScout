@@ -164,6 +164,7 @@ export function registerHostInterestRoutes(
         res.json(updatedInterest);
       } catch (error: any) {
         console.error("Error updating interest status:", error);
+        if (error?.code === "CAPACITY_REACHED") return res.status(409).json(buildCapacityFullError());
         res.status(500).json({ message: "Failed to update status" });
       }
     },

@@ -8,20 +8,15 @@
 import type { PublicRestaurantProfile } from "@shared/publicProfiles";
 import { Clock3 } from "lucide-react";
 import { shouldShowPublicClaimPrompt } from "./profileClaimPromptPolicy";
+import { getRestaurantOpenState } from "@/lib/scoutMapTruth";
 
 function parseOpenStatus(openStatus: string | null): {
   isOpen: boolean | null;
   label: string | null;
 } {
   if (!openStatus) return { isOpen: null, label: null };
-  const lower = openStatus.toLowerCase();
-  if (/open/i.test(lower) && !/closed/i.test(lower)) {
-    return { isOpen: true, label: openStatus };
-  }
-  if (/closed/i.test(lower)) {
-    return { isOpen: false, label: openStatus };
-  }
-  return { isOpen: null, label: openStatus };
+  const state = getRestaurantOpenState({ openStatus });
+  return { isOpen: state === "unknown" ? null : state === "open", label: openStatus };
 }
 
 export function RestaurantHoursPanel({

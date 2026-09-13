@@ -1739,7 +1739,12 @@ export function registerUserAdminRoutes(
         }
 
         const now = new Date();
-        const expiresAt = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000);
+        const restaurantId = String(req.body?.restaurantId || "").trim();
+        const expiry = String(req.body?.insuranceExpiresAt || "").trim();
+        const expiresAt = new Date(expiry);
+        if (!restaurantId || !expiry || !Number.isFinite(expiresAt.getTime()) || expiresAt <= now) {
+          return res.status(400).json({ message: "Select the covered business and enter the policy's actual future expiry date." });
+        }
         const updatedBusinesses = await db
           .update(restaurants)
           .set({
@@ -1749,7 +1754,7 @@ export function registerUserAdminRoutes(
             insuranceVerifiedByUserId: req.user?.id || null,
             updatedAt: now,
           })
-          .where(eq(restaurants.ownerId, user.id))
+          .where(and(eq(restaurants.ownerId, user.id), eq(restaurants.id, restaurantId)))
           .returning({
             id: restaurants.id,
             insuranceVerified: restaurants.insuranceVerified,

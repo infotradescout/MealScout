@@ -9,10 +9,11 @@ import {
   type EventSeries,
   type InsertEventSeries,
 } from "@shared/schema";
-import { db } from "../db";
+import { db as applicationDb } from "../db";
+import { buildCapacityFullError, shouldBlockAcceptance } from "../services/interestDecision";
 import { eq, and, or, isNull, asc, desc, sql } from "drizzle-orm";
 
-export function createHostsEventsRepository() {
+export function createHostsEventsRepository(db = applicationDb) {
   return {
     async createEvent(event: InsertEvent): Promise<Event> {
       const [newEvent] = await db.insert(events).values(event).returning();
@@ -57,6 +58,9 @@ export function createHostsEventsRepository() {
     async createEventInterest(
       interest: InsertEventInterest,
     ): Promise<EventInterest> {
+      if (interest.status && interest.status !== "pending") {
+        throw Object.assign(new Error("New event interests must be pending"), { status: 400 });
+      }
       const [newInterest] = await db
         .insert(eventInterests)
         .values(interest)
@@ -68,12 +72,26 @@ export function createHostsEventsRepository() {
       id: string,
       status: string,
     ): Promise<EventInterest> {
-      const [updated] = await db
-        .update(eventInterests)
-        .set({ status })
-        .where(eq(eventInterests.id, id))
-        .returning();
-      return updated;
+      return db.transaction(async (tx: any) => {
+        const [interest] = await tx.select().from(eventInterests).where(eq(eventInterests.id, id));
+        if (!interest) throw Object.assign(new Error("Interest not found"), { status: 404 });
+        // All decisions for an event share this lock, including declines that
+        // release capacity. Re-read the decision after acquiring it.
+        const [event] = await tx.select().from(events).where(eq(events.id, interest.eventId)).for("update");
+        if (!event) throw Object.assign(new Error("Event not found"), { status: 404 });
+        const [current] = await tx.select().from(eventInterests).where(eq(eventInterests.id, id)).for("update");
+        if (current.status === status) return current;
+        if (status === "accepted") {
+          const [count] = await tx.select({ value: sql<number>`count(*)`.mapWith(Number) }).from(eventInterests)
+            .where(and(eq(eventInterests.eventId, event.id), eq(eventInterests.status, "accepted")));
+          if (shouldBlockAcceptance({ hardCapEnabled: event.hardCapEnabled, maxTrucks: event.maxTrucks, acceptedCount: count.value })) {
+            const error = buildCapacityFullError();
+            throw Object.assign(new Error(error.message), { status: 409, code: error.code });
+          }
+        }
+        const [updated] = await tx.update(eventInterests).set({ status }).where(eq(eventInterests.id, id)).returning();
+        return updated;
+      });
     },
 
     async getEventInterest(id: string): Promise<EventInterest | undefined> {

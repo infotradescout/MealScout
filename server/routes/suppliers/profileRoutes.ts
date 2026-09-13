@@ -10,6 +10,7 @@ import {
   suppliers,
 } from "@shared/schema";
 import { parseTabularFile } from "../../utils/tabularImport";
+import { parseImportPrice } from "../../utils/importPrice";
 import type {
   EnsureSupplierProfile,
   SupplierRouteMiddleware,
@@ -360,11 +361,13 @@ export function registerSupplierProfileRoutes(
           const activeRaw = toCell(row, activeIdx);
           const deliveryRaw = toCell(row, deliveryIdx);
 
-          const priceCents = priceRaw
-            ? priceRaw.includes(".")
-              ? Math.max(0, Math.round(Number(priceRaw) * 100))
-              : Math.max(0, Math.round(Number(priceRaw)))
-            : 0;
+          const parsedPrice = parseImportPrice(priceRaw,
+            headerMap[priceIdx]?.endsWith("_cents") ? "cents" : "dollars");
+          if (!parsedPrice.valid || parsedPrice.cents === null) {
+            skipped.push({ name, sku });
+            continue;
+          }
+          const priceCents = parsedPrice.cents;
           const isActive = parseBool(activeRaw, true);
           const deliveryEligible = parseBool(deliveryRaw, true);
 

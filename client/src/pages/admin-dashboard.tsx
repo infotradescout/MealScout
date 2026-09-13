@@ -5,6 +5,7 @@ import { apiUrl } from "@/lib/api";
 import { buildPublicProfilePath } from "@/lib/public-profile-path";
 import { useEffectiveLocationContext } from "@/hooks/useEffectiveLocationContext";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Card,
   CardContent,
@@ -3605,6 +3606,7 @@ export default function AdminDashboard() {
     }
   });
   const [selectedUser, setSelectedUser] = useState<any>(null);
+  const [insuranceExpiryByBusiness, setInsuranceExpiryByBusiness] = useState<Record<string, string>>({});
   const [userDetailsOpen, setUserDetailsOpen] = useState(false);
   const [userSortKey, setUserSortKey] = useState<"name" | "type" | "created">(
     "type",
@@ -7075,10 +7077,11 @@ export default function AdminDashboard() {
   });
 
   const verifyUserInsurance = useMutation({
-    mutationFn: async (userId: string) => {
+    mutationFn: async ({ userId, restaurantId, insuranceExpiresAt }: { userId: string; restaurantId: string; insuranceExpiresAt: string }) => {
       const res = await apiRequest(
         "POST",
         `/api/admin/users/${userId}/verify-insurance`,
+        { restaurantId, insuranceExpiresAt },
       );
       return await res.json();
     },
@@ -7098,7 +7101,7 @@ export default function AdminDashboard() {
       }
       toast({
         title: "Insurance Verified",
-        description: "Auto insurance verification is valid for 365 days.",
+        description: "Insurance recorded with the policy's actual expiry date.",
       });
     },
     onError: (error: any) => {
@@ -11663,23 +11666,32 @@ export default function AdminDashboard() {
                             </Button>
                           )}
                           {isAdminOrSuper && user.hasRestaurant && (
+                            <div className="flex flex-wrap items-end gap-2">
+                            <label className="text-xs">
+                              Policy expiry for {user.businessName || "this business"}
+                              <Input type="date" aria-label={`Insurance expiry for ${user.businessName || user.id}`}
+                                value={insuranceExpiryByBusiness[user.restaurantId] || ""}
+                                onChange={(event) => setInsuranceExpiryByBusiness((current) => ({ ...current, [user.restaurantId]: event.target.value }))} />
+                            </label>
                             <Button
                               size="sm"
                               variant="outline"
                               onClick={() =>
-                                verifyUserInsurance.mutate(user.id)
+                                verifyUserInsurance.mutate({ userId: user.id, restaurantId: user.restaurantId,
+                                  insuranceExpiresAt: `${insuranceExpiryByBusiness[user.restaurantId]}T23:59:59.999Z` })
                               }
                               disabled={
                                 verifyUserInsurance.isPending ||
-                                user.insuranceVerified
+                                !insuranceExpiryByBusiness[user.restaurantId]
                               }
                               data-testid={`button-verify-insurance-${user.id}`}
                             >
                               <CheckCircle className="w-3 h-3 mr-1" />
                               {user.insuranceVerified
-                                ? "Insurance Verified"
+                                ? "Update Insurance"
                                 : "Verify Insurance"}
                             </Button>
+                            </div>
                           )}
                         </div>
                         <Button

@@ -53,12 +53,16 @@ export function evaluateScoutcoinPolicy(
     };
   }
 
-  if (txType === "buy" && tokenStatus === "disabled") {
+  if (txType !== "admin_freeze" && tokenStatus === "disabled") {
     return {
       allowed: false,
       code: "token_disabled",
-      reason: "ScoutCoin buying is disabled.",
+      reason: "ScoutCoin transactions are disabled.",
     };
+  }
+
+  if (txType !== "admin_freeze" && amountAtomic <= 0n) {
+    return { allowed: false, code: "invalid_amount", reason: "Transaction amount must be positive." };
   }
 
   const normalizedJurisdiction = String(jurisdictionCode || "")

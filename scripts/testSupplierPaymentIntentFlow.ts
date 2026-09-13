@@ -79,7 +79,7 @@ const cases: Case[] = [
     expected: "conflict",
   },
   {
-    name: "cancel+recreate when succeeded intent is reused",
+    name: "conflict when a succeeded intent awaits reconciliation",
     input: {
       intent: {
         status: "succeeded",
@@ -90,7 +90,7 @@ const cases: Case[] = [
       paymentMethod: "card",
       chargeAmountCents: 12000,
     },
-    expected: "cancel_and_recreate",
+    expected: "conflict",
   },
 ];
 

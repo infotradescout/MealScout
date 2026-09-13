@@ -7,7 +7,9 @@
  *
  * For guests, tapping the button routes to /login with a continuation path.
  */
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
 import { Heart } from "lucide-react";
 import { apiUrl } from "@/lib/api";
 
@@ -19,7 +21,11 @@ type ProfileFavoriteButtonProps = {
   profilePath?: string;
 };
 
-export function ProfileFavoriteButton({
+export function ProfileFavoriteButton(props: ProfileFavoriteButtonProps) {
+  return <FavoriteButton key={props.restaurantId} {...props} />;
+}
+
+function FavoriteButton({
   restaurantId,
   isAuthenticated,
   initialIsFavorited = false,
@@ -28,8 +34,22 @@ export function ProfileFavoriteButton({
 }: ProfileFavoriteButtonProps) {
   const [isFavorited, setIsFavorited] = useState(initialIsFavorited);
   const [isPending, setIsPending] = useState(false);
+  const pendingRef = useRef(false);
+  const mountedRef = useRef(true);
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  useEffect(() => {
+    if (!pendingRef.current) setIsFavorited(initialIsFavorited);
+  }, [initialIsFavorited]);
 
   const handleToggle = useCallback(async () => {
+    if (pendingRef.current) return;
     if (!isAuthenticated) {
       const continuationPath = profilePath || window.location.pathname;
       window.location.href = `/login?continuation=${encodeURIComponent(continuationPath)}`;
@@ -37,26 +57,32 @@ export function ProfileFavoriteButton({
     }
 
     const nextState = !isFavorited;
+    pendingRef.current = true;
     setIsFavorited(nextState); // optimistic
     setIsPending(true);
     onToggle?.(nextState);
 
     try {
-      await fetch(
+      const response = await fetch(
         apiUrl(`/api/restaurants/${encodeURIComponent(restaurantId)}/favorite`),
         {
           method: nextState ? "POST" : "DELETE",
           credentials: "include",
         },
       );
+      if (!response.ok) throw new Error("Save failed");
+      await queryClient.invalidateQueries({ queryKey: ["/api/favorites/restaurants"] });
     } catch {
-      // Revert on failure
-      setIsFavorited(!nextState);
-      onToggle?.(!nextState);
+      if (mountedRef.current) {
+        setIsFavorited(!nextState);
+        onToggle?.(!nextState);
+        toast({ title: "Couldn't update your saved places", description: "Please try again.", variant: "destructive" });
+      }
     } finally {
-      setIsPending(false);
+      pendingRef.current = false;
+      if (mountedRef.current) setIsPending(false);
     }
-  }, [isAuthenticated, isFavorited, restaurantId, onToggle, profilePath]);
+  }, [isAuthenticated, isFavorited, restaurantId, onToggle, profilePath, queryClient, toast]);
 
   return (
     <button

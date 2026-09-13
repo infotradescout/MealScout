@@ -710,7 +710,6 @@ export function registerSupplyScoutRoutes(app: Express) {
       // Best 2-stop split: brute force on top N candidates.
       const topN = Math.min(25, storeArray.length);
       let bestTwo: any = null;
-      const listItemIds = resolved.map((r) => r.resolvedItemId).filter(Boolean) as string[];
 
       for (let i = 0; i < topN; i++) {
         for (let j = i + 1; j < topN; j++) {
@@ -760,7 +759,8 @@ export function registerSupplyScoutRoutes(app: Express) {
       res.json({
         success: true,
         resolvedCount: targetCoverage,
-        unmatchedCount: listItemIds.length - targetCoverage,
+        unmatchedCount: resolved.length - targetCoverage,
+        unmatchedItems: resolved.filter((item) => !item.resolvedItemId).map((item) => item.rawName),
         costPerStopCents,
         plan: bestPlan,
         candidatesConsidered: storeArray.length,

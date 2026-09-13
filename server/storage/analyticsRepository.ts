@@ -10,10 +10,10 @@ import {
   type DealClaim,
   type RestaurantRecommendation,
 } from "@shared/schema";
-import { db } from "../db";
+import { db as applicationDb } from "../db";
 import { eq, and, gte, lte, desc, sql, inArray } from "drizzle-orm";
 
-export function createAnalyticsRepository() {
+export function createAnalyticsRepository(db: typeof applicationDb = applicationDb) {
   return {
     async recordDealView(view: InsertDealView): Promise<DealView> {
       const [newView] = await db.insert(dealViews).values(view).returning();
@@ -111,8 +111,8 @@ export function createAnalyticsRepository() {
       if (dateRange) {
         viewConditions.push(gte(dealViews.viewedAt, dateRange.start));
         viewConditions.push(lte(dealViews.viewedAt, dateRange.end));
-        claimConditions.push(gte(dealClaims.claimedAt, dateRange.start));
-        claimConditions.push(lte(dealClaims.claimedAt, dateRange.end));
+        claimConditions.push(gte(sql`coalesce(${dealClaims.usedAt}, ${dealClaims.claimedAt})`, dateRange.start));
+        claimConditions.push(lte(sql`coalesce(${dealClaims.usedAt}, ${dealClaims.claimedAt})`, dateRange.end));
       }
 
       const [viewsResult] = await db
@@ -134,24 +134,27 @@ export function createAnalyticsRepository() {
       const conversionRate =
         totalViews > 0 ? (totalClaims / totalViews) * 100 : 0;
 
-      const topDeals = await db
-        .select({
-          dealId: deals.id,
-          title: deals.title,
-          views: sql<number>`count(distinct ${dealViews.id})`,
-          claims: sql<number>`count(distinct ${dealClaims.id})`,
-          revenue: sql<number>`coalesce(sum(cast(${dealClaims.orderAmount} as decimal)), 0)`,
-        })
-        .from(deals)
-        .leftJoin(dealViews, eq(deals.id, dealViews.dealId))
-        .leftJoin(
-          dealClaims,
-          and(eq(deals.id, dealClaims.dealId), eq(dealClaims.isUsed, true)),
-        )
+      const viewTotals = db.select({
+        dealId: dealViews.dealId,
+        views: sql<number>`count(*)`.as("views"),
+      }).from(dealViews).where(and(...viewConditions)).groupBy(dealViews.dealId).as("view_totals");
+      const claimTotals = db.select({
+        dealId: dealClaims.dealId,
+        claims: sql<number>`count(*)`.as("claims"),
+        revenue: sql<number>`coalesce(sum(cast(${dealClaims.orderAmount} as decimal)), 0)`.as("revenue"),
+      }).from(dealClaims).where(and(...claimConditions, eq(dealClaims.isUsed, true)))
+        .groupBy(dealClaims.dealId).as("claim_totals");
+      const topDeals = await db.select({
+        dealId: deals.id,
+        title: deals.title,
+        views: sql<number>`coalesce(${viewTotals.views}, 0)`.mapWith(Number),
+        claims: sql<number>`coalesce(${claimTotals.claims}, 0)`.mapWith(Number),
+        revenue: sql<number>`coalesce(${claimTotals.revenue}, 0)`.mapWith(Number),
+      }).from(deals)
+        .leftJoin(viewTotals, eq(deals.id, viewTotals.dealId))
+        .leftJoin(claimTotals, eq(deals.id, claimTotals.dealId))
         .where(eq(deals.restaurantId, restaurantId))
-        .groupBy(deals.id, deals.title)
-        .orderBy(desc(sql`count(distinct ${dealViews.id})`))
-        .limit(5);
+        .orderBy(desc(sql`coalesce(${viewTotals.views}, 0)`), deals.id).limit(5);
 
       return {
         totalViews,
@@ -178,36 +181,34 @@ export function createAnalyticsRepository() {
         return [];
       }
 
-      const dateFormat = interval === "day" ? "YYYY-MM-DD" : 'YYYY-"W"WW';
-
-      const timeseries = await db
-        .select({
-          date: sql<string>`to_char(${dealViews.viewedAt}, '${dateFormat}')`,
-          views: sql<number>`count(distinct ${dealViews.id})`,
-          claims: sql<number>`count(distinct ${dealClaims.id})`,
-          revenue: sql<number>`coalesce(sum(cast(${dealClaims.orderAmount} as decimal)), 0)`,
-        })
-        .from(dealViews)
-        .leftJoin(
-          dealClaims,
-          and(
-            eq(dealViews.dealId, dealClaims.dealId),
-            eq(dealClaims.isUsed, true),
-            gte(dealClaims.claimedAt, dateRange.start),
-            lte(dealClaims.claimedAt, dateRange.end),
-          ),
-        )
-        .where(
-          and(
-            inArray(dealViews.dealId, dealIdArray),
-            gte(dealViews.viewedAt, dateRange.start),
-            lte(dealViews.viewedAt, dateRange.end),
-          ),
-        )
-        .groupBy(sql`to_char(${dealViews.viewedAt}, '${dateFormat}')`)
-        .orderBy(sql`to_char(${dealViews.viewedAt}, '${dateFormat}')`);
-
-      return timeseries;
+      const dateFormat = interval === "day" ? "YYYY-MM-DD" : 'IYYY-"W"IW';
+      // Aggregate independent view and redemption events, including days with
+      // redemptions but no views. Never join two unaggregated fact tables.
+      const result = await db.execute(sql`
+        select activity.date, sum(activity.views)::int as views,
+          sum(activity.claims)::int as claims, sum(activity.revenue)::numeric as revenue
+        from (
+          select to_char(${dealViews.viewedAt}, ${dateFormat}) as date,
+            count(*) as views, 0 as claims, 0::numeric as revenue
+          from ${dealViews}
+          where ${inArray(dealViews.dealId, dealIdArray)}
+            and ${gte(dealViews.viewedAt, dateRange.start)}
+            and ${lte(dealViews.viewedAt, dateRange.end)}
+          group by date
+          union all
+          select to_char(coalesce(${dealClaims.usedAt}, ${dealClaims.claimedAt}), ${dateFormat}) as date,
+            0 as views, count(*) as claims,
+            coalesce(sum(cast(${dealClaims.orderAmount} as decimal)), 0) as revenue
+          from ${dealClaims}
+          where ${inArray(dealClaims.dealId, dealIdArray)} and ${eq(dealClaims.isUsed, true)}
+            and coalesce(${dealClaims.usedAt}, ${dealClaims.claimedAt}) >= ${dateRange.start}
+            and coalesce(${dealClaims.usedAt}, ${dealClaims.claimedAt}) <= ${dateRange.end}
+          group by date
+        ) activity group by activity.date order by activity.date
+      `);
+      return result.rows.map((row: any) => ({
+        date: row.date, views: Number(row.views), claims: Number(row.claims), revenue: Number(row.revenue),
+      }));
     },
 
     async getRestaurantCustomerInsights(
@@ -322,44 +323,35 @@ export function createAnalyticsRepository() {
       restaurantId: string,
       dateRange: { start: Date; end: Date },
     ) {
-      const exportData = await db
-        .select({
-          dealTitle: deals.title,
-          date: sql<string>`to_char(${dealViews.viewedAt}, 'YYYY-MM-DD')`,
-          views: sql<number>`count(distinct ${dealViews.id})`,
-          claims: sql<number>`count(distinct ${dealClaims.id})`,
-          revenue: sql<number>`coalesce(sum(cast(${dealClaims.orderAmount} as decimal)), 0)`,
-        })
-        .from(deals)
-        .leftJoin(
-          dealViews,
-          and(
-            eq(deals.id, dealViews.dealId),
-            gte(dealViews.viewedAt, dateRange.start),
-            lte(dealViews.viewedAt, dateRange.end),
-          ),
-        )
-        .leftJoin(
-          dealClaims,
-          and(
-            eq(deals.id, dealClaims.dealId),
-            eq(dealClaims.isUsed, true),
-            gte(dealClaims.usedAt, dateRange.start),
-            lte(dealClaims.usedAt, dateRange.end),
-          ),
-        )
-        .where(eq(deals.restaurantId, restaurantId))
-        .groupBy(
-          deals.id,
-          deals.title,
-          sql`to_char(${dealViews.viewedAt}, 'YYYY-MM-DD')`,
-        )
-        .orderBy(
-          deals.title,
-          sql`to_char(${dealViews.viewedAt}, 'YYYY-MM-DD')`,
-        );
-
-      return exportData;
+      const result = await db.execute(sql`
+        select ${deals.title} as "dealTitle", activity.date,
+          sum(activity.views)::int as views, sum(activity.claims)::int as claims,
+          sum(activity.revenue)::numeric as revenue
+        from (
+          select ${dealViews.dealId} as deal_id,
+            to_char(${dealViews.viewedAt}, 'YYYY-MM-DD') as date,
+            count(*) as views, 0 as claims, 0::numeric as revenue
+          from ${dealViews}
+          where ${gte(dealViews.viewedAt, dateRange.start)} and ${lte(dealViews.viewedAt, dateRange.end)}
+          group by ${dealViews.dealId}, date
+          union all
+          select ${dealClaims.dealId} as deal_id,
+            to_char(coalesce(${dealClaims.usedAt}, ${dealClaims.claimedAt}), 'YYYY-MM-DD') as date,
+            0 as views, count(*) as claims,
+            coalesce(sum(cast(${dealClaims.orderAmount} as decimal)), 0) as revenue
+          from ${dealClaims} where ${eq(dealClaims.isUsed, true)}
+            and coalesce(${dealClaims.usedAt}, ${dealClaims.claimedAt}) >= ${dateRange.start}
+            and coalesce(${dealClaims.usedAt}, ${dealClaims.claimedAt}) <= ${dateRange.end}
+          group by ${dealClaims.dealId}, date
+        ) activity inner join ${deals} on ${deals.id} = activity.deal_id
+        where ${eq(deals.restaurantId, restaurantId)}
+        group by ${deals.id}, ${deals.title}, activity.date
+        order by ${deals.title}, ${deals.id}, activity.date
+      `);
+      return result.rows.map((row: any) => ({
+        dealTitle: row.dealTitle, date: row.date,
+        views: Number(row.views), claims: Number(row.claims), revenue: Number(row.revenue),
+      }));
     },
 
     async getRestaurantFavoritesAnalytics(

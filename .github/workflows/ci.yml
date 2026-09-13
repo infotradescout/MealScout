@@ -25,6 +25,9 @@ jobs:
       - name: Typecheck
         run: npm run check
 
+      - name: Audit Repair Regression Tests
+        run: npm run test:audit-repairs
+
       - name: Stripe Webhook Safety
         run: npm run test:stripe-webhook-safety
 

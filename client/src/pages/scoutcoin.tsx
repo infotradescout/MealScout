@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 
 type ScoutcoinConfigResponse = {
+  transactionsEnabled: boolean;
   token: {
     chain: string;
     contractAddress: string | null;
@@ -52,6 +53,7 @@ export default function ScoutcoinPage() {
 
   const buyDisabled = useMemo(() => {
     if (!config) return true;
+    if (!config.transactionsEnabled) return true;
     if (config.token.status === "disabled") return true;
     if (!config.priceModule.providerConfigured) return true;
     return false;
@@ -97,8 +99,7 @@ export default function ScoutcoinPage() {
             </Badge>
           </div>
           <p className="text-xs text-muted-foreground">
-            Risk disclosure: token actions may be restricted by compliance checks including
-            KYC, jurisdiction, and wallet safety controls.
+            ScoutCoin purchases, transfers, and perk redemptions are currently unavailable.
           </p>
         </CardContent>
       </Card>
@@ -147,7 +148,7 @@ export default function ScoutcoinPage() {
               placeholder="Amount (atomic units)"
             />
             <Button
-              disabled={txMutation.isPending || !sendToWallet.trim()}
+              disabled={!config?.transactionsEnabled || txMutation.isPending || !sendToWallet.trim()}
               onClick={() =>
                 txMutation.mutate({
                   txType: "send",
@@ -181,7 +182,7 @@ export default function ScoutcoinPage() {
               placeholder="Amount (atomic units)"
             />
             <Button
-              disabled={txMutation.isPending}
+              disabled={!config?.transactionsEnabled || txMutation.isPending}
               onClick={() =>
                 txMutation.mutate({
                   txType: "redeem",

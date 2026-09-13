@@ -1,4 +1,4 @@
-import { db } from "./db";
+import { db as applicationDb } from "./db";
 import {
   users,
   restaurants,
@@ -125,7 +125,7 @@ export interface UserFlagWithCaseStatus {
   };
 }
 
-export function createModerationService(storage: any): ModerationService {
+export function createModerationService(db = applicationDb): ModerationService {
   return {
     async flagRecommendation(
       recommendationId: string,
@@ -366,35 +366,44 @@ export function createModerationService(storage: any): ModerationService {
       appealedByUserId: string,
       appealReason: string,
     ) {
-      const [appeal] = await db
-        .insert(moderationAppeals)
-        .values({
-          resolutionId,
-          appealedByUserId,
-          appealReason,
-        })
-        .returning();
-
-      // Update resolution to mark as appealable
-      const resolution = await db
-        .select()
-        .from(moderationResolutions)
-        .where(eq(moderationResolutions.id, resolutionId))
-        .then((res: any[]) => res[0]);
-
-      const caseRecord = await db
-        .select()
-        .from(moderationCases)
-        .where(eq(moderationCases.id, resolution.caseId))
-        .then((res: any[]) => res[0]);
-
-      // Update case status to appealed
-      await db
-        .update(moderationCases)
-        .set({ status: "appealed" })
-        .where(eq(moderationCases.id, caseRecord.id));
-
-      return appeal.id;
+      return db.transaction(async (tx: any) => {
+        const [resolution] = await tx.select().from(moderationResolutions)
+          .where(eq(moderationResolutions.id, resolutionId)).for("update");
+        const fail = (message: string, status: number): never => {
+          throw Object.assign(new Error(message), { status });
+        };
+        if (!resolution) fail("Resolution not found", 404);
+        if (resolution.appealEligible === false) fail("This resolution is not eligible for appeal", 409);
+        const [caseRecord] = await tx.select().from(moderationCases)
+          .where(eq(moderationCases.id, resolution.caseId)).for("update");
+        if (!caseRecord) fail("Resolution not found", 404);
+        let authorized = caseRecord.reporterId === appealedByUserId;
+        if (!authorized && caseRecord.restaurantId) {
+          const [business] = await tx.select({ ownerId: restaurants.ownerId }).from(restaurants)
+            .where(eq(restaurants.id, caseRecord.restaurantId));
+          authorized = business?.ownerId === appealedByUserId;
+        }
+        if (!authorized && caseRecord.recommendationId) {
+          const [recommendation] = await tx.select({ userId: restaurantUserRecommendations.userId })
+            .from(restaurantUserRecommendations)
+            .where(eq(restaurantUserRecommendations.id, caseRecord.recommendationId));
+          authorized = recommendation?.userId === appealedByUserId;
+        }
+        if (!authorized) fail("You cannot appeal this resolution", 403);
+        if (!["resolved", "appealed"].includes(caseRecord.status)) {
+          fail("This case is not open for an appeal", 409);
+        }
+        const [existing] = await tx.select({ id: moderationAppeals.id, appealedByUserId: moderationAppeals.appealedByUserId })
+          .from(moderationAppeals).where(eq(moderationAppeals.resolutionId, resolutionId));
+        if (existing?.appealedByUserId === appealedByUserId) return existing.id;
+        if (existing) fail("An appeal has already been submitted for this resolution", 409);
+        const [appeal] = await tx.insert(moderationAppeals).values({
+          resolutionId, appealedByUserId, appealReason,
+        }).returning();
+        await tx.update(moderationCases).set({ status: "appealed", updatedAt: new Date() })
+          .where(eq(moderationCases.id, caseRecord.id));
+        return appeal.id;
+      });
     },
 
     async getReporterReputation(userId: string) {
@@ -501,4 +510,3 @@ export function createModerationService(storage: any): ModerationService {
     },
   };
 }
-

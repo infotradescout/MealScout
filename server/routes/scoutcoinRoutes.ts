@@ -139,6 +139,7 @@ export function registerScoutcoinRoutes(app: Express) {
     const tokenConfig = await getOrCreateTokenConfig();
     const complianceConfig = await getOrCreateComplianceConfig();
     res.json({
+      transactionsEnabled: false,
       token: {
         chain: tokenConfig.chain,
         contractAddress: tokenConfig.contractAddress,
@@ -263,60 +264,13 @@ export function registerScoutcoinRoutes(app: Express) {
           code: policy.code,
         });
       }
-      if (
-        payload.txType === "buy" &&
-        (!tokenConfig.providerConfigured || !tokenConfig.priceProvider)
-      ) {
-        await logAudit(
-          userId,
-          "scoutcoin_transaction_blocked",
-          "scoutcoin_tx",
-          "buy",
-          req.ip,
-          req.get("User-Agent"),
-          { code: "price_provider_not_configured" },
-        );
-        return res.status(403).json({
-          code: "price_provider_not_configured",
-          message:
-            "Buying is disabled until a supported provider is configured.",
-        });
-      }
-
-      const [tx] = await db
-        .insert(scoutcoinTxLedger)
-        .values({
-          txType: payload.txType,
-          status: "confirmed",
-          fromUserId:
-            payload.txType === "receive" ? null : (userId as string | null),
-          toUserId:
-            payload.toUserId ||
-            (payload.txType === "buy" ? userId : null) ||
-            null,
-          fromWalletAddress:
-            payload.txType === "receive" ? null : wallet.walletAddress,
-          toWalletAddress: payload.toWalletAddress || wallet.walletAddress,
-          amountAtomic: payload.amountAtomic,
-          perkSurface: payload.perkSurface || null,
-          reason: payload.reason || null,
-          metadata: {
-            jurisdictionCode: payload.jurisdictionCode || wallet.jurisdictionCode,
-          },
-          createdByUserId: userId,
-        })
-        .returning();
-
-      await logAudit(
-        userId,
-        "scoutcoin_transaction_recorded",
-        "scoutcoin_tx",
-        tx.id,
-        req.ip,
-        req.get("User-Agent"),
-        { txType: payload.txType, amountAtomic: payload.amountAtomic },
-      );
-      res.json(tx);
+      // No custody/settlement adapter is implemented. A local ledger write cannot
+      // establish a purchase, receipt, transfer or refund, even when admin config
+      // says a provider is configured.
+      return res.status(503).json({
+        code: "settlement_unavailable",
+        message: "ScoutCoin transactions are unavailable until settlement is connected.",
+      });
     },
   );
 

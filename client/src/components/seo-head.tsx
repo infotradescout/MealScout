@@ -167,6 +167,8 @@ export function SEOHead({
     setMetaTag("og:site_name", "MealScout", true);
     if (resolvedOgImage) {
       setMetaTag("og:image", resolvedOgImage, true);
+    } else {
+      removeMetaTag("og:image", true);
     }
     if (resolvedCanonical) {
       setMetaTag("og:url", resolvedCanonical, true);
@@ -180,17 +182,15 @@ export function SEOHead({
     setMetaTag("twitter:site", "@mealscout");
     if (resolvedOgImage) {
       setMetaTag("twitter:image", resolvedOgImage);
+    } else {
+      removeMetaTag("twitter:image");
     }
 
     // Structured data (JSON-LD)
     let pageSchema: HTMLScriptElement | null = null;
+    document.querySelectorAll('script[type="application/ld+json"][data-page-schema="true"]')
+      .forEach((schema) => schema.remove());
     if (schemaData) {
-      // Remove any existing page-specific schema
-      const existingPageSchema = document.querySelector('script[type="application/ld+json"][data-page-schema="true"]');
-      if (existingPageSchema) {
-        existingPageSchema.remove();
-      }
-      
       // Create new page-specific schema
       pageSchema = document.createElement("script");
       pageSchema.setAttribute("type", "application/ld+json");
@@ -201,11 +201,9 @@ export function SEOHead({
 
     // Cleanup function
     return () => {
-      // Optional: Clean up when component unmounts
-      // Usually not needed for SPAs, but good practice
+      pageSchema?.remove();
     };
   }, [title, description, keywords, canonicalUrl, ogImage, ogType, schemaData, noIndex]);
 
   return null; // This component doesn't render anything
 }
-

@@ -289,7 +289,7 @@ healthRouter.get("/health/ready", async (_req, res) => {
 healthRouter.get("/health/metrics", async (req, res) => {
   const expected = String(process.env.HEALTH_METRICS_TOKEN || "").trim();
   const provided = String(req.headers["x-health-token"] || "").trim();
-  if (expected && provided !== expected) {
+  if (!expected || provided !== expected) {
     return res.status(401).json({ message: "Unauthorized" });
   }
   const paymentHealth = await getPaymentHealthSnapshot().catch(() => null);

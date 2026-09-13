@@ -1468,7 +1468,7 @@ export async function setupUnifiedAuth(
       await storage.deleteExpiredPhoneVerificationTokens();
       await storage.deletePhoneVerificationTokens(normalizedPhone);
 
-      const code = String(Math.floor(100000 + Math.random() * 900000));
+      const code = String(crypto.randomInt(100000, 1000000));
       const tokenHash = crypto.createHash("sha256").update(code).digest("hex");
       const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
@@ -2870,4 +2870,3 @@ export const verifyResourceOwnership = (
     }
   };
 };
-

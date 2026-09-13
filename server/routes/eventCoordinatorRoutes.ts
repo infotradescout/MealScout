@@ -323,6 +323,7 @@ export function registerEventCoordinatorRoutes(
         res.json({ message: `Interest ${status}`, interest: updated });
       } catch (error: any) {
         console.error("Error updating interest status:", error);
+        if (error?.code === "CAPACITY_REACHED") return res.status(409).json(buildCapacityFullError());
         res.status(500).json({ message: "Failed to update interest status" });
       }
     },

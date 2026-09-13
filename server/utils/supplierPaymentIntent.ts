@@ -7,7 +7,7 @@ export type ExistingSupplierIntent = {
   paymentMethodTypes?: string[] | null | undefined;
 };
 
-export type SupplierIntentDecision = "reuse" | "cancel_and_recreate" | "conflict";
+export type SupplierIntentDecision = "reuse" | "recreate" | "cancel_and_recreate" | "conflict";
 
 const CANCELLABLE_STATUSES = new Set([
   "requires_payment_method",
@@ -24,9 +24,8 @@ export function decideSupplierIntentHandling(input: {
   const { intent, paymentMethod, chargeAmountCents } = input;
 
   const status = String(intent.status || "").trim();
-  if (!status || status === "canceled" || status === "succeeded") {
-    return "cancel_and_recreate";
-  }
+  if (!status || status === "succeeded") return "conflict";
+  if (status === "canceled") return "recreate";
 
   const expectedType = paymentMethod === "ach" ? "us_bank_account" : "card";
   const methodFromMetadata = String(intent.metadataPaymentMethod || "").trim();
@@ -44,4 +43,3 @@ export function decideSupplierIntentHandling(input: {
 
   return "conflict";
 }
-

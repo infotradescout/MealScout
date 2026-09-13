@@ -17,6 +17,10 @@
   ],
   "rewrites": [
     {
+      "source": "/health/:path*",
+      "destination": "https://mealscout.onrender.com/health/:path*"
+    },
+    {
       "source": "/assets/:path*",
       "destination": "/assets/:path*"
     },

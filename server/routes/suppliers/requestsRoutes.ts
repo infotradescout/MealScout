@@ -11,14 +11,13 @@ import { parseTabularFile } from "../../utils/tabularImport";
 import { canEmailForTopic } from "../../utils/notificationPreferences";
 import {
   restaurants,
-  supplierOrderItems,
-  supplierOrders,
   supplierProducts,
   supplierRequestItems,
   supplierRequests,
   suppliers,
 } from "@shared/schema";
 import type { SupplierRequestsRouteDeps } from "./shared";
+import { acceptSupplierRequest, updateSupplierDelivery, SupplierOrderError } from "../../services/supplierOrderAuthority";
 
 const importUpload = multer({
   storage: multer.memoryStorage(),
@@ -663,152 +662,9 @@ export function registerSupplierRequestsRoutes(
         const requestId = String(req.params.requestId || "").trim();
         if (!requestId) return res.status(400).json({ message: "Request ID required" });
 
-        const [request] = await db
-          .select()
-          .from(supplierRequests)
-          .where(and(eq(supplierRequests.id, requestId), eq(supplierRequests.supplierId, supplier.id)))
-          .limit(1);
-        if (!request) return res.status(404).json({ message: "Request not found" });
-        if (String((request as any).status) !== "submitted") {
-          return res.status(409).json({ message: "Request is not pending." });
-        }
-
-        const items = await db
-          .select()
-          .from(supplierRequestItems)
-          .where(eq(supplierRequestItems.requestId, requestId));
-
-        const missing = (items as any[]).filter((i) => !i.productId);
-        if (missing.length > 0) {
-          return res.status(400).json({
-            message: "Request contains unmapped items. Please fix the request items before accepting.",
-            missingCount: missing.length,
-          });
-        }
-
-        const productIds = Array.from(new Set((items as any[]).map((i) => String(i.productId))));
-        const products = await db
-          .select()
-          .from(supplierProducts)
-          .where(and(eq(supplierProducts.supplierId, supplier.id), inArray(supplierProducts.id, productIds)));
-        const productById = new Map<string, any>((products as any[]).map((p: any) => [String(p.id), p]));
-
-        let subtotalCents = 0;
-        const normalizedItems = (items as any[]).map((item) => {
-          const product = productById.get(String(item.productId));
-          const unitPriceCents = Number(product?.priceCents || 0) || 0;
-          const lineTotalCents = unitPriceCents * Number(item.quantity || 0);
-          subtotalCents += lineTotalCents;
-          return { productId: String(item.productId), quantity: Number(item.quantity), unitPriceCents, lineTotalCents };
-        });
-
-        const requestedFulfillment = String((request as any).requestedFulfillment || "pickup");
-        const deliveryFeeCents =
-          requestedFulfillment === "delivery"
-            ? Number((request as any).deliveryFeeCents ?? (supplier as any).deliveryFeeCents ?? 0) || 0
-            : 0;
-
-        if (requestedFulfillment === "delivery") {
-          const minOrderCents = Number((supplier as any).deliveryMinOrderCents || 0) || 0;
-          if (minOrderCents > 0 && subtotalCents < minOrderCents) {
-            return res.status(400).json({
-              message: `Delivery requires a minimum order of $${(minOrderCents / 100).toFixed(2)}.`,
-            });
-          }
-
-          const radiusMiles = (supplier as any).deliveryRadiusMiles
-            ? Number((supplier as any).deliveryRadiusMiles)
-            : null;
-          const supplierLat = Number((supplier as any).latitude);
-          const supplierLon = Number((supplier as any).longitude);
-          const buyer =
-            (request as any).buyerRestaurantId
-              ? await storage.getRestaurant(String((request as any).buyerRestaurantId)).catch(() => null)
-              : null;
-          const buyerLat = buyer ? Number((buyer as any)?.latitude) : NaN;
-          const buyerLon = buyer ? Number((buyer as any)?.longitude) : NaN;
-          if (
-            radiusMiles &&
-            Number.isFinite(radiusMiles) &&
-            radiusMiles > 0 &&
-            Number.isFinite(supplierLat) &&
-            Number.isFinite(supplierLon) &&
-            Number.isFinite(buyerLat) &&
-            Number.isFinite(buyerLon)
-          ) {
-            const distance = haversineMiles(
-              { lat: supplierLat, lon: supplierLon },
-              { lat: buyerLat, lon: buyerLon },
-            );
-            if (distance > radiusMiles) {
-              return res.status(400).json({
-                message: `Delivery address is outside the supplier's delivery radius (${radiusMiles} miles).`,
-              });
-            }
-          }
-        }
-
-        const now = new Date();
-        const paymentPref = String((request as any).paymentPreference || "offsite");
-        const isOnline = paymentPref === "online";
-        const supplierGrossCents = subtotalCents + deliveryFeeCents;
-        const feeModel = isOnline
-          ? computeOnPlatformPaymentFees(supplierGrossCents)
-          : null;
-
-        const order = await db.transaction(async (tx: any) => {
-          const [createdOrder] = await tx
-            .insert(supplierOrders)
-            .values({
-              supplierId: supplier.id,
-              buyerUserId: String((request as any).buyerUserId || req.user.id),
-              truckRestaurantId: (request as any).buyerRestaurantId ? String((request as any).buyerRestaurantId) : null,
-              status: "submitted",
-              paymentMethod: isOnline ? "stripe" : "offsite",
-              paymentStatus: isOnline ? "unpaid" : "offsite",
-              requestedFulfillment: requestedFulfillment === "delivery" ? "delivery" : "pickup",
-              subtotalCents,
-              deliveryFeeCents,
-              platformFeeCents: feeModel ? feeModel.platformFeeCents : 0,
-              stripeFeeEstimateCents: feeModel ? feeModel.stripeFeeEstimateCents : 0,
-              totalCents: feeModel ? feeModel.totalCents : supplierGrossCents,
-              stripeChargeAmountCents: feeModel ? feeModel.totalCents : 0,
-              stripeApplicationFeeCents: feeModel ? feeModel.platformFeeCents + feeModel.buyerProcessingFeeCents : 0,
-              stripeTransferAmountCents: feeModel ? supplierGrossCents - feeModel.sellerProcessingFeeCents : 0,
-              buyerDiscountCents: 0,
-              buyerPaymentMethod: null,
-              pickupNote: (request as any).note ?? null,
-              createdAt: now,
-              updatedAt: now,
-            } as any)
-            .returning();
-
-          await tx.insert(supplierOrderItems).values(
-            normalizedItems.map((row) => ({
-              orderId: createdOrder.id,
-              productId: row.productId,
-              quantity: row.quantity,
-              unitPriceCents: row.unitPriceCents,
-              lineTotalCents: row.lineTotalCents,
-              createdAt: now,
-              updatedAt: now,
-            })) as any,
-          );
-
-          await tx
-            .update(supplierRequests)
-            .set({
-              status: "accepted",
-              acceptedAt: now,
-              acceptedBy: req.user.id,
-              orderId: createdOrder.id,
-              deliveryStatus:
-                String((request as any).requestedFulfillment) === "delivery" ? "accepted" : "pending",
-              updatedAt: now,
-            } as any)
-            .where(eq(supplierRequests.id, requestId));
-
-          return createdOrder;
+        const { request, order } = await acceptSupplierRequest(db, {
+          requestId, supplierId: supplier.id, userId: req.user.id,
+          computeFees: computeOnPlatformPaymentFees, haversineMiles,
         });
 
         try {
@@ -844,6 +700,7 @@ export function registerSupplierRequestsRoutes(
 
         res.json({ success: true, orderId: order.id });
       } catch (error: any) {
+        if (error instanceof SupplierOrderError) return res.status(error.status).json({ message: error.message });
         console.error("Error accepting supplier request:", error);
         res.status(500).json({ message: error.message || "Failed to accept request" });
       }
@@ -860,18 +717,6 @@ export function registerSupplierRequestsRoutes(
         const requestId = String(req.params.requestId || "").trim();
         if (!requestId) return res.status(400).json({ message: "Request ID required" });
 
-        const [request] = await db
-          .select()
-          .from(supplierRequests)
-          .where(
-            and(eq(supplierRequests.id, requestId), eq(supplierRequests.supplierId, supplier.id)),
-          )
-          .limit(1);
-        if (!request) return res.status(404).json({ message: "Request not found" });
-        if (String((request as any).requestedFulfillment) !== "delivery") {
-          return res.status(400).json({ message: "This request is not a delivery request." });
-        }
-
         const schema = z.object({
           deliveryStatus: z
             .enum(["pending", "accepted", "out_for_delivery", "delivered", "cancelled"])
@@ -881,50 +726,9 @@ export function registerSupplierRequestsRoutes(
         });
         const parsed = schema.parse(req.body || {});
 
-        const currentStatus = String((request as any).deliveryStatus || "pending");
-        const requestStatus = String((request as any).status || "");
-        const nextStatus = parsed.deliveryStatus ? String(parsed.deliveryStatus) : null;
-
-        if (nextStatus) {
-          if (["out_for_delivery", "delivered"].includes(nextStatus) && requestStatus !== "accepted") {
-            return res.status(409).json({ message: "Request must be accepted before starting delivery." });
-          }
-          const order = ["pending", "accepted", "out_for_delivery", "delivered", "cancelled"];
-          if (order.indexOf(nextStatus) < 0) {
-            return res.status(400).json({ message: "Invalid delivery status." });
-          }
-          if (
-            currentStatus !== "cancelled" &&
-            currentStatus !== "delivered" &&
-            nextStatus !== "cancelled" &&
-            order.indexOf(nextStatus) < order.indexOf(currentStatus)
-          ) {
-            return res.status(409).json({ message: "Cannot move delivery status backwards." });
-          }
-        }
-
-        const now = new Date();
-        const scheduled =
-          parsed.deliveryScheduledFor !== undefined && parsed.deliveryScheduledFor !== null
-            ? new Date(String(parsed.deliveryScheduledFor))
-            : null;
-        const safeScheduled =
-          scheduled && !Number.isNaN(scheduled.getTime()) ? scheduled : null;
-
-        const [updated] = await db
-          .update(supplierRequests)
-          .set({
-            ...(parsed.deliveryStatus ? { deliveryStatus: parsed.deliveryStatus } : {}),
-            ...(parsed.deliveryFeeCents !== undefined
-              ? { deliveryFeeCents: parsed.deliveryFeeCents }
-              : {}),
-            ...(parsed.deliveryScheduledFor !== undefined
-              ? { deliveryScheduledFor: safeScheduled }
-              : {}),
-            updatedAt: now,
-          } as any)
-          .where(eq(supplierRequests.id, requestId))
-          .returning();
+        const { request, updated, currentStatus, nextStatus } = await updateSupplierDelivery(db, {
+          requestId, supplierId: supplier.id, ...parsed,
+        });
 
         if (nextStatus && nextStatus !== currentStatus) {
           try {
@@ -971,6 +775,7 @@ export function registerSupplierRequestsRoutes(
 
         res.json(updated);
       } catch (error: any) {
+        if (error instanceof SupplierOrderError) return res.status(error.status).json({ message: error.message });
         console.error("Error updating delivery request:", error);
         if (error instanceof z.ZodError) {
           return res.status(400).json({ message: "Invalid delivery update", errors: error.errors });

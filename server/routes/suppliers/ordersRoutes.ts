@@ -1,3 +1,5 @@
+import { canUseParkingPassTestFeatures as canUseFinancialTestFeatures } from "../../utils/parkingPassTestAccess";
+import { transitionSupplierOrder, validateSupplierOrderFees, SupplierOrderError } from "../../services/supplierOrderAuthority";
 import type { Express } from "express";
 import { z } from "zod";
 import { db } from "../../db";
@@ -118,13 +120,15 @@ export function registerSupplierOrdersRoutes(
           parsed.paymentMethod === "stripe"
             ? computeOnPlatformPaymentFees(supplierGrossCents)
             : null;
+        validateSupplierOrderFees(supplierGrossCents, feeModel);
         const platformFeeCents = feeModel ? feeModel.platformFeeCents : 0;
         const stripeFeeEstimateCents = feeModel ? feeModel.stripeFeeEstimateCents : 0;
         const totalCents = feeModel ? feeModel.totalCents : supplierGrossCents;
 
-        const bypassStripe =
+        const bypassStripe = canUseFinancialTestFeatures(req.user, process.env) && (
           String(process.env.MEALSCOUT_BYPASS_STRIPE || "").toLowerCase() === "true" ||
-          String(process.env.MEALSCOUT_TEST_MODE || "").toLowerCase() === "true";
+          String(process.env.MEALSCOUT_TEST_MODE || "").toLowerCase() === "true"
+        );
 
         if (parsed.paymentMethod === "stripe" && !stripe && !bypassStripe) {
           return res.status(500).json({ message: "Stripe not configured" });
@@ -384,20 +388,12 @@ export function registerSupplierOrdersRoutes(
         });
         const parsed = schema.parse(req.body || {});
 
-        const [existing] = await db
-          .select()
-          .from(supplierOrders)
-          .where(and(eq(supplierOrders.id, orderId), eq(supplierOrders.supplierId, supplier.id)))
-          .limit(1);
-        if (!existing) return res.status(404).json({ message: "Order not found" });
-
-        const [updated] = await db
-          .update(supplierOrders)
-          .set({ status: parsed.status, updatedAt: new Date() } as any)
-          .where(eq(supplierOrders.id, orderId))
-          .returning();
+        const updated = await transitionSupplierOrder(db, {
+          orderId, supplierId: supplier.id, status: parsed.status,
+        });
         res.json(updated);
       } catch (error: any) {
+        if (error instanceof SupplierOrderError) return res.status(error.status).json({ message: error.message });
         console.error("Error updating supplier order status:", error);
         if (error instanceof z.ZodError) {
           return res.status(400).json({ message: "Invalid status", errors: error.errors });

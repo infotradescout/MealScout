@@ -10,13 +10,15 @@
  */
 
 import { parseTabularFile } from "./tabularImport";
+import { parseImportPrice } from "./importPrice";
 
 type ParsedMenuItem = {
   menuId: string;
   restaurantId: string;
   name: string;
   description: string | null;
-  priceCents: number;
+  priceCents: number | null;
+  categoryName: string | null;
   sku: string | null;
   imageUrl: string | null;
   calories: number | null;
@@ -43,17 +45,6 @@ function normalizeHeader(h: string): string {
     .toLowerCase()
     .replace(/[\s_-]+/g, "_")
     .trim();
-}
-
-// Parse a price string into cents. Accepts "$12.99", "12.99", "1299" (cents).
-function parsePriceCents(raw: string): number | null {
-  const cleaned = raw.replace(/[^0-9.]/g, "").trim();
-  if (!cleaned) return null;
-  const num = parseFloat(cleaned);
-  if (isNaN(num)) return null;
-  // Heuristic: if value > 500 and no decimal, treat as cents
-  if (num > 500 && !raw.includes(".")) return Math.round(num);
-  return Math.round(num * 100);
 }
 
 function parseTags(raw: string): string[] {
@@ -109,15 +100,19 @@ export async function parseMenuCsv(
       return;
     }
 
-    const priceRaw = col(row, "price", "price_cents", "cost", "amount");
-    const priceCents = parsePriceCents(priceRaw);
-    if (priceCents === null || priceCents < 0) {
+    const dollarsRaw = col(row, "price", "cost", "amount");
+    const centsRaw = col(row, "price_cents");
+    const dollars = parseImportPrice(dollarsRaw, "dollars");
+    const cents = parseImportPrice(centsRaw, "cents");
+    if (!dollars.valid || !cents.valid ||
+        (dollars.cents !== null && cents.cents !== null && dollars.cents !== cents.cents)) {
       errors.push({
         row: rowNum,
-        reason: `Invalid or missing price: "${priceRaw}"`,
+        reason: "Invalid or conflicting price. Use dollars in price, or whole cents in price_cents.",
       });
       return;
     }
+    const priceCents = cents.cents ?? dollars.cents;
 
     const description =
       col(row, "description", "desc", "details", "notes") || null;
@@ -149,6 +144,7 @@ export async function parseMenuCsv(
       name,
       description,
       priceCents,
+      categoryName: col(row, "category", "category_name", "section") || null,
       sku,
       imageUrl,
       calories,

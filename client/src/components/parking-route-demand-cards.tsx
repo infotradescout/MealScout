@@ -8,7 +8,7 @@ const fetchJson = async (url: string) => {
 };
 
 export function HostRouteDemandCard() {
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["/api/parking-pass/host-route-demand"],
     queryFn: () => fetchJson("/api/parking-pass/host-route-demand"),
     retry: false,
@@ -17,9 +17,10 @@ export function HostRouteDemandCard() {
     <Card className="rounded-2xl border border-orange-200 pp-glass">
       <CardContent className="space-y-3 p-4">
         <div><p className="text-sm font-semibold">Truck route demand near your property</p><p className="text-xs text-muted-foreground">Planning demand helps you choose when to publish Parking Pass availability.</p></div>
+        {isError ? <p role="alert" className="text-sm">Demand is unavailable. <button type="button" className="underline" onClick={() => void refetch()}>Try again</button></p> : null}
         <div className="grid grid-cols-2 gap-2">
-          <div className="rounded-xl bg-orange-50 p-3 text-center"><p className="text-2xl font-bold text-orange-900">{isLoading ? "…" : data?.routesNearby ?? 0}</p><p className="text-[11px] text-orange-800">saved routes nearby</p></div>
-          <div className="rounded-xl bg-emerald-50 p-3 text-center"><p className="text-2xl font-bold text-emerald-900">{isLoading ? "…" : data?.scheduledStops ?? 0}</p><p className="text-[11px] text-emerald-800">scheduled stops</p></div>
+          <div className="rounded-xl bg-orange-50 p-3 text-center"><p className="text-2xl font-bold text-orange-900">{isLoading ? "…" : isError ? "—" : data?.routesNearby ?? 0}</p><p className="text-[11px] text-orange-800">saved routes nearby</p></div>
+          <div className="rounded-xl bg-emerald-50 p-3 text-center"><p className="text-2xl font-bold text-emerald-900">{isLoading ? "…" : isError ? "—" : data?.scheduledStops ?? 0}</p><p className="text-[11px] text-emerald-800">scheduled stops</p></div>
         </div>
         <p className="text-[11px] text-muted-foreground">More nearby routes with few scheduled stops indicates an opportunity to add dates or improve pricing.</p>
       </CardContent>

@@ -4,7 +4,8 @@ const smsApi = new TransactionalSMSApi();
 
 export const isSmsConfigured = (): boolean => {
   const apiKey = process.env.BREVO_API_KEY;
-  if (!apiKey) {
+  const sender = String(process.env.BREVO_SMS_SENDER || "").trim();
+  if (!apiKey || !sender) {
     return false;
   }
   try {
@@ -31,7 +32,7 @@ export const sendSms = async (to: string, content: string): Promise<boolean> => 
   // Brevo requires a registered toll-free/10DLC sender for US recipients
   // (alphanumeric sender IDs like the "MealScout" fallback are not deliverable there)
   // plus an organisation prefix once compliance is enabled on the account.
-  const sender = process.env.BREVO_SMS_SENDER || "MealScout";
+  const sender = String(process.env.BREVO_SMS_SENDER || "").trim();
   const organisationPrefix = process.env.BREVO_SMS_ORGANISATION_PREFIX;
 
   try {

@@ -13,12 +13,14 @@
  * Falls back gracefully when GEMINI_API_KEY is not configured.
  */
 
+import { parseImportPrice } from "./importPrice";
+
 export type ParsedPhotoMenuItem = {
   menuId: string;
   restaurantId: string;
   name: string;
   description: string | null;
-  priceCents: number;
+  priceCents: number | null;
   dietaryTags: string[];
   allergens: string[];
   isAvailable: boolean;
@@ -177,14 +179,13 @@ export async function parseImageMenuWithAi(
       return;
     }
 
-    // Photos frequently omit prices (e.g. a dish photo); keep the item at 0 so
-    // the owner can fill it in during review rather than losing the item+image.
-    const price = Number(item.price);
-    const priceCents = isNaN(price) || price < 0 ? 0 : Math.round(price * 100);
+    // Keep unknown or malformed model prices unpriced for owner review.
+    const priceCents = parseImportPrice(item.price, "dollars").cents;
 
     let imageIndex: number | null = null;
     const idx = Number(item.image_index);
-    if (Number.isInteger(idx) && idx >= 0 && idx < usableImages.length) {
+    if (item.image_index !== null && item.image_index !== undefined &&
+        item.image_index !== "" && Number.isInteger(idx) && idx >= 0 && idx < usableImages.length) {
       imageIndex = idx;
     }
 
