@@ -27,8 +27,8 @@ import { restaurants, truckClaimRequests } from "../shared/schema";
  * only; this does not touch or merge the underlying user account.
  *
  * Usage:
- *   npx tsx scripts/mergeConfirmedDuplicateRestaurants.ts --dry-run
- *   npx tsx scripts/mergeConfirmedDuplicateRestaurants.ts --apply
+ *   node --import tsx scripts/mergeConfirmedDuplicateRestaurants.ts --dry-run
+ *   node --import tsx scripts/mergeConfirmedDuplicateRestaurants.ts --apply
  *
  * Frozen after the July 2026 production-hold audit: do not run this script
  * again until a replacement merge tool reassigns dependencies, preserves

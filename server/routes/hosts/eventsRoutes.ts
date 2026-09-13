@@ -1,7 +1,6 @@
 import type { Express } from "express";
 import { z } from "zod";
 import { storage } from "../../storage";
-import { emailService } from "../../emailService";
 import { db } from "../../db";
 import {
   insertEventSchema,
@@ -15,15 +14,8 @@ import { isAuthenticated } from "../../unifiedAuth";
 import {
   getHostByUserId,
   getEventAndHostForUser,
-  getInterestEventAndHostForUser,
   userOwnsEvent,
 } from "../../services/hostOwnership";
-import {
-  computeAcceptedCount,
-  shouldBlockAcceptance,
-  buildCapacityFullError,
-  computeFillRate,
-} from "../../services/interestDecision";
 import {
   PARKING_PASS_MEAL_WINDOWS,
   PARKING_PASS_SLOT_TYPES,
@@ -40,7 +32,6 @@ import {
 import { logAudit } from "../../auditLogger";
 import { dateKeyInZone } from "../../services/dateKeys";
 import { resolveCityTimeZoneSync } from "../../services/cityTimeZone";
-import { canEmailForTopic } from "../../utils/notificationPreferences";
 
 export function registerHostParkingPassRoutes(app: Express) {
   const createHostParkingPassListing = async (req: any, res: any) => {
@@ -1113,148 +1104,6 @@ export function registerHostParkingPassRoutes(app: Express) {
     "/api/hosts/parking-pass/:passId",
     isAuthenticated,
     updateHostParkingPassListing,
-  );
-
-  app.patch(
-    "/api/hosts/interests/:interestId/status",
-    isAuthenticated,
-    async (req: any, res) => {
-      try {
-        const { interestId } = req.params;
-        const { status } = req.body;
-        const userId = req.user.id;
-
-        if (!["accepted", "declined"].includes(status)) {
-          return res.status(400).json({ message: "Invalid status" });
-        }
-
-        // Verify host owns the event associated with this interest
-        const { interest, event, host } = await getInterestEventAndHostForUser(
-          interestId,
-          userId,
-        );
-
-        if (!interest) {
-          return res.status(404).json({ message: "Interest not found" });
-        }
-
-        if (!event) {
-          return res
-            .status(404)
-            .json({ message: "Parking pass listing not found" });
-        }
-
-        if (!userOwnsEvent(userId, host, event)) {
-          return res.status(403).json({
-            message: "Not authorized to manage this parking pass listing",
-          });
-        }
-
-        // Idempotency Check: If already in desired status, return success
-        if (interest.status === status) {
-          return res.json(interest);
-        }
-
-        // CAPACITY GUARD v2.2
-        // If hard cap is enabled, block acceptance if full
-        if (status === "accepted" && event.hardCapEnabled) {
-          const currentInterests = await storage.getEventInterestsByEventId(
-            event.id,
-          );
-          // Note: interest.status is definitely NOT 'accepted' here due to idempotency check above
-          const acceptedCount = computeAcceptedCount(currentInterests);
-
-          if (
-            shouldBlockAcceptance({
-              hardCapEnabled: event.hardCapEnabled,
-              acceptedCount,
-              maxTrucks: event.maxTrucks,
-            })
-          ) {
-            // Telemetry: Blocked Attempt
-            await storage.createTelemetryEvent({
-              eventName: "interest_accept_blocked",
-              userId: req.user.id,
-              properties: {
-                eventId: event.id,
-                truckId: interest.truckId,
-                reason: "capacity_guard_limit_reached",
-                maxTrucks: event.maxTrucks,
-                acceptedCount,
-              },
-            });
-
-            const capacityError = buildCapacityFullError();
-
-            return res.status(400).json(capacityError);
-          }
-        }
-
-        const updatedInterest = await storage.updateEventInterestStatus(
-          interestId,
-          status,
-        );
-
-        // Send notification to truck (fire and forget)
-        (async () => {
-          try {
-            // Telemetry: Interest Status Changed
-            const allInterests = await storage.getEventInterestsByEventId(
-              event.id,
-            );
-            const acceptedCount = computeAcceptedCount(allInterests);
-            const isOverCap = acceptedCount >= event.maxTrucks;
-
-            await storage.createTelemetryEvent({
-              eventName:
-                status === "accepted"
-                  ? "interest_accepted"
-                  : "interest_declined",
-              userId: req.user.id,
-              properties: {
-                eventId: event.id,
-                truckId: interest.truckId,
-                fillRate: computeFillRate({
-                  acceptedCount,
-                  maxTrucks: event.maxTrucks,
-                }),
-                acceptedCount,
-                maxTrucks: event.maxTrucks,
-                isOverCap,
-              },
-            });
-
-            const truck = await storage.getRestaurant(interest.truckId);
-            if (truck) {
-              // Get truck owner's email
-              // Note: getRestaurant doesn't return ownerId directly in all schemas, but let's check schema.ts
-              // restaurants table has ownerId.
-              const owner = await storage.getUser(truck.ownerId);
-              if (
-                owner &&
-                owner.email &&
-                canEmailForTopic((owner as any).accountSettings, "nearbyEvents")
-              ) {
-                await emailService.sendInterestStatusUpdate(
-                  owner.email,
-                  truck.name,
-                  host!.businessName,
-                  new Date(event.date).toLocaleDateString(),
-                  status as "accepted" | "declined",
-                );
-              }
-            }
-          } catch (err) {
-            console.error("Failed to send status update notification:", err);
-          }
-        })();
-
-        res.json(updatedInterest);
-      } catch (error: any) {
-        console.error("Error updating interest status:", error);
-        res.status(500).json({ message: "Failed to update status" });
-      }
-    },
   );
 
   const listHostParkingPassInterests = async (req: any, res: any) => {

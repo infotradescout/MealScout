@@ -241,7 +241,7 @@ if (
   'path === "/account-setup"',
   'if (!params.get("token")) return null;',
   '"/api/auth/resend-verification"',
-  '"/api/auth/verification-status"',
+  "never exposes a public email-verification lookup endpoint",
 ].forEach((snippet) =>
   requireIncludes(
     postVerification,

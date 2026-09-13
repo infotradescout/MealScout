@@ -6,7 +6,7 @@
  * - imageUrl is never null
  * - Boolean flags match expected null patterns
  * 
- * Run: npx dotenv-cli -e .env -- npx tsx scripts/verifyDealWrites.ts
+ * Run: node --env-file=.env --import tsx scripts/verifyDealWrites.ts
  */
 
 import { db } from "../server/db";

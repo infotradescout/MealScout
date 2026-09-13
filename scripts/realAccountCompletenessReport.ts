@@ -34,7 +34,7 @@ import { isTruckBusinessType } from "../shared/businessTypes";
  *   appearing as a personal test account
  *
  * Usage:
- *   npx tsx scripts/realAccountCompletenessReport.ts
+ *   node --import tsx scripts/realAccountCompletenessReport.ts
  */
 
 const SMOKE_EMAIL_PATTERN = /(^|[._-])smoke([._-]|$)/i;

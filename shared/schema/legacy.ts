@@ -2904,6 +2904,7 @@ export type GoogleUserData = {
 export type TradeScoutUserData = {
   tradescoutId: string;
   email?: string | null;
+  emailVerified?: boolean;
   firstName?: string | null;
   lastName?: string | null;
   roles?: string[] | null;

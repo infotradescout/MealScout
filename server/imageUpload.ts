@@ -83,6 +83,64 @@ export async function uploadToCloudinary(
   });
 }
 
+export async function uploadVideoToCloudinary(
+  fileBuffer: Buffer,
+  publicId: string,
+): Promise<{
+  publicId: string;
+  secureUrl: string;
+  thumbnailUrl: string;
+  durationSeconds: number;
+  bytes: number;
+}> {
+  return new Promise((resolve, reject) => {
+    const uploadStream = cloudinary.uploader.upload_stream(
+      {
+        folder: "mealscout/stories",
+        public_id: publicId,
+        resource_type: "video",
+        overwrite: false,
+      },
+      async (error, result) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+        if (!result) {
+          reject(new Error("Video upload failed"));
+          return;
+        }
+
+        const durationSeconds = Number((result as any).duration);
+        if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) {
+          await deleteFromCloudinary(result.public_id, {
+            resourceType: "video",
+          }).catch(() => undefined);
+          reject(new Error("Video duration unavailable"));
+          return;
+        }
+
+        const thumbnailUrl = cloudinary.url(result.public_id, {
+          resource_type: "video",
+          format: "jpg",
+          secure: true,
+          transformation: [
+            { width: 640, height: 360, crop: "fill", gravity: "auto" },
+          ],
+        });
+        resolve({
+          publicId: result.public_id,
+          secureUrl: result.secure_url,
+          thumbnailUrl,
+          durationSeconds,
+          bytes: result.bytes,
+        });
+      },
+    );
+    uploadStream.end(fileBuffer);
+  });
+}
+
 /**
  * Social previews are authored as deterministic SVG, but Instagram's publish
  * API requires a public raster asset. Force Cloudinary to rasterize the SVG to
@@ -268,13 +326,47 @@ export function createAuthenticatedEvidenceReviewUrl(
 export const isAuthenticatedCloudinaryDeliveryUrl = (value: unknown) =>
   /\/image\/authenticated\//.test(String(value || ""));
 
+export function cloudinaryPublicIdFromDeliveryUrl(value: unknown): string | null {
+  try {
+    const url = new URL(String(value || ""));
+    if (url.protocol !== "https:" || url.hostname !== "res.cloudinary.com") {
+      return null;
+    }
+
+    const pathParts = url.pathname.split("/").filter(Boolean);
+    const versionIndex = pathParts.findIndex((part) => /^v\d+$/.test(part));
+    if (versionIndex < 3 || versionIndex === pathParts.length - 1) {
+      return null;
+    }
+    if (
+      !["image", "video", "raw"].includes(pathParts[1]) ||
+      !["upload", "authenticated", "private"].includes(pathParts[2])
+    ) {
+      return null;
+    }
+
+    const publicIdParts = pathParts.slice(versionIndex + 1).map(decodeURIComponent);
+    const finalPart = publicIdParts.at(-1);
+    if (!finalPart) return null;
+    publicIdParts[publicIdParts.length - 1] = finalPart.replace(/\.[^.\/]+$/, "");
+    const publicId = publicIdParts.join("/");
+    return publicId && !/[\u0000-\u001f\u007f]/.test(publicId) ? publicId : null;
+  } catch {
+    return null;
+  }
+}
+
 // Delete image from Cloudinary
 export async function deleteFromCloudinary(
   publicId: string,
-  options?: { type?: "upload" | "authenticated" | "private" },
+  options?: {
+    type?: "upload" | "authenticated" | "private";
+    resourceType?: "image" | "video" | "raw";
+  },
 ): Promise<void> {
   await cloudinary.uploader.destroy(publicId, {
     type: options?.type || "upload",
+    resource_type: options?.resourceType || "image",
   });
 }
 

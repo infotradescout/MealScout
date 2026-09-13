@@ -2,7 +2,6 @@ import passport from "passport";
 import { Strategy as GoogleStrategy } from "passport-google-oauth20";
 import { Strategy as FacebookStrategy } from "passport-facebook";
 import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
 import type { Express } from "express";
@@ -46,6 +45,10 @@ import {
   completeAccountSetupTransaction,
 } from "./services/accountSetupCompletion";
 import { distributedRateLimit } from "./middleware/distributedRateLimit";
+import {
+  resolveTradeScoutSsoConfig,
+  verifyTradeScoutSsoToken,
+} from "./services/tradescoutSsoPolicy";
 
 type UnifiedAuthDependencies = {
   hashAccountSetupPassword?: (password: string) => Promise<string>;
@@ -1986,37 +1989,17 @@ export async function setupUnifiedAuth(
     }
   });
 
-  // Check email verification status (public, non-enumerating)
-  app.post("/api/auth/verification-status", async (req, res) => {
-    try {
-      const emailRaw =
-        typeof req.body?.email === "string" ? req.body.email : "";
-      const email = emailRaw.trim().toLowerCase();
-      if (!email) {
-        return res.status(400).json({ error: "Email is required" });
-      }
-
-      const user = await storage.getUserByEmail(email);
-      if (!user) {
-        return res.json({ verified: false });
-      }
-
-      res.json({ verified: user.emailVerified === true });
-    } catch (error) {
-      console.error("Verification status check error:", error);
-      res.status(500).json({ error: "Unable to check verification status" });
-    }
-  });
-
   // TradeScout SSO endpoint - accepts a signed JWT from TradeScout and
   // creates/links a MealScout user, then establishes a session.
   app.post("/api/auth/tradescout/sso", async (req, res) => {
     try {
-      const secret = process.env.TRADESCOUT_JWT_SECRET;
-      if (!secret) {
+      const configResult = resolveTradeScoutSsoConfig();
+      if (!configResult.ok) {
+        console.error("TradeScout SSO configuration rejected", {
+          code: configResult.code,
+        });
         return res.status(503).json({
           error: "TradeScout SSO not configured",
-          message: "TRADESCOUT_JWT_SECRET is not set on the MealScout server",
         });
       }
 
@@ -2031,65 +2014,29 @@ export async function setupUnifiedAuth(
         return res.status(400).json({ error: "SSO token is required" });
       }
 
-      let decoded: any;
-      try {
-        decoded = jwt.verify(token, secret);
-      } catch (err) {
-        console.error("TradeScout SSO token verification failed:", err);
+      const verified = verifyTradeScoutSsoToken(token, configResult.config);
+      if (!verified.ok) {
+        authLog("tradescout_sso_rejected", { code: verified.code });
         return res.status(401).json({ error: "Invalid SSO token" });
       }
 
-      const roles: string[] | undefined = Array.isArray(decoded.roles)
-        ? decoded.roles
-        : typeof decoded.role === "string"
-          ? [decoded.role]
-          : undefined;
-
-      const mapRolesToUserType = (r?: string[]): User["userType"] => {
-        if (!r || r.length === 0) return "customer";
-        if (r.includes("mealscout_super_admin")) return "super_admin";
-        if (r.includes("mealscout_duper_admin")) return "duper_admin";
-        if (r.includes("mealscout_admin") || r.includes("admin"))
-          return "admin";
-        if (
-          r.includes("restaurant_owner") ||
-          r.includes("merchant") ||
-          r.includes("vendor")
-        )
-          return "restaurant_owner";
-        return "customer";
-      };
-
-      const userType = mapRolesToUserType(roles);
+      const { identity } = verified;
 
       const tsUserData: TradeScoutUserData = {
-        tradescoutId: String(decoded.sub || decoded.id || decoded.userId),
-        email: decoded.email ?? null,
-        firstName:
-          decoded.given_name ||
-          decoded.firstName ||
-          (decoded.name ? String(decoded.name).split(" ")[0] : null),
-        lastName:
-          decoded.family_name ||
-          decoded.lastName ||
-          (decoded.name
-            ? String(decoded.name).split(" ").slice(1).join(" ") || null
-            : null),
-        roles: roles ?? null,
+        tradescoutId: identity.tradescoutId,
+        email: identity.email,
+        emailVerified: identity.emailVerified,
+        firstName: identity.firstName,
+        lastName: identity.lastName,
+        roles: identity.roles,
       };
-
-      if (!tsUserData.tradescoutId) {
-        return res
-          .status(400)
-          .json({ error: "SSO token missing subject (sub)" });
-      }
 
       const user = await storage.upsertUserByAuth(
         "tradescout",
         tsUserData,
-        userType === "super_admin"
+        identity.userType === "super_admin"
           ? "admin"
-          : (userType as
+          : (identity.userType as
               | "customer"
               | "restaurant_owner"
               | "admin"
@@ -2870,4 +2817,3 @@ export const verifyResourceOwnership = (
     }
   };
 };
-

@@ -88,7 +88,7 @@ const confirmedEventTrucks = readFileSync(
   "utf8",
 );
 const staticRobots = readFileSync("client/public/robots.txt", "utf8");
-const ciWorkflow = readFileSync(".github/workflows/ci.yml", "utf8");
+const releaseGate = readFileSync("scripts/releaseGate.mjs", "utf8");
 const packageManifest = JSON.parse(readFileSync("package.json", "utf8"));
 
 const requiredClientRoutes = [
@@ -1043,17 +1043,16 @@ if (
 ) {
   throw new Error("Public SEO DB package command must run the guarded PG proof");
 }
-const publicDataStep = ciWorkflow.indexOf("Public Data Boundary Contract");
-const publicSeoStep = ciWorkflow.indexOf("Public SEO Landing Boundary");
-const frozenCleanupStep = ciWorkflow.indexOf("Frozen Cleanup Safety Contract");
+const publicDataStep = releaseGate.indexOf('"test:public-data-boundary"');
+const publicSeoStep = releaseGate.indexOf('"test:public-seo-landing"');
+const frozenCleanupStep = releaseGate.indexOf('"test:frozen-cleanup-safety"');
 if (
   publicDataStep < 0 ||
   publicSeoStep < publicDataStep ||
-  frozenCleanupStep < publicSeoStep ||
-  !ciWorkflow.includes("run: npm run test:public-seo-landing")
+  frozenCleanupStep < publicSeoStep
 ) {
   throw new Error(
-    "CI must run the public SEO boundary in the declared public-data sequence",
+    "The release gate must run the public SEO boundary in the declared public-data sequence",
   );
 }
 

@@ -29,7 +29,7 @@ Local prerequisites
 
 Quick start (dev)
 ```bash
-npm install
+npm ci
 npm run dev:server
 npm run dev
 ```
@@ -39,8 +39,14 @@ Useful commands
 npm run doctor
 npm run check
 npm run build
+npm run gate:release:local
 npm run test:flows:e2e
 ```
+
+Release verification
+- `npm run gate:release:local` runs the deterministic repository, security, migration, type, lint, build, mobile, and store checks used by the Render build.
+- `npm run gate:release:browser` adds the unauthenticated Chromium, Firefox, WebKit, and mobile journeys when Playwright browsers are installed.
+- `npm run gate:release` runs deterministic checks, browser journeys, and then strict, read-only production probes. It requires Playwright browsers, production environment configuration, and network access.
 
 License
 MIT

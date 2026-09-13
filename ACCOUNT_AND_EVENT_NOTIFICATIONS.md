@@ -197,5 +197,5 @@ npx tsc --noEmit
 # Look for: "⏰ Triggering Unbooked Event Notification Check"
 
 # Manual test of notification function
-npx tsx -e "import { notifyUnbookedEvents } from './server/eventNotificationCron'; notifyUnbookedEvents().then(console.log)"
+node --import tsx --input-type=module --eval "import { notifyUnbookedEvents } from './server/eventNotificationCron'; notifyUnbookedEvents().then(console.log)"
 ```

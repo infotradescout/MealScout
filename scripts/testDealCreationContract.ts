@@ -8,7 +8,7 @@
  * - Ongoing checkbox → null endDate
  * - Both checkboxes → all nulls
  * 
- * Run: npx tsx scripts/testDealCreationContract.ts
+ * Run: node --import tsx scripts/testDealCreationContract.ts
  */
 
 import { z } from "zod";

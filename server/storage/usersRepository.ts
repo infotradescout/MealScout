@@ -369,6 +369,8 @@ export function createUsersRepository() {
         if (authType === "tradescout") {
           const tsData = userData as TradeScoutUserData;
           const normalizedEmail = normalizeEmail(tsData.email);
+          const verifiedEmail =
+            tsData.emailVerified === true ? normalizedEmail : null;
           let existingUser = await db
             .select()
             .from(users)
@@ -377,6 +379,25 @@ export function createUsersRepository() {
 
           if (existingUser.length > 0) {
             const current = existingUser[0];
+            const currentEmail = normalizeEmail(current.email);
+            let acceptedVerifiedEmail = verifiedEmail;
+            if (
+              acceptedVerifiedEmail &&
+              currentEmail !== acceptedVerifiedEmail
+            ) {
+              const [emailOwner] = await db
+                .select({ id: users.id })
+                .from(users)
+                .where(sql`lower(${users.email}) = ${acceptedVerifiedEmail}`)
+                .limit(1);
+              if (emailOwner && emailOwner.id !== current.id) {
+                acceptedVerifiedEmail = null;
+              }
+            }
+            const canVerifyAcceptedEmail = Boolean(
+              acceptedVerifiedEmail &&
+                (!currentEmail || currentEmail === acceptedVerifiedEmail),
+            );
             const newAppContext =
               current.appContext && current.appContext !== appContext
                 ? "both"
@@ -384,8 +405,8 @@ export function createUsersRepository() {
             const [user] = await db
               .update(users)
               .set({
-                email: normalizedEmail ?? current.email,
-                ...(normalizedEmail ? { emailVerified: true } : {}),
+                email: current.email ?? acceptedVerifiedEmail,
+                ...(canVerifyAcceptedEmail ? { emailVerified: true } : {}),
                 firstName: tsData.firstName ?? current.firstName,
                 lastName: tsData.lastName ?? current.lastName,
                 appContext: newAppContext,
@@ -397,14 +418,20 @@ export function createUsersRepository() {
             return user;
           }
 
-          if (normalizedEmail) {
+          if (verifiedEmail) {
             existingUser = await db
               .select()
               .from(users)
-              .where(sql`lower(${users.email}) = ${normalizedEmail}`)
+              .where(sql`lower(${users.email}) = ${verifiedEmail}`)
               .limit(1);
             if (existingUser.length > 0) {
               const current = existingUser[0];
+              if (
+                current.tradescoutId &&
+                current.tradescoutId !== tsData.tradescoutId
+              ) {
+                throw new Error("TradeScout account link conflict");
+              }
               const newAppContext =
                 current.appContext && current.appContext !== appContext
                   ? "both"
@@ -426,7 +453,7 @@ export function createUsersRepository() {
                 userId: user.id,
                 provider: "tradescout",
                 matchedBy: "normalized_email",
-                email: normalizedEmail,
+                email: verifiedEmail,
               });
               return user;
             }
@@ -437,8 +464,8 @@ export function createUsersRepository() {
             .values({
               userType: insertUserType,
               tradescoutId: tsData.tradescoutId,
-              email: normalizedEmail ?? undefined,
-              emailVerified: Boolean(normalizedEmail),
+              email: verifiedEmail ?? undefined,
+              emailVerified: Boolean(verifiedEmail),
               firstName: tsData.firstName ?? undefined,
               lastName: tsData.lastName ?? undefined,
               appContext,
@@ -647,26 +674,39 @@ export function createUsersRepository() {
           if (authType === "tradescout") {
             const tsData = userData as TradeScoutUserData;
             const normalizedEmail = normalizeEmail(tsData.email);
-            const existingUser = await db
+            const verifiedEmail =
+              tsData.emailVerified === true ? normalizedEmail : null;
+            let existingUser = await db
               .select()
               .from(users)
-              .where(
-                normalizedEmail
-                  ? or(
-                      eq(users.tradescoutId, tsData.tradescoutId),
-                      sql`lower(${users.email}) = ${normalizedEmail}`,
-                    )
-                  : eq(users.tradescoutId, tsData.tradescoutId),
-              )
+              .where(eq(users.tradescoutId, tsData.tradescoutId))
               .limit(1);
+            if (existingUser.length === 0 && verifiedEmail) {
+              existingUser = await db
+                .select()
+                .from(users)
+                .where(sql`lower(${users.email}) = ${verifiedEmail}`)
+                .limit(1);
+            }
             if (existingUser.length > 0) {
               const current = existingUser[0];
+              if (
+                current.tradescoutId &&
+                current.tradescoutId !== tsData.tradescoutId
+              ) {
+                throw error;
+              }
+              const currentEmail = normalizeEmail(current.email);
+              const canAdoptVerifiedEmail = Boolean(
+                verifiedEmail &&
+                  (!currentEmail || currentEmail === verifiedEmail),
+              );
               const [user] = await db
                 .update(users)
                 .set({
                   tradescoutId: tsData.tradescoutId,
-                  email: normalizedEmail ?? current.email,
-                  ...(normalizedEmail ? { emailVerified: true } : {}),
+                  email: current.email ?? verifiedEmail,
+                  ...(canAdoptVerifiedEmail ? { emailVerified: true } : {}),
                   firstName: tsData.firstName ?? current.firstName,
                   lastName: tsData.lastName ?? current.lastName,
                   updatedAt: new Date(),
@@ -678,7 +718,7 @@ export function createUsersRepository() {
                 userId: user.id,
                 provider: "tradescout",
                 matchedBy: "duplicate_key",
-                email: normalizedEmail,
+                email: verifiedEmail,
               });
               return user;
             }

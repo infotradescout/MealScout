@@ -11,7 +11,7 @@
  * - Search with filters → sort results → compare
  * 
  * Run: npm run test:flows
- * or: npx tsx scripts/userFlows.ts
+ * or: node --import tsx scripts/userFlows.ts
  */
 
 import http from 'http';
@@ -567,7 +567,7 @@ class UserFlowTester {
           method: 'POST',
           path: '/api/affiliate/generate-link',
           body: {
-            baseUrl: this.baseUrl,
+            baseUrl: '/scout',
             resourceType: 'page',
             resourceId: 'home',
           },

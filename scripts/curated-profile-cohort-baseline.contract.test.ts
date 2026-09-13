@@ -8,7 +8,7 @@ const capturePath =
 const registry = JSON.parse(readFileSync(registryPath, "utf8")) as any;
 const capture = readFileSync(capturePath, "utf8");
 const packageJson = JSON.parse(readFileSync("package.json", "utf8")) as any;
-const ci = readFileSync(".github/workflows/ci.yml", "utf8");
+const releaseGate = readFileSync("scripts/releaseGate.mjs", "utf8");
 const status = readFileSync("scripts/data/onboarding/STATUS.md", "utf8");
 
 assert.equal(registry.canonicalTargetCount, 11);
@@ -174,13 +174,13 @@ assert(
 
 assert.equal(
   packageJson.scripts["capture:curated-profile-cohort-baseline"],
-  "tsx scripts/captureCuratedProfileCohortBaseline.ts",
+  "node --import tsx scripts/captureCuratedProfileCohortBaseline.ts",
 );
 assert.equal(
   packageJson.scripts["test:curated-profile-cohort-baseline"],
   "node --import tsx scripts/curated-profile-cohort-baseline.contract.test.ts",
 );
-assert.match(ci, /npm run test:curated-profile-cohort-baseline/);
+assert.match(releaseGate, /"test:curated-profile-cohort-baseline"/);
 assert.match(status, /historical working notes/i);
 assert.match(status, /current production proof/i);
 assert.match(status, /production baseline capture remains blocked/i);

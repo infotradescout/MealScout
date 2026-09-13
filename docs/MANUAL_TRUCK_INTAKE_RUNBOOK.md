@@ -145,7 +145,7 @@ Script: `scripts/runManualTruckIntakeSmokePacket.ts`
 Example command (dry run only, default):
 
 ```bash
-npx tsx scripts/runManualTruckIntakeSmokePacket.ts \
+node --import tsx scripts/runManualTruckIntakeSmokePacket.ts \
   --packet artifacts/mealscout-onboarding/3d-eats-and-tea/profile-enrichment.json \
   --logo artifacts/mealscout-onboarding/3d-eats-and-tea/images/cover-photo.png \
   --profile-images artifacts/mealscout-onboarding/3d-eats-and-tea/images/cover-photo.png \

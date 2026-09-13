@@ -28,7 +28,7 @@ No route should be removed in the first implementation slice. Legacy retirement 
 - Signed-in `/` redirects to Scout; signed-out `/` renders Welcome.
 - `/map` and `/trending` already redirect to Scout.
 - Public restaurant, truck, bar, location, supplier, generic profile, and clean-slug routes converge on `PublicProfilePage` or `CleanPublicProfileRoute`.
-- `explore-preview.tsx` contains an explicit dead-surface comment and is retained because contract tests read it by path. It is not the served Scout implementation.
+- The retired `explore-preview.tsx` implementation has been removed. Contract tests now inspect the canonical `explore-preview-v2.tsx` owner.
 - `/truck-discovery` is routed and has active inbound links from the dashboard switcher, events router, and Pensacola spots surface. It is not orphaned.
 - `/food-truck-rush`, `/golden-plate-winners`, and `/scout-prototype` are routed but have no inbound references in `client/src` outside their route declarations and own files. That makes them confirmed **unlinked routes**, not automatically safe to delete.
 - `/pensacola/report` and `/pensacola/spots` cross-link and are campaign/lead-generation surfaces. Absence from primary navigation does not prove they are unused externally.

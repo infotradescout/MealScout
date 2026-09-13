@@ -13,10 +13,6 @@ const shareButton = readFileSync(
   "client/src/components/share-button.tsx",
   "utf8",
 );
-const shareButtonCaps = readFileSync(
-  "client/src/components/ShareButton.tsx",
-  "utf8",
-);
 const ownerDashboard = readFileSync(
   "client/src/pages/restaurant-owner-dashboard.tsx",
   "utf8",
@@ -91,7 +87,6 @@ const finalShareSurfaces = [
   cityLanding,
   dealDetail,
   shareButton,
-  shareButtonCaps,
   shareHub,
   ownerDashboard,
   publicProfile,
@@ -155,9 +150,8 @@ for (const legacyFragment of [
 
 assert(
   shareHub.includes('fetch("/api/share/generate"') &&
-    shareButton.includes("getAffiliateShareUrl") &&
-    shareButtonCaps.includes("getAffiliateShareUrl"),
-  "Share Hub and ShareButton surfaces must use canonical tracked share generation.",
+    shareButton.includes("getAffiliateShareUrl"),
+  "Share Hub and the canonical ShareButton must use tracked share generation.",
 );
 
 console.log("mealscout-native-share-attribution.contract: PASS");

@@ -159,7 +159,7 @@ requireIncludes(
   "npm run verify:routes",
   "node scripts/repoDoctor.mjs",
   "node scripts/mealscout-production-readiness-gate.contract.test.ts",
-  "npx tsx scripts/admin-insurance-verification.contract.test.ts",
+  "node --import tsx scripts/admin-insurance-verification.contract.test.ts",
 ].forEach((snippet) => requireIncludes(snippet));
 
 const cleanupTickets = [...spine.matchAll(/^- C\d+ - /gm)];

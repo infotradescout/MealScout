@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 const appRoutes = readFileSync("client/src/App.tsx", "utf8");
-const scoutPage = readFileSync("client/src/pages/explore-preview.tsx", "utf8");
+const scoutPage = readFileSync("client/src/pages/explore-preview-v2.tsx", "utf8");
 const userDashboardPage = readFileSync("client/src/pages/user-dashboard.tsx", "utf8");
 const navigation = readFileSync("client/src/components/navigation.tsx", "utf8");
 const dealsFeaturedPage = readFileSync("client/src/pages/deals-featured.tsx", "utf8");

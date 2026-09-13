@@ -1,5 +1,7 @@
 import dns from "dns/promises";
 import net from "net";
+import * as http from "node:http";
+import * as https from "node:https";
 import * as cheerio from "cheerio";
 
 const FETCH_TIMEOUT_MS = 8000;
@@ -75,6 +77,102 @@ export async function assertPublicHostname(hostname: string): Promise<void> {
   await resolvePublicHostname(hostname);
 }
 
+type PinnedHtmlHop = { redirectUrl: string } | { html: string };
+
+function requestPinnedHtml(
+  parsed: URL,
+  address: string,
+  family: number,
+): Promise<PinnedHtmlHop> {
+  return new Promise((resolve, reject) => {
+    const transport = parsed.protocol === "https:" ? https : http;
+    const request = transport.request(
+      {
+        protocol: parsed.protocol,
+        hostname: address,
+        family,
+        port: parsed.port || (parsed.protocol === "https:" ? 443 : 80),
+        path: `${parsed.pathname}${parsed.search}`,
+        method: "GET",
+        servername: parsed.protocol === "https:" ? parsed.hostname : undefined,
+        rejectUnauthorized: true,
+        headers: {
+          Host: parsed.host,
+          Accept: "text/html,application/xhtml+xml",
+          "User-Agent": USER_AGENT,
+          Connection: "close",
+        },
+      },
+      (response) => {
+        const status = response.statusCode || 0;
+        if (status >= 300 && status < 400) {
+          const location = response.headers.location;
+          response.resume();
+          if (!location) {
+            reject(new WebsiteImportError("Couldn't reach that website."));
+            return;
+          }
+          resolve({ redirectUrl: new URL(location, parsed).toString() });
+          return;
+        }
+
+        if (status < 200 || status >= 300) {
+          response.resume();
+          reject(new WebsiteImportError("Couldn't reach that website."));
+          return;
+        }
+
+        const contentType = String(response.headers["content-type"] || "")
+          .split(";", 1)[0]
+          .trim()
+          .toLowerCase();
+        if (
+          contentType !== "text/html" &&
+          contentType !== "application/xhtml+xml"
+        ) {
+          response.resume();
+          reject(
+            new WebsiteImportError(
+              "That link doesn't look like a website page.",
+            ),
+          );
+          return;
+        }
+
+        const declaredBytes = Number(response.headers["content-length"] || 0);
+        if (declaredBytes > MAX_RESPONSE_BYTES) {
+          response.resume();
+          reject(new WebsiteImportError("That page is too large to read."));
+          return;
+        }
+
+        const chunks: Buffer[] = [];
+        let byteLength = 0;
+        response.on("data", (chunk: Buffer | Uint8Array) => {
+          const buffer = Buffer.from(chunk);
+          byteLength += buffer.byteLength;
+          if (byteLength > MAX_RESPONSE_BYTES) {
+            response.destroy(
+              new WebsiteImportError("That page is too large to read."),
+            );
+            return;
+          }
+          chunks.push(buffer);
+        });
+        response.on("end", () => {
+          resolve({ html: Buffer.concat(chunks).toString("utf8") });
+        });
+        response.on("error", reject);
+      },
+    );
+    request.setTimeout(FETCH_TIMEOUT_MS, () => {
+      request.destroy(new WebsiteImportError("Couldn't reach that website."));
+    });
+    request.on("error", reject);
+    request.end();
+  });
+}
+
 async function fetchHtml(startUrl: string): Promise<string> {
   let currentUrl = startUrl;
 
@@ -85,74 +183,42 @@ async function fetchHtml(startUrl: string): Promise<string> {
     } catch {
       throw new WebsiteImportError("Enter a valid website link.");
     }
-    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    if (
+      (parsed.protocol !== "http:" && parsed.protocol !== "https:") ||
+      parsed.username ||
+      parsed.password
+    ) {
       throw new WebsiteImportError("Enter a valid website link.");
     }
 
-    await assertPublicHostname(parsed.hostname);
-
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-    let response: Response;
-    try {
-      response = await fetch(parsed.toString(), {
-        signal: controller.signal,
-        redirect: "manual",
-        headers: {
-          "User-Agent": USER_AGENT,
-          Accept: "text/html,application/xhtml+xml",
-        },
-      });
-    } catch {
-      throw new WebsiteImportError("Couldn't reach that website.");
-    } finally {
-      clearTimeout(timeout);
+    const records = await resolvePublicHostname(parsed.hostname);
+    let hop: PinnedHtmlHop | null = null;
+    let lastError: unknown = null;
+    for (const record of records.slice(0, 4)) {
+      try {
+        hop = await requestPinnedHtml(
+          parsed,
+          record.address,
+          record.family,
+        );
+        break;
+      } catch (error) {
+        lastError = error;
+      }
     }
 
-    if (response.status >= 300 && response.status < 400) {
-      const location = response.headers.get("location");
-      if (!location) {
-        throw new WebsiteImportError("Couldn't reach that website.");
+    if (!hop) {
+      if (lastError instanceof WebsiteImportError) throw lastError;
+      throw new WebsiteImportError("Couldn't reach that website.");
+    }
+    if ("redirectUrl" in hop) {
+      if (redirects === MAX_REDIRECTS) {
+        throw new WebsiteImportError("That link redirects too many times.");
       }
-      currentUrl = new URL(location, parsed).toString();
+      currentUrl = hop.redirectUrl;
       continue;
     }
-
-    if (!response.ok) {
-      throw new WebsiteImportError("Couldn't reach that website.");
-    }
-
-    const contentType = response.headers.get("content-type") || "";
-    if (!contentType.includes("html")) {
-      throw new WebsiteImportError(
-        "That link doesn't look like a website page.",
-      );
-    }
-
-    const contentLength = Number(response.headers.get("content-length") || 0);
-    if (contentLength && contentLength > MAX_RESPONSE_BYTES) {
-      throw new WebsiteImportError("That page is too large to read.");
-    }
-
-    const reader = response.body?.getReader();
-    if (!reader) {
-      throw new WebsiteImportError("Couldn't reach that website.");
-    }
-    const chunks: Uint8Array[] = [];
-    let received = 0;
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      if (value) {
-        received += value.byteLength;
-        if (received > MAX_RESPONSE_BYTES) {
-          await reader.cancel().catch(() => {});
-          throw new WebsiteImportError("That page is too large to read.");
-        }
-        chunks.push(value);
-      }
-    }
-    return Buffer.concat(chunks).toString("utf-8");
+    return hop.html;
   }
 
   throw new WebsiteImportError("That link redirects too many times.");

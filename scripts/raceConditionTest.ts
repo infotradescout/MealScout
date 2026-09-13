@@ -1,6 +1,6 @@
 /**
  * Race Condition Test - Verify deal claim limits work under concurrent load
- * Usage: npx tsx scripts/raceConditionTest.ts
+ * Usage: node --import tsx scripts/raceConditionTest.ts
  */
 
 const RACE_TEST_URL = process.env.TEST_URL || 'http://localhost:5200';

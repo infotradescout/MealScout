@@ -15,7 +15,7 @@
  * - API action endpoints (server-side action integrations)
  * 
  * Run: npm run stress-test
- * or: npx tsx scripts/stressTest.ts
+ * or: node --import tsx scripts/stressTest.ts
  */
 
 import http from 'http';

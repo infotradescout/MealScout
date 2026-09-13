@@ -3,9 +3,10 @@ services:
     name: mealscout
     runtime: node
     plan: starter
-    buildCommand: npm ci --include=dev && npm run build:platform
+    buildCommand: npm ci --include=dev && npm run gate:release:local
     preDeployCommand: npm run migrate:deploy
     startCommand: npm run start
+    healthCheckPath: /health/ready
     autoDeploy: true
     envVars:
       - key: NODE_VERSION

@@ -540,7 +540,7 @@ export async function registerSchedulers(app: Express): Promise<void> {
     }
   });
 
-  // Request log cleanup — every 15 min. General request logs keep the existing
+  // Request log cleanup — hourly at minute 15. General request logs keep the existing
   // 48-hour window. Only allowlisted observatory rows, whose writer strips IP,
   // user agent, user/session IDs, URL queries, and private payloads, keep 180 d.
   scheduleCron("15 * * * *", async () => {

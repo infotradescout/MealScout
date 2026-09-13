@@ -4,10 +4,9 @@ const postVerification = readFileSync("client/src/pages/post-verification.tsx", 
 const unifiedAuth = readFileSync("server/unifiedAuth.ts", "utf8");
 
 const requiredPostVerificationSnippets = [
-  'app.post("/api/auth/verification-status"',
   "I verified, log in",
   "handleVerifiedContinue",
-  'title: "Email not verified yet"',
+  "never exposes a public email-verification lookup endpoint",
   "const isBarSetup",
   'label: "Bar setup"',
   '"Personal login", "Bar profile", "AI-prepared setup", "Owner approval"',
@@ -24,23 +23,14 @@ const forbiddenBarBaseSnippets = [
   '"Personal login", "Business profile", "AI-prepared setup", "Owner approval"',
 ];
 
-const requiredAuthSnippets = [
-  'app.post("/api/auth/verification-status"',
-  "const email = emailRaw.trim().toLowerCase()",
-  "res.json({ verified: false })",
-  "res.json({ verified: user.emailVerified === true })",
-];
-
 for (const snippet of requiredPostVerificationSnippets) {
   if (!postVerification.includes(snippet) && !unifiedAuth.includes(snippet)) {
     throw new Error(`Missing post-verification snippet: ${snippet}`);
   }
 }
 
-for (const snippet of requiredAuthSnippets) {
-  if (!unifiedAuth.includes(snippet)) {
-    throw new Error(`Missing unifiedAuth snippet: ${snippet}`);
-  }
+if (unifiedAuth.includes('/api/auth/verification-status')) {
+  throw new Error("Public verification-status lookup must remain removed");
 }
 
 if (!postVerification.includes('if (redirectPath.startsWith("/restaurant-signup"))')) {

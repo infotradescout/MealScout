@@ -7,7 +7,7 @@
  * Tracks response times, error rates, throughput, and resource usage
  * 
  * Run: npm run monitor
- * or: npx tsx scripts/monitorPerformance.ts
+ * or: node --import tsx scripts/monitorPerformance.ts
  */
 
 import http from 'http';

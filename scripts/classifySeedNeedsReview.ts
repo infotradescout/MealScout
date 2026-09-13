@@ -30,7 +30,7 @@ import { restaurants, truckImportListings, users } from "../shared/schema";
  *     most likely to be a genuinely new business that got wrongly blocked.
  *
  * Usage:
- *   npx tsx scripts/classifySeedNeedsReview.ts --report <path-to-report.json> [--samples 5]
+ *   node --import tsx scripts/classifySeedNeedsReview.ts --report <path-to-report.json> [--samples 5]
  */
 
 const getArg = (flag: string, dflt = "") => {

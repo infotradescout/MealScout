@@ -21,7 +21,7 @@ const mode = applyMode ? "apply" : "preview";
 
 if (!listingIdArg && !allMode) {
   throw new Error(
-    "Usage: npx tsx scripts/publishSafeIngestRecord.ts --listing-id <id> [--apply] OR --mode=preview|apply --all",
+    "Usage: node --import tsx scripts/publishSafeIngestRecord.ts --listing-id <id> [--apply] OR --mode=preview|apply --all",
   );
 }
 if (!db) throw new Error("DATABASE_URL is required.");

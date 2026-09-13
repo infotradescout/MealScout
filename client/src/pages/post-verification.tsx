@@ -151,7 +151,6 @@ export default function PostVerification() {
   const { isAuthenticated, isLoading } = useAuth();
   const { toast } = useToast();
   const [isResending, setIsResending] = useState(false);
-  const [isCheckingVerification, setIsCheckingVerification] = useState(false);
 
   const params = useMemo(() => new URLSearchParams(window.location.search), []);
   const redirectPath = useMemo(() => getBestRedirect(params), [params]);
@@ -207,42 +206,11 @@ export default function PostVerification() {
     }
   };
 
-  const handleVerifiedContinue = async () => {
-    if (!email) {
-      toast({
-        title: "Email needed",
-        description: "Use the login page with your signup email to continue.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setIsCheckingVerification(true);
-    try {
-      const response = await apiRequest("POST", "/api/auth/verification-status", {
-        email,
-      });
-      const payload = await response.json();
-      if (!payload?.verified) {
-        toast({
-          title: "Email not verified yet",
-          description:
-            "Please click the verification link in your inbox first, then try again.",
-          variant: "destructive",
-        });
-        return;
-      }
-      clearStoredRedirect();
-      window.location.href = loginHref;
-    } catch (error: any) {
-      toast({
-        title: "Could not verify status",
-        description: error?.message || "Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsCheckingVerification(false);
-    }
+  const handleVerifiedContinue = () => {
+    // Verification links already carry the proof. Continue through login so
+    // MealScout never exposes a public email-verification lookup endpoint.
+    clearStoredRedirect();
+    window.location.href = loginHref;
   };
 
   const headline = isAuthenticated
@@ -376,10 +344,9 @@ export default function PostVerification() {
               <button
                 type="button"
                 onClick={handleVerifiedContinue}
-                disabled={isCheckingVerification}
                 className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-amber-400 font-black text-black shadow-[0_12px_40px_rgba(251,191,36,0.28)] transition active:scale-[0.98]"
               >
-                {isCheckingVerification ? "Checking verification..." : "I verified, log in"}
+                I verified, log in
                 <ArrowRight className="h-5 w-5" />
               </button>
               <button

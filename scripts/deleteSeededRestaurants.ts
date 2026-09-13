@@ -21,8 +21,8 @@ import { users, restaurants } from "../shared/schema";
  *   so deletes will not be blocked; CASCADE FKs clean up the ~3 menus.
  *
  * Examples:
- *   npx tsx scripts/deleteSeededRestaurants.ts                 # dry-run + backup
- *   npx tsx scripts/deleteSeededRestaurants.ts --apply         # delete inactive seeded
+ *   node --import tsx scripts/deleteSeededRestaurants.ts                 # dry-run + backup
+ *   node --import tsx scripts/deleteSeededRestaurants.ts --apply         # delete inactive seeded
  */
 
 async function main() {

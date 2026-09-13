@@ -13,6 +13,10 @@ import {
   affiliateWallet,
 } from '@shared/schema';
 import { eq, and, sql, asc } from 'drizzle-orm';
+import {
+  buildTrackedAttributedUrl,
+  normalizeEligibleAffiliateDestination,
+} from "./shareTargetPolicy";
 
 const AFFILIATE_CODE_LENGTH = 8;
 
@@ -38,7 +42,16 @@ export async function createAffiliateLink(
   resourceType: 'deal' | 'restaurant' | 'page' | 'collection' | 'search',
   sourceUrl: string,
   resourceId?: string,
+  publicOrigin = "https://www.mealscout.us",
 ) {
+  const safeSourceUrl = normalizeEligibleAffiliateDestination(
+    sourceUrl,
+    publicOrigin,
+  );
+  if (!safeSourceUrl) {
+    throw new Error("Invalid affiliate destination");
+  }
+
   // Generate unique code
   let code: string;
   let attempts = 0;
@@ -57,9 +70,7 @@ export async function createAffiliateLink(
     throw new Error('Failed to generate unique affiliate code');
   }
 
-  // Build full URL with ref parameter
-  const separator = sourceUrl.includes('?') ? '&' : '?';
-  const fullUrl = `${sourceUrl}${separator}ref=${code}`;
+  const fullUrl = buildTrackedAttributedUrl(publicOrigin, code, safeSourceUrl);
 
   const link = await db
     .insert(affiliateLinks)
@@ -68,7 +79,7 @@ export async function createAffiliateLink(
       code,
       resourceType,
       resourceId,
-      sourceUrl,
+      sourceUrl: safeSourceUrl,
       fullUrl,
     })
     .returning();

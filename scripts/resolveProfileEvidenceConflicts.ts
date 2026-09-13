@@ -52,7 +52,7 @@ const apply = hasFlag("--apply");
 
 if (!reportPathArg || !batchPathArg) {
   throw new Error(
-    "Usage: npx tsx scripts/resolveProfileEvidenceConflicts.ts --report <report.json> --batch <batch.json> [--decisions <decisions.json>] [--apply]",
+    "Usage: node --import tsx scripts/resolveProfileEvidenceConflicts.ts --report <report.json> --batch <batch.json> [--decisions <decisions.json>] [--apply]",
   );
 }
 if (!db) throw new Error("DATABASE_URL is required.");
