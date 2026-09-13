@@ -100,7 +100,7 @@ const lastAlertAtByKey = new Map<string, number>();
 let lastSnapshot: WatchdogSnapshot = {
   ts: new Date(0).toISOString(),
   reason: "init",
-  ok: true,
+  ok: false,
   checks: [],
   alertsSent: 0,
   alertFailures: 0,
@@ -248,7 +248,7 @@ async function probeEndpoint(spec: CriticalEndpointSpec): Promise<{
     const responseTimeMs = Date.now() - started;
     const raw = await response.text();
     let payload: any = null;
-    let parseError = false;
+    let parseError = !raw;
     if (raw) {
       try {
         payload = JSON.parse(raw);
@@ -360,6 +360,7 @@ export async function runMapEndpointWatchdog(reason = "scheduled") {
     if (!okHttp) reasons.push("unavailable");
     if (probe.timedOut) reasons.push("timeout");
     if (probe.parseError) reasons.push("invalid_json");
+    if (spec.payloadCountMode !== "none" && probe.dataCount === null) reasons.push("invalid_payload");
 
     const window5xxRatePct =
       window.total > 0 ? (window.error5xx / window.total) * 100 : 0;
@@ -371,14 +372,13 @@ export async function runMapEndpointWatchdog(reason = "scheduled") {
     }
     if (
       spec.emptyPayloadCritical &&
-      probe.dataCount !== null &&
-      probe.dataCount <= 0
+      (probe.dataCount === null || probe.dataCount <= 0)
     ) {
       reasons.push("empty_payload");
     }
 
     const status: EndpointStatus = reasons.includes("unavailable") ||
-      reasons.includes("empty_payload")
+      reasons.includes("empty_payload") || reasons.includes("invalid_payload")
       ? "critical"
       : reasons.length > 0
         ? "degraded"
@@ -427,5 +427,13 @@ export async function runMapEndpointWatchdog(reason = "scheduled") {
 }
 
 export function getMapEndpointWatchdogSnapshot() {
-  return lastSnapshot;
+  const ageMs = Date.now() - Date.parse(lastSnapshot.ts);
+  const hasAllChecks = CRITICAL_ENDPOINTS.every((endpoint) =>
+    lastSnapshot.checks.some((check) => check.id === endpoint.id),
+  );
+  const stale = !Number.isFinite(ageMs) || ageMs > 10 * 60_000;
+  return { ...lastSnapshot, ok: hasAllChecks && !stale && lastSnapshot.ok,
+    stale, ageMs: Number.isFinite(ageMs) ? ageMs : null,
+    reason: !hasAllChecks ? "not_checked" : stale ? "stale" : lastSnapshot.reason,
+  };
 }

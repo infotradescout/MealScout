@@ -1,3 +1,4 @@
+import { ScoutLocationPicker, readScoutManualLocation, persistScoutManualLocation } from "@/components/scout-location-picker";
 import {
   DEFAULT_TRUCK_BROADCAST_FRESHNESS_MS,
   deriveTruckPresence,
@@ -2769,8 +2770,9 @@ export default function ExplorePreview() {
       .trim()
       .toLowerCase();
   }, [location]);
+  const [scoutPreviewDismissed, setScoutPreviewDismissed] = useState(false);
   const isPensacolaScoutPreview =
-    isScoutPreviewEligible && scoutPreviewCity === "pensacola";
+    !scoutPreviewDismissed && isScoutPreviewEligible && scoutPreviewCity === "pensacola";
   const previewLocation = useMemo(
     () =>
       isPensacolaScoutPreview
@@ -2783,7 +2785,7 @@ export default function ExplorePreview() {
         : null,
     [isPensacolaScoutPreview],
   );
-  const manualSelectedLocation = null;
+  const [manualSelectedLocation, setManualSelectedLocation] = useState(readScoutManualLocation);
   const savedLocation = useMemo(() => {
     if (!effectiveLocationContext) return null;
     const lat = Number(effectiveLocationContext?.latitude);
@@ -2838,7 +2840,7 @@ export default function ExplorePreview() {
     }
     if (savedLocation) return savedLocation;
     return fallbackLocation;
-  }, [deviceCoords, deviceLocationName, previewLocation, savedLocation]);
+  }, [deviceCoords, deviceLocationName, previewLocation, savedLocation, manualSelectedLocation, fallbackLocation]);
   const resolvedScoutCoords = useMemo(
     () =>
       resolvedScoutLocation
@@ -2876,7 +2878,7 @@ export default function ExplorePreview() {
   );
 
   useEffect(() => {
-    if (!location.startsWith("/scout") && !location.startsWith("/map")) {
+    if (!location.startsWith("/scout") && !location.startsWith("/map") && !location.startsWith("/directory")) {
       closeScoutSearch();
     }
   }, [closeScoutSearch, location]);
@@ -5794,10 +5796,23 @@ export default function ExplorePreview() {
               <>
                 {/* Map context, not a duplicate app header. */}
                 <div className="absolute left-3 top-3 z-20 flex items-center gap-2">
-                  <span className="inline-flex max-w-[15rem] items-center gap-1.5 rounded-full bg-[var(--bg-popup)] px-2.5 py-1.5 text-[11px] font-black text-[color:var(--text-primary)] ring-1 ring-[color:var(--border-subtle)] backdrop-blur-xl shadow-[0_8px_20px_rgba(0,0,0,0.14)]">
-                    <MapPin className="h-3.5 w-3.5 shrink-0 text-[color:var(--action-primary)]" aria-hidden="true" />
-                    <span className="truncate">{compactMapMarketHint}</span>
-                  </span>
+                  <ScoutLocationPicker label={resolvedScoutLocation.label} onSelect={(selected) => {
+                    setScoutPreviewDismissed(true);
+                    persistScoutManualLocation(selected);
+                    setManualSelectedLocation(selected);
+                    const params = new URLSearchParams(window.location.search);
+                    params.delete("scoutPreview"); params.delete("previewCity");
+                    const query = params.toString();
+                    navigate(`${window.location.pathname}${query ? `?${query}` : ""}`);
+                  }} onUseDevice={() => {
+                    setScoutPreviewDismissed(true);
+                    persistScoutManualLocation(null); setManualSelectedLocation(null);
+                    const params = new URLSearchParams(window.location.search);
+                    params.delete("scoutPreview"); params.delete("previewCity");
+                    const query = params.toString();
+                    navigate(`${window.location.pathname}${query ? `?${query}` : ""}`);
+                    requestLocation();
+                  }} />
                 </div>
 
                 {/* Top-right: recenter (sits below the map's own "Live" badge so the two don't overlap) */}

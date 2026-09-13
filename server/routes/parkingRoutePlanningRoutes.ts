@@ -92,10 +92,17 @@ export function registerParkingRoutePlanningRoutes(app: Express) {
   app.get("/api/parking-pass/host-route-demand", isAuthenticated, async (req: any, res) => {
     const host = await getHostByUserId(String(req.user.id));
     if (!host) return res.status(404).json({ message: "Host profile required" });
-    const rows = await db.select({ id: parkingRoutePlans.id, name: parkingRoutePlans.name, schedule: parkingRoutePlans.schedule, hostSnapshot: parkingRoutePlans.hostSnapshot, updatedAt: parkingRoutePlans.updatedAt }).from(parkingRoutePlans);
-    const matching = rows.filter((row: any) => asArray(row.hostSnapshot).some((item: any) => String(item.hostId) === String(host.id)));
-    const scheduled = rows.filter((row: any) => asArray(row.schedule).some((item: any) => String(item.hostId) === String(host.id)));
-    res.json({ hostId: host.id, routesNearby: matching.length, scheduledStops: scheduled.length, recentRoutes: matching.slice(0, 10) });
+    const [counts] = await db.select({
+      routesNearby: sql<number>`count(*) filter (where exists (
+        select 1 from jsonb_array_elements(coalesce(${parkingRoutePlans.hostSnapshot}, '[]'::jsonb)) stop
+        where stop->>'hostId' = ${String(host.id)}
+      ))`.mapWith(Number),
+      scheduledStops: sql<number>`count(*) filter (where exists (
+        select 1 from jsonb_array_elements(coalesce(${parkingRoutePlans.schedule}, '[]'::jsonb)) stop
+        where stop->>'hostId' = ${String(host.id)}
+      ))`.mapWith(Number),
+    }).from(parkingRoutePlans);
+    res.json({ hostId: host.id, routesNearby: counts?.routesNearby ?? 0, scheduledStops: counts?.scheduledStops ?? 0 });
   });
 
   app.get("/api/admin/parking-pass/route-demand-heatmap", isAuthenticated, isStaffOrAdmin, async (_req, res) => {

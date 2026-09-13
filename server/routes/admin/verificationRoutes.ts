@@ -97,20 +97,8 @@ export function registerVerificationAdminRoutes(
           }
         }
 
-        if (claimContext?.restaurantId) {
-          const now = new Date();
-          const insuranceExpiresAt = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000);
-          await db
-            .update(restaurants)
-            .set({
-              insuranceVerified: true,
-              insuranceVerifiedAt: now,
-              insuranceExpiresAt,
-              insuranceVerifiedByUserId: user.id,
-              updatedAt: now,
-            })
-            .where(eq(restaurants.id, claimContext.restaurantId));
-        }
+        // Ownership approval does not establish insurance coverage. Insurance
+        // is reviewed separately with its actual expiry in the insurance action.
 
         // Always send an approval email to the truck owner, regardless of whether
         // the truck was a claimed import or a fresh self-signup. Without this,
@@ -120,16 +108,16 @@ export function registerVerificationAdminRoutes(
           const isClaim = !!claimContext.claimedFromImportId;
           const subject = isClaim
             ? "Your food truck claim was approved — welcome to MealScout!"
-            : "Your MealScout account has been verified — you're ready to book!";
+            : "Your MealScout business has been verified";
           const body = isClaim
             ? `
               <p>Great news — your food truck claim has been approved on MealScout!</p>
-              <p>You can now log in and start booking parking pass slots at local host locations.</p>
+              <p>You can now manage your profile. Before booking, complete the insurance and other requirements shown for your truck.</p>
               <p>Head to <a href="https://mealscout.us/parking-pass">mealscout.us/parking-pass</a> to find available spots near you.</p>
             `
             : `
               <p>Great news — your MealScout account has been verified!</p>
-              <p>You can now book parking pass slots at host locations in your area.</p>
+              <p>You can now manage your profile. Before booking, complete the insurance and other requirements shown for your truck.</p>
               <p>Head to <a href="https://mealscout.us/parking-pass">mealscout.us/parking-pass</a> to find available spots near you.</p>
             `;
           try {

@@ -277,7 +277,7 @@ export default function SearchPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [showFilters, setShowFilters] = useState(false);
-  const [priceRange, setPriceRange] = useState([0, 50]);
+  const [priceRange, setPriceRange] = useState([0, 100]);
   const [sortBy, setSortBy] = useState("relevance");
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const [discoveryRadiusKm, setDiscoveryRadiusKm] = useState<number>(() =>
@@ -342,7 +342,7 @@ export default function SearchPage() {
   };
 
   // Fetch nearby deals when location is available, otherwise featured deals
-  const { data: nearbyDeals, isLoading: nearbyLoading } = useQuery({
+  const { data: nearbyDeals, isLoading: nearbyLoading, isError: nearbyError, refetch: retryNearby } = useQuery({
     queryKey: userLocation
       ? ["/api/deals/nearby", userLocation.lat, userLocation.lng, discoveryRadiusKm]
       : ["/api/deals/nearby", "no-location"],
@@ -356,7 +356,7 @@ export default function SearchPage() {
     enabled: !searchQuery && !!userLocation,
   });
 
-  const { data: featuredDeals, isLoading: featuredLoading } = useQuery({
+  const { data: featuredDeals, isLoading: featuredLoading, isError: featuredError, refetch: retryFeatured } = useQuery({
     queryKey: ["/api/deals/featured"],
     queryFn: async () => {
       const response = await fetch(apiUrl("/api/deals/featured"));
@@ -366,7 +366,7 @@ export default function SearchPage() {
     enabled: !searchQuery && !userLocation && !isLocating,
   });
 
-  const { data: unifiedResults, isLoading: unifiedLoading } = useQuery({
+  const { data: unifiedResults, isLoading: unifiedLoading, isError: unifiedError, refetch: retryUnified } = useQuery({
     queryKey: ["/api/search", debouncedSearchQuery],
     queryFn: async () => {
       const params = new URLSearchParams({ q: debouncedSearchQuery });
@@ -378,7 +378,7 @@ export default function SearchPage() {
     staleTime: 30_000,
   });
 
-  const { data: restaurantSearchResults = [] } = useQuery<any[]>({
+  const { data: restaurantSearchResults = [], isLoading: restaurantLoading, isError: restaurantError, refetch: retryRestaurants } = useQuery<any[]>({
     queryKey: [
       "/api/restaurants/search",
       debouncedSearchQuery,
@@ -401,7 +401,7 @@ export default function SearchPage() {
     staleTime: 30_000,
   });
 
-  const { data: menuItemSearchResults = [], isLoading: menuItemsLoading } =
+  const { data: menuItemSearchResults = [], isLoading: menuItemsLoading, isError: menuItemsError, refetch: retryMenuItems } =
     useQuery<MenuItemSearchResult[]>({
       queryKey: [
         "/api/menus/local-items",
@@ -433,8 +433,17 @@ export default function SearchPage() {
     nearbyLoading ||
     featuredLoading ||
     unifiedLoading ||
+    restaurantLoading ||
     menuItemsLoading ||
     isLocating;
+
+  const hasSearchError = debouncedSearchQuery.length >= 2
+    ? unifiedError || restaurantError || menuItemsError
+    : !searchQuery && (userLocation ? nearbyError : featuredError);
+  const retrySearch = () => {
+    if (debouncedSearchQuery.length >= 2) void Promise.all([retryUnified(), retryRestaurants(), retryMenuItems()]);
+    else if (userLocation) void retryNearby(); else void retryFeatured();
+  };
 
   // Function to map cuisine types and titles to category IDs
   const mapDealToCategory = (deal: any): string[] => {
@@ -596,7 +605,7 @@ export default function SearchPage() {
           // Apply price range filter
           const dealPrice = parseFloat(deal.minOrderAmount) || 0;
           const matchesPrice =
-            dealPrice >= priceRange[0] && dealPrice <= priceRange[1];
+            dealPrice >= priceRange[0] && (priceRange[1] >= 100 || dealPrice <= priceRange[1]);
 
           return matchesSearch && matchesCategory && matchesPrice;
         })
@@ -1012,7 +1021,7 @@ export default function SearchPage() {
               {/* Price Range */}
               <div>
                 <label className="block text-sm font-semibold text-foreground mb-2">
-                  Price Range: ${priceRange[0]} - ${priceRange[1]}
+                  Deal minimum spend: ${priceRange[0]} – {priceRange[1] >= 100 ? "No limit" : `$${priceRange[1]}`}
                 </label>
                 <Slider
                   value={priceRange}
@@ -1039,7 +1048,7 @@ export default function SearchPage() {
                   className="w-full sm:w-auto"
                   onClick={() => {
                     setSortBy("relevance");
-                    setPriceRange([0, 50]);
+                    setPriceRange([0, 100]);
                     setSelectedCategory("all");
                     setSearchQuery("");
                   }}
@@ -1055,6 +1064,9 @@ export default function SearchPage() {
 
       {/* Results */}
       <div className="px-4 sm:px-6 py-6">
+        {hasSearchError ? <div role="alert" className="mb-6 rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-950">
+          <p>Some results could not be loaded.</p><Button variant="outline" onClick={retrySearch} className="mt-2">Try again</Button>
+        </div> : null}
         {/* Menu Items Section (primary food-intent result) */}
         {searchQuery && menuItemSearchResults.length > 0 && (
           <div className="mb-8">
@@ -1347,11 +1359,6 @@ export default function SearchPage() {
             <span className="text-sm text-muted-foreground">
               {filteredDeals.length} deals found
             </span>
-            {filteredDeals.length > 0 && (
-              <span className="px-2 py-0.5 rounded-full bg-[var(--bg-surface-muted)] text-[11px] text-[color:var(--text-secondary)]">
-                Open now
-              </span>
-            )}
           </div>
         </div>
 
@@ -1376,7 +1383,7 @@ export default function SearchPage() {
               <DealCard key={deal.id} deal={deal} />
             ))}
           </div>
-        ) : (
+        ) : hasSearchError ? null : (
           <div className="text-center py-12">
             <div className="w-20 h-20 bg-[var(--bg-surface-muted)] rounded-2xl flex items-center justify-center mx-auto mb-4">
               <Search className="w-8 h-8 text-muted-foreground" />

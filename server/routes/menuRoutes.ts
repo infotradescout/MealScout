@@ -64,7 +64,6 @@ import { distributedRateLimit } from "../middleware/distributedRateLimit";
 import { storage } from "../storage";
 import {
   createMenuWithLisaRecord,
-  isMenuManagerUserType,
   MenuCreationError,
 } from "../services/menuCreation";
 import { buildPublicTruckOperatingPlan } from "../services/truckOperatingPlan";
@@ -120,17 +119,15 @@ const canManageMenu = (req: any, res: any, next: any) => {
   if (!req.isAuthenticated()) {
     return res.status(401).json({ error: "Authentication required" });
   }
-  if (!isMenuManagerUserType(req.user?.userType)) {
-    return res.status(403).json({ error: "Menu management access required" });
-  }
+  // Owners and delegated members are authorized against each target below.
   next();
 };
 
 async function assertOwnsRestaurant(reqUser: any, restaurantId: string) {
-  if (reqUser?.userType && reqUser.userType !== "restaurant_owner") {
+  if (["staff", "admin", "duper_admin", "super_admin"].includes(reqUser?.userType)) {
     return;
   }
-  const ok = await storage.verifyRestaurantOwnership(restaurantId, reqUser.id);
+  const ok = await storage.verifyRestaurantOwnership(restaurantId, reqUser.id, "manageProfile");
   if (!ok)
     throw Object.assign(new Error("Not authorized"), { statusCode: 403 });
 }
@@ -1944,7 +1941,10 @@ export function registerMenuRoutes(app: Express) {
     canManageMenu,
     wrap(async (req, res) => {
       const body = insertMenuCategorySchema.parse(req.body);
-      await assertOwnsMenu(req.user, body.menuId);
+      const parent = await assertOwnsMenu(req.user, body.menuId);
+      if (body.restaurantId !== parent.restaurantId) {
+        return res.status(400).json({ message: "Category must belong to the menu's business" });
+      }
 
       const [cat] = await db.insert(menuCategories).values(body).returning();
       res.status(201).json({ category: cat });
@@ -2016,7 +2016,17 @@ export function registerMenuRoutes(app: Express) {
     canManageMenu,
     wrap(async (req, res) => {
       const body = insertMenuItemSchema.parse(req.body);
-      await assertOwnsMenu(req.user, body.menuId);
+      const parent = await assertOwnsMenu(req.user, body.menuId);
+      if (body.restaurantId !== parent.restaurantId) {
+        return res.status(400).json({ error: "Item business must match its menu" });
+      }
+      if (body.categoryId) {
+        const [category] = await db.select({ id: menuCategories.id }).from(menuCategories).where(and(
+          eq(menuCategories.id, body.categoryId), eq(menuCategories.menuId, parent.id),
+          eq(menuCategories.restaurantId, parent.restaurantId),
+        ));
+        if (!category) return res.status(400).json({ error: "Category must belong to this menu" });
+      }
 
       const [item] = await db.insert(menuItems).values(body).returning();
       res.status(201).json({ item });
@@ -2032,12 +2042,19 @@ export function registerMenuRoutes(app: Express) {
     canManageMenu,
     wrap(async (req, res) => {
       const { itemId } = req.params;
-      await assertOwnsMenuItem(req.user, itemId);
+      const itemParent = await assertOwnsMenuItem(req.user, itemId);
 
       const updateSchema = insertMenuItemSchema
         .partial()
         .omit({ menuId: true, restaurantId: true });
       const updates = updateSchema.parse(req.body);
+      if (updates.categoryId) {
+        const [category] = await db.select({ id: menuCategories.id }).from(menuCategories).where(and(
+          eq(menuCategories.id, updates.categoryId), eq(menuCategories.menuId, itemParent.menuId),
+          eq(menuCategories.restaurantId, itemParent.restaurantId),
+        ));
+        if (!category) return res.status(400).json({ error: "Category must belong to this menu" });
+      }
 
       const [updated] = await db
         .update(menuItems)
@@ -2209,9 +2226,32 @@ export function registerMenuRoutes(app: Express) {
       // Download + re-host any item images so they persist on MealScout.
       await rehostImportedImages(imported);
 
-      // Insert imported items in a transaction
+      // Resolve categories in this menu and insert the complete batch atomically.
       if (imported.length > 0) {
-        await db.insert(menuItems).values(imported);
+        await db.transaction(async (tx: any) => {
+          await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`menu-import:${menuId}`}))`);
+          const categories = await tx.select().from(menuCategories)
+            .where(and(eq(menuCategories.menuId, menuId), eq(menuCategories.restaurantId, menu.restaurantId)));
+          const categoryIds = new Map<string, string>(categories.map((c: MenuCategory) => [c.name.trim().toLowerCase(), c.id]));
+          const items = [];
+          for (const { categoryName, ...item } of imported) {
+            let categoryId: string | null = null;
+            if (categoryName) {
+              const key = categoryName.trim().toLowerCase();
+              categoryId = categoryIds.get(key) ?? null;
+              if (!categoryId) {
+                const [category] = await tx.insert(menuCategories).values({
+                  menuId, restaurantId: menu.restaurantId, name: categoryName.trim(),
+                  sortOrder: categoryIds.size,
+                }).returning();
+                categoryId = category.id;
+                categoryIds.set(key, category.id);
+              }
+            }
+            items.push({ ...item, categoryId });
+          }
+          await tx.insert(menuItems).values(items);
+        });
       }
 
       // Audit log

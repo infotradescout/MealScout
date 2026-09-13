@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import type { PgDatabase } from "drizzle-orm/pg-core";
 import { z } from "zod";
 import * as schema from "@shared/schema";
@@ -10,6 +10,7 @@ import {
   LISA_CLAIM_TYPES,
   menus,
   restaurants,
+  businessStaffMemberships,
 } from "@shared/schema";
 
 type Actor = { id: string; userType: string };
@@ -27,6 +28,7 @@ export class MenuCreationError extends Error {
 // Shared by the existing menu route gates and the transaction's authority check.
 export const isMenuManagerUserType = (userType?: string | null) =>
   userType === "restaurant_owner" ||
+  userType === "food_truck" ||
   userType === "staff" ||
   userType === "admin" ||
   userType === "duper_admin" ||
@@ -38,7 +40,7 @@ export async function createMenuWithLisaRecord(
   input: unknown,
   requestKey: unknown,
 ) {
-  if (!actor?.id || !isMenuManagerUserType(actor.userType)) {
+  if (!actor?.id) {
     throw new MenuCreationError(403, "menu_access_denied", "Menu management access required");
   }
   const key = z.string().uuid().safeParse(requestKey);
@@ -58,7 +60,18 @@ export async function createMenuWithLisaRecord(
         .from(restaurants)
         .where(eq(restaurants.id, body.restaurantId))
         .for("update");
-      if (!restaurant || (actor.userType === "restaurant_owner" && restaurant.ownerId !== actor.id)) {
+      const platformOperator = ["staff", "admin", "duper_admin", "super_admin"].includes(actor.userType);
+      let authorized = Boolean(restaurant && (platformOperator || restaurant.ownerId === actor.id));
+      if (restaurant && !authorized) {
+        const memberships = await tx.select({ permissions: businessStaffMemberships.permissions })
+          .from(businessStaffMemberships).where(and(
+            eq(businessStaffMemberships.restaurantId, restaurant.id),
+            eq(businessStaffMemberships.userId, actor.id),
+            eq(businessStaffMemberships.status, "active"),
+          )).for("share");
+        authorized = memberships.some((m) => (m.permissions as any)?.manageProfile === true);
+      }
+      if (!restaurant || !authorized) {
         throw new MenuCreationError(403, "menu_access_denied", "Not authorized");
       }
 

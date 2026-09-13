@@ -1,3 +1,4 @@
+import { booleanInput } from "../../utils/booleanInput";
 import type { Express } from "express";
 import multer from "multer";
 import { z } from "zod";
@@ -45,8 +46,8 @@ export function registerSupplierShoppingListOptimizeRoutes(
           costPerStopCents: z.coerce.number().int().min(0).max(50_000).optional(),
           stopMinutes: z.coerce.number().int().min(0).max(240).optional(),
           costPerMinuteCents: z.coerce.number().int().min(0).max(5_000).optional(),
-          pingSuppliers: z.coerce.boolean().optional(),
-          allowSubstitutions: z.coerce.boolean().optional(),
+          pingSuppliers: booleanInput.optional(),
+          allowSubstitutions: booleanInput.optional(),
         });
         const parsedMeta = schema.parse(req.body || {});
 
@@ -398,8 +399,8 @@ export function registerSupplierShoppingListOptimizeRoutes(
         // Preferred
         stopMinutes: z.coerce.number().int().min(0).max(240).optional(),
         costPerMinuteCents: z.coerce.number().int().min(0).max(5_000).optional(),
-        pingSuppliers: z.coerce.boolean().optional(),
-        allowSubstitutions: z.coerce.boolean().optional(),
+        pingSuppliers: booleanInput.optional(),
+        allowSubstitutions: booleanInput.optional(),
       });
       const parsedMeta = schema.parse(req.body || {});
 

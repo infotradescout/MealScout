@@ -7,7 +7,7 @@ import { eq, is, SQL } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import { getTableConfig, PgDialect, type PgTable } from "drizzle-orm/pg-core";
 import * as schema from "../shared/schema";
-import { lisaClaims, menus } from "../shared/schema";
+import { businessStaffMemberships, lisaClaims, menus } from "../shared/schema";
 import { createMenuWithLisaRecord, MenuCreationError } from "../server/services/menuCreation";
 
 // Always creates a fresh in-memory PostgreSQL instance. No environment variable,
@@ -53,6 +53,7 @@ for (const claimLayout of ["migration-009-uuid", "current-model-varchar"] as con
     try {
       await pg.exec('CREATE TABLE restaurants (id varchar PRIMARY KEY, owner_id varchar NOT NULL)');
       await pg.exec(createModelTable(menus));
+      await pg.exec(createModelTable(businessStaffMemberships));
       await pg.exec(claimLayout === "migration-009-uuid"
         ? readFileSync(new URL("../migrations/009_lisa_claim_table.sql", import.meta.url), "utf8")
         : createModelTable(lisaClaims));
@@ -147,7 +148,7 @@ for (const claimLayout of ["migration-009-uuid", "current-model-varchar"] as con
       await suite.test("authorization is rechecked for new work and receipt replay", async () => {
         const key = randomUUID();
         await expectCode(create(key, input, outsider), 403, "menu_access_denied");
-        await expectCode(create(key, input, { ...actor, userType: "customer" }), 403, "menu_access_denied");
+        await expectCode(create(key, input, { ...outsider, userType: "customer" }), 403, "menu_access_denied");
         await create(key);
         await pg.query("UPDATE restaurants SET owner_id = $1 WHERE id = $2", [outsider.id, restaurantId]);
         try {
@@ -156,6 +157,22 @@ for (const claimLayout of ["migration-009-uuid", "current-model-varchar"] as con
         } finally {
           await pg.query("UPDATE restaurants SET owner_id = $1 WHERE id = $2", [actor.id, restaurantId]);
         }
+      });
+
+      await suite.test("owners and active delegated menu managers work regardless of account label", async () => {
+        await create(randomUUID(), input, { ...actor, userType: "food_truck" });
+        await create(randomUUID(), input, { ...actor, userType: "customer" });
+        const team = { id: randomUUID(), userType: "customer" };
+        const [membership] = await database.insert(businessStaffMemberships).values({
+          restaurantId, userId: team.id, invitedByUserId: actor.id, permissions: { manageProfile: true }, status: "active",
+        }).returning();
+        const key=randomUUID();
+        await create(key,input,team);
+        await database.update(businessStaffMemberships).set({status:"revoked"}).where(eq(businessStaffMemberships.id,membership.id));
+        await expectCode(create(key,input,team),403,"menu_access_denied");
+        await expectCode(create(randomUUID(),input,team),403,"menu_access_denied");
+        await database.update(businessStaffMemberships).set({status:"active",permissions:{viewAnalytics:true}}).where(eq(businessStaffMemberships.id,membership.id));
+        await expectCode(create(randomUUID(),input,team),403,"menu_access_denied");
       });
 
       await suite.test("retry never resurrects a deliberately deleted menu", async () => {

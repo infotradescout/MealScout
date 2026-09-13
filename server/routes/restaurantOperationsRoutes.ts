@@ -1049,6 +1049,9 @@ export function registerRestaurantOperationsRoutes(
     isAuthenticated,
     async (req: any, res) => {
       try {
+        if (!(await storage.verifyRestaurantOwnership(req.params.restaurantId, req.user.id, "viewAnalytics"))) {
+          return res.status(403).json({ message: "You do not have access to this business's analytics." });
+        }
         const deals = await storage.getDealsByRestaurant(
           req.params.restaurantId,
         );

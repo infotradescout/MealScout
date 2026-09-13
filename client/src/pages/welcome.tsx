@@ -27,6 +27,8 @@ export default function Welcome() {
         />
 
         <section className="relative z-10 flex min-h-[100dvh] flex-col items-center justify-center px-6 py-10 text-center">
+          <h1 className="mb-4 max-w-lg text-4xl font-black tracking-tight sm:text-5xl">Find your next local favorite.</h1>
+          <p className="mb-8 max-w-md text-base leading-relaxed text-orange-50">Discover food trucks, browse local menus, and find deals near you. Explore first, or create a free account to save your favorites.</p>
           <div className="flex w-full max-w-[18rem] flex-col gap-3">
             <Link
               href="/customer-signup"
@@ -46,7 +48,7 @@ export default function Welcome() {
             href="/scout"
             className="mt-7 inline-flex rounded-full border border-orange-300/22 bg-[#1a0d08]/32 px-5 py-2 text-[13px] font-black uppercase tracking-[0.24em] text-orange-100/95 shadow-[0_0_24px_rgba(255,90,47,0.18)] backdrop-blur-md transition hover:bg-[#2a1208]/60 focus:outline-none focus:ring-2 focus:ring-orange-200/70 focus:ring-offset-2 focus:ring-offset-[#120805] active:scale-[0.98]"
           >
-            Follow The Flavor
+            Explore nearby food
           </Link>
         </section>
       </main>

@@ -7,12 +7,14 @@
  * document to the Claude messages API.  Claude extracts items as structured JSON.
  */
 
+import { parseImportPrice } from "./importPrice";
+
 type ParsedMenuItem = {
   menuId: string;
   restaurantId: string;
   name: string;
   description: string | null;
-  priceCents: number;
+  priceCents: number | null;
   dietaryTags: string[];
   allergens: string[];
   isAvailable: boolean;
@@ -147,8 +149,8 @@ export async function parsePdfMenuWithAi(
       return;
     }
 
-    const price = Number(item.price);
-    if (isNaN(price) || price < 0) {
+    const price = parseImportPrice(item.price, "dollars");
+    if (!price.valid) {
       errors.push({
         row: idx,
         reason: `Item "${name}" has invalid price: ${item.price}`,
@@ -161,7 +163,7 @@ export async function parsePdfMenuWithAi(
       restaurantId,
       name,
       description: item.description ? String(item.description).trim() : null,
-      priceCents: Math.round(price * 100),
+      priceCents: price.cents,
       dietaryTags: Array.isArray(item.dietary_tags) ? item.dietary_tags : [],
       allergens: Array.isArray(item.allergens) ? item.allergens : [],
       isAvailable: true,

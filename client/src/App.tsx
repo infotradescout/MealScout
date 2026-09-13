@@ -272,6 +272,7 @@ const publicRoutePrefixes = [
   "/delivery-app-alternatives",
   "/online-ordering-platforms",
   "/faq",
+  "/help",
   "/how-it-works",
   "/contact",
   "/install",
@@ -453,6 +454,7 @@ function SharedPublicRoutes() {
         component={OnlineOrderingPlatformsPage}
       />
       <Route path="/faq" component={FAQ} />
+      <Route path="/help" component={FAQ} />
       <Route path="/how-it-works" component={HowItWorks} />
       <Route path="/contact" component={Contact} />
       <Route path="/install" component={InstallApp} />

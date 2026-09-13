@@ -1,3 +1,4 @@
+import { booleanInput } from "../../utils/booleanInput";
 import type { Express } from "express";
 import { z } from "zod";
 import { and, desc, eq, inArray } from "drizzle-orm";
@@ -45,8 +46,8 @@ export function registerSupplierSupplyIntelRoutes(
         // Preferred
         stopMinutes: z.coerce.number().int().min(0).max(240).optional(),
         costPerMinuteCents: z.coerce.number().int().min(0).max(5_000).optional(),
-        pingSuppliers: z.coerce.boolean().optional(),
-        allowSubstitutions: z.coerce.boolean().optional(),
+        pingSuppliers: booleanInput.optional(),
+        allowSubstitutions: booleanInput.optional(),
       });
       const parsed = schema.parse(req.body || {});
       const existing = await ensureSupplyOrderPreferences(String(req.user.id));

@@ -214,8 +214,7 @@ export function registerOperationalEndpoints(app: Express): void {
     async (_req, res) => {
       try {
         const snapshot = await getMapEndpointWatchdogSnapshot();
-        const { ok: _snapOk, ...snapRest } = (snapshot ?? {}) as any;
-        res.json({ ok: true, ...snapRest });
+        res.json(snapshot);
       } catch (error: any) {
         console.error("Failed to get map watchdog snapshot:", error);
         res
@@ -235,8 +234,7 @@ export function registerOperationalEndpoints(app: Express): void {
     async (_req, res) => {
       try {
         const result = await runMapEndpointWatchdog();
-        const { ok: _resultOk, ...resultRest } = result as any;
-        res.json({ ok: true, ...resultRest });
+        res.json(result);
       } catch (error: any) {
         console.error("Failed to run map watchdog:", error);
         res

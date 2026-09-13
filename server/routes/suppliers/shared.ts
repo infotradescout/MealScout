@@ -71,6 +71,7 @@ export type SupplierOrdersRouteDeps = {
 };
 
 export type SupplierPaymentsRouteDeps = {
+  database?: any;
   computeOnPlatformPaymentFees: ComputeOnPlatformPaymentFees;
   computeAchCheaperThresholdCents: ComputeAchCheaperThresholdCents;
   stripe: Stripe | null;

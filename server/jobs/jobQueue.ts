@@ -30,6 +30,7 @@ const stats = {
 };
 
 let wakeTimer: NodeJS.Timeout | null = null;
+class JobTimeoutError extends Error {}
 
 function nextJobId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -38,7 +39,7 @@ function nextJobId() {
 function raceWithTimeout<T>(promise: Promise<T>, timeoutMs: number) {
   let timer: NodeJS.Timeout | null = null;
   const timeoutPromise = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => reject(new Error(`job timed out after ${timeoutMs}ms`)), timeoutMs);
+    timer = setTimeout(() => reject(new JobTimeoutError(`job timed out after ${timeoutMs}ms`)), timeoutMs);
   });
   return Promise.race([promise, timeoutPromise]).finally(() => {
     if (timer) clearTimeout(timer);
@@ -94,14 +95,23 @@ async function pumpQueue() {
     job.attempts += 1;
 
     void (async () => {
+      // Keep ownership of this execution after a timeout. Promise.race cannot
+      // cancel work; retrying while it still runs can duplicate its effects.
+      const execution = Promise.resolve().then(() => job.run());
       try {
-        await raceWithTimeout(job.run(), job.timeoutMs);
+        await raceWithTimeout(execution, job.timeoutMs);
         stats.completed += 1;
       } catch (error) {
         const message = String((error as any)?.message || error || "job_failed");
         job.lastError = message;
-        const timedOut = /timed out/i.test(message);
-        if (timedOut) stats.timedOut += 1;
+        const timedOut = error instanceof JobTimeoutError;
+        if (timedOut) {
+          stats.timedOut += 1;
+          console.warn(`[jobs] ${job.name} exceeded its timeout; waiting for the original execution without retrying`);
+          try { await execution; stats.completed += 1; }
+          catch { stats.failed += 1; }
+          return;
+        }
 
         if (job.attempts < job.maxAttempts) {
           const backoffMs = computeBackoffMs(job.attempts);

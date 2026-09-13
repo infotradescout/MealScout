@@ -161,7 +161,8 @@
     "test:money-button": "tsx scripts/testMoneyButton.ts",
     "test:all": "npm run check && npm run test:email-policy && npm run audit:email-triggers && npm run test:flows && npm run stress-test",
     "monitor": "tsx scripts/monitorPerformance.ts",
-    "audit:theme": "node scripts/audit-theme-colors.mjs"
+    "audit:theme": "node scripts/audit-theme-colors.mjs",
+    "test:audit-repairs": "node --import tsx --test scripts/audit-*.test.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.109.0",
