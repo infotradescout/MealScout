@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import { formatDateOnly } from "@/lib/date-only";
 
 interface HostProfile {
   id: string;
@@ -1425,7 +1426,7 @@ function HostBookingsSection({ hostId }: { hostId: string }) {
           {events.map((ev: any) => (
             <option key={ev.id} value={ev.id}>
               {ev.name || ev.id} —{" "}
-              {ev.date ? new Date(ev.date).toLocaleDateString() : ""}
+              {ev.date ? formatDateOnly(ev.date) : ""}
               {ev.requiresPayment ? " (paid)" : ""}
             </option>
           ))}

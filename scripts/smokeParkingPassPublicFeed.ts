@@ -17,6 +17,11 @@ const parkingPassRow = (overrides: Record<string, unknown>) => ({
   title: "Parking Pass Host",
   status: "open",
   seriesStatus: "published",
+  seriesId: "parking-pass-smoke-series",
+  series: {
+    id: "parking-pass-smoke-series",
+    timezone: "America/Chicago",
+  },
   date: futureDate(1),
   startTime: "11:00",
   endTime: "22:00",
@@ -25,6 +30,7 @@ const parkingPassRow = (overrides: Record<string, unknown>) => ({
   bookedSpots: 0,
   availableSpotNumbers: [1, 2],
   dailyPriceCents: 2500,
+  hostUserId: "parking-pass-public-feed-owner",
   host: {
     id: "host-row",
     businessName: "Parking Pass Host",
@@ -56,6 +62,13 @@ const close = (server: http.Server) =>
 
 const run = async () => {
   const { registerEventRoutes } = await import("../server/routes/eventRoutes");
+  const { storage } = await import("../server/storage");
+  const originalGetUser = storage.getUser.bind(storage);
+  (storage as any).getUser = async (userId: string) => ({
+    id: userId,
+    isDisabled: false,
+    publicProfileSettings: { showAddress: true, showContact: false },
+  });
 
   const app = express();
   app.use(express.json());
@@ -150,6 +163,7 @@ const run = async () => {
 
     console.log("parking-pass public API smoke passed");
   } finally {
+    (storage as any).getUser = originalGetUser;
     await close(server);
   }
 };

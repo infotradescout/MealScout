@@ -1078,6 +1078,9 @@ assert.match(
 );
 
 const eventRoutesSource = readSource("server/routes/eventRoutes.ts");
+const parkingPassBookingServiceSource = readSource(
+  "server/services/parkingPassBookingService.ts",
+);
 assert.match(
   eventRoutesSource,
   /toPublicEventListingArray/,
@@ -1096,7 +1099,9 @@ assert.match(
 for (const snippet of [
   "canExposeAnonymousEventFeedItem",
   "filterPublicConfirmedEventTrucks",
-  "resolveCityTimeZone",
+  "resolvePersistedEventServiceTimeZone",
+  "seriesTimeZone",
+  "venueTimeZone",
   "buildSlotDateTimes",
   "isSlotPublic",
   'setHeader("Retry-After", "60")',
@@ -1192,7 +1197,7 @@ assert.match(
 const publicEventDetailRoute = sliceAfter(
   eventRoutesSource,
   'app.get("/api/public/events/:eventId"',
-  8000,
+  14000,
 );
 assert.match(
   publicEventDetailRoute,
@@ -1261,8 +1266,40 @@ assert.match(
 );
 assert.match(
   paidEventBookingRoute,
-  /from \$\{events\} where \$\{events\.id\} = \$\{eventId\} for update[\s\S]*hardCapEnabled: events\.hardCapEnabled[\s\S]*lockedEvent\.hardCapEnabled && reservedCount >= maxSpots/,
-  "legacy and canonical Parking Pass checkout must share the event-row lock and hard-cap policy",
+  /createParkingPassPurchase\(\{/,
+  "legacy event checkout must adapt to the canonical Parking Pass purchase service",
+);
+const canonicalEventSelection = parkingPassBookingServiceSource.indexOf(
+  "const selectedEventIds = normalizedLines.map",
+);
+const canonicalEventLock = parkingPassBookingServiceSource.indexOf(
+  '.for("update")',
+  canonicalEventSelection,
+);
+const canonicalEventLoop = parkingPassBookingServiceSource.indexOf(
+  "for (const line of normalizedLines)",
+  canonicalEventLock,
+);
+const canonicalCapacityCount = parkingPassBookingServiceSource.indexOf(
+  'inArray(eventBookings.status, ["pending", "confirmed"])',
+  canonicalEventLock,
+);
+const canonicalCapacityPolicy = parkingPassBookingServiceSource.indexOf(
+  "const capacityDecision = evaluatePaidLineReservation({",
+  canonicalCapacityCount,
+);
+const canonicalCapacityGuard = parkingPassBookingServiceSource.indexOf(
+  "if (!capacityDecision.allowed)",
+  canonicalCapacityPolicy,
+);
+assert.ok(
+  canonicalEventSelection >= 0 &&
+    canonicalEventSelection < canonicalEventLock &&
+    canonicalEventLock < canonicalEventLoop &&
+    canonicalEventLoop < canonicalCapacityCount &&
+    canonicalCapacityCount < canonicalCapacityPolicy &&
+    canonicalCapacityPolicy < canonicalCapacityGuard,
+  "every checkout adapter must share the canonical event-row lock and hard-cap policy",
 );
 assert.doesNotMatch(
   paidEventBookingRoute,

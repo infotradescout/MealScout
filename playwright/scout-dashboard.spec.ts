@@ -40,6 +40,14 @@ async function mockScoutUser(page: any) {
 }
 
 async function mockScoutFeeds(page: any) {
+  // Synthetic tile keeps the regression suite independent of public tile
+  // servers and their usage quotas. Rendered provider checks run separately.
+  await page.route("https://tile.openstreetmap.org/**", (route: any) =>
+    route.fulfill({
+      contentType: "image/png",
+      body: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=", "base64"),
+    }),
+  );
   await page.route("**/api/trucks/live?*", async (route: any) => {
     await route.fulfill({
       status: 200,
@@ -148,6 +156,9 @@ async function mockScoutFeeds(page: any) {
           latitude: USER_COORDS.lat + 0.001,
           longitude: USER_COORDS.lng + 0.001,
           host: {
+            id: "deleted-host",
+            latitude: USER_COORDS.lat + 0.001,
+            longitude: USER_COORDS.lng + 0.001,
             businessName: "Deleted Test Host",
             city: "Pensacola",
             state: "FL",
@@ -168,6 +179,9 @@ async function mockScoutFeeds(page: any) {
           latitude: USER_COORDS.lat + 0.001,
           longitude: USER_COORDS.lng + 0.001,
           host: {
+            id: "active-host",
+            latitude: USER_COORDS.lat + 0.001,
+            longitude: USER_COORDS.lng + 0.001,
             businessName: "Active Test Host",
             city: "Pensacola",
             state: "FL",
@@ -184,32 +198,24 @@ test.describe("Scout local dashboard", () => {
     await mockScoutFeeds(page);
   });
 
-  // NOTE on both parking-pass-host tests below: in the current Scout V2
-  // surface, parking-pass hosts are only ever drawn as map markers (MapLibre
-  // canvas in the default sheet state, Google Maps pins in fullMap). Host
-  // names only reach plain accessible text after a marker is tapped
-  // (CollapsedMapPinCard). Neither test taps a marker, so this "deleted host
-  // does not appear" assertion currently passes vacuously — no host's name
-  // renders as page text on load, deleted or not. It is not verifying the
-  // deletion filter.
+  // Verify map pins, then open the active host's card. A bare text assertion
+  // cannot establish whether the map included or excluded a host.
   test("deleted parking pass host does not appear on Scout", async ({ page }) => {
     await page.goto(`${FRONTEND}/scout`, { waitUntil: "domcontentloaded" });
+    await page.getByRole("button", { name: "Expand map", exact: true }).click();
 
-    await expect(page.getByText("Deleted Test Host")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Active Test Host pin", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Deleted Test Host pin", exact: true })).toHaveCount(0);
   });
 
-  // See NOTE above. Unlike its sibling, this assertion is not vacuously
-  // true, and it fails: nothing on the default Scout view renders a parking
-  // host's name as plain text without a marker tap. Whether hosts should
-  // have an ambient text presence (a list, a rail entry) is a product
-  // decision this suite can't make on its own, so the failure is preserved
-  // here rather than papered over.
-  test.fixme(
+  test(
     "active parking pass host appears on Scout",
-    async ({ page }) => {
+    async ({ page }, testInfo) => {
       await page.goto(`${FRONTEND}/scout`, { waitUntil: "domcontentloaded" });
-
+      await page.getByRole("button", { name: "Expand map", exact: true }).click();
+      await page.getByRole("button", { name: "Active Test Host pin", exact: true }).click();
       await expect(page.getByText("Active Test Host")).toBeVisible();
+      await page.screenshot({ path: testInfo.outputPath("active-parking-host.png") });
     },
   );
 
@@ -217,6 +223,16 @@ test.describe("Scout local dashboard", () => {
     await page.goto(`${FRONTEND}/scout`, { waitUntil: "domcontentloaded" });
 
     await expect(page.getByTestId("scout-map-container")).toBeVisible();
+  });
+
+  test("anonymous map expansion survives unavailable discovery feeds", async ({ page }) => {
+    await page.route("**/api/**", (route) => route.fulfill({
+      status: new URL(route.request().url()).pathname === "/api/auth/user" ? 401 : 404,
+      json: { message: "Unavailable fixture" },
+    }));
+    await page.goto(`${FRONTEND}/scout`, { waitUntil: "domcontentloaded" });
+    await page.getByRole("button", { name: "Expand map", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Collapse map and return to discover" })).toBeVisible();
   });
 
   test("Scout renders map preview without Google script", async ({ page }) => {

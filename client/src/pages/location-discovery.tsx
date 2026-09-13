@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { extractUuidFromSlug } from "@/lib/seo-slug";
 import { generateItemListSchema, generatePlaceSchema } from "@/lib/schema-helpers";
 import { formatRelativeTime } from "@/lib/relative-time";
-import { parseISO } from "date-fns";
+import { eventNumericDateLabel } from "@/lib/event-date-labels";
 
 type TimeKey = "now" | "tonight";
 
@@ -144,12 +144,7 @@ export default function LocationDiscoveryPage() {
                         <div className="text-sm text-muted-foreground">{truck.cuisineType}</div>
                       ) : null}
                       {(truck.schedules || []).slice(0, 2).map((s: any, idx: number) => {
-                        const dateText = s.date
-                          ? (String(s.date).includes("T")
-                              ? new Date(s.date)
-                              : parseISO(String(s.date))
-                            ).toLocaleDateString()
-                          : "";
+                        const dateText = eventNumericDateLabel(s.date);
                         const timeText = s.startTime && s.endTime ? `${s.startTime}–${s.endTime}` : "";
                         const confirmedAgo =
                           typeof s.lastConfirmedAt === "string"

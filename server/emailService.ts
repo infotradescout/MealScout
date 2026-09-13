@@ -31,6 +31,7 @@ type EmailAttempt = {
   error?: string;
   providerStatusCode?: number;
   providerErrorCode?: string;
+  providerMessageId?: string;
   provider: "brevo";
   fromEmail: string;
   mode: string;
@@ -126,10 +127,31 @@ interface BaseEmailParams {
   html: string;
   text?: string;
   category?: "account" | "general" | "marketing";
+  idempotencyKey?: string;
   attachments?: Array<{
     content: string;
     name: string;
   }>;
+}
+
+export type EmailDeliveryReceipt = {
+  sent: boolean;
+  providerStatus: string;
+  providerMessageId?: string;
+  /** True only when MealScout has proof the provider never accepted work. */
+  retrySafe: boolean;
+};
+
+export function isDefinitiveEmailProviderRejection(
+  statusCode: number | undefined,
+): boolean {
+  // These responses prove that Brevo rejected the request before accepting
+  // delivery work. Timeouts, transport failures, throttling and duplicate/
+  // conflict responses remain ambiguous and must never trigger a blind send.
+  return Boolean(
+    statusCode &&
+      [400, 401, 403, 404, 405, 410, 413, 415, 422].includes(statusCode),
+  );
 }
 
 interface ParkingPassCompletionReminderParams {
@@ -1078,7 +1100,9 @@ export class EmailService {
     return EmailService.instance;
   }
 
-  private async sendEmail(params: BaseEmailParams): Promise<boolean> {
+  private async sendEmailDelivery(
+    params: BaseEmailParams,
+  ): Promise<EmailDeliveryReceipt> {
     const notificationMode = process.env.EMAIL_NOTIFICATIONS_MODE || "all";
     const disabled = ["off", "disabled", "none"].includes(
       String(notificationMode).toLowerCase(),
@@ -1096,7 +1120,7 @@ export class EmailService {
         fromEmail: EMAIL_CONFIG.fromEmail,
         mode: notificationMode,
       });
-      return false;
+      return { sent: false, providerStatus: "mode_disabled", retrySafe: true };
     }
     if (notificationMode === "account_only" && params.category !== "account") {
       console.warn(
@@ -1114,7 +1138,7 @@ export class EmailService {
         fromEmail: EMAIL_CONFIG.fromEmail,
         mode: notificationMode,
       });
-      return false;
+      return { sent: false, providerStatus: "mode_filtered", retrySafe: true };
     }
     if (
       (params.category || "general") === "marketing" &&
@@ -1135,7 +1159,11 @@ export class EmailService {
         fromEmail: EMAIL_CONFIG.fromEmail,
         mode: notificationMode,
       });
-      return false;
+      return {
+        sent: false,
+        providerStatus: "marketing_disabled",
+        retrySafe: true,
+      };
     }
     if (
       (params.category || "general") === "marketing" &&
@@ -1156,7 +1184,11 @@ export class EmailService {
         fromEmail: EMAIL_CONFIG.fromEmail,
         mode: notificationMode,
       });
-      return false;
+      return {
+        sent: false,
+        providerStatus: "outside_marketing_window",
+        retrySafe: true,
+      };
     }
 
     // If env vars were updated after boot, re-check config on demand.
@@ -1180,7 +1212,11 @@ export class EmailService {
         fromEmail: EMAIL_CONFIG.fromEmail,
         mode: notificationMode,
       });
-      return false;
+      return {
+        sent: false,
+        providerStatus: "provider_not_configured",
+        retrySafe: true,
+      };
     }
 
     try {
@@ -1197,6 +1233,14 @@ export class EmailService {
         subject: params.subject,
         htmlContent: params.html,
         textContent: params.text,
+        ...(params.idempotencyKey
+          ? {
+              headers: {
+                idempotencyKey: params.idempotencyKey,
+                "X-Mealscout-Idempotency-Key": params.idempotencyKey,
+              },
+            }
+          : {}),
       };
 
       // Add attachments if provided
@@ -1204,7 +1248,12 @@ export class EmailService {
         emailData.attachment = params.attachments;
       }
 
-      await transactionalEmailsApi.sendTransacEmail(emailData);
+      const providerResponse = await transactionalEmailsApi.sendTransacEmail(emailData);
+      const providerMessageId = String(
+        providerResponse?.body?.messageId ||
+          providerResponse?.body?.messageIds?.[0] ||
+          "",
+      ).trim();
 
       console.log(`Email sent successfully to ${params.to}: ${params.subject}`);
       emailDeliveryAudit.add({
@@ -1214,11 +1263,17 @@ export class EmailService {
         subject: params.subject,
         category: params.category || "general",
         status: "sent",
+        ...(providerMessageId ? { providerMessageId } : {}),
         provider: "brevo",
         fromEmail: EMAIL_CONFIG.fromEmail,
         mode: notificationMode,
       });
-      return true;
+      return {
+        sent: true,
+        providerStatus: "provider_accepted",
+        ...(providerMessageId ? { providerMessageId } : {}),
+        retrySafe: false,
+      };
     } catch (error) {
       console.error(`Failed to send email to ${params.to}:`, error);
       const anyError: any = error as any;
@@ -1261,8 +1316,20 @@ export class EmailService {
         fromEmail: EMAIL_CONFIG.fromEmail,
         mode: notificationMode,
       });
-      return false;
+      return {
+        sent: false,
+        providerStatus:
+          providerErrorCode ||
+          (providerStatusCode ? `provider_http_${providerStatusCode}` : "provider_ambiguous"),
+        // A definitive HTTP validation/auth/content rejection proves that no
+        // delivery was accepted. Transport/timeouts remain accepted-unknown.
+        retrySafe: isDefinitiveEmailProviderRejection(providerStatusCode),
+      };
     }
+  }
+
+  private async sendEmail(params: BaseEmailParams): Promise<boolean> {
+    return (await this.sendEmailDelivery(params)).sent;
   }
 
   async sendBasicEmail(
@@ -1273,6 +1340,24 @@ export class EmailService {
     category?: "account" | "general" | "marketing",
   ): Promise<boolean> {
     return this.sendEmail({ to, subject, html, text, category });
+  }
+
+  async sendBasicEmailWithReceipt(
+    to: string,
+    subject: string,
+    html: string,
+    text: string | undefined,
+    category: "account" | "general" | "marketing" | undefined,
+    idempotencyKey: string,
+  ): Promise<EmailDeliveryReceipt> {
+    return this.sendEmailDelivery({
+      to,
+      subject,
+      html,
+      text,
+      category,
+      idempotencyKey,
+    });
   }
 
   async sendBookingConfirmationEmail(

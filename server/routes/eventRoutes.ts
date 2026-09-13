@@ -21,7 +21,7 @@ import {
   CLAIM_STATUS,
   CLAIM_TYPES,
 } from "@shared/schema";
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, sql } from "drizzle-orm";
 
 const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY)
@@ -48,11 +48,10 @@ import {
   renderReportPdfForToken,
   requestReportSchema,
 } from "../services/pensacolaReportLeadMagnet";
-import { buildSlotDateTimes } from "../services/timeIntent";
 import {
-  resolveCityTimeZone,
-  resolveCityTimeZoneSync,
-} from "../services/cityTimeZone";
+  buildSlotDateTimes,
+  classifyServiceInterval,
+} from "../services/timeIntent";
 import { isSlotPublic, type PublicSlot } from "../services/publicSlotGate";
 import { toPublicEventListingArray } from "../publicProfiles/toPublicEventListing";
 import { toPublicParkingPassListingArray } from "../publicProfiles/toPublicParkingPassListing";
@@ -62,7 +61,16 @@ import {
   canExposeAuthorizedPaidEventDetail,
 } from "../publicProfiles/publicEventDetailAccess";
 import { distributedRateLimit } from "../middleware/distributedRateLimit";
-import { dateKeyFromUnknown, dateKeyInZone } from "../services/dateKeys";
+import {
+  dateKeyFromUnknown,
+  dateKeyInZone,
+  formatDateKeyForDisplay,
+} from "../services/dateKeys";
+import { isEventWithinPublicFeedWindow } from "../services/publicEventTimeTruth";
+import {
+  loadPersistedEventServiceTimeZone,
+  resolvePersistedEventServiceTimeZone,
+} from "../services/persistedServiceTimeZone";
 import {
   filterPublicConfirmedEventTrucks,
   loadConfirmedEventTrucks,
@@ -71,6 +79,14 @@ import { isPublicDiscoveryEligibleEntity } from "@shared/publicDiscoveryIntegrit
 import { resolvePublicProfileVisibility } from "../publicProfiles/publicProfileUtils";
 import { resolvePublicCanonicalOrigin } from "../seo/publicCanonicalOrigin";
 import { assessParkingPassTruckEligibility } from "../services/parkingPassTruckEligibility";
+import { requireIdempotencyKey } from "../middleware/idempotency";
+import {
+  cancelParkingPassLines,
+  serializeParkingPassCancellationOperation,
+  confirmParkingPassPurchaseFromIntent,
+  createParkingPassPurchase,
+  ParkingPassBookingError,
+} from "../services/parkingPassBookingService";
 
 const normalizeParkingStatus = (value: unknown) =>
   String(value ?? "")
@@ -185,16 +201,33 @@ export const buildAnonymousPublicEventFeed = async (rows: unknown, now: Date) =>
   const evaluated = await Promise.all(
     attached.map(async (event: any) => {
       const primaryTruck = event?.trucks?.[0] || null;
-      const timeZone = await resolveCityTimeZone({
-        city: event?.host?.city,
-        state: event?.host?.state,
+      if (
+        String(event?.activeParticipationMutationId || "").trim() ||
+        String(event?.series?.activeParticipationMutationId || "").trim()
+      ) {
+        return null;
+      }
+      const timeZone = resolvePersistedEventServiceTimeZone({
+        seriesId: event?.seriesId,
+        seriesTimeZone: event?.series?.timezone,
+        venueTimeZone: event?.venueTimeZone,
       });
-      const interval = buildSlotDateTimes({
-        timeZone,
-        date: event?.date,
-        startTime: String(event?.startTime || ""),
-        endTime: String(event?.endTime || ""),
-      });
+      const serviceTruth = timeZone
+        ? classifyServiceInterval({
+            timeZone,
+            date: event?.date,
+            startTime: String(event?.startTime || ""),
+            endTime: String(event?.endTime || ""),
+            now,
+          })
+        : null;
+      const interval =
+        serviceTruth?.startUtc && serviceTruth.endUtc
+          ? {
+              startUtc: serviceTruth.startUtc,
+              endUtc: serviceTruth.endUtc,
+            }
+          : null;
       const lastConfirmedAtUtc = new Date(
         primaryTruck?.bookingConfirmedAt ||
           event?.lastConfirmedAt ||
@@ -230,7 +263,17 @@ export const buildAnonymousPublicEventFeed = async (rows: unknown, now: Date) =>
       })) {
         return null;
       }
-      return event;
+      return {
+        ...event,
+        // These are scheduled public event facts, not protected arrival
+        // corrections. Project the server's authoritative venue-zone view so
+        // Scout never reclassifies the event using the browser's calendar.
+        serviceTimezone: timeZone,
+        serviceDateKey: serviceTruth?.dateKey || null,
+        servicePhase: serviceTruth?.phase || "invalid",
+        serviceStartsAtUtc: serviceTruth?.startUtc?.toISOString() || null,
+        serviceEndsAtUtc: serviceTruth?.endUtc?.toISOString() || null,
+      };
     }),
   );
   return evaluated.filter((event): event is any => Boolean(event));
@@ -244,7 +287,7 @@ const sendPublicEventFeedUnavailable = (res: any) =>
     .setHeader("X-Robots-Tag", "noindex,follow")
     .json({ message: "Events are temporarily unavailable" });
 
-export const isParkingPassFeedCandidate = (event: any) => {
+export const isParkingPassFeedCandidate = (event: any, now = new Date()) => {
   const eventStatus = normalizeParkingStatus(event?.status || "open");
   const seriesStatus = normalizeParkingStatus(event?.seriesStatus || "published");
   const hostStatus = normalizeParkingStatus(event?.host?.status || event?.hostStatus || "");
@@ -254,16 +297,7 @@ export const isParkingPassFeedCandidate = (event: any) => {
   if (event?.deletedAt || event?.archivedAt || event?.cancelledAt) return false;
   if (event?.host?.deletedAt || event?.host?.archivedAt || event?.host?.cancelledAt) return false;
 
-  const eventDate = event?.date ? new Date(event.date) : null;
-  if (!eventDate || !Number.isFinite(eventDate.getTime())) return false;
-  const endTime = String(event?.endTime || "").trim();
-  if (/^\d{1,2}:\d{2}/.test(endTime)) {
-    const [hour, minute] = endTime.split(":").map((part) => Number(part));
-    if (Number.isFinite(hour) && Number.isFinite(minute)) {
-      eventDate.setHours(hour, minute, 0, 0);
-    }
-  }
-  if (eventDate.getTime() < Date.now() - 30 * 60 * 1000) return false;
+  if (!isEventWithinPublicFeedWindow(event, now)) return false;
   return true;
 };
 
@@ -341,6 +375,16 @@ export function registerEventRoutes(
           hostState: occurrence.host.state,
           hostLatitude: occurrence.host.latitude,
           hostLongitude: occurrence.host.longitude,
+          hostStripeConnectAccountId:
+            occurrence.host.stripeConnectAccountId,
+          hostStripeOnboardingCompleted:
+            occurrence.host.stripeOnboardingCompleted,
+          hostStripeChargesEnabled: occurrence.host.stripeChargesEnabled,
+          hostStripePayoutsEnabled: occurrence.host.stripePayoutsEnabled,
+          activeParticipationMutationId:
+            (occurrence as any).activeParticipationMutationId || null,
+          seriesId: occurrence.seriesId,
+          seriesTimeZone: occurrence.seriesTimeZone,
         };
       }
 
@@ -367,9 +411,18 @@ export function registerEventRoutes(
           hostState: hosts.state,
           hostLatitude: hosts.latitude,
           hostLongitude: hosts.longitude,
+          hostStripeConnectAccountId: hosts.stripeConnectAccountId,
+          hostStripeOnboardingCompleted: hosts.stripeOnboardingCompleted,
+          hostStripeChargesEnabled: hosts.stripeChargesEnabled,
+          hostStripePayoutsEnabled: hosts.stripePayoutsEnabled,
+          activeParticipationMutationId:
+            events.activeParticipationMutationId,
+          seriesId: events.seriesId,
+          seriesTimeZone: eventSeries.timezone,
         })
         .from(events)
         .innerJoin(hosts, eq(events.hostId, hosts.id))
+        .leftJoin(eventSeries, eq(events.seriesId, eventSeries.id))
         .where(eq(events.id, eventId))
         .limit(1);
       return row || null;
@@ -684,7 +737,9 @@ export function registerEventRoutes(
     const payoutsEnabled = (event: any) =>
       Boolean(
         event?.host?.stripeConnectAccountId &&
-        event?.host?.stripeChargesEnabled,
+          event?.host?.stripeOnboardingCompleted &&
+          event?.host?.stripeChargesEnabled &&
+          event?.host?.stripePayoutsEnabled,
       );
     const isPublicHostProfile = (host: any, event?: any) =>
       isHostProfileMapEligible({
@@ -793,7 +848,11 @@ export function registerEventRoutes(
     }
 
     const bookingsByEvent = new Map<string, typeof bookingRows>();
+    const capacityBookingsByEvent = new Map<string, typeof bookingRows>();
     for (const row of bookingRows) {
+      const capacityRows = capacityBookingsByEvent.get(row.eventId) ?? [];
+      capacityRows.push(row);
+      capacityBookingsByEvent.set(row.eventId, capacityRows);
       const isPublicTruck = (
         publicTrucksByEvent.get(String(row.eventId || "")) || []
       ).some((truck) => truck.truckId === String(row.truckId || ""));
@@ -805,11 +864,12 @@ export function registerEventRoutes(
 
     const enhancedEvents = parkingEvents.map((event) => {
       const rows = bookingsByEvent.get(event.id) ?? [];
+      const capacityRows = capacityBookingsByEvent.get(event.id) ?? [];
       const pending = pendingByEvent.get(event.id) ?? 0;
       const maxSpots = event.maxTrucks ?? 1;
 
       const usedSpotNumbers = new Set<number>();
-      for (const row of rows) {
+      for (const row of capacityRows) {
         if (row.spotNumber && row.spotNumber > 0) {
           usedSpotNumbers.add(row.spotNumber);
         }
@@ -836,7 +896,7 @@ export function registerEventRoutes(
         }
       }
 
-      const confirmedCount = rows.length;
+      const confirmedCount = capacityRows.length;
       const hardCapEnabled = Boolean(event.hardCapEnabled);
       const reservedRaw = confirmedCount + pending;
       const reservedCount = hardCapEnabled
@@ -1128,12 +1188,8 @@ export function registerEventRoutes(
             String(host.state || row?.hostState || row?.state || "FL"),
           );
           const startingAtCents = minStartingPriceCents(row);
-          const rowTimeZone = resolveCityTimeZoneSync({
-            city: host.city || row?.hostCity || row?.city,
-            state: host.state || row?.hostState || row?.state,
-          });
           const nextDate = row?.date
-            ? dateKeyInZone(new Date(row.date), rowTimeZone)
+            ? dateKeyFromUnknown(row.date, "UTC")
             : null;
 
           const lat = host.latitude ?? row?.hostLatitude ?? row?.latitude;
@@ -1211,10 +1267,14 @@ export function registerEventRoutes(
       const slug = `${toSlug(title) || row.id}--${row.id}`;
       const canonicalUrl = `${baseUrl}/event/${encodeURIComponent(slug)}`;
 
-      const timeZone = await resolveCityTimeZone({
+      const timeZone = await loadPersistedEventServiceTimeZone({
+        seriesId: row.seriesId,
         city: row.hostCity,
         state: row.hostState,
       });
+      if (!timeZone) {
+        return res.status(404).json({ message: "Event not found" });
+      }
       const dt = buildSlotDateTimes({
         timeZone,
         date: new Date(row.date as any),
@@ -1261,6 +1321,7 @@ export function registerEventRoutes(
         });
       const anonymousDetailAllowed =
         hasPublicIdentity &&
+        !String(row.activeParticipationMutationId || "").trim() &&
         canExposeAnonymousEventDetail({
           eventType: row.eventType,
           requiresPayment: row.requiresPayment,
@@ -1304,6 +1365,48 @@ export function registerEventRoutes(
         return res.status(404).json({ message: "Event not found" });
       }
 
+      let paymentsEnabled = row.requiresPayment !== true;
+      let paymentEligibilityReason: string | null = null;
+      if (row.requiresPayment === true) {
+        const destinationAccountId = String(
+          row.hostStripeConnectAccountId || "",
+        ).trim();
+        const databaseReady = Boolean(
+          destinationAccountId &&
+            row.hostStripeOnboardingCompleted === true &&
+            row.hostStripeChargesEnabled === true &&
+            row.hostStripePayoutsEnabled === true,
+        );
+        if (String(row.activeParticipationMutationId || "").trim()) {
+          paymentEligibilityReason =
+            "This event is being corrected or cancelled. Checkout is paused until participation work converges.";
+        } else if (!stripe) {
+          paymentEligibilityReason = "Payments are temporarily unavailable.";
+        } else if (!databaseReady) {
+          paymentEligibilityReason =
+            "The host must finish Stripe onboarding with charges and payouts enabled.";
+        } else {
+          try {
+            const providerAccount = await stripe.accounts.retrieve(
+              destinationAccountId,
+            );
+            paymentsEnabled = Boolean(
+              providerAccount.details_submitted &&
+                providerAccount.charges_enabled &&
+                providerAccount.payouts_enabled,
+            );
+            if (!paymentsEnabled) {
+              paymentEligibilityReason =
+                "Stripe does not currently report this host ready for charges and payouts.";
+            }
+          } catch {
+            paymentsEnabled = false;
+            paymentEligibilityReason =
+              "The host payment account could not be verified. Try again shortly.";
+          }
+        }
+      }
+
       const hostSlug = `${toSlug(row.hostName) || row.hostId}--${row.hostId}`;
       const hostPath = `/location/${encodeURIComponent(hostSlug)}`;
       const publicTrucks = confirmedTrucks.map((truck) => ({
@@ -1335,6 +1438,8 @@ export function registerEventRoutes(
         status: row.status,
         maxTrucks: row.maxTrucks,
         requiresPayment: row.requiresPayment ?? false,
+        paymentsEnabled,
+        paymentEligibilityReason,
         hostPriceCents: row.hostPriceCents ?? null,
         host: {
           id: row.hostId,
@@ -1607,16 +1712,11 @@ export function registerEventRoutes(
   );
 
   const normalizeDateKey = (value: unknown) =>
-    dateKeyFromUnknown(value, "America/Chicago") ||
-    dateKeyInZone(new Date(), "America/Chicago");
+    dateKeyFromUnknown(value, "UTC") || dateKeyInZone(new Date(), "UTC");
 
   const buildParkingPassHostStatusPayload = async (dateKey: string) => {
     const eventDateKey = (event: any) => {
-      const tz = resolveCityTimeZoneSync({
-        city: event?.host?.city || event?.hostCity || event?.city,
-        state: event?.host?.state || event?.hostState || event?.state,
-      });
-      return dateKeyInZone(new Date(event?.date), tz);
+      return dateKeyFromUnknown(event?.date, "UTC");
     };
     const isPublicHostProfile = (host: any, event?: any) =>
       isHostProfileMapEligible({
@@ -1790,13 +1890,7 @@ export function registerEventRoutes(
         });
         occurrences.forEach((event: any) => {
           const hostId = String(event?.hostId ?? event?.host?.id ?? "").trim();
-          const eventDate = dateKeyInZone(
-            new Date(event?.date),
-            resolveCityTimeZoneSync({
-              city: event?.host?.city || event?.hostCity || event?.city,
-              state: event?.host?.state || event?.hostState || event?.state,
-            }),
-          );
+          const eventDate = dateKeyFromUnknown(event?.date, "UTC");
           if (!hostId || eventDate !== dateKey) return;
           const flags = computeParkingPassQualityFlags(event);
           const set = flagsByHost.get(hostId) || new Set<string>();
@@ -2216,9 +2310,24 @@ export function registerEventRoutes(
           });
         }
 
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        if (new Date(event.date) < today) {
+        const eventHost = await storage.getHost(event.hostId);
+        const eventTimeZone = await loadPersistedEventServiceTimeZone({
+          seriesId: event.seriesId,
+          city: eventHost?.city,
+          state: eventHost?.state,
+        });
+        if (!eventTimeZone) {
+          return res.status(409).json({
+            code: "venue_timezone_unavailable",
+            message:
+              "This venue does not have a valid persisted service timezone yet.",
+          });
+        }
+        const eventDateKey = dateKeyFromUnknown(event.date, eventTimeZone);
+        if (
+          !eventDateKey ||
+          eventDateKey < dateKeyInZone(new Date(), eventTimeZone)
+        ) {
           return res
             .status(400)
             .json({ message: "Cannot express interest in past events" });
@@ -2271,7 +2380,7 @@ export function registerEventRoutes(
                     hostUser.email,
                     host.businessName,
                     truck.name,
-                    new Date(event.date).toLocaleDateString(),
+                    formatDateKeyForDisplay(event.date),
                   );
                 }
               }
@@ -2393,6 +2502,7 @@ export function registerEventRoutes(
    */
   app.post(
     "/api/events/:eventId/book",
+    requireIdempotencyKey({ scope: "parking_pass_event_booking" }),
     isAuthenticated,
     async (req: any, res) => {
       try {
@@ -2487,15 +2597,6 @@ export function registerEventRoutes(
           logBookingFailure("event_not_found");
           return res.status(404).json({ message: "Event not found" });
         }
-        if (event.eventType !== "parking_pass") {
-          logBookingFailure("event_type_not_bookable", {
-            eventType: event.eventType,
-          });
-          return res.status(400).json({
-            message:
-              "Paid checkout is only available for Parking Pass bookings",
-          });
-        }
         if (!event.requiresPayment) {
           logBookingFailure("event_does_not_require_payment");
           return res.status(400).json({
@@ -2510,8 +2611,7 @@ export function registerEventRoutes(
             .json({ message: "Event is not available for booking" });
         }
         const hostPriceCents = event.hostPriceCents ?? 0;
-        const PLATFORM_FEE = 1000; // always $10
-        const totalCents = hostPriceCents + PLATFORM_FEE;
+        const PLATFORM_FEE = 1000; // fixed platform fee for one paid participation line
 
         const [host] = await db
           .select()
@@ -2522,10 +2622,22 @@ export function registerEventRoutes(
           logBookingFailure("host_not_found", { hostId: event.hostId });
           return res.status(500).json({ message: "Host not found" });
         }
-        const bookingTimeZone = await resolveCityTimeZone({
+        const bookingTimeZone = await loadPersistedEventServiceTimeZone({
+          seriesId: event.seriesId,
           city: host.city,
           state: host.state,
         });
+        if (!bookingTimeZone) {
+          logBookingFailure("venue_timezone_unavailable", {
+            hostId: event.hostId,
+            seriesId: event.seriesId,
+          });
+          return res.status(409).json({
+            code: "venue_timezone_unavailable",
+            message:
+              "This venue does not have a valid persisted service timezone yet.",
+          });
+        }
         const bookingInterval = buildSlotDateTimes({
           timeZone: bookingTimeZone,
           date: event.date,
@@ -2554,202 +2666,57 @@ export function registerEventRoutes(
             host.stripePayoutsEnabled &&
             host.stripeOnboardingCompleted,
         );
-        const hostStripeAccountId = hostPaymentsEnabled
-          ? host.stripeConnectAccountId
-          : null;
-
-        // Use the same row lock as the canonical Parking Pass checkout so both
-        // endpoints serialize capacity checks against one lock domain.
-        const booking = await db.transaction(async (tx: any) => {
-          await tx.execute(
-            sql`select ${events.id} from ${events} where ${events.id} = ${eventId} for update`,
-          );
-
-          const [lockedEvent] = await tx
-            .select({
-              maxTrucks: events.maxTrucks,
-              hardCapEnabled: events.hardCapEnabled,
-              status: events.status,
-            })
-            .from(events)
-            .where(eq(events.id, eventId))
-            .limit(1);
-
-          if (!lockedEvent || lockedEvent.status !== "open") {
-            logBookingFailure("event_not_open", { status: lockedEvent?.status });
-            throw Object.assign(new Error("Event is not available for booking"), {
-              statusCode: 409,
-            });
-          }
-
-          const [existing] = await tx
-            .select({ id: eventBookings.id, status: eventBookings.status })
-            .from(eventBookings)
-            .where(
-              and(
-                eq(eventBookings.eventId, eventId),
-                eq(eventBookings.truckId, truckId),
-              ),
-            )
-            .limit(1);
-
-          if (existing?.status === "confirmed") {
-            logBookingFailure("already_confirmed", { bookingId: existing.id });
-            throw Object.assign(new Error("This spot is already booked"), {
-              statusCode: 409,
-            });
-          }
-
-          if (existing?.status === "pending") {
-            logBookingFailure("pending_booking_exists", { bookingId: existing.id });
-            throw Object.assign(new Error("A pending booking already exists"), {
-              statusCode: 409,
-            });
-          }
-
-          if (existing?.status === "cancelled" || existing?.status === "refunded") {
-            logBookingFailure("closed_booking_exists", {
-              bookingId: existing.id,
-              status: existing.status,
-            });
-            throw Object.assign(
-              new Error(
-                "This booking was previously closed. Refresh the listing and try again.",
-              ),
-              {
-                statusCode: 409,
-              },
-            );
-          }
-
-          const [countRow] = await tx
-            .select({ count: sql<number>`count(*)` })
-            .from(eventBookings)
-            .where(
-              and(
-                eq(eventBookings.eventId, eventId),
-                inArray(eventBookings.status, ["pending", "confirmed"]),
-              ),
-            );
-
-          const reservedCount = Number(countRow?.count ?? 0);
-          const maxSpots = Math.max(
-            1,
-            Number(lockedEvent.maxTrucks ?? 1) || 1,
-          );
-          if (lockedEvent.hardCapEnabled && reservedCount >= maxSpots) {
-            logBookingFailure("event_full", {
-              reservedCount,
-              maxTrucks: maxSpots,
-            });
-            throw Object.assign(new Error("Event is fully booked"), {
-              statusCode: 409,
-            });
-          }
-
-          const [insertedBooking] = await tx
-            .insert(eventBookings)
-            .values({
-              eventId,
-              truckId,
-              hostId: event.hostId,
-              hostPriceCents,
-              platformFeeCents: PLATFORM_FEE,
-              totalCents,
-              status: "pending",
-              stripeApplicationFeeAmount: hostStripeAccountId ? PLATFORM_FEE : null,
-              stripeTransferDestination: hostStripeAccountId,
-            })
-            .returning();
-
-          return insertedBooking;
-        });
-
-        // Create a platform PaymentIntent so the platform Payment Element can confirm it.
-        // If host payouts are ready, use a destination charge. If not, MealScout holds
-        // the funds on the platform and host payout can be handled later.
-        let paymentIntent: Stripe.PaymentIntent;
-        try {
-          const intentParams: Stripe.PaymentIntentCreateParams = {
-            amount: totalCents,
-            currency: "usd",
-            metadata: {
-              bookingId: booking.id,
-              eventId,
-              hostId: event.hostId,
-              truckId,
-              userId: req.user.id,
-              hostPriceCents: hostPriceCents.toString(),
-              platformFeeCents: PLATFORM_FEE.toString(),
-              totalCents: totalCents.toString(),
-              hostPaymentMode: hostStripeAccountId
-                ? "destination_charge"
-                : "platform_hold",
-            },
-          };
-          if (hostStripeAccountId) {
-            intentParams.application_fee_amount = PLATFORM_FEE;
-            intentParams.transfer_data = {
-              destination: hostStripeAccountId,
-            };
-          }
-          paymentIntent = await stripe.paymentIntents.create(intentParams);
-        } catch (stripeError: any) {
-          // Preserve the booking intent for manual follow-up if Stripe fails.
-          await db
-            .update(eventBookings)
-            .set({
-              status: "cancelled",
-              cancelledAt: new Date(),
-              cancellationReason:
-                "payment_pending_manual_review: Payment setup failed",
-              stripePaymentStatus: "payment_pending",
-              updatedAt: new Date(),
-            })
-            .where(eq(eventBookings.id, booking.id));
-          console.error("[event-booking] Stripe PaymentIntent creation failed", {
-            ...logContext,
-            hostId: event.hostId,
-            bookingId: booking.id,
-            hostPaymentsEnabled,
-            failureReason: stripeError?.message || "stripe_create_failed",
-          });
-          return res.status(202).json({
-            paymentPending: true,
-            bookingId: booking.id,
+        if (!hostPaymentsEnabled) {
+          logBookingFailure("host_connect_not_ready", { hostId: event.hostId });
+          return res.status(409).json({
+            code: "host_connect_not_ready",
             message:
-              "Your spot request was received. We'll send payment instructions.",
+              "This host must finish Stripe onboarding with charges and payouts enabled before paid booking.",
           });
         }
 
-        // Attach the PaymentIntent ID to the booking record
-        await db
-          .update(eventBookings)
-          .set({
-            stripePaymentIntentId: paymentIntent.id,
-            updatedAt: new Date(),
-          })
-          .where(eq(eventBookings.id, booking.id));
+        const purchase = await createParkingPassPurchase({
+          purchaserUserId: req.user.id,
+          truckId,
+          hostId: event.hostId,
+          idempotencyKey: String(req.headers["idempotency-key"] || "").trim(),
+          lines: [
+            {
+              eventId: event.id,
+              hostPriceCents,
+              platformFeeCents: PLATFORM_FEE,
+              slotType: "daily",
+            },
+          ],
+          stripe,
+          metadata: {
+            eventId: event.id,
+            adapter: "event_route",
+            participationType:
+              event.eventType === "parking_pass" ? "parking_pass" : "paid_event",
+          },
+        });
 
         res.json({
-          bookingId: booking.id,
-          clientSecret: paymentIntent.client_secret,
-          paymentIntentId: paymentIntent.id,
-          hostPaymentsReady: hostPaymentsEnabled,
-          totalCents,
-          breakdown: {
-            hostPrice: hostPriceCents,
-            platformFee: PLATFORM_FEE,
-          },
+          ...purchase,
+          bookingId: purchase.bookingIds[0],
         });
         console.info("[event-booking] checkout created", {
           ...logContext,
           hostId: event.hostId,
-          bookingId: booking.id,
-          paymentIntentId: paymentIntent.id,
-          hostPaymentsEnabled,
+          purchaseId: purchase.purchaseId,
+          bookingId: purchase.bookingIds[0],
+          paymentIntentId: purchase.paymentIntentId,
+          settlementTopology: "destination_charge",
         });
       } catch (error: any) {
+        if (error instanceof ParkingPassBookingError) {
+          return res.status(error.statusCode).json({
+            code: error.code,
+            message: error.message,
+            ...(error.details ? { details: error.details } : {}),
+          });
+        }
         if (Number(error?.statusCode) >= 400 && Number(error?.statusCode) < 500) {
           return res.status(Number(error.statusCode)).json({
             message: String(error?.message || "Could not create booking"),
@@ -2807,86 +2774,51 @@ export function registerEventRoutes(
             .json({ message: `Booking is ${booking.status}` });
         }
 
-        // Verify payment via Stripe if we have a PaymentIntent
-        if (booking.stripePaymentIntentId && stripe) {
-          const hostStripeAccountId = booking.stripeTransferDestination;
-          let intent: Stripe.PaymentIntent;
-          try {
-            try {
-              intent = await stripe.paymentIntents.retrieve(
-                booking.stripePaymentIntentId,
-              );
-            } catch (platformError: any) {
-              if (!hostStripeAccountId) throw platformError;
-              // Backward compatibility for any older direct-charge booking rows.
-              intent = await stripe.paymentIntents.retrieve(
-                booking.stripePaymentIntentId,
-                { stripeAccount: hostStripeAccountId },
-              );
-            }
-          } catch (e: any) {
-            console.error("[event-booking] Error retrieving PaymentIntent:", {
-              bookingId,
-              userId: req.user?.id,
-              role: req.user?.userType || req.user?.role || null,
-              truckId: booking.truckId,
-              eventId: booking.eventId,
-              paymentIntentId: booking.stripePaymentIntentId,
-              failureReason: e?.message || "payment_intent_retrieve_failed",
-            });
+        if (booking.purchaseId) {
+          if (!stripe || !booking.stripePaymentIntentId) {
             return res
-              .status(502)
-              .json({ message: "Could not verify payment" });
+              .status(503)
+              .json({ message: "Payment verification is unavailable" });
           }
-
+          const intent = await stripe.paymentIntents.retrieve(
+            booking.stripePaymentIntentId,
+          );
           if (intent.status !== "succeeded") {
             return res
               .status(402)
               .json({ message: "Payment has not succeeded yet" });
           }
+          const confirmation =
+            await confirmParkingPassPurchaseFromIntent(intent, stripe);
+          return res.json({
+            message: "Parking Pass purchase confirmed",
+            bookingId,
+            purchaseId: booking.purchaseId,
+            confirmation,
+          });
         }
 
-        const now = new Date();
         await db
           .update(eventBookings)
           .set({
-            status: "confirmed",
-            stripePaymentStatus: "succeeded",
-            paidAt: now,
-            bookingConfirmedAt: now,
-            updatedAt: now,
+            stripePaymentStatus: "reconciliation_required",
+            settlementState: "action_required",
+            updatedAt: new Date(),
           })
           .where(eq(eventBookings.id, bookingId));
-
-        // Update event status if now full
-        const [countRow] = await db
-          .select({ count: sql<number>`count(*)` })
-          .from(eventBookings)
-          .where(
-            and(
-              eq(eventBookings.eventId, booking.eventId),
-              eq(eventBookings.status, "confirmed"),
-            ),
-          );
-        const confirmedCount = Number(countRow?.count ?? 0);
-
-        const [eventRow] = await db
-          .select({ maxTrucks: events.maxTrucks })
-          .from(events)
-          .where(eq(events.id, booking.eventId))
-          .limit(1);
-
-        if (eventRow) {
-          const newStatus =
-            confirmedCount >= (eventRow.maxTrucks ?? 1) ? "filled" : "open";
-          await db
-            .update(events)
-            .set({ status: newStatus, updatedAt: new Date() })
-            .where(eq(events.id, booking.eventId));
-        }
-
-        res.json({ message: "Booking confirmed", bookingId });
+        return res.status(409).json({
+          code: "legacy_payment_state_unbound",
+          message:
+            "This paid booking predates the durable purchase aggregate and requires staff reconciliation; it cannot be confirmed locally.",
+        });
       } catch (error: any) {
+        if (error instanceof ParkingPassBookingError) {
+          return res.status(error.statusCode).json({
+            code: error.code,
+            message: error.message,
+            ...(error.details ? { details: error.details } : {}),
+          });
+        }
         console.error("Error confirming booking:", error);
         res.status(500).json({ message: "Failed to confirm booking" });
       }
@@ -2895,7 +2827,9 @@ export function registerEventRoutes(
 
   /**
    * POST /api/bookings/:bookingId/cancel
-   * Host or truck owner may cancel. No refunds are allowed.
+   * Canonical Parking Pass policy chooses cash refund, restricted credit, or
+   * no remedy from the stored actor and start time. Legacy free event rows keep
+   * the historical no-refund cancellation path.
    */
   app.post(
     "/api/bookings/:bookingId/cancel",
@@ -2904,13 +2838,6 @@ export function registerEventRoutes(
       try {
         const { bookingId } = req.params;
         const { reason, refundType } = req.body;
-
-        // Booking policy: no refunds allowed.
-        if (refundType && String(refundType).toLowerCase() !== "none") {
-          return res.status(400).json({
-            message: "Refunds are not allowed for bookings",
-          });
-        }
 
         const [booking] = await db
           .select()
@@ -2939,9 +2866,74 @@ export function registerEventRoutes(
           .where(eq(hosts.id, booking.hostId))
           .limit(1);
         const isHost = host?.userId === req.user.id;
+        const [eventAuthority] = await db
+          .select({
+            eventType: events.eventType,
+            coordinatorUserId: events.coordinatorUserId,
+            requiresPayment: events.requiresPayment,
+          })
+          .from(events)
+          .where(eq(events.id, booking.eventId))
+          .limit(1);
+        const isCoordinator = Boolean(
+          eventAuthority?.eventType !== "parking_pass" &&
+            eventAuthority?.coordinatorUserId === req.user.id,
+        );
 
-        if (!ownsTruck && !isHost && !isAdmin) {
+        if (!ownsTruck && !isHost && !isAdmin && !isCoordinator) {
           return res.status(403).json({ message: "Not authorized" });
+        }
+
+        if (booking.purchaseId) {
+          const operation = await cancelParkingPassLines({
+            purchaseId: booking.purchaseId,
+            bookingLineIds: [booking.id],
+            requestId: String(
+              req.headers["idempotency-key"] ||
+                req.body?.requestId ||
+                `booking-cancel:${booking.id}:${req.user.id}`,
+            ).trim(),
+            reason: String(reason || "Parking Pass booking cancelled").trim(),
+            actor: {
+              userId: req.user.id,
+              userType: req.user?.userType,
+              canManageTruck: ownsTruck,
+            },
+            stripe,
+          });
+          return res.json({
+            message: "Parking Pass cancellation processed",
+            bookingId,
+            remedy: operation.remedy,
+            amountCents: operation.amountCents,
+            operation: serializeParkingPassCancellationOperation(operation),
+          });
+        }
+
+        if (
+          eventAuthority?.requiresPayment === true ||
+          Boolean(booking.stripePaymentIntentId)
+        ) {
+          await db
+            .update(eventBookings)
+            .set({
+              stripePaymentStatus: "reconciliation_required",
+              settlementState: "action_required",
+              updatedAt: new Date(),
+            })
+            .where(eq(eventBookings.id, bookingId));
+          return res.status(409).json({
+            code: "legacy_payment_state_unbound",
+            message:
+              "This paid booking predates the durable purchase aggregate and requires staff reconciliation; it cannot be cancelled locally.",
+          });
+        }
+
+        // Historical non-Parking-Pass/free booking behavior.
+        if (refundType && String(refundType).toLowerCase() !== "none") {
+          return res.status(400).json({
+            message: "This legacy booking does not support a refund request",
+          });
         }
 
         if (booking.status === "cancelled" || booking.status === "refunded") {
@@ -2965,17 +2957,30 @@ export function registerEventRoutes(
           })
           .where(eq(eventBookings.id, bookingId));
 
-        // Reopen the event if it was filled
+        // Legacy filled normalization is direct only after the withdrawal
+        // leaves no participating supply. Any still-participating event must
+        // be changed through the durable coordinator/host mutation saga.
         const [eventRow] = await db
           .select({ status: events.status, maxTrucks: events.maxTrucks })
           .from(events)
           .where(eq(events.id, booking.eventId))
           .limit(1);
         if (eventRow?.status === "filled") {
-          await db
-            .update(events)
-            .set({ status: "open", updatedAt: new Date() })
-            .where(eq(events.id, booking.eventId));
+          const [remaining] = await db
+            .select({ count: count(eventBookings.id) })
+            .from(eventBookings)
+            .where(
+              and(
+                eq(eventBookings.eventId, booking.eventId),
+                inArray(eventBookings.status, ["pending", "confirmed"]),
+              ),
+            );
+          if (Number(remaining?.count || 0) === 0) {
+            await db
+              .update(events)
+              .set({ status: "open", updatedAt: new Date() })
+              .where(eq(events.id, booking.eventId));
+          }
         }
 
         res.json({
@@ -2984,6 +2989,13 @@ export function registerEventRoutes(
           refunded: false,
         });
       } catch (error: any) {
+        if (error instanceof ParkingPassBookingError) {
+          return res.status(error.statusCode).json({
+            code: error.code,
+            message: error.message,
+            ...(error.details ? { details: error.details } : {}),
+          });
+        }
         console.error("Error cancelling booking:", error);
         res.status(500).json({ message: "Failed to cancel booking" });
       }

@@ -23,16 +23,19 @@ Active docs and maintenance
 - `EMBED_CONTRACT.md` and `API_ACTIONS.md` - TradeScout integration contracts; modify only through an explicitly reviewed compatibility or security change
 
 Local prerequisites
-- Node.js 20-24
+- Node.js 24 LTS (`.node-version` and `.nvmrc`)
 - Git
 - Both `node`/`npm` and `git` available on your shell `PATH`
 
 Quick start (dev)
 ```bash
-npm install
+npm ci
 npm run dev:server
 npm run dev
 ```
+
+Use npm from the repository root. `package-lock.json` is the supported dependency
+lockfile used by CI, Render, and Vercel; do not generate a second package-manager lockfile.
 
 Useful commands
 ```bash
@@ -41,6 +44,21 @@ npm run check
 npm run build
 npm run test:flows:e2e
 ```
+
+Migration 142 acceptance defaults to a disposable PostgreSQL 16 Docker container:
+```bash
+npm run test:migration-142-postgres16
+```
+When Docker is unavailable, the identical assertions can run with a complete native
+PostgreSQL 16 binary distribution (`postgres`, `initdb`, `pg_ctl`, `psql`, `pg_dump`,
+and `pg_restore`):
+```bash
+npm run test:migration-142-postgres16 -- --native-pg-bin="C:/PostgreSQL/16/bin"
+```
+The native option creates its own new cluster, binds only to loopback, ignores
+ambient PostgreSQL connection settings, and stops the cluster on completion.
+It never accepts an existing database URL or data directory. Temporary cluster
+files and diagnostic logs are retained at the path printed by the runner.
 
 License
 MIT

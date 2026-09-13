@@ -73,6 +73,7 @@ import {
   isRestaurantOpenNow,
   isRestaurantMenuAvailableNow,
   isRestaurantOrderingAuthorityReady,
+  isRestaurantProfileOwnerReady,
   isTruckStopOrderableForPickup,
   resolveFixedRestaurantPickupAddress,
   resolveRestaurantPaymentMethods,
@@ -276,6 +277,8 @@ export async function buildOrderingReadiness(
     existingReservedMenuItemIds?: string[];
     includeSettlementIdentity?: boolean;
     database?: any;
+    reviewMode?: boolean;
+    proposedAcknowledgementMinutes?: number;
   },
 ) {
   const database = context?.database || db;
@@ -381,17 +384,30 @@ export async function buildOrderingReadiness(
     : [];
 
   const stripeConfigured = Boolean(process.env.STRIPE_SECRET_KEY);
-  const profileOwnerReady = isRestaurantOrderingAuthorityReady({
-    ownerId: restaurantRow?.ownerId,
-    ownerEmail: restaurantRow?.email,
-    ownerEmailVerified: restaurantRow?.ownerEmailVerified,
-    ownerIsDisabled: restaurantRow?.ownerIsDisabled,
-    isVerified: restaurantRow?.isVerified,
-    orderingApprovedAt: restaurantRow?.orderingApprovedAt,
-    orderingApprovedByUserId: restaurantRow?.orderingApprovedByUserId,
-  });
+  const baseProfileOwnerReady = Boolean(
+    isRestaurantProfileOwnerReady({
+      ownerId: restaurantRow?.ownerId,
+      ownerEmail: restaurantRow?.email,
+      isVerified: restaurantRow?.isVerified,
+    }) &&
+      restaurantRow?.ownerEmailVerified === true &&
+      restaurantRow?.ownerIsDisabled === false,
+  );
+  const profileOwnerReady = context?.reviewMode
+    ? baseProfileOwnerReady
+    : isRestaurantOrderingAuthorityReady({
+        ownerId: restaurantRow?.ownerId,
+        ownerEmail: restaurantRow?.email,
+        ownerEmailVerified: restaurantRow?.ownerEmailVerified,
+        ownerIsDisabled: restaurantRow?.ownerIsDisabled,
+        isVerified: restaurantRow?.isVerified,
+        orderingApprovedAt: restaurantRow?.orderingApprovedAt,
+        orderingApprovedByUserId: restaurantRow?.orderingApprovedByUserId,
+      });
   const configuredAcknowledgementMinutes = Number(
-    restaurantRow?.pickupAcknowledgementMinutes,
+    context?.reviewMode
+      ? context.proposedAcknowledgementMinutes
+      : restaurantRow?.pickupAcknowledgementMinutes,
   );
   const merchantAcknowledgementMinutes =
     Number.isInteger(configuredAcknowledgementMinutes) &&
@@ -447,7 +463,9 @@ export async function buildOrderingReadiness(
       ok: profileOwnerReady,
       blocking: true,
       action:
-        "Complete evidence-backed ordering approval with an active, verified owner before taking orders.",
+        context?.reviewMode
+          ? "Verify the active owner and owner email before requesting ordering review."
+          : "Complete evidence-backed ordering approval with an active, verified owner before taking orders.",
     },
     {
       id: "pickup_location",
@@ -475,7 +493,9 @@ export async function buildOrderingReadiness(
       ok: merchantAcknowledgementMinutes !== null,
       blocking: true,
       action:
-        "Complete ordering approval with a 5-30 minute merchant acknowledgement window.",
+        context?.reviewMode
+          ? "Choose a 5-30 minute merchant acknowledgement window for this review request."
+          : "Complete ordering approval with a 5-30 minute merchant acknowledgement window.",
     },
     ...(restaurantRow?.isFoodTruck
       ? [

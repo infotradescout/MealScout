@@ -1,4 +1,5 @@
 import {
+  eventBookings,
   events,
   eventInterests,
   eventSeries,
@@ -10,9 +11,36 @@ import {
   type InsertEventSeries,
 } from "@shared/schema";
 import { db } from "../db";
-import { eq, and, or, isNull, asc, desc, sql } from "drizzle-orm";
+import {
+  eq,
+  and,
+  or,
+  isNull,
+  inArray,
+  asc,
+  count,
+  desc,
+  sql,
+} from "drizzle-orm";
 
 export function createHostsEventsRepository() {
+  const assertSeriesHasNoParticipation = async (seriesId: string) => {
+    const [row] = await db
+      .select({ count: count(eventBookings.id) })
+      .from(eventBookings)
+      .innerJoin(events, eq(events.id, eventBookings.eventId))
+      .where(
+        and(
+          eq(events.seriesId, seriesId),
+          inArray(eventBookings.status, ["pending", "confirmed"]),
+        ),
+      );
+    if (Number(row?.count || 0) > 0) {
+      throw new Error(
+        "Participating event series must be changed through the durable participation mutation service.",
+      );
+    }
+  };
   return {
     async createEvent(event: InsertEvent): Promise<Event> {
       const [newEvent] = await db.insert(events).values(event).returning();
@@ -62,18 +90,6 @@ export function createHostsEventsRepository() {
         .values(interest)
         .returning();
       return newInterest;
-    },
-
-    async updateEventInterestStatus(
-      id: string,
-      status: string,
-    ): Promise<EventInterest> {
-      const [updated] = await db
-        .update(eventInterests)
-        .set({ status })
-        .where(eq(eventInterests.id, id))
-        .returning();
-      return updated;
     },
 
     async getEventInterest(id: string): Promise<EventInterest | undefined> {
@@ -153,6 +169,7 @@ export function createHostsEventsRepository() {
       id: string,
       updates: Partial<InsertEventSeries>,
     ): Promise<EventSeries> {
+      await assertSeriesHasNoParticipation(id);
       const [updated] = await db
         .update(eventSeries)
         .set({ ...updates, updatedAt: new Date() })
@@ -162,6 +179,7 @@ export function createHostsEventsRepository() {
     },
 
     async publishEventSeries(id: string): Promise<EventSeries> {
+      await assertSeriesHasNoParticipation(id);
       const [published] = await db
         .update(eventSeries)
         .set({

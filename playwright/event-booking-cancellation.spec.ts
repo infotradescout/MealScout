@@ -2,7 +2,7 @@ import { expect, test, type Page, type Route } from "@playwright/test";
 
 const FRONTEND = process.env.FRONTEND_URL ?? "http://localhost:5174";
 const EVENT_ID =
-  "pp:4950164b-6246-444e-a293-aea953aba78a:2026-08-23";
+  "pp:4950164b-6246-444e-a293-aea953aba78a:2099-08-23";
 const TRUCK_ID = "event-checkout-truck";
 const PAYMENT_INTENT_ID = "pi_event_checkout_cancel";
 
@@ -116,11 +116,13 @@ async function installCheckoutApi(
         id: EVENT_ID,
         title: "Future paid Parking Pass",
         description: "A production-shaped paid parking occurrence.",
-        date: "2026-08-23T00:00:00.000Z",
+        date: "2099-08-23T00:00:00.000Z",
         startTime: "07:00",
         endTime: "21:00",
         status: "open",
         requiresPayment: true,
+        paymentsEnabled: true,
+        paymentEligibilityReason: null,
         hostPriceCents: 2500,
         ended: false,
         noIndex: true,

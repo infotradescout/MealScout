@@ -47,7 +47,7 @@ import {
   markSocialPostResult,
   publishSocialQueueItem,
 } from "./socialPublishing";
-import { resolveCityTimeZoneSync } from "./cityTimeZone";
+import { resolveCityTimeZoneStrict } from "./cityTimeZone";
 
 const DRAFT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const PUBLIC_BASE_URL = () =>
@@ -1659,7 +1659,15 @@ async function applyCanonicalPacket(tx: any, restaurant: any, packet: OwnerAiAct
     }
     const city = stop.city || restaurant.city || null;
     const state = stop.state || restaurant.state || null;
-    const values = { truckId: restaurant.id, date, startTime: stop.startTime ?? null, endTime: stop.endTime ?? null, locationName: stop.locationName || stop.eventName || "Scheduled stop", address: stop.address ?? null, city, state, notes: [stop.eventName && stop.kind === "event_stop" ? `Event: ${stop.eventName}` : null, stop.notes].filter(Boolean).join("\n") || null, isPublic: stop.isPublic, status: "confirmed", scheduleType: stop.kind, timezone: stop.timezone || resolveCityTimeZoneSync({ city: city || "", state: state || "" }), sourceType: "owner_ai_approved", sourceArtifact: stop.sourceUrl || null, sourceConfidence: "confirmed", ownerSubmittedEquivalent: true, recurring: false, expiresAt: stop.expiresAt ? new Date(stop.expiresAt) : null, mapEligible: stop.isPublic, liveFeedEligible: stop.isPublic, lastConfirmedAt: now, updatedAt: now };
+    const timeZone = await resolveCityTimeZoneStrict({ city, state }, tx);
+    if (!timeZone) {
+      throw new OwnerAiActionError(
+        409,
+        "schedule_timezone_unavailable",
+        "The schedule location must match exactly one persisted venue timezone.",
+      );
+    }
+    const values = { truckId: restaurant.id, date, startTime: stop.startTime ?? null, endTime: stop.endTime ?? null, locationName: stop.locationName || stop.eventName || "Scheduled stop", address: stop.address ?? null, city, state, notes: [stop.eventName && stop.kind === "event_stop" ? `Event: ${stop.eventName}` : null, stop.notes].filter(Boolean).join("\n") || null, isPublic: stop.isPublic, status: "confirmed", scheduleType: stop.kind, timezone: timeZone, sourceType: "owner_ai_approved", sourceArtifact: stop.sourceUrl || null, sourceConfidence: "confirmed", ownerSubmittedEquivalent: true, recurring: false, expiresAt: stop.expiresAt ? new Date(stop.expiresAt) : null, mapEligible: stop.isPublic, liveFeedEligible: stop.isPublic, lastConfirmedAt: now, updatedAt: now };
     if (existing) await tx.update(truckManualSchedules).set(values).where(eq(truckManualSchedules.id, existing.id));
     else await tx.insert(truckManualSchedules).values(values);
     counts.schedulesUpserted += 1;

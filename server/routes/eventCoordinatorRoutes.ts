@@ -5,27 +5,58 @@ import {
   insertHostSchema,
   eventInterests,
   events,
+  hosts,
+  cities,
   restaurants,
   socialPostQueue,
 } from "@shared/schema";
 import { storage } from "../storage";
 import { db } from "../db";
-import { and, eq, inArray, desc, sql } from "drizzle-orm";
-import { emailService } from "../emailService";
+import { and, eq, inArray, desc, sql, ilike, or } from "drizzle-orm";
 import { canEmailForTopic } from "../utils/notificationPreferences";
+import { deliverInterestStatusEventNotification } from "../services/eventNotificationDeliveryService";
 import {
-  computeAcceptedCount,
-  shouldBlockAcceptance,
-  buildCapacityFullError,
-} from "../services/interestDecision";
+  decideEventInterest,
+  EventInterestDecisionError,
+} from "../services/eventInterestDecisionService";
 import {
   eventDateInputSchema,
   formatEventDateOnly,
 } from "../utils/eventDateInput";
+import { requireIdempotencyKey } from "../middleware/idempotency";
+import {
+  cancelCoordinatedEvent,
+  cancelCoordinatedSeries,
+  EventParticipationMutationError,
+  updateCoordinatedEvent,
+  updateCoordinatedSeries,
+} from "../services/eventParticipationMutationService";
+import {
+  resolveCityTimeZoneStrict,
+  resolveUniquePersistedTimeZoneRows,
+} from "../services/cityTimeZone";
+import {
+  dateKeyFromUnknown,
+  dateKeyInZone,
+} from "../services/dateKeys";
 
 type EventCoordinatorRouteDependencies = {
   hasCompleteProfileAccess: (userId: string) => Promise<boolean>;
 };
+
+function normalizeVenueIdentityPart(value: unknown) {
+  return String(value || "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLocaleLowerCase("en-US");
+}
+
+function citySlug(value: unknown) {
+  return String(value || "")
+    .trim()
+    .toLocaleLowerCase("en-US")
+    .replace(/[^a-z0-9-]+/g, "-");
+}
 
 const allowedRoles = new Set([
   "event_coordinator",
@@ -82,11 +113,37 @@ export function registerEventCoordinatorRoutes(
         }
 
         const host = await storage.getHostByUserId(req.user.id);
-        if (!host) {
-          return res.json([]);
-        }
-
-        const eventsData = await storage.getEventsOwnedByUser(req.user.id);
+        const hostEvents = host
+          ? await storage.getEventsOwnedByUser(req.user.id)
+          : [];
+        const coordinatorEvents = await db
+          .select()
+          .from(events)
+          .where(
+            and(
+              eq(events.coordinatorUserId, req.user.id),
+              sql`${events.eventType} <> 'parking_pass'`,
+            ),
+          );
+        const eventsData = Array.from(
+          new Map(
+            [...hostEvents, ...coordinatorEvents].map((event: any) => [
+              event.id,
+              event,
+            ]),
+          ).values(),
+        ) as any[];
+        const hostIds = Array.from(
+          new Set(eventsData.map((event: any) => String(event.hostId))),
+        );
+        const eventHosts = await Promise.all(
+          hostIds.map((hostId) => storage.getHost(hostId)),
+        );
+        const hostById = new Map(
+          eventHosts
+            .filter(Boolean)
+            .map((eventHost: any) => [eventHost.id, eventHost]),
+        );
 
         // Enrich each event with interest counts
         const eventIds = eventsData.map((e) => e.id);
@@ -114,6 +171,7 @@ export function registerEventCoordinatorRoutes(
         }
 
         const payload = eventsData.map((event) => {
+          const eventHost = hostById.get(String(event.hostId));
           const interests = interestsByEvent[event.id] || [];
           const acceptedCount = interests.filter(
             (i: any) => i.status === "accepted",
@@ -128,8 +186,8 @@ export function registerEventCoordinatorRoutes(
           return {
             ...event,
             host: {
-              businessName: host.businessName,
-              address: host.address,
+              businessName: eventHost?.businessName || "Event location",
+              address: eventHost?.address || null,
             },
             interestSummary: {
               total: interests.length,
@@ -168,7 +226,8 @@ export function registerEventCoordinatorRoutes(
         const host = await storage.getHostByUserId(req.user.id);
         const ownsEvent =
           (host && event.hostId === host.id) ||
-          event.coordinatorUserId === req.user.id ||
+          (event.eventType !== "parking_pass" &&
+            event.coordinatorUserId === req.user.id) ||
           req.user.userType === "admin" ||
           req.user.userType === "duper_admin" ||
           req.user.userType === "super_admin";
@@ -248,46 +307,18 @@ export function registerEventCoordinatorRoutes(
             .status(400)
             .json({ message: "Status must be 'accepted' or 'declined'" });
         }
-        const interest = await storage.getEventInterest(interestId);
-        if (!interest) {
-          return res.status(404).json({ message: "Interest not found" });
-        }
-        const event = await storage.getEvent(interest.eventId);
-        if (!event) {
-          return res.status(404).json({ message: "Event not found" });
-        }
-        const host = await storage.getHostByUserId(req.user.id);
-        const ownsEvent =
-          (host && event.hostId === host.id) ||
-          event.coordinatorUserId === req.user.id ||
-          req.user.userType === "admin" ||
-          req.user.userType === "duper_admin" ||
-          req.user.userType === "super_admin";
-        if (!ownsEvent) {
-          return res.status(403).json({ message: "Not authorized" });
-        }
-        if (interest.status === status) {
-          return res.json({ message: "Status already set", interest });
-        }
-        if (status === "accepted") {
-          const allInterests = await storage.getEventInterestsByEventId(
-            interest.eventId,
-          );
-          const acceptedCount = computeAcceptedCount(allInterests as any);
-          if (
-            shouldBlockAcceptance({
-              hardCapEnabled: event.hardCapEnabled,
-              acceptedCount,
-              maxTrucks: event.maxTrucks,
-            })
-          ) {
-            return res.status(409).json(buildCapacityFullError());
-          }
-        }
-        const updated = await storage.updateEventInterestStatus(
+        const decision = await decideEventInterest({
           interestId,
           status,
-        );
+          actorUserId: req.user.id,
+          actorRole: req.user.userType,
+        });
+        const interest = decision.interest;
+        const event = decision.event;
+        const host = decision.host;
+        if (decision.replayed) {
+          return res.json({ message: "Status already set", interest });
+        }
 
         // A truck applying to an event here previously had no way to learn
         // whether they were accepted or declined except by polling
@@ -305,23 +336,38 @@ export function registerEventCoordinatorRoutes(
             ) {
               return;
             }
-            const eventHost = await storage.getHost(event.hostId);
             const hostDisplayName =
-              eventHost?.businessName || event.name || "the event host";
-            await emailService.sendInterestStatusUpdate(
-              owner.email,
-              truck.name,
-              hostDisplayName,
-              new Date(event.date).toLocaleDateString(),
-              status as "accepted" | "declined",
-            );
+              host.businessName || event.name || "the event host";
+            await deliverInterestStatusEventNotification({
+              interestId: interest.id,
+              eventId: event.id,
+              eventDate: event.date,
+              seriesId: event.seriesId,
+              hostCity: host.city,
+              hostState: host.state,
+              recipientUserId: owner.id,
+              recipientEmail: owner.email,
+              truckName: truck.name,
+              hostName: hostDisplayName,
+              status: status as "accepted" | "declined",
+            });
           } catch (err) {
             console.error("Failed to send event interest status notification:", err);
           }
         })();
 
-        res.json({ message: `Interest ${status}`, interest: updated });
+        res.json({ message: `Interest ${status}`, interest });
       } catch (error: any) {
+        if (error instanceof EventInterestDecisionError) {
+          return res.status(error.statusCode).json({
+            message: error.message,
+            code:
+              error.code === "capacity_reached"
+                ? "CAPACITY_REACHED"
+                : error.code,
+            ...error.details,
+          });
+        }
         console.error("Error updating interest status:", error);
         res.status(500).json({ message: "Failed to update interest status" });
       }
@@ -383,6 +429,7 @@ export function registerEventCoordinatorRoutes(
   app.post(
     "/api/event-coordinator/events",
     isEventCoordinator,
+    requireIdempotencyKey({ scope: "event_coordinator_event_create" }),
     async (req: any, res) => {
       try {
         if (!(await ensurePaidEventAccess(req, res))) {
@@ -405,49 +452,36 @@ export function registerEventCoordinatorRoutes(
             .string()
             .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "End time must be in HH:MM format"),
           maxTrucks: z.number().int().min(1).max(50),
+          hardCapEnabled: z.boolean().default(false),
         });
 
         const parsed = schema.parse(req.body);
 
-        let host = await storage.getHostByUserId(req.user.id);
-        if (!host) {
-          const hostData = insertHostSchema.parse({
-            userId: req.user.id,
-            businessName: parsed.businessName,
-            address: parsed.address,
-            city: parsed.city,
-            state: parsed.state,
-            contactPhone: parsed.contactPhone,
-            locationType: "event_coordinator",
-          });
-          host = await storage.createHost(hostData);
-        }
-
-        const eventPayload = insertEventSchema.parse({
-          hostId: host.id,
-          coordinatorUserId: req.user.id,
-          name: parsed.name,
-          description: parsed.description || null,
-          date: parsed.date,
-          startTime: parsed.startTime,
-          endTime: parsed.endTime,
-          maxTrucks: parsed.maxTrucks,
-          requiresPayment: false,
+        const venueTimeZone = await resolveCityTimeZoneStrict({
+          city: parsed.city,
+          state: parsed.state,
         });
-
-        const eventDate = eventPayload.date;
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        if (eventDate < today) {
+        if (!venueTimeZone) {
+          return res.status(409).json({
+            code: "venue_timezone_unavailable",
+            message:
+              "This event needs one unambiguous persisted city timezone before it can be created.",
+          });
+        }
+        const eventDateKey = dateKeyFromUnknown(parsed.date, "UTC");
+        if (
+          !eventDateKey ||
+          eventDateKey < dateKeyInZone(new Date(), venueTimeZone)
+        ) {
           return res
             .status(400)
             .json({ message: "Event date must be in the future" });
         }
 
-        const [startHour, startMinute] = eventPayload.startTime
+        const [startHour, startMinute] = parsed.startTime
           .split(":")
           .map(Number);
-        const [endHour, endMinute] = eventPayload.endTime
+        const [endHour, endMinute] = parsed.endTime
           .split(":")
           .map(Number);
         const startMinutes = startHour * 60 + startMinute;
@@ -459,7 +493,100 @@ export function registerEventCoordinatorRoutes(
             .json({ message: "End time must be after start time" });
         }
 
-        const created = await storage.createEvent(eventPayload);
+        // Lock the exact persisted venue identity and re-resolve its city
+        // timezone inside the same transaction that writes the host/event.
+        // A coordinator's unrelated host must never silently move an event to
+        // another venue or timezone.
+        const { host, created } = await db.transaction(async (tx: any) => {
+          const normalizedAddress = normalizeVenueIdentityPart(parsed.address);
+          const normalizedCity = normalizeVenueIdentityPart(parsed.city);
+          const normalizedState = normalizeVenueIdentityPart(parsed.state);
+          await tx.execute(
+            sql`SELECT pg_advisory_xact_lock(hashtext(${`event_coordinator_venue:${req.user.id}:${normalizedAddress}:${normalizedCity}:${normalizedState}`}))`,
+          );
+
+          const persistedCityRows = await tx
+            .select({ timezone: cities.timezone })
+            .from(cities)
+            .where(
+              and(
+                or(
+                  ilike(cities.name, parsed.city.trim()),
+                  eq(cities.slug, citySlug(parsed.city)),
+                ),
+                eq(cities.state, parsed.state.trim().toUpperCase()),
+              ),
+            )
+            .for("share");
+          const lockedVenueTimeZone = resolveUniquePersistedTimeZoneRows(
+            persistedCityRows,
+          );
+          if (!lockedVenueTimeZone || lockedVenueTimeZone !== venueTimeZone) {
+            throw new EventParticipationMutationError(
+              409,
+              "venue_timezone_unavailable",
+              "This event needs one unambiguous persisted city timezone before it can be created.",
+            );
+          }
+          if (eventDateKey < dateKeyInZone(new Date(), lockedVenueTimeZone)) {
+            throw new EventParticipationMutationError(
+              400,
+              "event_date_in_past",
+              "Event date must be in the future",
+            );
+          }
+
+          const coordinatorHosts = await tx
+            .select()
+            .from(hosts)
+            .where(eq(hosts.userId, req.user.id))
+            .for("update");
+          const exactVenueHosts = coordinatorHosts.filter(
+            (candidate: any) =>
+              normalizeVenueIdentityPart(candidate.address) === normalizedAddress &&
+              normalizeVenueIdentityPart(candidate.city) === normalizedCity &&
+              normalizeVenueIdentityPart(candidate.state) === normalizedState,
+          );
+          if (exactVenueHosts.length > 1) {
+            throw new EventParticipationMutationError(
+              409,
+              "event_venue_ambiguous",
+              "Multiple persisted venue records match this event address.",
+            );
+          }
+
+          let lockedHost = exactVenueHosts[0];
+          if (!lockedHost) {
+            const hostData = insertHostSchema.parse({
+              userId: req.user.id,
+              businessName: parsed.businessName.trim(),
+              address: parsed.address.trim(),
+              city: parsed.city.trim(),
+              state: parsed.state.trim().toUpperCase(),
+              contactPhone: parsed.contactPhone.trim(),
+              locationType: "event_coordinator",
+            });
+            [lockedHost] = await tx.insert(hosts).values(hostData).returning();
+          }
+
+          const eventPayload = insertEventSchema.parse({
+            hostId: lockedHost.id,
+            coordinatorUserId: req.user.id,
+            name: parsed.name,
+            description: parsed.description || null,
+            date: new Date(`${eventDateKey}T00:00:00.000Z`),
+            startTime: parsed.startTime,
+            endTime: parsed.endTime,
+            maxTrucks: parsed.maxTrucks,
+            hardCapEnabled: parsed.hardCapEnabled,
+            requiresPayment: false,
+          });
+          const [lockedEvent] = await tx
+            .insert(events)
+            .values(eventPayload)
+            .returning();
+          return { host: lockedHost, created: lockedEvent };
+        });
 
         // Auto-enqueue social post for new event
         db.insert(socialPostQueue)
@@ -488,6 +615,13 @@ export function registerEventCoordinatorRoutes(
             .status(400)
             .json({ message: "Invalid event data", errors: error.errors });
         }
+        if (error instanceof EventParticipationMutationError) {
+          return res.status(error.statusCode).json({
+            code: error.code,
+            message: error.message,
+            details: error.details,
+          });
+        }
         res.status(400).json({
           message: error.message || "Failed to create event",
         });
@@ -502,22 +636,12 @@ export function registerEventCoordinatorRoutes(
    */
   app.patch(
     "/api/event-coordinator/events/:eventId",
+    requireIdempotencyKey({ scope: "event_coordinator_event_mutation" }),
     isEventCoordinator,
     async (req: any, res) => {
       try {
         if (!(await ensurePaidEventAccess(req, res))) return;
         const { eventId } = req.params;
-        const event = await storage.getEvent(eventId);
-        if (!event) return res.status(404).json({ message: "Event not found" });
-        const host = await storage.getHostByUserId(req.user.id);
-        const ownsEvent =
-          (host && event.hostId === host.id) ||
-          event.coordinatorUserId === req.user.id ||
-          ["admin", "duper_admin", "super_admin", "staff"].includes(
-            req.user.userType,
-          );
-        if (!ownsEvent)
-          return res.status(403).json({ message: "Not authorized" });
         const schema = z.object({
           name: z.string().min(1).optional(),
           description: z.string().optional(),
@@ -529,19 +653,28 @@ export function registerEventCoordinatorRoutes(
           status: z.enum(["open", "closed", "cancelled"]).optional(),
         });
         const body = schema.parse(req.body);
-        const updates: Record<string, any> = { ...body, updatedAt: new Date() };
-        const [updated] = await db
-          .update(events)
-          .set(updates)
-          .where(eq(events.id, eventId))
-          .returning();
-        res.json({ event: updated });
+        const result = await updateCoordinatedEvent({
+          eventId,
+          actor: { userId: req.user.id },
+          requestId: String(req.headers["idempotency-key"] || "").trim(),
+          updates: body,
+        });
+        res.status(result.fanout.affected > 0 ? 202 : 200).json(result);
       } catch (error: any) {
         console.error("Error updating event:", error);
         if (error instanceof z.ZodError)
           return res
             .status(400)
             .json({ message: error.errors[0]?.message || "Validation error" });
+        if (
+          error instanceof EventParticipationMutationError ||
+          Number(error?.statusCode) >= 400
+        ) {
+          return res.status(Number(error.statusCode) || 409).json({
+            code: error.code,
+            message: error.message,
+          });
+        }
         res
           .status(500)
           .json({ message: error.message || "Failed to update event" });
@@ -556,49 +689,121 @@ export function registerEventCoordinatorRoutes(
    */
   app.delete(
     "/api/event-coordinator/events/:eventId",
+    requireIdempotencyKey({ scope: "event_coordinator_event_cancellation" }),
     isEventCoordinator,
     async (req: any, res) => {
       try {
         if (!(await ensurePaidEventAccess(req, res))) return;
         const { eventId } = req.params;
-        const event = await storage.getEvent(eventId);
-        if (!event) return res.status(404).json({ message: "Event not found" });
-        const host = await storage.getHostByUserId(req.user.id);
-        const ownsEvent =
-          (host && event.hostId === host.id) ||
-          event.coordinatorUserId === req.user.id ||
-          ["admin", "duper_admin", "super_admin", "staff"].includes(
-            req.user.userType,
-          );
-        if (!ownsEvent)
-          return res.status(403).json({ message: "Not authorized" });
-        if ((event as any).status === "cancelled") {
-          return res
-            .status(409)
-            .json({ message: "Event is already cancelled" });
-        }
-        // Cancel all pending interests
-        await db
-          .update(eventInterests)
-          .set({ status: "declined", updatedAt: new Date() } as any)
-          .where(
-            and(
-              eq(eventInterests.eventId, eventId),
-              eq(eventInterests.status, "pending"),
-            ),
-          );
-        // Mark event as cancelled
-        const [cancelled] = await db
-          .update(events)
-          .set({ status: "cancelled", updatedAt: new Date() } as any)
-          .where(eq(events.id, eventId))
-          .returning();
-        res.json({ event: cancelled, message: "Event cancelled" });
+        const result = await cancelCoordinatedEvent({
+          eventId,
+          actor: { userId: req.user.id },
+          requestId: String(req.headers["idempotency-key"] || "").trim(),
+        });
+        res.status(result.fanout.affected > 0 ? 202 : 200).json({
+          ...result,
+          message:
+            result.fanout.affected > 0
+              ? "Event cancelled; paid participation remedies are recorded with their current provider states."
+              : "Event cancelled",
+        });
       } catch (error: any) {
         console.error("Error cancelling event:", error);
+        if (
+          error instanceof EventParticipationMutationError ||
+          Number(error?.statusCode) >= 400
+        ) {
+          return res.status(Number(error.statusCode) || 409).json({
+            code: error.code,
+            message: error.message,
+          });
+        }
         res
           .status(500)
           .json({ message: error.message || "Failed to cancel event" });
+      }
+    },
+  );
+
+  app.patch(
+    "/api/event-coordinator/series/:seriesId",
+    requireIdempotencyKey({ scope: "event_coordinator_series_mutation" }),
+    isEventCoordinator,
+    async (req: any, res) => {
+      try {
+        if (!(await ensurePaidEventAccess(req, res))) return;
+        const updates = z
+          .object({
+            name: z.string().min(1).optional(),
+            defaultStartTime: z
+              .string()
+              .regex(/^([01]\d|2[0-3]):[0-5]\d$/)
+              .optional(),
+            defaultEndTime: z
+              .string()
+              .regex(/^([01]\d|2[0-3]):[0-5]\d$/)
+              .optional(),
+            defaultMaxTrucks: z.number().int().min(1).max(50).optional(),
+            status: z.enum(["draft", "published", "closed"]).optional(),
+          })
+          .parse(req.body);
+        const result = await updateCoordinatedSeries({
+          seriesId: String(req.params.seriesId || "").trim(),
+          actor: { userId: req.user.id },
+          requestId: String(req.headers["idempotency-key"] || "").trim(),
+          updates,
+        });
+        res.status(result.eventResults.length > 0 ? 202 : 200).json(result);
+      } catch (error: any) {
+        if (error instanceof z.ZodError) {
+          return res.status(400).json({
+            message: error.errors[0]?.message || "Validation error",
+          });
+        }
+        if (
+          error instanceof EventParticipationMutationError ||
+          Number(error?.statusCode) >= 400
+        ) {
+          return res.status(Number(error.statusCode) || 409).json({
+            code: error.code,
+            message: error.message,
+          });
+        }
+        console.error("Error updating coordinated series:", error);
+        return res.status(500).json({ message: "Failed to update series" });
+      }
+    },
+  );
+
+  app.delete(
+    "/api/event-coordinator/series/:seriesId",
+    requireIdempotencyKey({ scope: "event_coordinator_series_cancellation" }),
+    isEventCoordinator,
+    async (req: any, res) => {
+      try {
+        if (!(await ensurePaidEventAccess(req, res))) return;
+        const result = await cancelCoordinatedSeries({
+          seriesId: String(req.params.seriesId || "").trim(),
+          actor: { userId: req.user.id },
+          requestId: String(req.headers["idempotency-key"] || "").trim(),
+        });
+        return res.status(result.eventResults.length > 0 ? 202 : 200).json({
+          ...result,
+          message:
+            "Series closed; future paid participation remedies are recorded with their current provider states.",
+        });
+      } catch (error: any) {
+        if (
+          error instanceof EventParticipationMutationError ||
+          Number(error?.statusCode) >= 400
+        ) {
+          return res.status(Number(error.statusCode) || 409).json({
+            code: error.code,
+            message: error.message,
+          });
+        }
+        console.error("Error cancelling coordinated series:", error);
+        return res.status(500).json({ message: "Failed to cancel series" });
       }
     },
   );

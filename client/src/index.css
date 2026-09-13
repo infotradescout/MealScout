@@ -5,6 +5,12 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Map overlays sit above both pale street tiles and dark map styles. */
+.scout-map-panel {
+  background: rgba(30, 24, 19, 0.97);
+  color: #fff7ed;
+}
+
 :root {
   --font-sans: "Space Grotesk", ui-sans-serif, system-ui, -apple-system,
     "Segoe UI", sans-serif;

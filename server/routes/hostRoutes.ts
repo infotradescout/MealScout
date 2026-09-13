@@ -73,13 +73,27 @@ import {
 import { imageUploads } from "@shared/schema";
 import { logAudit } from "../auditLogger";
 import { getHostEarningsSummary } from "../hostEarningsService";
-import { resolveCityTimeZoneSync } from "../services/cityTimeZone";
+import { evaluateParkingPassBookingTime } from "../services/parkingPassServiceTime";
+import { loadPersistedEventServiceTimeZone } from "../services/persistedServiceTimeZone";
+import { normalizePersistedIanaTimeZone } from "../services/persistedServiceTimeZoneRules";
 import { requireIdempotencyKey } from "../middleware/idempotency";
 import { distributedRateLimit } from "../middleware/distributedRateLimit";
 import { registerHostProfileRoutes } from "./hosts/profileRoutes";
 import { registerHostParkingPassRoutes } from "./hosts/eventsRoutes";
 import { isStaffOrAdminUserType } from "@shared/profileAccessPolicy";
 import { assessParkingPassTruckEligibility } from "../services/parkingPassTruckEligibility";
+import {
+  createParkingPassBlackout,
+  createParkingPassPurchase,
+  deleteParkingPassBlackout,
+  expireStaleParkingPassHolds,
+  ParkingPassBookingError,
+} from "../services/parkingPassBookingService";
+import {
+  isFinancialTestPromoCode,
+  isProductionFinancialTestPromo,
+  isTruthyFinancialTestFlag,
+} from "@shared/financialTestSafety";
 
 const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY)
@@ -137,40 +151,32 @@ export function registerHostRoutes(app: Express) {
   ) => [address, city, state, "USA"].filter(Boolean).join(", ");
 
   const getActiveParkingPassSeriesId = async (hostId: string) => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
     const rows = await db
       .select({
-        seriesId: events.seriesId,
-        date: events.date,
-        breakfastPriceCents: events.breakfastPriceCents,
-        lunchPriceCents: events.lunchPriceCents,
-        dinnerPriceCents: events.dinnerPriceCents,
-        dailyPriceCents: events.dailyPriceCents,
-        weeklyPriceCents: events.weeklyPriceCents,
-        monthlyPriceCents: events.monthlyPriceCents,
+        seriesId: eventSeries.id,
+        timezone: eventSeries.timezone,
+        startDate: eventSeries.startDate,
+        endDate: eventSeries.endDate,
+        status: eventSeries.status,
+        updatedAt: eventSeries.updatedAt,
       })
-      .from(events)
+      .from(eventSeries)
       .where(
         and(
-          eq(events.hostId, hostId),
-          eq(events.requiresPayment, true),
-          gte(events.date, today),
-          isNotNull(events.seriesId),
+          eq(eventSeries.hostId, hostId),
+          eq(eventSeries.seriesType, "parking_pass"),
+          inArray(eventSeries.status, ["published", "draft"] as any),
         ),
       )
-      .orderBy(asc(events.date))
-      .limit(14);
-    const hasActivePricing = (row: (typeof rows)[number]) =>
-      (row.breakfastPriceCents ?? 0) > 0 ||
-      (row.lunchPriceCents ?? 0) > 0 ||
-      (row.dinnerPriceCents ?? 0) > 0 ||
-      (row.dailyPriceCents ?? 0) > 0 ||
-      (row.weeklyPriceCents ?? 0) > 0 ||
-      (row.monthlyPriceCents ?? 0) > 0;
-    const activeRow = rows.find((row: (typeof rows)[number]) =>
-      hasActivePricing(row),
-    );
+      .orderBy(desc(eventSeries.updatedAt), asc(eventSeries.id));
+    const activeRow = rows.find((row: (typeof rows)[number]) => {
+      const timezone = normalizePersistedIanaTimeZone(row.timezone);
+      if (!timezone) return false;
+      const todayKey = dateKeyInZone(new Date(), timezone);
+      const startKey = dateKeyFromUnknown(row.startDate, "UTC");
+      const endKey = dateKeyFromUnknown(row.endDate, "UTC");
+      return (!startKey || startKey <= todayKey) && (!endKey || endKey >= todayKey);
+    });
     return activeRow?.seriesId ?? null;
   };
 
@@ -467,7 +473,10 @@ export function registerHostRoutes(app: Express) {
 
       // Keep the implementation-detail series in sync so bookings are possible via virtual ids.
       try {
-        await storage.syncParkingPassSeriesFromHost(host.id);
+        await storage.syncParkingPassSeriesFromHost(host.id, {
+          actorUserId: String(req.user?.id || "").trim(),
+          requestId: `host-profile-update:${host.id}`,
+        });
       } catch (e) {
         console.warn(
           "syncParkingPassSeriesFromHost failed after host update:",
@@ -655,14 +664,10 @@ export function registerHostRoutes(app: Express) {
         }
         const blackoutDates =
           await storage.getParkingPassBlackoutDates(seriesId);
-        const timezone = resolveCityTimeZoneSync({
-          city: host.city,
-          state: host.state,
-        });
         res.json(
           blackoutDates.map((row: any) => ({
             ...row,
-            dateKey: dateKeyInZone(new Date(row.date), timezone),
+            dateKey: dateKeyFromUnknown(row.date, "UTC"),
           })),
         );
       } catch (error: any) {
@@ -684,30 +689,25 @@ export function registerHostRoutes(app: Express) {
           return res.status(404).json({ message: "Host profile not found" });
         }
 
-        const seriesId = await getActiveParkingPassSeriesId(hostId);
-        if (!seriesId) {
-          return res
-            .status(404)
-            .json({ message: "No active parking pass found." });
-        }
-
-        const timezone = resolveCityTimeZoneSync({
-          city: host.city,
-          state: host.state,
-        });
-        const dateKey = dateKeyFromUnknown(req.body?.date, timezone);
+        const dateKey = dateKeyFromUnknown(req.body?.date, "UTC");
         if (!dateKey) {
           return res.status(400).json({ message: "Valid date required" });
         }
-        const date = utcDateFromDateKey(dateKey);
-
-        const created = await storage.createParkingPassBlackoutDate({
-          seriesId,
-          date,
+        const created = await createParkingPassBlackout({
+          hostId,
+          actorUserId: userId,
+          dateKey,
         });
         res.status(201).json(created);
       } catch (error: any) {
         console.error("Error creating blackout date:", error);
+        if (error instanceof ParkingPassBookingError) {
+          return res.status(error.statusCode).json({
+            message: error.message,
+            code: error.code,
+            details: error.details,
+          });
+        }
         res.status(500).json({ message: "Failed to create blackout date" });
       }
     },
@@ -725,33 +725,25 @@ export function registerHostRoutes(app: Express) {
           return res.status(404).json({ message: "Host profile not found" });
         }
 
-        const timezone = resolveCityTimeZoneSync({
-          city: host.city,
-          state: host.state,
-        });
-        const dateKey = dateKeyFromUnknown(req.body?.date, timezone);
+        const dateKey = dateKeyFromUnknown(req.body?.date, "UTC");
         if (!dateKey) {
           return res.status(400).json({ message: "Valid date required" });
         }
-        const date = utcDateFromDateKey(dateKey);
-        const todayKey = dateKeyInZone(new Date(), timezone);
-        if (dateKey <= todayKey) {
-          return res.status(400).json({
-            message: "Same-day blackout dates cannot be removed.",
-          });
-        }
-
-        const seriesId = await getActiveParkingPassSeriesId(hostId);
-        if (!seriesId) {
-          return res
-            .status(404)
-            .json({ message: "No active parking pass found." });
-        }
-
-        await storage.deleteParkingPassBlackoutDate(seriesId, date);
-        res.json({ message: "Blackout date removed" });
+        const result = await deleteParkingPassBlackout({
+          hostId,
+          actorUserId: userId,
+          dateKey,
+        });
+        res.json({ message: "Blackout date removed", ...result });
       } catch (error: any) {
         console.error("Error deleting blackout date:", error);
+        if (error instanceof ParkingPassBookingError) {
+          return res.status(error.statusCode).json({
+            message: error.message,
+            code: error.code,
+            details: error.details,
+          });
+        }
         res.status(500).json({ message: "Failed to delete blackout date" });
       }
     },
@@ -991,7 +983,7 @@ export function registerHostRoutes(app: Express) {
         if (!stripePayoutReady) {
           return res.status(400).json({
             message:
-              "Complete Stripe onboarding to request payout. Bookings can continue in the meantime.",
+              "Complete Stripe onboarding with charges and payouts enabled. Paid Parking Pass bookings stay unavailable until Stripe reports the account ready.",
             code: "stripe_payout_not_ready",
           });
         }
@@ -1017,6 +1009,20 @@ export function registerHostRoutes(app: Express) {
             await tx.execute(
               sql`SELECT pg_advisory_xact_lock(hashtext(${`host_payout:${host.id}`}))`,
             );
+            const [currentHostOwner] = await tx
+              .select({ id: hosts.id })
+              .from(hosts)
+              .where(
+                and(eq(hosts.id, host.id), eq(hosts.userId, req.user.id)),
+              )
+              .limit(1)
+              .for("update");
+            if (!currentHostOwner) {
+              throw Object.assign(
+                new Error("Current host ownership is required for a payout request."),
+                { statusCode: 403 },
+              );
+            }
 
             const summary = await getHostEarningsSummary(host.id, tx);
             const requestedAmountCents = Number.isFinite(requestedAmountRaw)
@@ -1043,6 +1049,9 @@ export function registerHostRoutes(app: Express) {
                 userId: req.user.id,
                 amountCents: requestedAmountCents,
                 status: "pending",
+                fundingTopology: "legacy_platform_hold",
+                eligibilityState: "eligible_legacy",
+                eligibleAmountSnapshotCents: summary.availableCents,
                 notes,
                 createdAt: new Date(),
                 updatedAt: new Date(),
@@ -1051,8 +1060,8 @@ export function registerHostRoutes(app: Express) {
             return inserted;
           });
         } catch (error: any) {
-          if (error?.statusCode === 400) {
-            return res.status(400).json({
+          if ([400, 403].includes(Number(error?.statusCode))) {
+            return res.status(Number(error.statusCode)).json({
               message: error.message,
               ...(error.availableCents !== undefined
                 ? { availableCents: error.availableCents }
@@ -1093,7 +1102,12 @@ export function registerHostRoutes(app: Express) {
         const requests = await db
           .select()
           .from(hostPayoutRequests)
-          .where(eq(hostPayoutRequests.hostId, host.id))
+          .where(
+            and(
+              eq(hostPayoutRequests.hostId, host.id),
+              sql`coalesce(${hostPayoutRequests.fundingTopology}, 'unclassified') <> 'destination_charge'`,
+            ),
+          )
           .orderBy(sql`${hostPayoutRequests.createdAt} desc`)
           .limit(50);
         res.json({ requests });
@@ -1116,8 +1130,9 @@ export function registerHostRoutes(app: Express) {
     async (req: any, res) => {
       try {
         const testModeEnabled =
-          String(process.env.MEALSCOUT_TEST_MODE || "").toLowerCase() ===
-            "true" || process.env.NODE_ENV !== "production";
+          isTruthyFinancialTestFlag(process.env.MEALSCOUT_TEST_MODE) ||
+          String(process.env.NODE_ENV || "").trim().toLowerCase() !==
+            "production";
         const testPromosRequireAdmin =
           String(
             process.env.MEALSCOUT_TEST_PROMOS_REQUIRE_ADMIN || "",
@@ -1144,13 +1159,8 @@ export function registerHostRoutes(app: Express) {
             bookingFeePromoFlag,
           );
         const bypassStripe =
-          String(process.env.MEALSCOUT_BYPASS_STRIPE || "").toLowerCase() ===
-            "true" ||
-          String(process.env.MEALSCOUT_TEST_MODE || "").toLowerCase() ===
-            "true";
-        if (!stripe && !bypassStripe) {
-          return res.status(500).json({ message: "Stripe not configured" });
-        }
+          isTruthyFinancialTestFlag(process.env.MEALSCOUT_BYPASS_STRIPE) ||
+          isTruthyFinancialTestFlag(process.env.MEALSCOUT_TEST_MODE);
 
         const { passId } = req.params;
         const {
@@ -1170,10 +1180,21 @@ export function registerHostRoutes(app: Express) {
         const normalizedPromoCode = String(promoCode || "")
           .trim()
           .toUpperCase();
-        const isTestDollarPromo =
-          normalizedPromoCode === "TEST1" ||
-          normalizedPromoCode === "FREE100" ||
-          normalizedPromoCode === "SCOUT100";
+        const isTestDollarPromo = isFinancialTestPromoCode(normalizedPromoCode);
+        if (
+          isProductionFinancialTestPromo({
+            nodeEnv: process.env.NODE_ENV,
+            promoCode: normalizedPromoCode,
+          })
+        ) {
+          return res.status(403).json({
+            code: "production_test_promo_forbidden",
+            message: "Test payment promo codes are disabled in production.",
+          });
+        }
+        if (!stripe && !bypassStripe) {
+          return res.status(500).json({ message: "Stripe not configured" });
+        }
         const bookingPromoCodes = new Set([
           "TEST1",
           "FREE100",
@@ -1202,9 +1223,12 @@ export function registerHostRoutes(app: Express) {
               message: "This test promo code is admin-only.",
             });
           }
-          // If admin-only mode is not enabled, allow test promos for verified booking flows.
-          // We intentionally do not hard-block on environment mode here, because Parking Pass
-          // QA in production-like environments needs a no-charge path for verified trucks.
+          if (!testModeEnabled) {
+            return res.status(403).json({
+              code: "test_promo_disabled",
+              message: "Test payment promo codes are disabled.",
+            });
+          }
         }
         if (normalizedPromoCode === "BOOKFEE10" && !bookingFeePromoEnabled) {
           return res
@@ -1380,33 +1404,23 @@ export function registerHostRoutes(app: Express) {
           host.stripePayoutsEnabled &&
           host.stripeOnboardingCompleted,
         );
-        // Host payouts may still be configuring Stripe Connect.
-        // We still allow bookings: if Connect is not ready we charge on platform,
-        // and payouts are handled after host onboarding is completed.
-        const hostStripeAccountId = hostPaymentsEnabled
-          ? host.stripeConnectAccountId
-          : null;
-        const bookingTimeZone = resolveCityTimeZoneSync({
+        if (!hostPaymentsEnabled) {
+          return res.status(409).json({
+            code: "host_connect_not_ready",
+            message:
+              "This host must finish Stripe onboarding with charges and payouts enabled before paid booking.",
+          });
+        }
+        const bookingTimeZone = await loadPersistedEventServiceTimeZone({
+          seriesId: event.seriesId,
           city: host.city,
           state: host.state,
         });
-
-        // Check for existing booking
-        const existingBooking = await db
-          .select()
-          .from(eventBookings)
-          .where(eq(eventBookings.eventId, passId))
-          .where(eq(eventBookings.truckId, truckId))
-          .where(inArray(eventBookings.status, ["pending", "confirmed"]))
-          .limit(1);
-
-        if (existingBooking.length > 0) {
-          return res.status(400).json({
+        if (!bookingTimeZone) {
+          return res.status(409).json({
+            code: "venue_timezone_unavailable",
             message:
-              existingBooking[0].status === "pending"
-                ? "You already have a checkout in progress for this parking pass."
-                : "You already have a booking for this parking pass",
-            bookingId: existingBooking[0].id,
+              "This venue does not have a valid persisted service timezone yet.",
           });
         }
 
@@ -1497,9 +1511,10 @@ export function registerHostRoutes(app: Express) {
             .status(400)
             .json({ message: "Invalid booking dates selected." });
         }
-        const rangeQueryStart = new Date(firstDate);
-        const rangeQueryEnd = new Date(lastDate);
-        rangeQueryEnd.setDate(rangeQueryEnd.getDate() + 1);
+        const rangeQueryStart = utcDateFromDateKey(sortedDateKeys[0]);
+        const rangeQueryEnd = utcDateFromDateKey(
+          addDaysToDateKey(sortedDateKeys[sortedDateKeys.length - 1], 1),
+        );
 
         const parsedVirtualPassId = parseParkingPassVirtualId(passId);
         if (parsedVirtualPassId) {
@@ -1566,25 +1581,28 @@ export function registerHostRoutes(app: Express) {
         }
 
         const now = new Date();
-        const todayStart = new Date(now);
-        todayStart.setHours(0, 0, 0, 0);
-        const nowMinutes = now.getHours() * 60 + now.getMinutes();
+        const minutesToTime = (minutes: number) => {
+          const normalized = ((minutes % (24 * 60)) + 24 * 60) % (24 * 60);
+          return `${String(Math.floor(normalized / 60)).padStart(2, "0")}:${String(normalized % 60).padStart(2, "0")}`;
+        };
 
         for (const dateKey of expectedDateKeys) {
           const row = eventsByDate.get(dateKey);
           if (!row) continue;
-          const rowDate = new Date(row.date);
-          const rowDayStart = new Date(rowDate);
-          rowDayStart.setHours(0, 0, 0, 0);
 
-          if (rowDayStart < todayStart) {
+          const rowTiming = evaluateParkingPassBookingTime({
+            timeZone: bookingTimeZone,
+            date: dateKey,
+            startTime: String(row.startTime || ""),
+            endTime: String(row.endTime || ""),
+            now,
+            policy: "until_service_end",
+          });
+          if (rowTiming.reason === "past_date") {
             return res.status(400).json({
               message: "Cannot book past parking pass dates.",
             });
           }
-
-          const isSameDayBooking =
-            rowDayStart.getTime() === todayStart.getTime();
 
           if (row.status !== "open") {
             return res.status(400).json({
@@ -1598,18 +1616,26 @@ export function registerHostRoutes(app: Express) {
               });
             }
 
-            if (isSameDayBooking) {
-              const window = getSlotWindowMinutesWithCleanup(
-                slotType,
-                row.startTime,
-                row.endTime,
-              );
-              if (!window || window.startMinutes <= nowMinutes) {
-                return res.status(400).json({
-                  message:
-                    "Selected slots must start in the future. Choose a later slot or a different date.",
-                });
-              }
+            const window = getSlotWindowMinutesWithCleanup(
+              slotType,
+              row.startTime,
+              row.endTime,
+            );
+            const timing = window
+              ? evaluateParkingPassBookingTime({
+                  timeZone: bookingTimeZone,
+                  date: dateKey,
+                  startTime: minutesToTime(window.startMinutes),
+                  endTime: minutesToTime(window.startMinutes + 1),
+                  now,
+                  policy: "must_start_in_future",
+                })
+              : null;
+            if (!timing?.eligible) {
+              return res.status(400).json({
+                message:
+                  "Selected slots must start in the future. Choose a later slot or a different date.",
+              });
             }
           }
         }
@@ -1623,22 +1649,27 @@ export function registerHostRoutes(app: Express) {
           ? Math.max(1, Math.min(holdTtlMinutesRaw, 60))
           : 7;
         const holdCutoff = new Date(Date.now() - holdTtlMinutes * 60 * 1000);
-        await db
-          .update(eventBookings)
-          .set({
-            status: "cancelled",
-            stripePaymentStatus: "cancelled",
-            cancelledAt: new Date(),
-            cancellationReason: "Payment not completed (hold expired)",
-            updatedAt: new Date(),
-          })
-          .where(
-            and(
-              eq(eventBookings.truckId, truckId),
-              eq(eventBookings.status, "pending"),
-              lt(eventBookings.createdAt, holdCutoff),
-            ),
-          );
+        const expiry = await expireStaleParkingPassHolds({
+          truckId,
+          before: holdCutoff,
+          stripe,
+        });
+        if (expiry.actionRequired > 0) {
+          return res.status(409).json({
+            message:
+              "A previous paid checkout needs payment reconciliation before another slot can be reserved.",
+            code: "stale_paid_hold_action_required",
+            expiry,
+          });
+        }
+        if (expiry.providerPending > 0) {
+          return res.status(409).json({
+            message:
+              "A previous checkout cancellation is still waiting for payment-provider confirmation. Retry shortly with the same booking request.",
+            code: "stale_paid_hold_provider_pending",
+            expiry,
+          });
+        }
 
         const existingBookings: Array<{
           slotType: string | null;
@@ -1768,7 +1799,7 @@ export function registerHostRoutes(app: Express) {
 
         if (isTestDollarPromo) {
           // Admin/testing-only: force a $1 total booking regardless of slot price.
-          // This is intentionally not available in production unless MEALSCOUT_TEST_MODE is enabled.
+          // This is never available in production, regardless of test flags.
           adjustedHostPriceCents = 0;
           platformFeeCents = 100;
         } else if (normalizedPromoCode === "BOOKFEE10") {
@@ -1786,26 +1817,13 @@ export function registerHostRoutes(app: Express) {
           promoDiscountCents = Math.min(1000, platformFeeCents);
         }
 
-        let creditAppliedCents = 0;
         const requestedCreditCents = isTestDollarPromo
           ? 0
-          : Number(applyCreditsCents || 0);
-        if (requestedCreditCents > 0) {
-          const { getUserCreditBalance } = await import("../creditService");
-          const creditBalance = await getUserCreditBalance(userId);
-          const availableCents = Math.max(0, Math.floor(creditBalance * 100));
-          creditAppliedCents = Math.min(
-            requestedCreditCents,
-            platformFeeCents,
-            availableCents,
-          );
-        }
-
-        const adjustedPlatformFeeCents = Math.max(
-          platformFeeCents - creditAppliedCents - promoDiscountCents,
+          : Math.max(0, Number(applyCreditsCents || 0));
+        const platformFeeBeforeRestrictedCredit = Math.max(
+          platformFeeCents - promoDiscountCents,
           0,
         );
-        const totalCents = adjustedHostPriceCents + adjustedPlatformFeeCents;
 
         const splitAmount = (total: number, days: number) => {
           if (days <= 1) return [total];
@@ -1818,267 +1836,87 @@ export function registerHostRoutes(app: Express) {
 
         const hostSplit = splitAmount(adjustedHostPriceCents, bookingDays);
         const platformSplit = splitAmount(
-          adjustedPlatformFeeCents,
+          platformFeeBeforeRestrictedCredit,
           bookingDays,
         );
-
-        // Create the pending holds inside a DB transaction with row-level locks on each event row.
-        // This prevents two trucks from simultaneously booking the last spot and paying.
-        let insertedHolds: any[] = [];
-        try {
-          insertedHolds = await db.transaction(async (tx: any) => {
-            const now = new Date();
-            const inserted: any[] = [];
-
-            for (let index = 0; index < expectedDateKeys.length; index += 1) {
-              const dateKey = expectedDateKeys[index];
-              const row = eventsByDate.get(dateKey);
-              if (!row) {
-                throw new Error("Missing parking pass date in booking range.");
-              }
-
-              // Lock this event row so capacity checks + hold insert are serialized.
-              await tx.execute(
-                sql`select ${events.id} from ${events} where ${events.id} = ${row.id} for update`,
-              );
-
-              const counts = await tx
-                .select({ count: sql<number>`count(*)` })
-                .from(eventBookings)
-                .where(
-                  and(
-                    eq(eventBookings.eventId, row.id),
-                    inArray(eventBookings.status, ["confirmed", "pending"]),
-                  ),
-                );
-
-              const reservedCount = Number(counts[0]?.count || 0);
-              const hardCapEnabled = Boolean(row.hardCapEnabled);
-              const maxSpots = Math.max(1, Number(row.maxTrucks ?? 1) || 1);
-              if (hardCapEnabled && reservedCount >= maxSpots) {
-                const err: any = new Error(
-                  "This parking pass is fully booked.",
-                );
-                err.code = "FULLY_BOOKED";
-                throw err;
-              }
-
-              const hostCents = hostSplit[index] ?? 0;
-              const feeCents = platformSplit[index] ?? 0;
-
-              const [created] = await tx
-                .insert(eventBookings)
-                .values({
-                  eventId: row.id,
-                  truckId,
-                  hostId: row.hostId,
-                  hostPriceCents: hostCents,
-                  platformFeeCents: feeCents,
-                  totalCents: hostCents + feeCents,
-                  status: "pending",
-                  stripePaymentStatus: "pending",
-                  stripeApplicationFeeAmount: hostStripeAccountId
-                    ? feeCents
-                    : null,
-                  stripeTransferDestination: hostStripeAccountId,
-                  slotType: selectedSlotTypes.join(","),
-                  createdAt: now,
-                  updatedAt: now,
-                })
-                .returning();
-
-              if (!created) {
-                throw new Error("Failed to reserve parking pass hold.");
-              }
-
-              inserted.push(created);
-            }
-
-            return inserted;
-          });
-        } catch (error: any) {
-          if (error?.code === "FULLY_BOOKED") {
-            return res
-              .status(400)
-              .json({ message: "This parking pass is fully booked." });
-          }
-
-          // Unique constraint or race conditions should surface as "already booked" / "in progress".
-          console.error("Failed to create booking holds:", error);
-          return res.status(409).json({
-            message:
-              "Unable to reserve this parking pass right now. Please refresh and try again.",
-          });
-        }
-
-        if (bypassStripe) {
-          const holdIds = insertedHolds.map((row) => row.id);
-          const now = new Date();
-          if (holdIds.length > 0) {
-            await db
-              .update(eventBookings)
-              .set({
-                status: "confirmed",
-                stripePaymentStatus: "bypassed",
-                bookingConfirmedAt: now,
-                paidAt: now,
-                updatedAt: now,
-              })
-              .where(inArray(eventBookings.id, holdIds));
-          }
-
-          if (normalizedPromoCode === "BOOKFEE10") {
-            try {
-              const userRecord = await storage.getUser(userId);
-              const existingSettings =
-                (userRecord?.accountSettings as any) || {};
-              const promos = existingSettings.promos || {};
-              promos.bookingFee10 = {
-                ...(promos.bookingFee10 || {}),
-                redeemedAt: now.toISOString(),
-                redeemedPaymentIntentId: "bypass",
-                discountCents: promoDiscountCents,
-                pendingPaymentIntentId: null,
-                pendingAt: null,
-              };
-              await storage.updateUser(userId, {
-                accountSettings: { ...existingSettings, promos } as any,
-              });
-            } catch {
-              // ignore
-            }
-          }
-
-          return res.json({
-            bypassed: true,
-            bookingIds: holdIds,
-            totalCents,
-            breakdown: {
-              hostPrice: adjustedHostPriceCents,
-              platformFee: adjustedPlatformFeeCents,
-              creditsApplied: creditAppliedCents,
-              promoDiscount: promoDiscountCents,
-              promoCode: normalizedPromoCode || undefined,
-            },
-          });
-        }
-
-        // Create Stripe PaymentIntent.
-        // Always create the intent on the platform account so the existing client Payment Element
-        // can confirm with the platform publishable key. When host payouts are ready, attach
-        // transfer_data.destination and application_fee_amount as a destination charge.
-        // Otherwise, charge on the platform and record host earnings for later payout.
-        if (!stripe) {
-          return res.status(500).json({ message: "Stripe is not configured" });
-        }
-
-        let paymentIntent: Stripe.PaymentIntent;
-        try {
-          const intentParams: Stripe.PaymentIntentCreateParams = {
-            amount: totalCents,
-            currency: "usd",
-            metadata: {
-              passId: event.id,
-              hostId: host.id,
-              truckId,
-              userId,
-              slotTypes: selectedSlotTypes.join(","),
-              bookingDays: bookingDays.toString(),
-              bookingStartDate: sortedDateKeys[0],
-              hostPriceCents: adjustedHostPriceCents.toString(),
-              platformFeeCents: adjustedPlatformFeeCents.toString(),
-              totalCents: totalCents.toString(),
-              creditAppliedCents: creditAppliedCents.toString(),
-              bookingPromoCode: normalizedPromoCode || "",
-              bookingPromoDiscountCents: promoDiscountCents.toString(),
-            },
-          };
-
-          if (hostStripeAccountId) {
-            intentParams.application_fee_amount = adjustedPlatformFeeCents;
-            intentParams.transfer_data = {
-              destination: hostStripeAccountId,
-            };
-          }
-
-          paymentIntent = await stripe.paymentIntents.create(intentParams);
-        } catch (error: any) {
-          // Preserve booking intent for manual follow-up if Stripe fails.
-          try {
-            const holdIds = insertedHolds.map((row) => row.id);
-            if (holdIds.length > 0) {
-              await db
-                .update(eventBookings)
-                .set({
-                  status: "cancelled",
-                  cancelledAt: new Date(),
-                  cancellationReason:
-                    "payment_pending_manual_review: Payment setup failed",
-                  stripePaymentStatus: "payment_pending",
-                  updatedAt: new Date(),
-                })
-                .where(inArray(eventBookings.id, holdIds));
-            }
-          } catch (cleanupError) {
-            console.error(
-              "Failed to cancel holds after Stripe failure:",
-              cleanupError,
+        const preparedLines = expectedDateKeys.map((dateKey, index) => {
+          const row = eventsByDate.get(dateKey);
+          if (!row) {
+            throw new ParkingPassBookingError(
+              409,
+              "booking_line_not_eligible",
+              "One of the selected Parking Pass dates is no longer available.",
             );
           }
-          console.error("[parking-pass-booking] Stripe PaymentIntent creation failed", {
-            passId: event.id,
-            hostId: host.id,
-            truckId,
-            userId,
-            holdCount: insertedHolds.length,
-            failureReason: error?.message || "stripe_create_failed",
-          });
-          const holdIds = insertedHolds.map((row) => row.id);
-          return res.status(202).json({
-            paymentPending: true,
-            bookingIds: holdIds,
-            message:
-              "Your spot request was received. We'll send payment instructions.",
-          });
-        }
+          return {
+            eventId: row.id,
+            hostPriceCents: hostSplit[index] ?? 0,
+            platformFeeCents: platformSplit[index] ?? 0,
+            slotType: selectedSlotTypes.join(","),
+          };
+        });
 
-        const holdIds = insertedHolds.map((row) => row.id);
-        if (holdIds.length > 0) {
-          await db
-            .update(eventBookings)
-            .set({
-              stripePaymentIntentId: paymentIntent.id,
-              updatedAt: new Date(),
-            })
-            .where(inArray(eventBookings.id, holdIds));
+        const purchaseResult = await createParkingPassPurchase({
+          purchaserUserId: userId,
+          truckId,
+          hostId: host.id,
+          idempotencyKey: String(req.headers["idempotency-key"] || "").trim(),
+          requestedCreditCents,
+          lines: preparedLines,
+          stripe,
+          bypassProvider: bypassStripe,
+          metadata: {
+            passId: event.id,
+            slotTypes: selectedSlotTypes.join(","),
+            bookingDays: bookingDays.toString(),
+            bookingStartDate: sortedDateKeys[0],
+            bookingPromoCode: normalizedPromoCode || "",
+            bookingPromoDiscountCents: promoDiscountCents.toString(),
+          },
+        });
+
+        if (purchaseResult.bypassed && normalizedPromoCode === "BOOKFEE10") {
+          try {
+            const now = new Date();
+            const userRecord = await storage.getUser(userId);
+            const existingSettings = (userRecord?.accountSettings as any) || {};
+            const promos = existingSettings.promos || {};
+            promos.bookingFee10 = {
+              ...(promos.bookingFee10 || {}),
+              redeemedAt: now.toISOString(),
+              redeemedPaymentIntentId: "bypass",
+              discountCents: promoDiscountCents,
+              pendingPaymentIntentId: null,
+              pendingAt: null,
+            };
+            await storage.updateUser(userId, {
+              accountSettings: { ...existingSettings, promos } as any,
+            });
+          } catch {
+            // Promo persistence is best effort; the purchase idempotency remains authoritative.
+          }
         }
 
         res.json({
-          clientSecret: paymentIntent.client_secret,
-          paymentIntentId: paymentIntent.id,
-          totalCents,
-          // hostPaymentsReady: true means the host has a fully-onboarded Stripe Connect
-          // account and will receive their payout immediately after the booking is confirmed.
-          // false means the payment is charged to the MealScout platform account and the
-          // host payout will be processed once they complete Stripe Connect onboarding.
-          hostPaymentsReady: hostPaymentsEnabled,
+          ...purchaseResult,
           breakdown: {
-            hostPrice: adjustedHostPriceCents,
-            platformFee: adjustedPlatformFeeCents,
-            creditsApplied: creditAppliedCents,
+            ...purchaseResult.breakdown,
             promoDiscount: promoDiscountCents,
             promoCode: normalizedPromoCode || undefined,
           },
         });
 
-        if (normalizedPromoCode === "BOOKFEE10") {
+        if (
+          normalizedPromoCode === "BOOKFEE10" &&
+          purchaseResult.paymentIntentId
+        ) {
           try {
             const userRecord = await storage.getUser(userId);
             const existingSettings = (userRecord?.accountSettings as any) || {};
             const promos = existingSettings.promos || {};
             promos.bookingFee10 = {
               ...(promos.bookingFee10 || {}),
-              pendingPaymentIntentId: paymentIntent.id,
+              pendingPaymentIntentId: purchaseResult.paymentIntentId,
               pendingAt: new Date().toISOString(),
               discountCents: promoDiscountCents,
             };
@@ -2093,6 +1931,13 @@ export function registerHostRoutes(app: Express) {
           }
         }
       } catch (error: any) {
+        if (error instanceof ParkingPassBookingError) {
+          return res.status(error.statusCode).json({
+            code: error.code,
+            message: error.message,
+            ...(error.details ? { details: error.details } : {}),
+          });
+        }
         console.error("Error creating booking:", error);
         res.status(500).json({ message: "Failed to create booking" });
       }

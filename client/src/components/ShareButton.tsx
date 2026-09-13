@@ -16,7 +16,7 @@ interface ShareButtonProps {
   imageUrl?: string;
 }
 
-export function ShareButton({ title, description, url, imageUrl }: ShareButtonProps) {
+export function LegacyShareButton({ title, description, url, imageUrl }: ShareButtonProps) {
   const { toast } = useToast();
   const getShareUrl = async () => getAffiliateShareUrl(url);
 

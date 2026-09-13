@@ -298,6 +298,51 @@ export const merchantDeliverySettings = pgTable(
   (table) => [index("idx_merchant_delivery_enabled").on(table.enabled)],
 );
 
+// Native ordering approval is a separate, durable lifecycle from generic
+// business verification. A request captures the exact authority revision that
+// an administrator must re-check before granting ordering authority.
+export const orderingReviewRequests = pgTable(
+  "ordering_review_requests",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    restaurantId: varchar("restaurant_id")
+      .notNull()
+      .references(() => restaurants.id, { onDelete: "cascade" }),
+    requesterUserId: varchar("requester_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    submittedAuthorityVersion: integer("submitted_authority_version").notNull(),
+    acknowledgementMinutes: integer("acknowledgement_minutes").notNull(),
+    evidenceUrl: text("evidence_url").notNull(),
+    readinessSnapshot: jsonb("readiness_snapshot")
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    status: varchar("status").notNull().default("pending"), // pending | approved | rejected | superseded
+    idempotencyKey: varchar("idempotency_key").notNull(),
+    reviewerUserId: varchar("reviewer_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    reviewNote: text("review_note"),
+    rejectionReason: text("rejection_reason"),
+    reviewedAt: timestamp("reviewed_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_ordering_review_restaurant").on(
+      table.restaurantId,
+      table.createdAt,
+    ),
+    index("idx_ordering_review_status").on(table.status, table.createdAt),
+    unique("uq_ordering_review_request_idempotency").on(
+      table.restaurantId,
+      table.idempotencyKey,
+    ),
+  ],
+);
+
 export const businessStaffInvites = pgTable(
   "business_staff_invites",
   {
@@ -3444,6 +3489,87 @@ export const hosts = pgTable(
   ],
 );
 
+// One provider charge owns every dated Parking Pass allocation created by the
+// checkout. New rows are destination charges only; historical platform-held
+// money remains outside this aggregate in the isolated legacy reconciliation
+// path.
+export const parkingPassPurchases = pgTable(
+  "parking_pass_purchases",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    purchaserUserId: varchar("purchaser_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    truckId: varchar("truck_id")
+      .notNull()
+      .references(() => restaurants.id, { onDelete: "restrict" }),
+    hostId: varchar("host_id")
+      .notNull()
+      .references(() => hosts.id, { onDelete: "restrict" }),
+    currency: varchar("currency").notNull().default("usd"),
+    hostAmountCents: integer("host_amount_cents").notNull(),
+    platformFeeCents: integer("platform_fee_cents").notNull(),
+    chargedAmountCents: integer("charged_amount_cents").notNull(),
+    refundedAmountCents: integer("refunded_amount_cents").notNull().default(0),
+    cancellationCreditIssuedCents: integer(
+      "cancellation_credit_issued_cents",
+    )
+      .notNull()
+      .default(0),
+    creditAppliedCents: integer("credit_applied_cents").notNull().default(0),
+    settlementTopology: varchar("settlement_topology")
+      .notNull()
+      .default("destination_charge"),
+    settlementStatus: varchar("settlement_status")
+      .notNull()
+      .default("pending"), // pending | transferred_to_connect | reversed | partially_reversed | disputed | failed
+    status: varchar("status").notNull().default("pending"), // pending | confirmed | partially_cancelled | cancelled | partially_refunded | refunded | disputed | payment_failed
+    stripePaymentIntentId: varchar("stripe_payment_intent_id"),
+    stripeChargeId: varchar("stripe_charge_id"),
+    stripeTransferId: varchar("stripe_transfer_id"),
+    stripeApplicationFeeId: varchar("stripe_application_fee_id"),
+    stripeDestinationAccountId: varchar("stripe_destination_account_id")
+      .notNull(),
+    idempotencyKey: varchar("idempotency_key").notNull(),
+    requestDigest: varchar("request_digest").notNull(),
+    allocationDigest: varchar("allocation_digest").notNull(),
+    allocationLineCount: integer("allocation_line_count").notNull(),
+    providerLifecycleState: varchar("provider_lifecycle_state")
+      .notNull()
+      .default("create_prepared"), // create_prepared | create_submitted | provider_created | bind_pending | bound | cancel_pending | action_required | closed
+    disputeState: varchar("dispute_state").notNull().default("none"),
+    stripeDisputeId: varchar("stripe_dispute_id"),
+    disputeOutcome: varchar("dispute_outcome"),
+    providerErrorCode: varchar("provider_error_code"),
+    providerErrorMessage: text("provider_error_message"),
+    paidAt: timestamp("paid_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_parking_pass_purchase_purchaser").on(
+      table.purchaserUserId,
+      table.createdAt,
+    ),
+    index("idx_parking_pass_purchase_truck").on(table.truckId, table.createdAt),
+    index("idx_parking_pass_purchase_host").on(table.hostId, table.createdAt),
+    index("idx_parking_pass_purchase_status").on(table.status, table.updatedAt),
+    index("idx_parking_pass_purchase_lifecycle").on(
+      table.providerLifecycleState,
+      table.updatedAt,
+    ),
+    unique("uq_parking_pass_purchase_idempotency").on(
+      table.purchaserUserId,
+      table.idempotencyKey,
+    ),
+    unique("uq_parking_pass_purchase_intent").on(
+      table.stripePaymentIntentId,
+    ),
+  ],
+);
+
 // Track every link shared by a user (for affiliate analytics)
 export const affiliateShareEvents = pgTable(
   "affiliate_share_events",
@@ -3528,6 +3654,12 @@ export const eventSeries = pgTable(
         onDelete: "set null",
       },
     ),
+    participationVersion: integer("participation_version").notNull().default(0),
+    activeParticipationMutationId: varchar("active_participation_mutation_id"),
+    participationSuppressedAt: timestamp("participation_suppressed_at"),
+    participationSuppressionReason: text("participation_suppression_reason"),
+    activePublicationOperationId: varchar("active_publication_operation_id"),
+    publicationSuppressedAt: timestamp("publication_suppressed_at"),
     name: varchar("name").notNull(), // e.g. "Summer Market Series"
     description: text("description"),
     timezone: varchar("timezone").notNull().default("America/New_York"), // IANA timezone
@@ -3575,6 +3707,12 @@ export const eventSeries = pgTable(
   (table) => [
     index("idx_event_series_host").on(table.hostId),
     index("idx_event_series_coordinator_user").on(table.coordinatorUserId),
+    index("idx_event_series_active_mutation").on(
+      table.activeParticipationMutationId,
+    ),
+    index("idx_event_series_active_publication").on(
+      table.activePublicationOperationId,
+    ),
     index("idx_event_series_status").on(table.status),
     index("idx_event_series_dates").on(table.startDate, table.endDate),
   ],
@@ -3595,6 +3733,13 @@ export const events = pgTable(
         onDelete: "set null",
       },
     ),
+    participationVersion: integer("participation_version").notNull().default(0),
+    activeParticipationMutationId: varchar("active_participation_mutation_id"),
+    participationSuppressedAt: timestamp("participation_suppressed_at"),
+    participationSuppressionReason: text("participation_suppression_reason"),
+    publicationOperationId: varchar("publication_operation_id"),
+    publicationDateKey: varchar("publication_date_key"),
+    publicationPayloadDigest: varchar("publication_payload_digest"),
     seriesId: varchar("series_id").references(() => eventSeries.id, {
       onDelete: "set null",
     }), // Open Calls: FK to parent series
@@ -3631,6 +3776,10 @@ export const events = pgTable(
   (table) => [
     index("idx_events_host").on(table.hostId),
     index("idx_events_coordinator_user").on(table.coordinatorUserId),
+    index("idx_events_active_mutation").on(
+      table.activeParticipationMutationId,
+    ),
+    index("idx_events_publication_operation").on(table.publicationOperationId),
     index("idx_events_series").on(table.seriesId),
     index("idx_events_date").on(table.date),
     index("idx_events_status").on(table.status),
@@ -3638,6 +3787,159 @@ export const events = pgTable(
     index("idx_events_booked_restaurant").on(table.bookedRestaurantId),
     index("idx_events_requires_payment").on(table.requiresPayment),
     index("idx_events_last_confirmed").on(table.lastConfirmedAt),
+  ],
+);
+
+// Open-call publication is a durable parent/fixed-child saga. Occurrences are
+// inserted as private drafts and become public together with the parent only
+// after the exact frozen set converges.
+export const eventSeriesPublicationOperations = pgTable(
+  "event_series_publication_operations",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    seriesId: varchar("series_id")
+      .notNull()
+      .references(() => eventSeries.id, { onDelete: "restrict" }),
+    requestId: varchar("request_id").notNull(),
+    idempotencyKey: varchar("idempotency_key").notNull(),
+    requestDigest: varchar("request_digest").notNull(),
+    actorUserId: varchar("actor_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    authoritySnapshot: jsonb("authority_snapshot")
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    expectedParticipationVersion: integer("expected_participation_version")
+      .notNull()
+      .default(0),
+    targetDateKeys: jsonb("target_date_keys")
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    targetSetDigest: varchar("target_set_digest").notNull(),
+    expectedChildCount: integer("expected_child_count").notNull(),
+    status: varchar("status").notNull().default("prepared"),
+    failureCode: varchar("failure_code"),
+    failureMessage: text("failure_message"),
+    recoveryRequestedAt: timestamp("recovery_requested_at"),
+    recoveryClaimedAt: timestamp("recovery_claimed_at"),
+    recoveryClaimedBy: varchar("recovery_claimed_by"),
+    attemptCount: integer("attempt_count").notNull().default(0),
+    completedAt: timestamp("completed_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    unique("uq_event_series_publication_request").on(
+      table.seriesId,
+      table.requestId,
+    ),
+    unique("uq_event_series_publication_idempotency").on(table.idempotencyKey),
+    index("idx_event_series_publication_recovery").on(
+      table.status,
+      table.recoveryRequestedAt,
+      table.updatedAt,
+    ),
+  ],
+);
+
+export const eventSeriesPublicationChildren = pgTable(
+  "event_series_publication_children",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    operationId: varchar("operation_id")
+      .notNull()
+      .references(() => eventSeriesPublicationOperations.id, {
+        onDelete: "restrict",
+      }),
+    seriesId: varchar("series_id")
+      .notNull()
+      .references(() => eventSeries.id, { onDelete: "restrict" }),
+    expectedEventId: varchar("expected_event_id").notNull(),
+    eventId: varchar("event_id").references(() => events.id, {
+      onDelete: "restrict",
+    }),
+    dateKey: varchar("date_key").notNull(),
+    hostId: varchar("host_id")
+      .notNull()
+      .references(() => hosts.id, { onDelete: "restrict" }),
+    coordinatorUserId: varchar("coordinator_user_id").references(
+      () => users.id,
+      { onDelete: "restrict" },
+    ),
+    name: varchar("name").notNull(),
+    description: text("description"),
+    startTime: varchar("start_time").notNull(),
+    endTime: varchar("end_time").notNull(),
+    maxTrucks: integer("max_trucks").notNull(),
+    hardCapEnabled: boolean("hard_cap_enabled").notNull(),
+    eventType: varchar("event_type").notNull(),
+    requiresPayment: boolean("requires_payment").notNull(),
+    payloadDigest: varchar("payload_digest").notNull(),
+    status: varchar("status").notNull().default("prepared"),
+    attemptCount: integer("attempt_count").notNull().default(0),
+    failureCode: varchar("failure_code"),
+    failureMessage: text("failure_message"),
+    completedAt: timestamp("completed_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    unique("uq_event_series_publication_child_date").on(
+      table.operationId,
+      table.dateKey,
+    ),
+    unique("uq_event_series_occurrence_date").on(table.seriesId, table.dateKey),
+    unique("uq_event_series_publication_expected_event").on(
+      table.expectedEventId,
+    ),
+    index("idx_event_series_publication_child_recovery").on(
+      table.status,
+      table.updatedAt,
+    ),
+  ],
+);
+
+// Durable per-recipient delivery identity for legacy event email paths. A
+// provider-attempted ambiguous result is terminal until an audited provider
+// reconciliation proves the exact message identity; it is never blind resent.
+export const eventNotificationDeliveries = pgTable(
+  "event_notification_deliveries",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    notificationKind: varchar("notification_kind").notNull(),
+    subjectId: varchar("subject_id").notNull(),
+    recipientKey: varchar("recipient_key").notNull(),
+    recipientUserId: varchar("recipient_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    recipientEmail: varchar("recipient_email").notNull(),
+    payloadDigest: varchar("payload_digest").notNull(),
+    idempotencyKey: varchar("idempotency_key").notNull(),
+    serviceTimeZone: varchar("service_timezone").notNull(),
+    serviceDateKey: varchar("service_date_key").notNull(),
+    status: varchar("status").notNull().default("prepared"),
+    claimToken: varchar("claim_token"),
+    claimedAt: timestamp("claimed_at"),
+    attemptCount: integer("attempt_count").notNull().default(0),
+    providerStatus: varchar("provider_status"),
+    providerMessageId: varchar("provider_message_id"),
+    failureMessage: text("failure_message"),
+    completedAt: timestamp("completed_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    unique("uq_event_notification_recipient").on(
+      table.notificationKind,
+      table.subjectId,
+      table.recipientKey,
+    ),
+    unique("uq_event_notification_idempotency").on(table.idempotencyKey),
+    index("idx_event_notification_recovery").on(
+      table.status,
+      table.claimedAt,
+      table.updatedAt,
+    ),
   ],
 );
 
@@ -3721,9 +4023,16 @@ export const eventBookings = pgTable(
     hostId: varchar("host_id")
       .notNull()
       .references(() => hosts.id, { onDelete: "cascade" }),
+    purchaseId: varchar("purchase_id").references(
+      () => parkingPassPurchases.id,
+      { onDelete: "restrict" },
+    ),
+    allocationOrdinal: integer("allocation_ordinal"),
+    allocationDigest: varchar("allocation_digest"),
     // Pricing (locked at booking time so changes don't affect existing bookings)
     hostPriceCents: integer("host_price_cents").notNull(), // What host set
     platformFeeCents: integer("platform_fee_cents").notNull().default(1000), // Always $10
+    creditAppliedCents: integer("credit_applied_cents").notNull().default(0), // restricted Parking Pass fee credit allocated to this line
     slotType: varchar("slot_type"),
     totalCents: integer("total_cents").notNull(), // host_price + platform_fee (what truck pays)
     // Payment status
@@ -3737,10 +4046,50 @@ export const eventBookings = pgTable(
     ).default(1000), // Always $10 to platform
     stripeTransferDestination: varchar("stripe_transfer_destination"), // Host's Stripe Connect account ID
     // Refunds
-    refundStatus: varchar("refund_status").default("none"), // 'none' | 'partial' | 'full'
+    refundStatus: varchar("refund_status").default("none"), // none | pending | processing | partially_refunded | refunded | failed | legacy credit values
     refundAmountCents: integer("refund_amount_cents"),
+    cashRefundedCents: integer("cash_refunded_cents").notNull().default(0),
+    hostTransferReversedCents: integer("host_transfer_reversed_cents")
+      .notNull()
+      .default(0),
+    applicationFeeRefundedCents: integer(
+      "application_fee_refunded_cents",
+    )
+      .notNull()
+      .default(0),
+    restoredCreditCents: integer("restored_credit_cents").notNull().default(0),
+    settlementState: varchar("settlement_state")
+      .notNull()
+      .default("unsettled"),
     refundedAt: timestamp("refunded_at"),
     refundReason: text("refund_reason"),
+    cancellationCreditIssuedCents: integer(
+      "cancellation_credit_issued_cents",
+    )
+      .notNull()
+      .default(0),
+    cancellationActorType: varchar("cancellation_actor_type"),
+    cancellationActorUserId: varchar("cancellation_actor_user_id").references(
+      () => users.id,
+      { onDelete: "set null" },
+    ),
+    cancellationPolicy: varchar("cancellation_policy"),
+    settlementTopology: varchar("settlement_topology"),
+    publicLocationConsentSnapshot: boolean(
+      "public_location_consent_snapshot",
+    )
+      .notNull()
+      .default(false),
+    arrivalState: varchar("arrival_state").notNull().default("not_captured"), // not_captured | acknowledged | arrival_change_pending | operator_cancelled
+    currentArrivalVersionId: varchar("current_arrival_version_id"),
+    pendingArrivalVersionId: varchar("pending_arrival_version_id"),
+    eventParticipationVersion: integer("event_participation_version")
+      .notNull()
+      .default(0),
+    activeEventMutationId: varchar("active_event_mutation_id"),
+    participationVisibilityState: varchar("participation_visibility_state")
+      .notNull()
+      .default("eligible"), // eligible | suppressed | action_required
     // Metadata
     spotNumber: integer("spot_number"),
     bookingConfirmedAt: timestamp("booking_confirmed_at"),
@@ -3755,9 +4104,513 @@ export const eventBookings = pgTable(
     index("idx_bookings_host").on(table.hostId),
     index("idx_bookings_status").on(table.status),
     index("idx_bookings_payment_intent").on(table.stripePaymentIntentId),
+    index("idx_bookings_purchase").on(table.purchaseId),
+    unique("uq_bookings_purchase_ordinal").on(
+      table.purchaseId,
+      table.allocationOrdinal,
+    ),
+    index("idx_bookings_arrival_state").on(table.arrivalState),
+    index("idx_bookings_active_event_mutation").on(
+      table.activeEventMutationId,
+    ),
+    index("idx_bookings_participation_visibility").on(
+      table.participationVisibilityState,
+    ),
     index("idx_bookings_created").on(table.createdAt),
     // One booking per truck per event
     unique("uq_bookings_event_truck").on(table.eventId, table.truckId),
+  ],
+);
+
+// Selected-line cancellation/refund/credit requests converge through one
+// idempotent operation record. Provider state is recorded separately from the
+// booking cancellation decision so a failed refund is never shown complete.
+export const parkingPassCancellationOperations = pgTable(
+  "parking_pass_cancellation_operations",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    purchaseId: varchar("purchase_id")
+      .notNull()
+      .references(() => parkingPassPurchases.id, { onDelete: "restrict" }),
+    requestId: varchar("request_id").notNull(),
+    idempotencyKey: varchar("idempotency_key").notNull(),
+    bookingLineIds: jsonb("booking_line_ids")
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    requestDigest: varchar("request_digest").notNull(),
+    allocationDigest: varchar("allocation_digest").notNull(),
+    actorSnapshot: jsonb("actor_snapshot").notNull().default(sql`'{}'::jsonb`),
+    policyFacts: jsonb("policy_facts").notNull().default(sql`'{}'::jsonb`),
+    actorType: varchar("actor_type").notNull(),
+    actorUserId: varchar("actor_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    reason: text("reason").notNull(),
+    policyTrigger: varchar("policy_trigger").notNull(),
+    remedy: varchar("remedy").notNull(), // release | restricted_credit | cash_refund | none
+    amountCents: integer("amount_cents").notNull().default(0),
+    expectedPaymentIntentId: varchar("expected_payment_intent_id"),
+    expectedChargeId: varchar("expected_charge_id"),
+    expectedCurrency: varchar("expected_currency").notNull().default("usd"),
+    expectedCashRefundCents: integer("expected_cash_refund_cents")
+      .notNull()
+      .default(0),
+    expectedHostReversalCents: integer("expected_host_reversal_cents")
+      .notNull()
+      .default(0),
+    expectedApplicationFeeRefundCents: integer(
+      "expected_application_fee_refund_cents",
+    )
+      .notNull()
+      .default(0),
+    expectedDestinationAccountId: varchar(
+      "expected_destination_account_id",
+    ),
+    status: varchar("status").notNull().default("pending"), // pending | processing | failed_action_required | provider_confirmed | credit_issued | released | no_remedy
+    stripeRefundId: varchar("stripe_refund_id"),
+    providerStatus: varchar("provider_status"),
+    providerErrorCode: varchar("provider_error_code"),
+    providerErrorMessage: text("provider_error_message"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    completedAt: timestamp("completed_at"),
+    actionRequiredAt: timestamp("action_required_at"),
+  },
+  (table) => [
+    index("idx_parking_pass_operation_purchase").on(
+      table.purchaseId,
+      table.createdAt,
+    ),
+    index("idx_parking_pass_operation_status").on(table.status, table.updatedAt),
+    unique("uq_parking_pass_operation_request").on(
+      table.purchaseId,
+      table.requestId,
+    ),
+    unique("uq_parking_pass_operation_idempotency").on(table.idempotencyKey),
+    unique("uq_parking_pass_operation_refund").on(table.stripeRefundId),
+  ],
+);
+
+// Provider mutations are sagas, not incidental network calls. The operation is
+// written before contacting Stripe and binds the immutable financial identity;
+// each provider object mutation is then converged by a separately durable step.
+export const parkingPassProviderOperations = pgTable(
+  "parking_pass_provider_operations",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    purchaseId: varchar("purchase_id")
+      .notNull()
+      .references(() => parkingPassPurchases.id, { onDelete: "restrict" }),
+    cancellationOperationId: varchar("cancellation_operation_id").references(
+      () => parkingPassCancellationOperations.id,
+      { onDelete: "restrict" },
+    ),
+    operationKind: varchar("operation_kind").notNull(),
+    requestId: varchar("request_id").notNull(),
+    idempotencyKey: varchar("idempotency_key").notNull(),
+    requestDigest: varchar("request_digest").notNull(),
+    status: varchar("status").notNull().default("prepared"),
+    policyTrigger: varchar("policy_trigger"),
+    actorType: varchar("actor_type").notNull(),
+    actorUserId: varchar("actor_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    sortedLineIds: jsonb("sorted_line_ids").notNull().default(sql`'[]'::jsonb`),
+    allocationDigest: varchar("allocation_digest").notNull(),
+    expectedPaymentIntentId: varchar("expected_payment_intent_id"),
+    expectedChargeId: varchar("expected_charge_id"),
+    expectedCurrency: varchar("expected_currency").notNull(),
+    expectedAmountCents: integer("expected_amount_cents").notNull(),
+    expectedHostAmountCents: integer("expected_host_amount_cents")
+      .notNull()
+      .default(0),
+    expectedApplicationFeeCents: integer("expected_application_fee_cents")
+      .notNull()
+      .default(0),
+    expectedDestinationAccountId: varchar(
+      "expected_destination_account_id",
+    ).notNull(),
+    providerPaymentIntentId: varchar("provider_payment_intent_id"),
+    providerChargeId: varchar("provider_charge_id"),
+    providerTransferId: varchar("provider_transfer_id"),
+    providerApplicationFeeId: varchar("provider_application_fee_id"),
+    providerDisputeId: varchar("provider_dispute_id"),
+    providerStatus: varchar("provider_status"),
+    providerErrorCode: varchar("provider_error_code"),
+    providerErrorMessage: text("provider_error_message"),
+    idempotencyExpiresAt: timestamp("idempotency_expires_at").notNull(),
+    attemptCount: integer("attempt_count").notNull().default(0),
+    lastAttemptAt: timestamp("last_attempt_at"),
+    completedAt: timestamp("completed_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_parking_pass_provider_operation_recovery").on(
+      table.status,
+      table.updatedAt,
+    ),
+    index("idx_parking_pass_provider_operation_purchase").on(
+      table.purchaseId,
+      table.createdAt,
+    ),
+    unique("uq_parking_pass_provider_operation_request").on(
+      table.purchaseId,
+      table.operationKind,
+      table.requestId,
+    ),
+    unique("uq_parking_pass_provider_operation_idempotency").on(
+      table.idempotencyKey,
+    ),
+    unique("uq_parking_pass_provider_operation_dispute").on(
+      table.providerDisputeId,
+    ),
+  ],
+);
+
+export const parkingPassProviderOperationSteps = pgTable(
+  "parking_pass_provider_operation_steps",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    operationId: varchar("operation_id")
+      .notNull()
+      .references(() => parkingPassProviderOperations.id, {
+        onDelete: "restrict",
+      }),
+    stepType: varchar("step_type").notNull(),
+    stepOrder: integer("step_order").notNull(),
+    status: varchar("status").notNull().default("prepared"),
+    idempotencyKey: varchar("idempotency_key").notNull(),
+    requestDigest: varchar("request_digest").notNull(),
+    allocationDigest: varchar("allocation_digest").notNull(),
+    policyTrigger: varchar("policy_trigger"),
+    expectedPaymentIntentId: varchar("expected_payment_intent_id"),
+    expectedChargeId: varchar("expected_charge_id"),
+    expectedCurrency: varchar("expected_currency").notNull(),
+    expectedAmountCents: integer("expected_amount_cents").notNull(),
+    expectedDestinationAccountId: varchar(
+      "expected_destination_account_id",
+    ).notNull(),
+    expectedApplicationFeeCents: integer("expected_application_fee_cents")
+      .notNull()
+      .default(0),
+    providerObjectId: varchar("provider_object_id"),
+    providerPaymentIntentId: varchar("provider_payment_intent_id"),
+    providerChargeId: varchar("provider_charge_id"),
+    providerTransferId: varchar("provider_transfer_id"),
+    providerTransferReversalId: varchar("provider_transfer_reversal_id"),
+    providerApplicationFeeId: varchar("provider_application_fee_id"),
+    providerApplicationFeeRefundId: varchar(
+      "provider_application_fee_refund_id",
+    ),
+    providerRefundId: varchar("provider_refund_id"),
+    providerDisputeId: varchar("provider_dispute_id"),
+    attemptCount: integer("attempt_count").notNull().default(0),
+    submittedAt: timestamp("submitted_at"),
+    confirmedAt: timestamp("confirmed_at"),
+    providerErrorCode: varchar("provider_error_code"),
+    providerErrorMessage: text("provider_error_message"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_parking_pass_provider_step_recovery").on(
+      table.status,
+      table.updatedAt,
+    ),
+    unique("uq_parking_pass_provider_step_kind").on(
+      table.operationId,
+      table.stepType,
+    ),
+    unique("uq_parking_pass_provider_step_idempotency").on(
+      table.idempotencyKey,
+    ),
+  ],
+);
+
+// Restricted non-cash cancellation credit. Reserved debits prevent concurrent
+// checkouts from spending the same balance; released reservations do not affect
+// the available amount. This ledger never represents a cash refund.
+export const parkingPassCreditLedger = pgTable(
+  "parking_pass_credit_ledger",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    userId: varchar("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    purchaseId: varchar("purchase_id").references(
+      () => parkingPassPurchases.id,
+      { onDelete: "restrict" },
+    ),
+    bookingId: varchar("booking_id").references(() => eventBookings.id, {
+      onDelete: "restrict",
+    }),
+    operationId: varchar("operation_id").references(
+      () => parkingPassCancellationOperations.id,
+      { onDelete: "restrict" },
+    ),
+    amountCents: integer("amount_cents").notNull(),
+    entryType: varchar("entry_type").notNull(), // cancellation_credit | booking_fee_consumption | non_service_credit_restoration | release | adjustment
+    state: varchar("state").notNull().default("posted"), // reserved | posted | released
+    idempotencyKey: varchar("idempotency_key").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_parking_pass_credit_user").on(table.userId, table.createdAt),
+    index("idx_parking_pass_credit_purchase").on(table.purchaseId),
+    unique("uq_parking_pass_credit_idempotency").on(table.idempotencyKey),
+  ],
+);
+
+// Exact booked-party arrival data is append-only and never reused as an
+// anonymous map serializer. A material proposed version remains pending until
+// the truck team acknowledges it or the deadline recovery cancels/refunds.
+export const parkingPassArrivalVersions = pgTable(
+  "parking_pass_arrival_versions",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    bookingId: varchar("booking_id")
+      .notNull()
+      .references(() => eventBookings.id, { onDelete: "restrict" }),
+    version: integer("version").notNull(),
+    supersedesVersionId: varchar("supersedes_version_id"),
+    correctionIdempotencyKey: varchar("correction_idempotency_key"),
+    correctionRequestDigest: varchar("correction_request_digest"),
+    acknowledgementIdempotencyKey: varchar(
+      "acknowledgement_idempotency_key",
+    ),
+    acknowledgementRequestDigest: varchar("acknowledgement_request_digest"),
+    state: varchar("state").notNull().default("current"), // current | proposed | historical | cancelled
+    address: text("address").notNull(),
+    city: varchar("city"),
+    stateCode: varchar("state_code"),
+    latitude: decimal("latitude", { precision: 10, scale: 8 }),
+    longitude: decimal("longitude", { precision: 11, scale: 8 }),
+    startAt: timestamp("start_at").notNull(),
+    endAt: timestamp("end_at").notNull(),
+    accessInstructions: text("access_instructions"),
+    safetyInstructions: text("safety_instructions"),
+    actorType: varchar("actor_type").notNull(),
+    actorUserId: varchar("actor_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    reason: text("reason").notNull(),
+    effectiveAt: timestamp("effective_at").notNull(),
+    isMaterial: boolean("is_material").notNull().default(false),
+    notificationState: varchar("notification_state")
+      .notNull()
+      .default("not_required"),
+    acknowledgementDeadlineAt: timestamp("acknowledgement_deadline_at"),
+    acknowledgedByUserId: varchar("acknowledged_by_user_id").references(
+      () => users.id,
+      { onDelete: "set null" },
+    ),
+    acknowledgedAt: timestamp("acknowledged_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_parking_pass_arrival_booking").on(table.bookingId, table.version),
+    index("idx_parking_pass_arrival_deadline").on(
+      table.state,
+      table.acknowledgementDeadlineAt,
+    ),
+    unique("uq_parking_pass_arrival_version").on(table.bookingId, table.version),
+    unique("uq_parking_pass_arrival_correction_idempotency").on(
+      table.bookingId,
+      table.correctionIdempotencyKey,
+    ),
+    unique("uq_parking_pass_arrival_ack_idempotency").on(
+      table.bookingId,
+      table.acknowledgementIdempotencyKey,
+    ),
+  ],
+);
+
+// Event and series changes that can alter paid participation are durable sagas.
+// The parent freezes the complete event/booking target set before any public,
+// ordering, fulfillment, notification, or provider-visible work begins.
+export const eventParticipationMutations = pgTable(
+  "event_participation_mutations",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    scopeKind: varchar("scope_kind").notNull(), // event | series
+    eventId: varchar("event_id").references(() => events.id, {
+      onDelete: "restrict",
+    }),
+    seriesId: varchar("series_id").references(() => eventSeries.id, {
+      onDelete: "restrict",
+    }),
+    mutationKind: varchar("mutation_kind").notNull(), // correction | cancellation
+    requestId: varchar("request_id").notNull(),
+    idempotencyKey: varchar("idempotency_key").notNull(),
+    requestDigest: varchar("request_digest").notNull(),
+    actorUserId: varchar("actor_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    actorType: varchar("actor_type").notNull(),
+    authoritySnapshot: jsonb("authority_snapshot")
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    expectedParticipationVersion: integer("expected_participation_version")
+      .notNull()
+      .default(0),
+    targetEventIds: jsonb("target_event_ids")
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    targetBookingIds: jsonb("target_booking_ids")
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    targetSetDigest: varchar("target_set_digest").notNull(),
+    expectedChildCount: integer("expected_child_count").notNull(),
+    providerRequiredCount: integer("provider_required_count")
+      .notNull()
+      .default(0),
+    requestedChanges: jsonb("requested_changes")
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    status: varchar("status").notNull().default("prepared"), // prepared | suppressed | processing | action_required | converged | failed
+    suppressionReason: text("suppression_reason").notNull(),
+    convergedChildCount: integer("converged_child_count")
+      .notNull()
+      .default(0),
+    failureCode: varchar("failure_code"),
+    failureMessage: text("failure_message"),
+    recoveryRequestedAt: timestamp("recovery_requested_at"),
+    recoveryClaimedAt: timestamp("recovery_claimed_at"),
+    recoveryClaimedBy: varchar("recovery_claimed_by"),
+    recoveryAttemptCount: integer("recovery_attempt_count")
+      .notNull()
+      .default(0),
+    lastRecoveryActorUserId: varchar("last_recovery_actor_user_id").references(
+      () => users.id,
+      { onDelete: "set null" },
+    ),
+    lastRecoveryActorType: varchar("last_recovery_actor_type"),
+    lastRecoveryReason: text("last_recovery_reason"),
+    startedAt: timestamp("started_at"),
+    completedAt: timestamp("completed_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    unique("uq_event_participation_mutation_request").on(
+      table.scopeKind,
+      table.eventId,
+      table.seriesId,
+      table.requestId,
+    ),
+    unique("uq_event_participation_mutation_idempotency").on(
+      table.idempotencyKey,
+    ),
+    index("idx_event_participation_mutation_recovery").on(
+      table.status,
+      table.recoveryRequestedAt,
+      table.updatedAt,
+    ),
+    index("idx_event_participation_mutation_event").on(
+      table.eventId,
+      table.createdAt,
+    ),
+    index("idx_event_participation_mutation_series").on(
+      table.seriesId,
+      table.createdAt,
+    ),
+  ],
+);
+
+export const eventParticipationMutationChildren = pgTable(
+  "event_participation_mutation_children",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    mutationId: varchar("mutation_id")
+      .notNull()
+      .references(() => eventParticipationMutations.id, {
+        onDelete: "restrict",
+      }),
+    eventId: varchar("event_id").references(() => events.id, {
+      onDelete: "restrict",
+    }),
+    bookingId: varchar("booking_id").references(() => eventBookings.id, {
+      onDelete: "restrict",
+    }),
+    purchaseId: varchar("purchase_id").references(
+      () => parkingPassPurchases.id,
+      { onDelete: "restrict" },
+    ),
+    childKind: varchar("child_kind").notNull(), // series_apply | event_apply | booking_cancel | arrival_correct | notification | free_participation_cancel | legacy_paid_action_required
+    actionKey: varchar("action_key").notNull(),
+    idempotencyKey: varchar("idempotency_key").notNull(),
+    requestDigest: varchar("request_digest").notNull(),
+    targetParticipationVersion: integer("target_participation_version")
+      .notNull()
+      .default(0),
+    targetFacts: jsonb("target_facts").notNull().default(sql`'{}'::jsonb`),
+    remedy: varchar("remedy"),
+    providerRequired: boolean("provider_required").notNull().default(false),
+    status: varchar("status").notNull().default("prepared"), // prepared | processing | provider_confirmed | notification_pending | converged | action_required | skipped
+    cancellationOperationId: varchar("cancellation_operation_id").references(
+      () => parkingPassCancellationOperations.id,
+      { onDelete: "restrict" },
+    ),
+    arrivalVersionId: varchar("arrival_version_id").references(
+      () => parkingPassArrivalVersions.id,
+      { onDelete: "restrict" },
+    ),
+    notificationTargetUserId: varchar(
+      "notification_target_user_id",
+    ).references(() => users.id, { onDelete: "restrict" }),
+    notificationPayload: jsonb("notification_payload")
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    notificationDeliveryState: varchar("notification_delivery_state")
+      .notNull()
+      .default("prepared"), // prepared | submitted | retry_safe | ambiguous | provider_confirmed | not_required
+    notificationClaimId: varchar("notification_claim_id"),
+    notificationClaimedAt: timestamp("notification_claimed_at"),
+    notificationSubmittedAt: timestamp("notification_submitted_at"),
+    notificationProviderMessageId: varchar(
+      "notification_provider_message_id",
+    ),
+    attemptCount: integer("attempt_count").notNull().default(0),
+    lastAttemptAt: timestamp("last_attempt_at"),
+    providerStatus: varchar("provider_status"),
+    failureCode: varchar("failure_code"),
+    failureMessage: text("failure_message"),
+    completedAt: timestamp("completed_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    unique("uq_event_participation_mutation_child_action").on(
+      table.mutationId,
+      table.actionKey,
+    ),
+    unique("uq_event_participation_mutation_child_idempotency").on(
+      table.idempotencyKey,
+    ),
+    index("idx_event_participation_mutation_child_recovery").on(
+      table.status,
+      table.updatedAt,
+    ),
+    index("idx_event_participation_mutation_child_booking").on(
+      table.bookingId,
+      table.createdAt,
+    ),
   ],
 );
 
@@ -3819,6 +4672,10 @@ export const truckParkingReports = pgTable(
     bookingId: varchar("booking_id").references(() => eventBookings.id, {
       onDelete: "set null",
     }),
+    purchaseId: varchar("purchase_id").references(
+      () => parkingPassPurchases.id,
+      { onDelete: "restrict" },
+    ),
     manualScheduleId: varchar("manual_schedule_id").references(
       () => truckManualSchedules.id,
       { onDelete: "set null" },
@@ -3965,6 +4822,13 @@ export const hostEarningsLedger = pgTable(
     sourceType: varchar("source_type")
       .notNull()
       .default("parking_pass_booking"),
+    settlementTopology: varchar("settlement_topology")
+      .notNull()
+      .default("legacy_platform_hold"),
+    reconciliationState: varchar("reconciliation_state")
+      .notNull()
+      .default("eligible_legacy"),
+    quarantineReason: text("quarantine_reason"),
     amountCents: integer("amount_cents").notNull(), // positive or negative
     description: text("description"),
     createdAt: timestamp("created_at").defaultNow(),
@@ -3972,6 +4836,10 @@ export const hostEarningsLedger = pgTable(
   (table) => [
     index("idx_host_earnings_host").on(table.hostId),
     index("idx_host_earnings_booking").on(table.bookingId),
+    index("idx_host_earnings_reconciliation").on(
+      table.reconciliationState,
+      table.hostId,
+    ),
     index("idx_host_earnings_intent").on(table.stripePaymentIntentId),
     index("idx_host_earnings_created").on(table.createdAt),
     unique("uq_host_earnings_booking_entry").on(
@@ -3995,6 +4863,15 @@ export const hostPayoutRequests = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     amountCents: integer("amount_cents").notNull(),
+    fundingTopology: varchar("funding_topology")
+      .notNull()
+      .default("legacy_platform_hold"),
+    eligibilityState: varchar("eligibility_state")
+      .notNull()
+      .default("requires_revalidation"),
+    eligibleAmountSnapshotCents: integer("eligible_amount_snapshot_cents"),
+    providerTransferId: varchar("provider_transfer_id"),
+    quarantineReason: text("quarantine_reason"),
     status: varchar("status").notNull().default("pending"), // 'pending' | 'approved' | 'paid' | 'rejected' | 'cancelled'
     notes: text("notes"),
     reviewedByUserId: varchar("reviewed_by_user_id").references(
@@ -4013,6 +4890,79 @@ export const hostPayoutRequests = pgTable(
     index("idx_host_payout_requests_user").on(table.userId),
     index("idx_host_payout_requests_status").on(table.status),
     index("idx_host_payout_requests_created").on(table.createdAt),
+  ],
+);
+
+// Historical platform-held payout transfers use their own provider saga. The
+// immutable expectation is persisted before Stripe and ambiguous submissions
+// never become a second blind transfer after provider idempotency retention.
+export const legacyPayoutProviderOperations = pgTable(
+  "legacy_payout_provider_operations",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    payoutRequestId: varchar("payout_request_id")
+      .notNull()
+      .references(() => hostPayoutRequests.id, { onDelete: "restrict" }),
+    requestId: varchar("request_id").notNull(),
+    idempotencyKey: varchar("idempotency_key").notNull(),
+    requestDigest: varchar("request_digest").notNull(),
+    actorUserId: varchar("actor_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    expectedHostId: varchar("expected_host_id")
+      .notNull()
+      .references(() => hosts.id, { onDelete: "restrict" }),
+    expectedAmountCents: integer("expected_amount_cents").notNull(),
+    expectedCurrency: varchar("expected_currency").notNull().default("usd"),
+    expectedDestinationAccountId: varchar(
+      "expected_destination_account_id",
+    ).notNull(),
+    expectedFundingTopology: varchar("expected_funding_topology")
+      .notNull()
+      .default("legacy_platform_hold"),
+    expectedEligibleAmountSnapshotCents: integer(
+      "expected_eligible_amount_snapshot_cents",
+    ).notNull(),
+    status: varchar("status").notNull().default("prepared"), // prepared | submitted | provider_confirmed | action_required | quarantined
+    providerTransferId: varchar("provider_transfer_id"),
+    providerStatus: varchar("provider_status"),
+    attemptCount: integer("attempt_count").notNull().default(0),
+    idempotencyExpiresAt: timestamp("idempotency_expires_at").notNull(),
+    lastAttemptAt: timestamp("last_attempt_at"),
+    submittedAt: timestamp("submitted_at"),
+    confirmedAt: timestamp("confirmed_at"),
+    providerErrorCode: varchar("provider_error_code"),
+    providerErrorMessage: text("provider_error_message"),
+    recoveryAttemptCount: integer("recovery_attempt_count")
+      .notNull()
+      .default(0),
+    lastRecoveryActorUserId: varchar("last_recovery_actor_user_id").references(
+      () => users.id,
+      { onDelete: "set null" },
+    ),
+    lastRecoveryActorType: varchar("last_recovery_actor_type"),
+    lastRecoveryReason: text("last_recovery_reason"),
+    lastRecoveryAt: timestamp("last_recovery_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    unique("uq_legacy_payout_provider_operation_request").on(
+      table.payoutRequestId,
+      table.requestId,
+    ),
+    unique("uq_legacy_payout_provider_operation_idempotency").on(
+      table.idempotencyKey,
+    ),
+    unique("uq_legacy_payout_provider_operation_transfer").on(
+      table.providerTransferId,
+    ),
+    index("idx_legacy_payout_provider_operation_recovery").on(
+      table.status,
+      table.updatedAt,
+    ),
   ],
 );
 
@@ -4673,10 +5623,60 @@ export type InsertAffiliateCommissionLedger =
 export type CreditLedger = typeof creditLedger.$inferSelect;
 export type InsertCreditLedger = typeof creditLedger.$inferInsert;
 
+export type OrderingReviewRequest = typeof orderingReviewRequests.$inferSelect;
+export type InsertOrderingReviewRequest =
+  typeof orderingReviewRequests.$inferInsert;
+export type ParkingPassPurchase = typeof parkingPassPurchases.$inferSelect;
+export type InsertParkingPassPurchase =
+  typeof parkingPassPurchases.$inferInsert;
+export type ParkingPassCancellationOperation =
+  typeof parkingPassCancellationOperations.$inferSelect;
+export type InsertParkingPassCancellationOperation =
+  typeof parkingPassCancellationOperations.$inferInsert;
+export type ParkingPassProviderOperation =
+  typeof parkingPassProviderOperations.$inferSelect;
+export type InsertParkingPassProviderOperation =
+  typeof parkingPassProviderOperations.$inferInsert;
+export type ParkingPassProviderOperationStep =
+  typeof parkingPassProviderOperationSteps.$inferSelect;
+export type InsertParkingPassProviderOperationStep =
+  typeof parkingPassProviderOperationSteps.$inferInsert;
+export type ParkingPassCreditEntry = typeof parkingPassCreditLedger.$inferSelect;
+export type InsertParkingPassCreditEntry =
+  typeof parkingPassCreditLedger.$inferInsert;
+export type ParkingPassArrivalVersion =
+  typeof parkingPassArrivalVersions.$inferSelect;
+export type InsertParkingPassArrivalVersion =
+  typeof parkingPassArrivalVersions.$inferInsert;
+export type EventParticipationMutation =
+  typeof eventParticipationMutations.$inferSelect;
+export type InsertEventParticipationMutation =
+  typeof eventParticipationMutations.$inferInsert;
+export type EventParticipationMutationChild =
+  typeof eventParticipationMutationChildren.$inferSelect;
+export type InsertEventParticipationMutationChild =
+  typeof eventParticipationMutationChildren.$inferInsert;
+export type EventSeriesPublicationOperation =
+  typeof eventSeriesPublicationOperations.$inferSelect;
+export type InsertEventSeriesPublicationOperation =
+  typeof eventSeriesPublicationOperations.$inferInsert;
+export type EventSeriesPublicationChild =
+  typeof eventSeriesPublicationChildren.$inferSelect;
+export type InsertEventSeriesPublicationChild =
+  typeof eventSeriesPublicationChildren.$inferInsert;
+export type EventNotificationDelivery =
+  typeof eventNotificationDeliveries.$inferSelect;
+export type InsertEventNotificationDelivery =
+  typeof eventNotificationDeliveries.$inferInsert;
+
 export type HostEarningsLedger = typeof hostEarningsLedger.$inferSelect;
 export type InsertHostEarningsLedger = typeof hostEarningsLedger.$inferInsert;
 export type HostPayoutRequest = typeof hostPayoutRequests.$inferSelect;
 export type InsertHostPayoutRequest = typeof hostPayoutRequests.$inferInsert;
+export type LegacyPayoutProviderOperation =
+  typeof legacyPayoutProviderOperations.$inferSelect;
+export type InsertLegacyPayoutProviderOperation =
+  typeof legacyPayoutProviderOperations.$inferInsert;
 
 // PHASE 5: Payout preferences types
 export type UserPayoutPreferences = typeof userPayoutPreferences.$inferSelect;

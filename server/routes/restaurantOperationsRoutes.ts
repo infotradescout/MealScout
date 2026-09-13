@@ -23,6 +23,7 @@ import {
   menuItems,
   menus,
   requestLogs,
+  parkingPassPurchases,
   restaurants,
   socialPostQueue,
   socialPublishingConnections,
@@ -53,6 +54,7 @@ import {
 import { toPublicRestaurantListingArrayWithVisibility } from "../publicProfiles/toPublicRestaurantListingWithVisibility";
 import { isPublicBusinessVisible } from "../utils/publicBusinessVisibility";
 import { deriveProfileEvidenceQuarantineVisibility } from "../services/profileEvidenceQuarantine";
+import { publicParkingPassBookingSqlCondition } from "../services/truckOperatingPlan";
 
 type AnalyticsAccessResult = {
   hasAccess: boolean;
@@ -2682,11 +2684,16 @@ export function registerRestaurantOperationsRoutes(
           .select({ eventId: eventBookings.eventId })
           .from(eventBookings)
           .innerJoin(events, eq(events.id, eventBookings.eventId))
+          .leftJoin(
+            parkingPassPurchases,
+            eq(eventBookings.purchaseId, parkingPassPurchases.id),
+          )
           .where(
             and(
               eq(eventBookings.eventId, parsed.eventId),
               eq(eventBookings.truckId, truckId),
               eq(eventBookings.status, "confirmed"),
+              publicParkingPassBookingSqlCondition,
               isNotNull(eventBookings.bookingConfirmedAt),
               inArray(events.status, ["open", "booked", "filled"]),
             ),

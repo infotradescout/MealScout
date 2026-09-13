@@ -8,7 +8,6 @@ import {
   isSameDay,
   isSameMonth,
   isToday,
-  parseISO,
   startOfMonth,
   startOfWeek,
 } from "date-fns";
@@ -18,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatRelativeTime } from "@/lib/relative-time";
+import { dateOnlyKey, localCalendarDate } from "@/lib/date-only";
 
 export type ParkingScheduleItem = {
   id: string;
@@ -33,6 +33,8 @@ export type ParkingScheduleItem = {
   lastConfirmedAt?: string | Date | null;
   manualId?: string;
   bookingId?: string;
+  arrivalState?: string | null;
+  pendingArrivalVersionId?: string | null;
   hostId?: string;
   locationName?: string | null;
   address?: string | null;
@@ -48,6 +50,10 @@ type ParkingScheduleCalendarProps = {
   allowManualEdits?: boolean;
   onDeleteManual?: (manualId: string) => void;
   onCancelBooking?: (bookingId: string, item: ParkingScheduleItem) => void;
+  onReviewArrivalChange?: (
+    bookingId: string,
+    pendingArrivalVersionId: string,
+  ) => void;
   cancelingBookingId?: string | null;
   reportLookup?: Record<string, boolean>;
   onAddReport?: (item: ParkingScheduleItem) => void;
@@ -66,10 +72,9 @@ const typeDotClass: Record<ParkingScheduleItem["type"], string> = {
   accepted_interest: "pp-calendar-dot pp-calendar-dot--accepted",
 };
 
-const toDate = (value: string | Date) =>
-  value instanceof Date ? value : parseISO(value);
+const toDate = (value: string | Date) => localCalendarDate(value)!;
 
-const toDateKey = (value: string | Date) => format(toDate(value), "yyyy-MM-dd");
+const toDateKey = (value: string | Date) => dateOnlyKey(value) || "";
 
 export function ParkingScheduleCalendar({
   items,
@@ -78,6 +83,7 @@ export function ParkingScheduleCalendar({
   allowManualEdits = false,
   onDeleteManual,
   onCancelBooking,
+  onReviewArrivalChange,
   cancelingBookingId,
   reportLookup,
   onAddReport,
@@ -275,6 +281,14 @@ export function ParkingScheduleCalendar({
                             Private
                           </Badge>
                         )}
+                        {item.arrivalState === "arrival_change_pending" && (
+                          <Badge
+                            variant="outline"
+                            className="text-[10px] border-amber-300 bg-amber-50 text-amber-800"
+                          >
+                            Arrival change needs acknowledgment
+                          </Badge>
+                        )}
                       </div>
                       <p className="mt-2 text-sm font-semibold text-foreground">
                         {item.title}
@@ -323,6 +337,24 @@ export function ParkingScheduleCalendar({
                           {cancelingBookingId === item.bookingId
                             ? "Cancelling..."
                             : "Cancel booking"}
+                        </Button>
+                      )}
+                    {onReviewArrivalChange &&
+                      item.type === "booking" &&
+                      item.bookingId &&
+                      item.arrivalState === "arrival_change_pending" &&
+                      item.pendingArrivalVersionId && (
+                        <Button
+                          variant="default"
+                          size="sm"
+                          onClick={() =>
+                            onReviewArrivalChange(
+                              item.bookingId!,
+                              item.pendingArrivalVersionId!,
+                            )
+                          }
+                        >
+                          Review arrival change
                         </Button>
                       )}
                     {onAddReport && item.reportKey && (

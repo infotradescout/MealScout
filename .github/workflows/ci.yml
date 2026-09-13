@@ -16,7 +16,7 @@ jobs:
       - name: Use Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version-file: ".node-version"
           cache: "npm"
 
       - name: Install dependencies
@@ -27,6 +27,28 @@ jobs:
 
       - name: Stripe Webhook Safety
         run: npm run test:stripe-webhook-safety
+
+      - name: Critical Health Smoke Failure Detection
+        run: npm run test:critical-smoke
+
+      - name: Ordering and Marketplace Financial Safety
+        run: |
+          npm run test:ordering-truth
+          npm run test:integrated-marketplace
+
+      - name: Marketplace Provider Recovery on PostgreSQL 16
+        run: npm run test:integrated-marketplace:stateful
+
+      - name: Migration 142 Apply, Containment, Concurrency and Restore
+        run: |
+          git fetch --no-tags --depth=1 origin 6128fbc9539c27d70f937a7ffa1d619bf819c7b3
+          npm run test:migration-142-postgres16
+
+      - name: Menu Creation and LISA Record Integrity
+        run: npm run test:menu-lisa
+
+      - name: Production Dependency Audit
+        run: npm audit --omit=dev
 
       - name: Consumer Entity Foundation Contract
         run: npm run test:consumer-entity-foundation

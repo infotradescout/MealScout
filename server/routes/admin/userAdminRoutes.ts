@@ -28,6 +28,7 @@ import {
   isParkingPassPublicReady,
 } from "../../services/parkingPassQuality";
 import { listParkingPassOccurrences } from "../../services/parkingPassVirtual";
+import { dateKeyFromUnknown } from "../../services/dateKeys";
 import { runParkingPassIntegrity } from "../../services/parkingPassIntegrity";
 import { isSlotWithinHours } from "@shared/parkingPassSlots";
 import {
@@ -55,6 +56,19 @@ import {
   buildRestaurantOwnerTransferReset,
 } from "../../services/restaurantOrderingAuthorityReset";
 import { lockRestaurantForOwnerTransfer } from "../../services/restaurantOwnerTransferSafety";
+import { requireIdempotencyKey } from "../../middleware/idempotency";
+import {
+  EventParticipationMutationError,
+  updateCoordinatedEvent,
+  updateCoordinatedSeries,
+  type EventUpdates,
+  type SeriesUpdates,
+} from "../../services/eventParticipationMutationService";
+import {
+  cancelParkingPassLines,
+  ParkingPassBookingError,
+  serializeParkingPassCancellationOperation,
+} from "../../services/parkingPassBookingService";
 
 type DenyStaffEdits = (req: any, res: any) => boolean;
 type RequireAdminUser = (req: any, res: any) => boolean;
@@ -623,14 +637,13 @@ export function registerUserAdminRoutes(
           hosts.map((host) => storage.ensureDraftParkingPassForHost(host.id)),
         );
 
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
+        const now = new Date();
         const hostIds = hosts.map((host) => host.id);
         const { occurrences } = await listParkingPassOccurrences({
           hostIds,
           horizonDays: 30,
           includeDraft: true,
-          start: today,
+          now,
         });
 
         const occurrencesByHost = new Map<string, any[]>();
@@ -644,11 +657,14 @@ export function registerUserAdminRoutes(
           const hostOccurrences = occurrencesByHost.get(host.id) ?? [];
           if (!hostOccurrences.length) return [];
           const sorted = [...hostOccurrences].sort(
-            (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
+            (a, b) =>
+              String(dateKeyFromUnknown(a.date, "UTC") || "").localeCompare(
+                String(dateKeyFromUnknown(b.date, "UTC") || ""),
+              ),
           );
-          const upcoming = sorted.find(
-            (event) => new Date(event.date) >= today,
-          );
+          // The virtualizer already derives each series' first occurrence
+          // from `now` in that series' persisted IANA timezone.
+          const upcoming = sorted[0];
           const representative = upcoming ?? sorted[0];
 
           return [
@@ -677,6 +693,7 @@ export function registerUserAdminRoutes(
     "/api/admin/parking-pass/:id",
     isAuthenticated,
     isStaffOrAdmin,
+    requireIdempotencyKey({ scope: "admin_parking_pass_mutation" }),
     async (req: any, res) => {
       try {
         const eventId = req.params.id;
@@ -795,67 +812,20 @@ export function registerUserAdminRoutes(
           updatedAt: new Date(),
         };
 
+        const requestId = String(req.headers["idempotency-key"] || "").trim();
+        const pricingTouched = [
+          "breakfastPriceCents",
+          "lunchPriceCents",
+          "dinnerPriceCents",
+          "dailyPriceCents",
+          "weeklyPriceCents",
+          "monthlyPriceCents",
+        ].some((field) => req.body?.[field] !== undefined);
+        let updated = event;
+        let mutationFanout: any;
         if (event.seriesId) {
-          const seriesUpdates: any = { updatedAt: new Date() };
-          if (updates.startTime !== undefined) {
-            seriesUpdates.defaultStartTime = String(updates.startTime);
-          }
-          if (updates.endTime !== undefined) {
-            seriesUpdates.defaultEndTime = String(updates.endTime);
-          }
-          if (updates.maxTrucks !== undefined) {
-            seriesUpdates.defaultMaxTrucks = Number(updates.maxTrucks);
-          }
-          const pricingTouched = [
-            "breakfastPriceCents",
-            "lunchPriceCents",
-            "dinnerPriceCents",
-            "dailyPriceCents",
-            "weeklyPriceCents",
-            "monthlyPriceCents",
-          ].some((field) => req.body?.[field] !== undefined);
-          if (pricingTouched) {
-            seriesUpdates.defaultBreakfastPriceCents = breakfast;
-            seriesUpdates.defaultLunchPriceCents = lunch;
-            seriesUpdates.defaultDinnerPriceCents = dinner;
-            seriesUpdates.defaultDailyPriceCents = baseDaily;
-            seriesUpdates.defaultWeeklyPriceCents =
-              pricingUpdates.weeklyPriceCents;
-            seriesUpdates.defaultMonthlyPriceCents =
-              pricingUpdates.monthlyPriceCents;
-            seriesUpdates.defaultHostPriceCents = hostPriceCents;
-
-            // Simple model: mirror Parking Pass defaults back onto the host row as the source of truth.
-            // This is best-effort because older DBs may not have these columns yet.
-            try {
-              if (host?.id) {
-                await db
-                  .update(hosts)
-                  .set({
-                    parkingPassBreakfastPriceCents: breakfast,
-                    parkingPassLunchPriceCents: lunch,
-                    parkingPassDinnerPriceCents: dinner,
-                    parkingPassDailyPriceCents: baseDaily,
-                    parkingPassWeeklyPriceCents:
-                      pricingUpdates.weeklyPriceCents,
-                    parkingPassMonthlyPriceCents:
-                      pricingUpdates.monthlyPriceCents,
-                    parkingPassStartTime: String(
-                      updates.startTime ?? event.startTime ?? "",
-                    ),
-                    parkingPassEndTime: String(
-                      updates.endTime ?? event.endTime ?? "",
-                    ),
-                    updatedAt: new Date(),
-                  } as any)
-                  .where(eq(hosts.id, host.id));
-              }
-            } catch (e) {
-              console.warn("Failed to persist host parking pass defaults:", e);
-            }
-
-            const publicReady =
-              host &&
+          const publicReady = Boolean(
+            host &&
               isParkingPassPublicReady({
                 host,
                 startTime: updates.startTime ?? event.startTime,
@@ -867,46 +837,89 @@ export function registerUserAdminRoutes(
                 dailyPriceCents: baseDaily,
                 weeklyPriceCents: pricingUpdates.weeklyPriceCents,
                 monthlyPriceCents: pricingUpdates.monthlyPriceCents,
-              });
-
-            seriesUpdates.status = publicReady ? "published" : "draft";
-            seriesUpdates.publishedAt = publicReady ? new Date() : null;
-          }
-          if (Object.keys(seriesUpdates).length > 1) {
-            await db
-              .update(eventSeries)
-              .set(seriesUpdates)
-              .where(eq(eventSeries.id, event.seriesId));
-          }
+              }),
+          );
+          const seriesUpdates: SeriesUpdates = {
+            ...(updates.startTime !== undefined
+              ? { defaultStartTime: String(updates.startTime) }
+              : {}),
+            ...(updates.endTime !== undefined
+              ? { defaultEndTime: String(updates.endTime) }
+              : {}),
+            ...(updates.maxTrucks !== undefined
+              ? { defaultMaxTrucks: Number(updates.maxTrucks) }
+              : {}),
+            ...(pricingTouched
+              ? {
+                  defaultBreakfastPriceCents: breakfast,
+                  defaultLunchPriceCents: lunch,
+                  defaultDinnerPriceCents: dinner,
+                  defaultDailyPriceCents: baseDaily,
+                  defaultWeeklyPriceCents:
+                    pricingUpdates.weeklyPriceCents,
+                  defaultMonthlyPriceCents:
+                    pricingUpdates.monthlyPriceCents,
+                  defaultHostPriceCents: hostPriceCents,
+                }
+              : {}),
+            status:
+              String(updates.status || "") === "cancelled"
+                ? "closed"
+                : publicReady
+                  ? "published"
+                  : "draft",
+            publishedAt: publicReady ? new Date() : null,
+          };
+          const result = await updateCoordinatedSeries({
+            seriesId: event.seriesId,
+            actor: { userId: req.user.id },
+            requestId,
+            updates: seriesUpdates,
+          });
+          mutationFanout = result.fanout;
+          updated =
+            result.eventResults.find((row: any) => row.id === eventId) ||
+            event;
+        } else {
+          const result = await updateCoordinatedEvent({
+            eventId,
+            actor: { userId: req.user.id },
+            requestId,
+            updates: {
+              ...updates,
+              hostPriceCents: pricingUpdates.hostPriceCents,
+              dailyPriceCents: pricingUpdates.dailyPriceCents,
+              weeklyPriceCents: pricingUpdates.weeklyPriceCents,
+              monthlyPriceCents: pricingUpdates.monthlyPriceCents,
+            } as EventUpdates,
+          });
+          mutationFanout = result.fanout;
+          updated = result.event || event;
         }
 
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-
-        const scope = event.seriesId
-          ? eq(events.seriesId, event.seriesId)
-          : eq(events.hostId, event.hostId);
-
-        const updatedEvents = await db
-          .update(events)
-          .set({ ...updates, ...pricingUpdates })
-          .where(
-            and(
-              scope,
-              gte(events.date, today),
-              eq(events.requiresPayment, true),
-            ),
-          )
-          .returning();
-
-        let updated = updatedEvents[0];
-        if (!updated) {
-          const [singleUpdated] = await db
-            .update(events)
-            .set({ ...updates, ...pricingUpdates })
-            .where(eq(events.id, eventId))
-            .returning();
-          updated = singleUpdated;
+        if (mutationFanout.mutation.status === "converged" && host?.id) {
+          try {
+            await db
+              .update(hosts)
+              .set({
+                parkingPassBreakfastPriceCents: breakfast,
+                parkingPassLunchPriceCents: lunch,
+                parkingPassDinnerPriceCents: dinner,
+                parkingPassDailyPriceCents: baseDaily,
+                parkingPassWeeklyPriceCents: pricingUpdates.weeklyPriceCents,
+                parkingPassMonthlyPriceCents: pricingUpdates.monthlyPriceCents,
+                parkingPassStartTime: String(
+                  updates.startTime ?? event.startTime ?? "",
+                ),
+                parkingPassEndTime: String(
+                  updates.endTime ?? event.endTime ?? "",
+                ),
+                updatedAt: new Date(),
+              } as any)
+              .where(eq(hosts.id, host.id));
+          } catch (error) {
+            console.warn("Failed to persist host parking pass defaults:", error);
+          }
         }
 
         void logAudit(
@@ -926,9 +939,25 @@ export function registerUserAdminRoutes(
           console.error("Failed to write admin parking pass audit log:", err),
         );
 
-        res.json(updated ?? event);
+        res
+          .status(mutationFanout.mutation.status === "converged" ? 200 : 202)
+          .json({
+            ...updated,
+            participationMutation: {
+              ...mutationFanout.mutation,
+              children: mutationFanout.children,
+              operations: mutationFanout.operations,
+            },
+          });
       } catch (error: any) {
         console.error("Error updating parking pass:", error);
+        if (error instanceof EventParticipationMutationError) {
+          return res.status(error.statusCode).json({
+            message: error.message,
+            code: error.code,
+            details: error.details,
+          });
+        }
         res.status(500).json({
           message: error.message || "Failed to update parking pass",
         });
@@ -958,7 +987,7 @@ export function registerUserAdminRoutes(
     "/api/admin/parking-pass/sync-host-defaults",
     isAuthenticated,
     isStaffOrAdmin,
-    async (_req: any, res) => {
+    async (req: any, res) => {
       try {
         const seriesRows = await storage.getParkingPassSeriesSafe();
         let updatedHosts = 0;
@@ -1011,7 +1040,10 @@ export function registerUserAdminRoutes(
         // Ensure series status reflects host defaults.
         let syncedSeries = 0;
         for (const hostId of touchedHostIds) {
-          const seriesId = await storage.syncParkingPassSeriesFromHost(hostId);
+          const seriesId = await storage.syncParkingPassSeriesFromHost(hostId, {
+            actorUserId: String(req.user?.id || "").trim(),
+            requestId: `admin-sync-host-defaults:${hostId}`,
+          });
           if (seriesId) syncedSeries += 1;
         }
 
@@ -1033,7 +1065,7 @@ export function registerUserAdminRoutes(
     "/api/admin/parking-pass/normalize-series",
     isAuthenticated,
     isStaffOrAdmin,
-    async (_req: any, res) => {
+    async (req: any, res) => {
       try {
         let rows: Array<{ series: any }> = [];
         try {
@@ -1064,6 +1096,7 @@ export function registerUserAdminRoutes(
         );
 
         let updated = 0;
+        let recoveryPending = 0;
         for (const row of rows as any[]) {
           const series = row.series;
           const host = hostById.get(String(series.hostId || "").trim()) ?? null;
@@ -1083,21 +1116,50 @@ export function registerUserAdminRoutes(
           const nextStatus = publicReady ? "published" : "draft";
 
           if (String(series.status) !== nextStatus) {
-            await db
-              .update(eventSeries)
-              .set({
-                status: nextStatus as any,
-                publishedAt: publicReady
-                  ? (series.publishedAt ?? new Date())
-                  : null,
-                updatedAt: new Date(),
-              })
-              .where(eq(eventSeries.id, series.id));
+            const [participation] = await db
+              .select({ count: sql<number>`count(*)::int` })
+              .from(eventBookings)
+              .innerJoin(events, eq(events.id, eventBookings.eventId))
+              .where(
+                and(
+                  eq(events.seriesId, series.id),
+                  inArray(eventBookings.status, ["pending", "confirmed"]),
+                ),
+              );
+            if (Number(participation?.count || 0) > 0) {
+              const result = await updateCoordinatedSeries({
+                seriesId: series.id,
+                actor: { userId: String(req.user?.id || "").trim() },
+                requestId: `normalize-parking-pass-series:${series.id}:v${Number(series.participationVersion || 0)}:${nextStatus}`,
+                updates: {
+                  status: nextStatus,
+                  publishedAt: publicReady
+                    ? (series.publishedAt ?? new Date())
+                    : null,
+                },
+              });
+              if (result.fanout.mutation.status !== "converged") {
+                recoveryPending += 1;
+              }
+            } else {
+              await db
+                .update(eventSeries)
+                .set({
+                  status: nextStatus as any,
+                  publishedAt: publicReady
+                    ? (series.publishedAt ?? new Date())
+                    : null,
+                  updatedAt: new Date(),
+                })
+                .where(eq(eventSeries.id, series.id));
+            }
             updated += 1;
           }
         }
 
-        res.json({ success: true, updated });
+        res
+          .status(recoveryPending > 0 ? 202 : 200)
+          .json({ success: true, updated, recoveryPending });
       } catch (error: any) {
         console.error("Error normalizing parking pass series:", error);
         res
@@ -1114,7 +1176,11 @@ export function registerUserAdminRoutes(
     async (req: any, res) => {
       try {
         const dryRun = Boolean(req.body?.dryRun);
-        const result = await runParkingPassIntegrity({ dryRun });
+        const result = await runParkingPassIntegrity({
+          dryRun,
+          actorUserId: String(req.user?.id || "").trim(),
+          requestId: `admin-parking-pass-integrity:${dryRun ? "dry" : "apply"}`,
+        });
         res.json({ success: true, ...result });
       } catch (error: any) {
         console.error("Error running parking pass integrity:", error);
@@ -2180,7 +2246,10 @@ export function registerUserAdminRoutes(
         // Keep derived series in sync so pins/bookability update immediately.
         try {
           if (updated?.id) {
-            await storage.syncParkingPassSeriesFromHost(String(updated.id));
+            await storage.syncParkingPassSeriesFromHost(String(updated.id), {
+              actorUserId: String(req.user?.id || "").trim(),
+              requestId: `admin-host-update:${String(updated.id)}`,
+            });
           }
         } catch (e) {
           console.warn(
@@ -2388,6 +2457,7 @@ export function registerUserAdminRoutes(
     "/api/admin/events/:id",
     isAuthenticated,
     isStaffOrAdmin,
+    requireIdempotencyKey({ scope: "admin_event_mutation" }),
     async (req: any, res) => {
       if (denyStaffEdits(req, res)) return;
       try {
@@ -2395,6 +2465,16 @@ export function registerUserAdminRoutes(
         const event = await storage.getEvent(eventId);
         if (!event) {
           return res.status(404).json({ message: "Event not found" });
+        }
+        if (
+          req.body?.requiresPayment !== undefined &&
+          Boolean(req.body.requiresPayment) !== Boolean(event.requiresPayment)
+        ) {
+          return res.status(409).json({
+            message:
+              "Payment topology cannot be changed through an event compatibility edit. Create a new event with the required payment model.",
+            code: "event_payment_topology_immutable",
+          });
         }
 
         const updates: any = {
@@ -2409,7 +2489,6 @@ export function registerUserAdminRoutes(
               : undefined,
           status: req.body?.status,
           hardCapEnabled: req.body?.hardCapEnabled,
-          requiresPayment: req.body?.requiresPayment,
           breakfastPriceCents:
             req.body?.breakfastPriceCents !== undefined
               ? Number(req.body.breakfastPriceCents)
@@ -2488,17 +2567,31 @@ export function registerUserAdminRoutes(
         updates.dailyPriceCents = slotSum;
         updates.weeklyPriceCents = slotSum * 7;
         updates.monthlyPriceCents = slotSum * 30;
-        updates.updatedAt = new Date();
-
-        const [updated] = await db
-          .update(events)
-          .set(updates)
-          .where(eq(events.id, eventId))
-          .returning();
-
-        res.json(updated);
+        const result = await updateCoordinatedEvent({
+          eventId,
+          actor: { userId: req.user.id },
+          requestId: String(req.headers["idempotency-key"] || "").trim(),
+          updates: updates as EventUpdates,
+        });
+        res
+          .status(result.fanout.mutation.status === "converged" ? 200 : 202)
+          .json({
+            ...(result.event || event),
+            participationMutation: {
+              ...result.fanout.mutation,
+              children: result.fanout.children,
+              operations: result.fanout.operations,
+            },
+          });
       } catch (error: any) {
         console.error("Error updating event:", error);
+        if (error instanceof EventParticipationMutationError) {
+          return res.status(error.statusCode).json({
+            message: error.message,
+            code: error.code,
+            details: error.details,
+          });
+        }
         res.status(500).json({ message: "Failed to update event" });
       }
     },
@@ -2508,6 +2601,7 @@ export function registerUserAdminRoutes(
     "/api/admin/event-series/:id",
     isAuthenticated,
     isStaffOrAdmin,
+    requireIdempotencyKey({ scope: "admin_event_series_mutation" }),
     async (req: any, res) => {
       if (denyStaffEdits(req, res)) return;
       try {
@@ -2536,15 +2630,31 @@ export function registerUserAdminRoutes(
           }
         });
 
-        const [updated] = await db
-          .update(eventSeries)
-          .set({ ...updates, updatedAt: new Date() })
-          .where(eq(eventSeries.id, req.params.id))
-          .returning();
-
-        res.json(updated);
+        const result = await updateCoordinatedSeries({
+          seriesId: req.params.id,
+          actor: { userId: req.user.id },
+          requestId: String(req.headers["idempotency-key"] || "").trim(),
+          updates: updates as SeriesUpdates,
+        });
+        res
+          .status(result.fanout.mutation.status === "converged" ? 200 : 202)
+          .json({
+            ...(result.series || {}),
+            participationMutation: {
+              ...result.fanout.mutation,
+              children: result.fanout.children,
+              operations: result.fanout.operations,
+            },
+          });
       } catch (error: any) {
         console.error("Error updating event series:", error);
+        if (error instanceof EventParticipationMutationError) {
+          return res.status(error.statusCode).json({
+            message: error.message,
+            code: error.code,
+            details: error.details,
+          });
+        }
         res.status(500).json({ message: "Failed to update event series" });
       }
     },
@@ -2554,49 +2664,119 @@ export function registerUserAdminRoutes(
     "/api/admin/parking-pass-bookings/:id",
     isAuthenticated,
     isStaffOrAdmin,
+    requireIdempotencyKey({ scope: "admin_parking_pass_booking_mutation" }),
     async (req: any, res) => {
       if (denyStaffEdits(req, res)) return;
       try {
-        const updates: any = {
-          status: req.body?.status,
-          refundStatus: req.body?.refundStatus,
-          refundAmountCents:
-            req.body?.refundAmountCents !== undefined
-              ? Number(req.body.refundAmountCents)
-              : undefined,
-          cancellationReason: req.body?.cancellationReason,
-          refundReason: req.body?.refundReason,
-        };
-
-        Object.keys(updates).forEach((key) => {
-          if (updates[key] === undefined) {
-            delete updates[key];
+        const [bookingRow] = await db
+          .select({ booking: eventBookings, event: events })
+          .from(eventBookings)
+          .innerJoin(events, eq(events.id, eventBookings.eventId))
+          .where(eq(eventBookings.id, req.params.id))
+          .limit(1);
+        if (!bookingRow) {
+          return res.status(404).json({ message: "Booking not found" });
+        }
+        const requestedStatus = String(req.body?.status || "")
+          .trim()
+          .toLowerCase();
+        const requestsCancellation =
+          ["cancelled", "refunded"].includes(requestedStatus) ||
+          req.body?.refundStatus !== undefined ||
+          req.body?.refundAmountCents !== undefined ||
+          req.body?.refundReason !== undefined;
+        if (bookingRow.booking.purchaseId) {
+          if (!requestsCancellation) {
+            return res.status(409).json({
+              message:
+                "Paid booking confirmation and financial fields converge from the canonical provider lifecycle; this admin route only accepts a cancellation request.",
+              code: "paid_booking_provider_state_immutable",
+            });
           }
-        });
-
-        if (
-          String(updates.status || "")
-            .trim()
-            .toLowerCase() === "confirmed"
-        ) {
-          updates.status = "confirmed";
-          updates.bookingConfirmedAt = sql<Date>`case
-            when ${eventBookings.status} = 'confirmed'
-              and ${eventBookings.bookingConfirmedAt} is not null
-            then ${eventBookings.bookingConfirmedAt}
-            else now()
-          end`;
+          const operation = await cancelParkingPassLines({
+            purchaseId: bookingRow.booking.purchaseId,
+            bookingLineIds: [bookingRow.booking.id],
+            requestId: String(req.headers["idempotency-key"] || "").trim(),
+            reason:
+              String(
+                req.body?.cancellationReason ||
+                  req.body?.refundReason ||
+                  "Staff cancelled paid participation",
+              ).trim(),
+            actor: {
+              userId: req.user.id,
+              userType: req.user.userType,
+            },
+            technicalNonService: req.body?.technicalNonService === true,
+          });
+          const terminal = [
+            "provider_confirmed",
+            "credit_issued",
+            "released",
+            "no_remedy",
+          ].includes(operation.status);
+          return res.status(terminal ? 200 : 202).json({
+            bookingId: bookingRow.booking.id,
+            operation: serializeParkingPassCancellationOperation(operation),
+          });
         }
 
+        const providerBound = Boolean(
+          bookingRow.event.requiresPayment === true ||
+            bookingRow.booking.stripePaymentIntentId ||
+            bookingRow.booking.stripeTransferDestination ||
+            bookingRow.booking.paidAt ||
+            bookingRow.booking.settlementTopology ||
+            bookingRow.booking.stripePaymentStatus,
+        );
+        if (providerBound) {
+          await db
+            .update(eventBookings)
+            .set({
+              participationVisibilityState: "action_required",
+              cancellationReason:
+                "Legacy paid booking requires provider reconciliation",
+              updatedAt: new Date(),
+            })
+            .where(eq(eventBookings.id, bookingRow.booking.id));
+          return res.status(409).json({
+            message:
+              "This legacy paid booking has no canonical purchase identity. It is suppressed and requires reconciliation; no local money state was changed.",
+            code: "legacy_paid_booking_action_required",
+          });
+        }
+        if (requestedStatus !== "cancelled") {
+          return res.status(409).json({
+            message:
+              "Only cancellation is supported for a proven free, provider-unbound compatibility booking.",
+            code: "free_booking_transition_unsupported",
+          });
+        }
         const [updated] = await db
           .update(eventBookings)
-          .set({ ...updates, updatedAt: new Date() })
-          .where(eq(eventBookings.id, req.params.id))
+          .set({
+            status: "cancelled",
+            cancelledAt: new Date(),
+            cancellationReason:
+              String(req.body?.cancellationReason || "Staff cancelled free participation").trim(),
+            cancellationActorType: "admin",
+            cancellationActorUserId: req.user.id,
+            cancellationPolicy: "proven_free_direct_cancel",
+            participationVisibilityState: "suppressed",
+            updatedAt: new Date(),
+          })
+          .where(eq(eventBookings.id, bookingRow.booking.id))
           .returning();
-
         res.json(updated);
       } catch (error: any) {
         console.error("Error updating booking:", error);
+        if (error instanceof ParkingPassBookingError) {
+          return res.status(error.statusCode).json({
+            message: error.message,
+            code: error.code,
+            details: error.details,
+          });
+        }
         res.status(500).json({ message: "Failed to update booking" });
       }
     },

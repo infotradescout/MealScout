@@ -1,7 +1,6 @@
 import type { Express } from "express";
 import { z } from "zod";
 import { storage } from "../../storage";
-import { emailService } from "../../emailService";
 import { db } from "../../db";
 import {
   insertEventSchema,
@@ -15,15 +14,13 @@ import { isAuthenticated } from "../../unifiedAuth";
 import {
   getHostByUserId,
   getEventAndHostForUser,
-  getInterestEventAndHostForUser,
   userOwnsEvent,
 } from "../../services/hostOwnership";
+import { computeFillRate } from "../../services/interestDecision";
 import {
-  computeAcceptedCount,
-  shouldBlockAcceptance,
-  buildCapacityFullError,
-  computeFillRate,
-} from "../../services/interestDecision";
+  decideEventInterest,
+  EventInterestDecisionError,
+} from "../../services/eventInterestDecisionService";
 import {
   PARKING_PASS_MEAL_WINDOWS,
   PARKING_PASS_SLOT_TYPES,
@@ -38,9 +35,24 @@ import {
   isParkingPassPublicReady,
 } from "../../services/parkingPassQuality";
 import { logAudit } from "../../auditLogger";
-import { dateKeyInZone } from "../../services/dateKeys";
-import { resolveCityTimeZoneSync } from "../../services/cityTimeZone";
+import {
+  dateKeyFromUnknown,
+  dateKeyInZone,
+  utcDateFromDateKey,
+} from "../../services/dateKeys";
+import { resolveCityTimeZoneStrict } from "../../services/cityTimeZone";
+import { normalizePersistedIanaTimeZone } from "../../services/persistedServiceTimeZoneRules";
+import { loadPersistedEventServiceTimeZone } from "../../services/persistedServiceTimeZone";
 import { canEmailForTopic } from "../../utils/notificationPreferences";
+import { deliverInterestStatusEventNotification } from "../../services/eventNotificationDeliveryService";
+import { requireIdempotencyKey } from "../../middleware/idempotency";
+import {
+  EventParticipationMutationError,
+  updateCoordinatedEvent,
+  updateCoordinatedSeries,
+  type EventUpdates,
+  type SeriesUpdates,
+} from "../../services/eventParticipationMutationService";
 
 export function registerHostParkingPassRoutes(app: Express) {
   const createHostParkingPassListing = async (req: any, res: any) => {
@@ -107,11 +119,67 @@ export function registerHostParkingPassRoutes(app: Express) {
           .json({ message: "Number of spots must be at least 1" });
       }
 
-      if (host.spotCount !== spotCount) {
-        await db
-          .update(hosts)
-          .set({ spotCount, updatedAt: new Date() })
-          .where(eq(hosts.id, host.id));
+      // Ordinary listing edits preserve the series' explicit clock. Only a
+      // new series derives its clock from one unambiguous persisted city row.
+      // A timezone change on an existing series must be explicit and is sent
+      // through the durable material-mutation saga below.
+      const existingSeries = await db
+        .select({
+          id: eventSeries.id,
+          timezone: eventSeries.timezone,
+          startDate: eventSeries.startDate,
+        })
+        .from(eventSeries)
+        .where(
+          and(
+            eq(eventSeries.hostId, host.id),
+            eq(eventSeries.seriesType, "parking_pass"),
+          ),
+        )
+        .limit(1);
+      const hasExplicitTimeZone = Object.prototype.hasOwnProperty.call(
+        req.body || {},
+        "timezone",
+      );
+      const explicitTimeZone = hasExplicitTimeZone
+        ? normalizePersistedIanaTimeZone(req.body?.timezone)
+        : null;
+      if (hasExplicitTimeZone && !explicitTimeZone) {
+        return res.status(400).json({
+          code: "event_series_timezone_invalid",
+          message: "A timezone change requires a valid IANA timezone.",
+        });
+      }
+      if (existingSeries.length === 0 && hasExplicitTimeZone) {
+        return res.status(400).json({
+          code: "new_series_timezone_is_persisted",
+          message:
+            "A new Parking Pass timezone is derived from the persisted venue city and cannot be supplied ad hoc.",
+        });
+      }
+      const storedSeriesTimeZone = existingSeries[0]
+        ? normalizePersistedIanaTimeZone(existingSeries[0].timezone)
+        : null;
+      if (existingSeries[0] && !storedSeriesTimeZone) {
+        return res.status(409).json({
+          code: "event_series_timezone_unavailable",
+          message:
+            "This Parking Pass series does not have a valid stored service timezone.",
+        });
+      }
+      const newSeriesTimeZone =
+        existingSeries.length === 0
+          ? await resolveCityTimeZoneStrict({
+              city: host.city,
+              state: host.state,
+            })
+          : null;
+      if (existingSeries.length === 0 && !newSeriesTimeZone) {
+        return res.status(409).json({
+          code: "venue_timezone_unavailable",
+          message:
+            "This venue needs one valid persisted city timezone before a Parking Pass listing can be created.",
+        });
       }
 
       const defaultStartTime = PARKING_PASS_MEAL_WINDOWS.breakfast.start;
@@ -122,28 +190,6 @@ export function registerHostParkingPassRoutes(app: Express) {
           : "";
       const endTimeRaw =
         typeof req.body?.endTime === "string" ? req.body.endTime.trim() : "";
-
-      // New model: persist pricing defaults on the host as the source of truth.
-      try {
-        await db
-          .update(hosts)
-          .set({
-            parkingPassBreakfastPriceCents: breakfastPriceCents,
-            parkingPassLunchPriceCents: lunchPriceCents,
-            parkingPassDinnerPriceCents: dinnerPriceCents,
-            parkingPassDailyPriceCents: dailyPriceCents,
-            parkingPassWeeklyPriceCents: weeklyPriceCents,
-            parkingPassMonthlyPriceCents: monthlyPriceCents,
-            parkingPassStartTime: startTimeRaw || null,
-            parkingPassEndTime: endTimeRaw || null,
-            parkingPassDaysOfWeek: daysOfWeek,
-            updatedAt: new Date(),
-          } as any)
-          .where(eq(hosts.id, host.id));
-      } catch (e) {
-        // Non-blocking: older DBs may not have these columns yet.
-        console.warn("Failed to persist host parking pass defaults:", e);
-      }
 
       const parsed = insertEventSchema.parse({
         ...req.body,
@@ -209,24 +255,16 @@ export function registerHostParkingPassRoutes(app: Express) {
           .json({ message: "Number of spots must be at least 1" });
       }
 
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+      const authoritativeTimeZone =
+        storedSeriesTimeZone || newSeriesTimeZone!;
+      const todayKey = dateKeyInZone(new Date(), authoritativeTimeZone);
+      const today = utcDateFromDateKey(todayKey);
 
       // A Parking Pass is finite inventory: every paid reservation consumes
       // one of the host's configured truck spots.
       const hardCapEnabled = true;
 
       // Airbnb-style listing: store defaults on the series; do not materialize occurrences here.
-      const existingSeries = await db
-        .select({ id: eventSeries.id })
-        .from(eventSeries)
-        .where(
-          and(
-            eq(eventSeries.hostId, host.id),
-            eq(eventSeries.seriesType, "parking_pass"),
-          ),
-        )
-        .limit(1);
 
       if (existingSeries.length === 0) {
         const legacyRows = await db
@@ -277,18 +315,26 @@ export function registerHostParkingPassRoutes(app: Express) {
         weeklyPriceCents,
         monthlyPriceCents,
       });
-      const seriesTimezone = resolveCityTimeZoneSync({
-        city: host.city,
-        state: host.state,
-      });
-
+      const companionHostDefaults = {
+        spotCount,
+        parkingPassBreakfastPriceCents: breakfastPriceCents,
+        parkingPassLunchPriceCents: lunchPriceCents,
+        parkingPassDinnerPriceCents: dinnerPriceCents,
+        parkingPassDailyPriceCents: dailyPriceCents,
+        parkingPassWeeklyPriceCents: weeklyPriceCents,
+        parkingPassMonthlyPriceCents: monthlyPriceCents,
+        parkingPassStartTime: startTimeRaw || null,
+        parkingPassEndTime: endTimeRaw || null,
+        parkingPassDaysOfWeek: daysOfWeek,
+      };
       const seriesValues: typeof eventSeries.$inferInsert = {
         hostId: host.id,
         name: `Parking Pass - ${host.businessName}`,
         description: host.address,
-        timezone: seriesTimezone,
+        timezone:
+          explicitTimeZone || storedSeriesTimeZone || newSeriesTimeZone!,
         recurrenceRule: null,
-        startDate: today,
+        startDate: existingSeries[0]?.startDate ?? today,
         endDate: null as any,
         defaultStartTime: parsed.startTime,
         defaultEndTime: parsed.endTime,
@@ -309,21 +355,57 @@ export function registerHostParkingPassRoutes(app: Express) {
       };
 
       let seriesId = existingSeries[0]?.id ?? null;
+      let seriesMutationFanout: any = null;
       if (seriesId) {
-        await db
-          .update(eventSeries)
-          .set(seriesValues as any)
-          .where(eq(eventSeries.id, seriesId));
+        const result = await updateCoordinatedSeries({
+          seriesId,
+          actor: { userId },
+          requestId: String(req.headers["idempotency-key"] || "").trim(),
+          companionHostDefaults,
+          updates: {
+            name: seriesValues.name,
+            description: seriesValues.description ?? null,
+            ...(explicitTimeZone && explicitTimeZone !== storedSeriesTimeZone
+              ? { timezone: explicitTimeZone }
+              : {}),
+            recurrenceRule: seriesValues.recurrenceRule ?? null,
+            endDate: seriesValues.endDate ?? null,
+            defaultStartTime: seriesValues.defaultStartTime,
+            defaultEndTime: seriesValues.defaultEndTime,
+            defaultMaxTrucks: seriesValues.defaultMaxTrucks,
+            defaultHardCapEnabled:
+              seriesValues.defaultHardCapEnabled ?? false,
+            parkingPassDaysOfWeek: daysOfWeek,
+            defaultBreakfastPriceCents: breakfastPriceCents,
+            defaultLunchPriceCents: lunchPriceCents,
+            defaultDinnerPriceCents: dinnerPriceCents,
+            defaultDailyPriceCents: dailyPriceCents,
+            defaultWeeklyPriceCents: weeklyPriceCents,
+            defaultMonthlyPriceCents: monthlyPriceCents,
+            defaultHostPriceCents: slotSum,
+            status: publicReady ? "published" : "draft",
+            publishedAt: publicReady ? new Date() : null,
+          },
+        });
+        seriesMutationFanout = result.fanout;
       } else {
-        const [created] = await db
-          .insert(eventSeries)
-          .values(seriesValues)
-          .onConflictDoNothing()
-          .returning();
+        const created = await db.transaction(async (tx: any) => {
+          const [inserted] = await tx
+            .insert(eventSeries)
+            .values(seriesValues)
+            .onConflictDoNothing()
+            .returning();
+          if (!inserted) return null;
+          await tx
+            .update(hosts)
+            .set({ ...companionHostDefaults, updatedAt: new Date() } as any)
+            .where(eq(hosts.id, host.id));
+          return inserted;
+        });
         seriesId = created?.id ?? null;
         if (!seriesId) {
           const [existingAfterConflict] = await db
-            .select({ id: eventSeries.id })
+            .select({ id: eventSeries.id, timezone: eventSeries.timezone })
             .from(eventSeries)
             .where(
               and(
@@ -334,10 +416,34 @@ export function registerHostParkingPassRoutes(app: Express) {
             .limit(1);
           if (existingAfterConflict?.id) {
             seriesId = existingAfterConflict.id;
-            await db
-              .update(eventSeries)
-              .set(seriesValues as any)
-              .where(eq(eventSeries.id, seriesId));
+            const result = await updateCoordinatedSeries({
+              seriesId,
+              actor: { userId },
+              requestId: String(req.headers["idempotency-key"] || "").trim(),
+              companionHostDefaults,
+              updates: {
+                name: seriesValues.name,
+                description: seriesValues.description ?? null,
+                recurrenceRule: seriesValues.recurrenceRule ?? null,
+                endDate: seriesValues.endDate ?? null,
+                defaultStartTime: seriesValues.defaultStartTime,
+                defaultEndTime: seriesValues.defaultEndTime,
+                defaultMaxTrucks: seriesValues.defaultMaxTrucks,
+                defaultHardCapEnabled:
+                  seriesValues.defaultHardCapEnabled ?? false,
+                parkingPassDaysOfWeek: daysOfWeek,
+                defaultBreakfastPriceCents: breakfastPriceCents,
+                defaultLunchPriceCents: lunchPriceCents,
+                defaultDinnerPriceCents: dinnerPriceCents,
+                defaultDailyPriceCents: dailyPriceCents,
+                defaultWeeklyPriceCents: weeklyPriceCents,
+                defaultMonthlyPriceCents: monthlyPriceCents,
+                defaultHostPriceCents: slotSum,
+                status: publicReady ? "published" : "draft",
+                publishedAt: publicReady ? new Date() : null,
+              },
+            });
+            seriesMutationFanout = result.fanout;
           }
         }
       }
@@ -359,7 +465,10 @@ export function registerHostParkingPassRoutes(app: Express) {
           hostId: host.id,
           publicReady,
           paymentsEnabled: Boolean(
-            host.stripeConnectAccountId && host.stripeChargesEnabled,
+            host.stripeConnectAccountId &&
+              host.stripeOnboardingCompleted &&
+              host.stripeChargesEnabled &&
+              host.stripePayoutsEnabled,
           ),
         },
       ).catch((err) =>
@@ -372,20 +481,39 @@ export function registerHostParkingPassRoutes(app: Express) {
         horizonDays: 90,
         includeDraft: true,
       });
-      res.status(201).json(
-        occurrences
-          .filter((item) => item.seriesId === seriesId)
-          .map((item: any) => ({
-            ...item,
-            qualityFlags: computeParkingPassQualityFlags(item),
-          })),
-      );
+      const responseOccurrences = occurrences
+        .filter((item) => item.seriesId === seriesId)
+        .map((item: any) => ({
+          ...item,
+          qualityFlags: computeParkingPassQualityFlags(item),
+        }));
+      if (
+        seriesMutationFanout &&
+        seriesMutationFanout.mutation.status !== "converged"
+      ) {
+        return res.status(202).json({
+          occurrences: responseOccurrences,
+          participationMutation: {
+            ...seriesMutationFanout.mutation,
+            children: seriesMutationFanout.children,
+            operations: seriesMutationFanout.operations,
+          },
+        });
+      }
+      res.status(201).json(responseOccurrences);
     } catch (error: any) {
       console.error("Error creating parking pass listing:", error);
       if (error instanceof z.ZodError) {
         return res.status(400).json({
           message: "Invalid parking pass data",
           errors: error.errors,
+        });
+      }
+      if (error instanceof EventParticipationMutationError) {
+        return res.status(error.statusCode).json({
+          message: error.message,
+          code: error.code,
+          details: error.details,
         });
       }
       res.status(400).json({
@@ -397,6 +525,7 @@ export function registerHostParkingPassRoutes(app: Express) {
   app.post(
     "/api/hosts/parking-pass",
     isAuthenticated,
+    requireIdempotencyKey({ scope: "host_parking_pass_configuration" }),
     createHostParkingPassListing,
   );
 
@@ -479,14 +608,27 @@ export function registerHostParkingPassRoutes(app: Express) {
       }
 
       // Don't allow editing past events
-      const eventDate = new Date(event.date);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      if (eventDate < today) {
+      const eventTimeZone = await loadPersistedEventServiceTimeZone({
+        seriesId: event.seriesId,
+        city: host.city,
+        state: host.state,
+      });
+      const eventDateKey = dateKeyFromUnknown(event.date, "UTC");
+      if (!eventTimeZone || !eventDateKey) {
+        return res.status(409).json({
+          code: "venue_timezone_unavailable",
+          message:
+            "This Parking Pass occurrence does not have authoritative date information.",
+        });
+      }
+      if (eventDateKey < dateKeyInZone(new Date(), eventTimeZone)) {
         return res
           .status(400)
           .json({ message: "Cannot edit past parking pass listings" });
       }
+      const today = utcDateFromDateKey(
+        dateKeyInZone(new Date(), eventTimeZone),
+      );
 
       const {
         startTime,
@@ -791,15 +933,9 @@ export function registerHostParkingPassRoutes(app: Express) {
 
         const affectedEventIds = affectedEvents.map((row) => row.id);
         const eventDateById = new Map<string, string>();
-        const hostTimeZone = resolveCityTimeZoneSync({
-          city: host.city,
-          state: host.state,
-        });
         for (const row of affectedEvents) {
-          eventDateById.set(
-            row.id,
-            dateKeyInZone(new Date(row.date), hostTimeZone),
-          );
+          const dateKey = dateKeyFromUnknown(row.date, "UTC");
+          if (dateKey) eventDateById.set(row.id, dateKey);
         }
 
         if (isCapacityChanging) {
@@ -888,148 +1024,103 @@ export function registerHostParkingPassRoutes(app: Express) {
         hardCapEnabled: event.hardCapEnabled,
       };
 
-      // Apply updates
-      updates.updatedAt = new Date();
-      const [updatedEvent] = await db
-        .update(events)
-        .set(updates)
-        .where(eq(events.id, eventId))
-        .returning();
-
       const shouldSyncFuture = applyToFuture && Boolean(event.requiresPayment);
+      const requestId = String(req.headers["idempotency-key"] || "").trim();
+      let updatedEvent = event;
+      let mutationFanout: any = null;
+      if (Object.keys(updates).length > 0) {
+        if (shouldSyncFuture && event.seriesId) {
+          const [seriesRow] = await db
+            .select({
+              status: eventSeries.status,
+              publishedAt: eventSeries.publishedAt,
+            })
+            .from(eventSeries)
+            .where(eq(eventSeries.id, event.seriesId))
+            .limit(1);
+          const projectedEvent = { ...event, ...updates };
+          const publicReady = isParkingPassPublicReady({
+            host,
+            startTime: projectedEvent.startTime,
+            endTime: projectedEvent.endTime,
+            maxTrucks: projectedEvent.maxTrucks,
+            breakfastPriceCents: projectedEvent.breakfastPriceCents,
+            lunchPriceCents: projectedEvent.lunchPriceCents,
+            dinnerPriceCents: projectedEvent.dinnerPriceCents,
+            dailyPriceCents: projectedEvent.dailyPriceCents,
+            weeklyPriceCents: projectedEvent.weeklyPriceCents,
+            monthlyPriceCents: projectedEvent.monthlyPriceCents,
+          });
+          const seriesUpdates: SeriesUpdates = {
+            ...(updates.startTime !== undefined
+              ? { defaultStartTime: updates.startTime }
+              : {}),
+            ...(updates.endTime !== undefined
+              ? { defaultEndTime: updates.endTime }
+              : {}),
+            ...(updates.maxTrucks !== undefined
+              ? { defaultMaxTrucks: updates.maxTrucks }
+              : {}),
+            ...(updates.hardCapEnabled !== undefined
+              ? { defaultHardCapEnabled: updates.hardCapEnabled }
+              : {}),
+            ...(updates.breakfastPriceCents !== undefined
+              ? { defaultBreakfastPriceCents: updates.breakfastPriceCents }
+              : {}),
+            ...(updates.lunchPriceCents !== undefined
+              ? { defaultLunchPriceCents: updates.lunchPriceCents }
+              : {}),
+            ...(updates.dinnerPriceCents !== undefined
+              ? { defaultDinnerPriceCents: updates.dinnerPriceCents }
+              : {}),
+            ...(updates.dailyPriceCents !== undefined
+              ? { defaultDailyPriceCents: updates.dailyPriceCents }
+              : {}),
+            ...(updates.weeklyPriceCents !== undefined
+              ? { defaultWeeklyPriceCents: updates.weeklyPriceCents }
+              : {}),
+            ...(updates.monthlyPriceCents !== undefined
+              ? { defaultMonthlyPriceCents: updates.monthlyPriceCents }
+              : {}),
+            ...(updates.hostPriceCents !== undefined
+              ? { defaultHostPriceCents: updates.hostPriceCents }
+              : {}),
+            status: publicReady ? "published" : "draft",
+            publishedAt: publicReady
+              ? (seriesRow?.publishedAt ?? new Date())
+              : null,
+          };
+          const result = await updateCoordinatedSeries({
+            seriesId: event.seriesId,
+            actor: { userId },
+            requestId,
+            updates: seriesUpdates,
+          });
+          mutationFanout = result.fanout;
+          updatedEvent =
+            result.eventResults.find((row: any) => row.id === event.id) ||
+            event;
+        } else {
+          const result = await updateCoordinatedEvent({
+            eventId,
+            actor: { userId },
+            requestId,
+            updates: updates as EventUpdates,
+          });
+          mutationFanout = result.fanout;
+          updatedEvent = result.event || event;
+        }
+      }
 
-      if (shouldSyncSpotCount && updates.maxTrucks !== undefined) {
+      if (
+        shouldSyncSpotCount &&
+        updates.maxTrucks !== undefined &&
+        (!mutationFanout || mutationFanout.mutation.status === "converged")
+      ) {
         await db
           .update(hosts)
           .set({ spotCount: updates.maxTrucks, updatedAt: new Date() })
           .where(eq(hosts.id, host.id));
-      }
-
-      const futureUpdates: Record<string, any> = {};
-      if (shouldSyncSpotCount && updates.maxTrucks !== undefined) {
-        futureUpdates.maxTrucks = updates.maxTrucks;
-      }
-      if (shouldSyncFuture) {
-        if (updates.startTime !== undefined)
-          futureUpdates.startTime = updates.startTime;
-        if (updates.endTime !== undefined)
-          futureUpdates.endTime = updates.endTime;
-        if (updates.hardCapEnabled !== undefined)
-          futureUpdates.hardCapEnabled = updates.hardCapEnabled;
-        if (updates.breakfastPriceCents !== undefined)
-          futureUpdates.breakfastPriceCents = updates.breakfastPriceCents;
-        if (updates.lunchPriceCents !== undefined)
-          futureUpdates.lunchPriceCents = updates.lunchPriceCents;
-        if (updates.dinnerPriceCents !== undefined)
-          futureUpdates.dinnerPriceCents = updates.dinnerPriceCents;
-        if (updates.dailyPriceCents !== undefined)
-          futureUpdates.dailyPriceCents = updates.dailyPriceCents;
-        if (updates.weeklyPriceCents !== undefined)
-          futureUpdates.weeklyPriceCents = updates.weeklyPriceCents;
-        if (updates.monthlyPriceCents !== undefined)
-          futureUpdates.monthlyPriceCents = updates.monthlyPriceCents;
-        if (updates.hostPriceCents !== undefined)
-          futureUpdates.hostPriceCents = updates.hostPriceCents;
-      }
-
-      if (
-        Object.keys(futureUpdates).length > 0 &&
-        Boolean(event.requiresPayment)
-      ) {
-        await db
-          .update(events)
-          .set({ ...futureUpdates, updatedAt: new Date() })
-          .where(
-            and(
-              eq(events.hostId, host.id),
-              eq(events.requiresPayment, true),
-              gte(events.date, today),
-            ),
-          );
-      }
-
-      const seriesUpdates: Record<string, any> = {};
-      if (shouldSyncSpotCount && updates.maxTrucks !== undefined) {
-        seriesUpdates.defaultMaxTrucks = updates.maxTrucks;
-      }
-      if (shouldSyncFuture) {
-        if (updates.startTime !== undefined)
-          seriesUpdates.defaultStartTime = updates.startTime;
-        if (updates.endTime !== undefined)
-          seriesUpdates.defaultEndTime = updates.endTime;
-        if (updates.hardCapEnabled !== undefined) {
-          seriesUpdates.defaultHardCapEnabled = updates.hardCapEnabled;
-        }
-        if (updates.breakfastPriceCents !== undefined) {
-          seriesUpdates.defaultBreakfastPriceCents =
-            updates.breakfastPriceCents;
-        }
-        if (updates.lunchPriceCents !== undefined) {
-          seriesUpdates.defaultLunchPriceCents = updates.lunchPriceCents;
-        }
-        if (updates.dinnerPriceCents !== undefined) {
-          seriesUpdates.defaultDinnerPriceCents = updates.dinnerPriceCents;
-        }
-        if (updates.dailyPriceCents !== undefined) {
-          seriesUpdates.defaultDailyPriceCents = updates.dailyPriceCents;
-        }
-        if (updates.weeklyPriceCents !== undefined) {
-          seriesUpdates.defaultWeeklyPriceCents = updates.weeklyPriceCents;
-        }
-        if (updates.monthlyPriceCents !== undefined) {
-          seriesUpdates.defaultMonthlyPriceCents = updates.monthlyPriceCents;
-        }
-        if (updates.hostPriceCents !== undefined) {
-          seriesUpdates.defaultHostPriceCents = updates.hostPriceCents;
-        }
-      }
-
-      if (event.seriesId && Object.keys(seriesUpdates).length > 0) {
-        await db
-          .update(eventSeries)
-          .set({ ...seriesUpdates, updatedAt: new Date() })
-          .where(eq(eventSeries.id, event.seriesId));
-      }
-
-      // Enforce: Parking Pass only becomes publicly visible when it is complete + priced.
-      // Draft series are allowed to exist for incomplete data entry.
-      if (event.seriesId) {
-        const [seriesRow] = await db
-          .select({
-            status: eventSeries.status,
-            publishedAt: eventSeries.publishedAt,
-          })
-          .from(eventSeries)
-          .where(eq(eventSeries.id, event.seriesId))
-          .limit(1);
-        if (seriesRow) {
-          const publicReady = isParkingPassPublicReady({
-            host,
-            startTime: updatedEvent.startTime,
-            endTime: updatedEvent.endTime,
-            maxTrucks: updatedEvent.maxTrucks,
-            breakfastPriceCents: updatedEvent.breakfastPriceCents,
-            lunchPriceCents: updatedEvent.lunchPriceCents,
-            dinnerPriceCents: updatedEvent.dinnerPriceCents,
-            dailyPriceCents: updatedEvent.dailyPriceCents,
-            weeklyPriceCents: updatedEvent.weeklyPriceCents,
-            monthlyPriceCents: updatedEvent.monthlyPriceCents,
-          });
-          const nextStatus = publicReady ? "published" : "draft";
-          const shouldUpdateStatus = String(seriesRow.status) !== nextStatus;
-          if (shouldUpdateStatus) {
-            await db
-              .update(eventSeries)
-              .set({
-                status: nextStatus as any,
-                publishedAt: publicReady
-                  ? (seriesRow.publishedAt ?? new Date())
-                  : null,
-                updatedAt: new Date(),
-              })
-              .where(eq(eventSeries.id, event.seriesId));
-          }
-        }
       }
 
       // Telemetry
@@ -1097,12 +1188,32 @@ export function registerHostParkingPassRoutes(app: Express) {
         console.error("Failed to write parking pass audit log:", err),
       );
 
-      res.json({
+      res
+        .status(
+          mutationFanout && mutationFanout.mutation.status !== "converged"
+            ? 202
+            : 200,
+        )
+        .json({
         ...updatedEvent,
         qualityFlags: computeParkingPassQualityFlags({ ...updatedEvent, host }),
+        participationMutation: mutationFanout
+          ? {
+              ...mutationFanout.mutation,
+              children: mutationFanout.children,
+              operations: mutationFanout.operations,
+            }
+          : null,
       });
     } catch (error: any) {
       console.error("Error updating parking pass listing:", error);
+      if (error instanceof EventParticipationMutationError) {
+        return res.status(error.statusCode).json({
+          message: error.message,
+          code: error.code,
+          details: error.details,
+        });
+      }
       res
         .status(500)
         .json({ message: "Failed to update parking pass listing" });
@@ -1112,6 +1223,7 @@ export function registerHostParkingPassRoutes(app: Express) {
   app.patch(
     "/api/hosts/parking-pass/:passId",
     isAuthenticated,
+    requireIdempotencyKey({ scope: "host_parking_pass_mutation" }),
     updateHostParkingPassListing,
   );
 
@@ -1128,81 +1240,22 @@ export function registerHostParkingPassRoutes(app: Express) {
           return res.status(400).json({ message: "Invalid status" });
         }
 
-        // Verify host owns the event associated with this interest
-        const { interest, event, host } = await getInterestEventAndHostForUser(
-          interestId,
-          userId,
-        );
-
-        if (!interest) {
-          return res.status(404).json({ message: "Interest not found" });
-        }
-
-        if (!event) {
-          return res
-            .status(404)
-            .json({ message: "Parking pass listing not found" });
-        }
-
-        if (!userOwnsEvent(userId, host, event)) {
-          return res.status(403).json({
-            message: "Not authorized to manage this parking pass listing",
-          });
-        }
-
-        // Idempotency Check: If already in desired status, return success
-        if (interest.status === status) {
-          return res.json(interest);
-        }
-
-        // CAPACITY GUARD v2.2
-        // If hard cap is enabled, block acceptance if full
-        if (status === "accepted" && event.hardCapEnabled) {
-          const currentInterests = await storage.getEventInterestsByEventId(
-            event.id,
-          );
-          // Note: interest.status is definitely NOT 'accepted' here due to idempotency check above
-          const acceptedCount = computeAcceptedCount(currentInterests);
-
-          if (
-            shouldBlockAcceptance({
-              hardCapEnabled: event.hardCapEnabled,
-              acceptedCount,
-              maxTrucks: event.maxTrucks,
-            })
-          ) {
-            // Telemetry: Blocked Attempt
-            await storage.createTelemetryEvent({
-              eventName: "interest_accept_blocked",
-              userId: req.user.id,
-              properties: {
-                eventId: event.id,
-                truckId: interest.truckId,
-                reason: "capacity_guard_limit_reached",
-                maxTrucks: event.maxTrucks,
-                acceptedCount,
-              },
-            });
-
-            const capacityError = buildCapacityFullError();
-
-            return res.status(400).json(capacityError);
-          }
-        }
-
-        const updatedInterest = await storage.updateEventInterestStatus(
+        const decision = await decideEventInterest({
           interestId,
           status,
-        );
+          actorUserId: userId,
+          actorRole: req.user.userType,
+        });
+        const interest = decision.interest;
+        const event = decision.event;
+        const host = decision.host;
+        if (decision.replayed) return res.json(interest);
 
         // Send notification to truck (fire and forget)
         (async () => {
           try {
             // Telemetry: Interest Status Changed
-            const allInterests = await storage.getEventInterestsByEventId(
-              event.id,
-            );
-            const acceptedCount = computeAcceptedCount(allInterests);
+            const acceptedCount = decision.acceptedCount;
             const isOverCap = acceptedCount >= event.maxTrucks;
 
             await storage.createTelemetryEvent({
@@ -1235,13 +1288,19 @@ export function registerHostParkingPassRoutes(app: Express) {
                 owner.email &&
                 canEmailForTopic((owner as any).accountSettings, "nearbyEvents")
               ) {
-                await emailService.sendInterestStatusUpdate(
-                  owner.email,
-                  truck.name,
-                  host!.businessName,
-                  new Date(event.date).toLocaleDateString(),
-                  status as "accepted" | "declined",
-                );
+                await deliverInterestStatusEventNotification({
+                  interestId: interest.id,
+                  eventId: event.id,
+                  eventDate: event.date,
+                  seriesId: event.seriesId,
+                  hostCity: host?.city,
+                  hostState: host?.state,
+                  recipientUserId: owner.id,
+                  recipientEmail: owner.email,
+                  truckName: truck.name,
+                  hostName: host.businessName,
+                  status: status as "accepted" | "declined",
+                });
               }
             }
           } catch (err) {
@@ -1249,8 +1308,29 @@ export function registerHostParkingPassRoutes(app: Express) {
           }
         })();
 
-        res.json(updatedInterest);
+        res.json(interest);
       } catch (error: any) {
+        if (error instanceof EventInterestDecisionError) {
+          if (error.code === "capacity_reached") {
+            await storage.createTelemetryEvent({
+              eventName: "interest_accept_blocked",
+              userId: req.user.id,
+              properties: {
+                eventId: error.details?.eventId,
+                reason: "capacity_guard_limit_reached",
+                ...error.details,
+              },
+            });
+          }
+          return res.status(error.statusCode).json({
+            message: error.message,
+            code:
+              error.code === "capacity_reached"
+                ? "CAPACITY_REACHED"
+                : error.code,
+            ...error.details,
+          });
+        }
         console.error("Error updating interest status:", error);
         res.status(500).json({ message: "Failed to update status" });
       }

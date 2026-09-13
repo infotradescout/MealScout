@@ -6,7 +6,7 @@
  * - Expand any event to see interested trucks and accept / decline each
  */
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { format } from "date-fns";
@@ -37,6 +37,10 @@ import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  localCalendarDate,
+  localDateTimeFromDateKey,
+} from "@/lib/date-only";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -405,20 +409,12 @@ function InterestsPanel({
 // ---------------------------------------------------------------------------
 
 function hasEventEnded(event: Pick<EventItem, "date" | "endTime">) {
-  const eventDate = new Date(event.date);
-  if (!Number.isFinite(eventDate.getTime())) return false;
-
   const endTime = String(event.endTime || "").trim();
-  const match = endTime.match(/^(\d{1,2}):(\d{2})/);
-  if (match) {
-    const hour = Number(match[1]);
-    const minute = Number(match[2]);
-    if (Number.isFinite(hour) && Number.isFinite(minute)) {
-      eventDate.setHours(hour, minute, 0, 0);
-    }
-  } else {
-    eventDate.setHours(23, 59, 59, 999);
-  }
+  const eventDate = localDateTimeFromDateKey(
+    event.date,
+    /^\d{1,2}:\d{2}/.test(endTime) ? endTime.slice(0, 5) : "23:59",
+  );
+  if (!eventDate) return false;
 
   return eventDate.getTime() < Date.now();
 }
@@ -465,7 +461,7 @@ function EventCard({
             <div className="text-sm text-[color:var(--text-secondary)] space-y-1 mt-1">
               <div className="flex items-center gap-2">
                 <Calendar className="h-4 w-4 text-[color:var(--accent-text)]" />
-                {format(new Date(event.date), "EEEE, MMMM d, yyyy")}
+                {format(localCalendarDate(event.date)!, "EEEE, MMMM d, yyyy")}
               </div>
               <div className="flex items-center gap-2">
                 <Clock className="h-4 w-4 text-[color:var(--accent-text)]" />
@@ -586,6 +582,7 @@ export default function EventCoordinatorDashboard() {
     maxTrucks: 1,
     hardCapEnabled: false,
   });
+  const createRequestRef = useRef<{ body: string; key: string } | null>(null);
 
   useEffect(() => {
     if (dashboardParams.get("setup") === "onboarding") {
@@ -641,27 +638,38 @@ export default function EventCoordinatorDashboard() {
     setCreateError("");
     setIsSubmitting(true);
     try {
+      const requestBody = JSON.stringify({
+        businessName: formData.organizationName,
+        address: formData.address,
+        city: formData.city,
+        state: formData.state,
+        contactPhone: formData.contactPhone,
+        name: formData.eventName,
+        description: formData.description,
+        date: formData.date,
+        startTime: formData.startTime,
+        endTime: formData.endTime,
+        maxTrucks: Number(formData.maxTrucks),
+        hardCapEnabled: formData.hardCapEnabled,
+      });
+      if (!createRequestRef.current || createRequestRef.current.body !== requestBody) {
+        createRequestRef.current = {
+          body: requestBody,
+          key: crypto.randomUUID(),
+        };
+      }
       const res = await fetch("/api/event-coordinator/events", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": createRequestRef.current.key,
+        },
         credentials: "include",
-        body: JSON.stringify({
-          businessName: formData.organizationName,
-          address: formData.address,
-          city: formData.city,
-          state: formData.state,
-          contactPhone: formData.contactPhone,
-          name: formData.eventName,
-          description: formData.description,
-          date: formData.date,
-          startTime: formData.startTime,
-          endTime: formData.endTime,
-          maxTrucks: Number(formData.maxTrucks),
-          hardCapEnabled: formData.hardCapEnabled,
-        }),
+        body: requestBody,
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.message || "Failed to create event");
+      createRequestRef.current = null;
       setEvents((prev) => [data, ...prev]);
       setIsCreating(false);
       setFormData({

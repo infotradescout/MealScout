@@ -1,4 +1,4 @@
-import { and, eq, gte, inArray, lt } from "drizzle-orm";
+import { and, eq, gte, inArray, isNull, lt } from "drizzle-orm";
 import { db } from "../db";
 import { storage } from "../storage";
 import {
@@ -21,6 +21,8 @@ import {
   weekdayInZoneForDateKey,
 } from "./dateKeys";
 import { buildSlotDateTimes } from "./timeIntent";
+import { normalizePersistedIanaTimeZone } from "./persistedServiceTimeZoneRules";
+import { parkingPassSeriesBoundaryDateKey } from "./parkingPassVirtualDates";
 
 const DEFAULT_HORIZON_DAYS = 30;
 
@@ -35,18 +37,6 @@ export const parseParkingPassVirtualId = (value: string) => {
   if (!seriesId) return null;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) return null;
   return { seriesId, dateKey };
-};
-
-const dayStart = (d: Date) => {
-  const next = new Date(d);
-  next.setHours(0, 0, 0, 0);
-  return next;
-};
-
-const addDays = (d: Date, days: number) => {
-  const next = new Date(d);
-  next.setDate(next.getDate() + days);
-  return next;
 };
 
 const normalizeDaysOfWeek = (value: unknown): number[] => {
@@ -118,24 +108,30 @@ const normalizeStatus = (value: unknown) =>
 
 const dateKeyFromMaybeDate = (
   value: unknown,
-  timezone: string,
+  _timezone: string,
 ): string | null => {
-  if (!value) return null;
-  const parsed = new Date(value as any);
-  if (!Number.isFinite(parsed.getTime())) return null;
-  return dateKeyInZone(parsed, timezone);
+  return parkingPassSeriesBoundaryDateKey(value);
 };
 
 export async function listParkingPassOccurrences(options?: {
   start?: Date;
+  now?: Date;
   horizonDays?: number;
   hostIds?: string[];
   seriesIds?: string[];
   includeDraft?: boolean;
 }) {
-  const start = dayStart(options?.start ?? new Date());
+  const now = options?.now || new Date();
+  const explicitStartDateKey = options?.start
+    ? dateKeyFromUnknown(options.start, "UTC")
+    : null;
+  const fallbackStartDateKey =
+    explicitStartDateKey || dateKeyInZone(now, "UTC");
+  let start = utcDateFromDateKey(fallbackStartDateKey);
   const horizonDays = Math.max(1, options?.horizonDays ?? DEFAULT_HORIZON_DAYS);
-  const end = addDays(start, horizonDays);
+  let end = utcDateFromDateKey(
+    addDaysToDateKey(fallbackStartDateKey, horizonDays),
+  );
   const includeDraft = options?.includeDraft ?? false;
 
   const statusFilter = includeDraft
@@ -150,6 +146,9 @@ export async function listParkingPassOccurrences(options?: {
       : []),
     ...(options?.seriesIds?.length
       ? [inArray(eventSeries.id, options.seriesIds)]
+      : []),
+    ...(!includeDraft
+      ? [isNull(eventSeries.activeParticipationMutationId)]
       : []),
   );
 
@@ -195,6 +194,10 @@ export async function listParkingPassOccurrences(options?: {
       const status = normalizeStatus(row.status);
       if (status && !allowStatuses.has(status)) return false;
       if (!status && !includeDraft) return false;
+      if (!includeDraft && String(row.activeParticipationMutationId || "").trim()) {
+        return false;
+      }
+      if (!normalizePersistedIanaTimeZone(row.timezone)) return false;
       return true;
     });
 
@@ -205,7 +208,7 @@ export async function listParkingPassOccurrences(options?: {
         coordinatorUserId: null,
         name: row.name ?? `Parking Pass - ${row.hostId}`,
         description: row.description ?? null,
-        timezone: "America/Chicago",
+        timezone: normalizePersistedIanaTimeZone(row.timezone),
         recurrenceRule: null,
         startDate: row.startDate ? (new Date(row.startDate) as any) : (start as any),
         endDate: row.endDate ? (new Date(row.endDate) as any) : (end as any),
@@ -225,6 +228,14 @@ export async function listParkingPassOccurrences(options?: {
         defaultMonthlyPriceCents: row.defaultMonthlyPriceCents ?? 0,
         defaultHostPriceCents: row.defaultHostPriceCents ?? 0,
         status: row.status ?? (includeDraft ? "draft" : "published"),
+        participationVersion: row.participationVersion ?? 0,
+        activeParticipationMutationId:
+          row.activeParticipationMutationId ?? null,
+        participationSuppressedAt: row.participationSuppressedAt
+          ? (new Date(row.participationSuppressedAt) as any)
+          : null,
+        participationSuppressionReason:
+          row.participationSuppressionReason ?? null,
         publishedAt: row.publishedAt
           ? (new Date(row.publishedAt) as any)
           : null,
@@ -240,6 +251,9 @@ export async function listParkingPassOccurrences(options?: {
 
   seriesRows = seriesRows.filter((row) => {
     const status = normalizeStatus((row.series as any).status);
+    if (!normalizePersistedIanaTimeZone((row.series as any).timezone)) {
+      return false;
+    }
     if (includeDraft) {
       return PUBLIC_SERIES_STATUSES.has(status) || DRAFT_SERIES_STATUSES.has(status);
     }
@@ -249,6 +263,26 @@ export async function listParkingPassOccurrences(options?: {
   if (seriesRows.length === 0) {
     return { occurrences: [] as ParkingPassOccurrence[], start, end };
   }
+
+  const authoritativeStartKeys = seriesRows
+    .map((row) => {
+      const timeZone = normalizePersistedIanaTimeZone(row.series.timezone);
+      return timeZone
+        ? explicitStartDateKey || dateKeyInZone(now, timeZone)
+        : null;
+    })
+    .filter((value): value is string => Boolean(value))
+    .sort();
+  if (authoritativeStartKeys.length === 0) {
+    return { occurrences: [] as ParkingPassOccurrence[], start, end };
+  }
+  const queryStartKey = authoritativeStartKeys[0];
+  const queryEndKey = addDaysToDateKey(
+    authoritativeStartKeys[authoritativeStartKeys.length - 1],
+    horizonDays,
+  );
+  start = utcDateFromDateKey(queryStartKey);
+  end = utcDateFromDateKey(queryEndKey);
 
   const seriesHostIds = Array.from(
     new Set(
@@ -358,8 +392,10 @@ export async function listParkingPassOccurrences(options?: {
         PARKING_PASS_MEAL_WINDOWS.dinner.end,
     );
 
-    const seriesTimeZone = String(series.timezone || "America/Chicago").trim();
-    const startDateKey = dateKeyInZone(start, seriesTimeZone);
+    const seriesTimeZone = normalizePersistedIanaTimeZone(series.timezone);
+    if (!seriesTimeZone) continue;
+    const startDateKey =
+      explicitStartDateKey || dateKeyInZone(now, seriesTimeZone);
     const seriesStartDateKey = dateKeyFromMaybeDate(
       (series as any).startDate,
       seriesTimeZone,
@@ -475,6 +511,20 @@ export async function listParkingPassOccurrences(options?: {
         weeklyPriceCents,
         monthlyPriceCents,
         requiresPayment: true,
+        participationVersion:
+          override?.participationVersion ?? series.participationVersion ?? 0,
+        activeParticipationMutationId:
+          override?.activeParticipationMutationId ??
+          series.activeParticipationMutationId ??
+          null,
+        participationSuppressedAt:
+          override?.participationSuppressedAt ??
+          series.participationSuppressedAt ??
+          null,
+        participationSuppressionReason:
+          override?.participationSuppressionReason ??
+          series.participationSuppressionReason ??
+          null,
         lastConfirmedAt:
           override?.updatedAt ??
           override?.createdAt ??
@@ -536,11 +586,13 @@ export async function ensureParkingPassEventRow(args: {
   const { seriesId, dateKey } = parsed;
   const virtualOccurrence = await loadParkingPassOccurrenceById(args.passId);
   if (!virtualOccurrence) return null;
+  const occurrenceTimeZone = normalizePersistedIanaTimeZone(
+    virtualOccurrence.seriesTimeZone,
+  );
+  if (!occurrenceTimeZone) return null;
   if (args.requireFuture) {
     const interval = buildSlotDateTimes({
-      timeZone: String(
-        virtualOccurrence.seriesTimeZone || "America/Chicago",
-      ).trim(),
+      timeZone: occurrenceTimeZone,
       date: virtualOccurrence.date,
       startTime: String(virtualOccurrence.startTime || ""),
       endTime: String(virtualOccurrence.endTime || ""),
@@ -567,9 +619,10 @@ export async function ensureParkingPassEventRow(args: {
   if (!seriesRow || seriesRow.series.seriesType !== "parking_pass") {
     return null;
   }
-  const seriesTimeZone = String(
-    seriesRow.series.timezone || "America/Chicago",
-  ).trim();
+  const seriesTimeZone = normalizePersistedIanaTimeZone(
+    seriesRow.series.timezone,
+  );
+  if (!seriesTimeZone) return null;
   // Blackout check
   const targetDateEnd = new Date(targetDate);
   targetDateEnd.setUTCDate(targetDateEnd.getUTCDate() + 1);

@@ -590,10 +590,19 @@ assert.match(
   /loadConfirmedEventTrucks\(\[eventId\]\)[\s\S]*truck: publicTrucks\[0\] \|\| null,[\s\S]*trucks: publicTrucks/,
   "Public event detail must expose multi-truck truth with a singular compatibility alias",
 );
+const adminBookingMutation = userAdminRouteSource.slice(
+  userAdminRouteSource.indexOf('"/api/admin/parking-pass-bookings/:id"'),
+  userAdminRouteSource.indexOf("// OAuth configuration status check"),
+);
 assert.match(
-  userAdminRouteSource,
-  /updates\.bookingConfirmedAt = sql<Date>`case[\s\S]*eventBookings\.status[\s\S]*eventBookings\.bookingConfirmedAt[\s\S]*else now\(\)/,
-  "Admin confirmation must atomically stamp missing or newly transitioned booking evidence",
+  adminBookingMutation,
+  /if \(bookingRow\.booking\.purchaseId\)[\s\S]*if \(!requestsCancellation\)[\s\S]*paid_booking_provider_state_immutable[\s\S]*cancelParkingPassLines\(/,
+  "Admin paid-booking mutations must reject local confirmation and use the canonical cancellation lifecycle",
+);
+assert.doesNotMatch(
+  adminBookingMutation,
+  /bookingConfirmedAt\s*[:=]|status:\s*"confirmed"/,
+  "Admin mutations must not manufacture public booking confirmation evidence",
 );
 assert.ok(
   (discoveryRouteSource.match(/\.from\(eventBookings\)/g) || []).length >= 2,

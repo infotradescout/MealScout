@@ -267,8 +267,9 @@ assert.match(
   /resolveCoordinatePair\(event\.host\?\.latitude, event\.host\?\.longitude\)/,
 );
 assert.match(
-  scout,
-  /\.filter\(\(event\) => isTodayDate\(getEventCalendarDay\(event\)\)\)/,
+  between(scout, "const eventMarkers = useMemo", "const hostMarkers = useMemo"),
+  /\.filter\(isEventOnAuthoritativeVenueDay\)/,
+  "Event pins must use the server-derived venue day, not the browser's calendar day.",
 );
 assert.match(
   markerFilter,

@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "type": "module",
   "engines": {
-    "node": ">=20 <25"
+    "node": "24.x"
   },
   "license": "MIT",
   "scripts": {
@@ -41,6 +41,9 @@
     "test:search-response-bounds": "npx --yes tsx scripts/mealscout-search-response-bounds.contract.test.ts",
     "test:public-search-ranking-db": "node --import tsx scripts/mealscout-public-search-ranking.integration.test.ts",
     "test:render-migration-gate": "node --import tsx scripts/mealscout-render-migration-gate.contract.test.ts",
+    "test:integrated-marketplace": "node --import tsx scripts/eventSeriesPublicationSafety.behavior.test.ts && node --import tsx scripts/productionFinancialSafety.behavior.test.ts && node --import tsx scripts/clientDateOnly.behavior.test.ts && node --import tsx scripts/emailAdapterReceipt.behavior.test.ts && node --import tsx scripts/serviceTimeTruth.behavior.test.ts && node --import tsx scripts/dateRolloverInvariant.behavior.test.ts && node --import tsx scripts/mealscout-integrated-marketplace-v1.behavior.test.ts && node --import tsx scripts/mealscout-integrated-marketplace-v1.contract.test.ts",
+    "test:date-rollover-invariant": "node --import tsx scripts/dateRolloverInvariant.behavior.test.ts",
+    "test:integrated-marketplace:stateful": "node --import tsx scripts/integratedMarketplaceProviderStateful.test.ts",
     "test:scout-result-view-model": "npx --yes tsx scripts/mealscout-scout-result-view-model.contract.test.ts",
     "test:map-truth": "npx --yes tsx scripts/mealscout-map-truth.contract.test.ts",
     "test:leaflet-removal": "npx --yes tsx scripts/mealscout-leaflet-removal.contract.test.ts",
@@ -74,7 +77,7 @@
     "db:generate:sql": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
     "test:flows:e2e": "playwright test",
-    "test:flows:e2e:no-creds": "playwright test playwright/reviews-route.spec.ts playwright/welcome-routing.spec.ts playwright/verification-handoff.spec.ts playwright/search-recovery.spec.ts playwright/scout-dashboard.spec.ts playwright/about-explainer.spec.ts playwright/owner-profile-evidence-review.spec.ts playwright/event-booking-cancellation.spec.ts",
+    "test:flows:e2e:no-creds": "playwright test playwright/reviews-route.spec.ts playwright/welcome-routing.spec.ts playwright/verification-handoff.spec.ts playwright/search-recovery.spec.ts playwright/scout-dashboard.spec.ts playwright/about-explainer.spec.ts playwright/owner-profile-evidence-review.spec.ts playwright/event-booking-cancellation.spec.ts playwright/ordering-truth.spec.ts",
     "test:reviews-route": "playwright test playwright/reviews-route.spec.ts",
     "test:staff-rbac": "npx --yes tsx scripts/testStaffRBAC.ts",
     "test:staff-rbac-guardrails": "npx --yes tsx scripts/staff-rbac-guardrails.contract.test.ts",
@@ -86,7 +89,7 @@
     "test:supplier-payments": "tsx scripts/testSupplierPaymentIntentFlow.ts",
     "test:supplier-pay-intent-switch": "tsx scripts/testSupplierPayIntentMethodSwitch.ts",
     "test:ordering-profile-access": "tsx scripts/testOrderingProfileAccess.ts",
-    "test:ordering-truth": "node --import tsx scripts/mealscout-ordering-eligibility.behavior.test.ts && node --import tsx scripts/mealscout-pickup-checkout-replay.behavior.test.ts && node --import tsx scripts/mealscout-pickup-checkout-display.behavior.test.ts && node --import tsx scripts/mealscout-pickup-payment-reconciliation.behavior.test.ts && node --import tsx scripts/mealscout-pickup-transfer-reversal.behavior.test.ts && node --import tsx scripts/mealscout-pickup-dispute-authority.behavior.test.ts && node --import tsx scripts/mealscout-pickup-payout-recovery.behavior.test.ts && node --import tsx scripts/mealscout-pickup-financial-race.behavior.test.ts && node --import tsx scripts/mealscout-ordering-authority-race.behavior.test.ts && node --import tsx scripts/mealscout-public-restaurant-write-boundary.behavior.test.ts && node --import tsx scripts/mealscout-public-search-trust.behavior.test.ts && node --import tsx scripts/mealscout-ordering-truth.contract.test.ts",
+    "test:ordering-truth": "node --import tsx scripts/restaurant-connect-status.behavior.test.ts && node --import tsx scripts/mealscout-ordering-eligibility.behavior.test.ts && node --import tsx scripts/mealscout-pickup-checkout-replay.behavior.test.ts && node --import tsx scripts/mealscout-pickup-checkout-display.behavior.test.ts && node --import tsx scripts/mealscout-pickup-payment-reconciliation.behavior.test.ts && node --import tsx scripts/mealscout-pickup-transfer-reversal.behavior.test.ts && node --import tsx scripts/mealscout-pickup-dispute-authority.behavior.test.ts && node --import tsx scripts/mealscout-pickup-payout-recovery.behavior.test.ts && node --import tsx scripts/mealscout-pickup-financial-race.behavior.test.ts && node --import tsx scripts/mealscout-ordering-authority-race.behavior.test.ts && node --import tsx scripts/mealscout-public-restaurant-write-boundary.behavior.test.ts && node --import tsx scripts/mealscout-public-search-trust.behavior.test.ts && node --import tsx scripts/mealscout-ordering-truth.contract.test.ts",
     "test:stripe-webhook-safety": "node --import tsx scripts/mealscout-stripe-webhook-verification-mode.contract.test.ts && node --import tsx scripts/mealscout-pickup-webhook-payout-eligibility.behavior.test.ts && node --import tsx scripts/mealscout-stripe-subscription-stale-event-guard.behavior.test.ts && node --import tsx scripts/mealscout-stripe-webhook-subscription-entitlement-guards.contract.test.ts && node --import tsx scripts/mealscout-stripe-webhook-idempotency-guards.contract.test.ts && node --import tsx scripts/mealscout-stripe-webhook-signature-verification.behavior.test.ts",
     "test:subscription-entitlement-safety": "node --import tsx scripts/mealscout-subscription-entitlement-safety.integration.test.ts",
     "test:stripe-webhook-stateful-replay": "node --import tsx scripts/mealscout-stripe-webhook-stateful-replay.integration.test.ts",
@@ -124,6 +127,7 @@
     "migrate:chain": "tsx scripts/runMigrationChain.ts",
     "migrate:deploy": "tsx scripts/runDeployMigrations.ts",
     "test:migration-118-upgrade": "tsx scripts/proveMigration118Upgrade.ts",
+    "test:migration-142-postgres16": "node --import tsx scripts/proveMigration142Postgres16.ts",
     "backfill:host-coordinates": "tsx scripts/backfillHostGeocodes.ts",
     "backfill:map-coordinates": "tsx scripts/backfillMapCoordinates.ts",
     "backfill:parking-pass-hours": "tsx scripts/backfillParkingPassHours.ts",
@@ -133,6 +137,7 @@
     "test:flows": "tsx scripts/userFlows.ts",
     "test:flows:with-server": "node scripts/testFlowsWithServer.mjs",
     "smoke:critical": "node scripts/smokeCriticalRoutes.mjs",
+    "test:critical-smoke": "node --import tsx --test scripts/smoke-critical-routes.behavior.test.mjs",
     "smoke:scout-surface": "node scripts/smokeScoutSurface.mjs",
     "gate:prelaunch": "node scripts/preLaunchGate.mjs",
     "gate:production": "node scripts/productionReadinessGate.mjs",
@@ -148,11 +153,13 @@
     "verify:routes": "node scripts/verifyRoutes.mjs && node scripts/verifyPublicProfileContracts.mjs && npx --yes tsx scripts/testPublicResponseSafety.ts",
     "verify:public-profiles": "node scripts/verifyPublicProfileContracts.mjs",
     "test:event-spot-booking-payment": "tsx scripts/testEventSpotBookingPaymentContract.ts",
-    "test:parking-pass-concurrency": "tsx scripts/testParkingPassBookingConcurrency.ts",
+    "test:parking-pass-concurrency": "npm run test:migration-142-postgres16 && npm run test:integrated-marketplace:stateful",
+    "smoke:parking-pass-concurrency-live": "tsx scripts/testParkingPassBookingConcurrency.ts",
     "audit:parking-pass-webhooks": "tsx scripts/auditParkingPassWebhookReconciliation.ts",
     "test:parking-pass-datekeys": "tsx scripts/testParkingPassDateKeys.ts",
     "audit:demand-funnel": "tsx scripts/auditLocationDemandFunnel.ts",
-    "test:parking-pass-webhook-replay": "tsx scripts/testParkingPassWebhookReplay.ts",
+    "test:parking-pass-webhook-replay": "node --import tsx scripts/parking-pass-webhook-replay.behavior.test.ts",
+    "smoke:parking-pass-webhook-replay-live": "tsx scripts/testParkingPassWebhookReplay.ts",
     "check:parking-pass-readiness": "tsx scripts/runParkingPassReadinessSuite.ts",
     "audit:location-demand-activation": "tsx scripts/auditLocationDemandActivation.ts",
     "test:email-policy": "tsx scripts/testEmailPolicy.ts",
@@ -243,7 +250,7 @@
     "jsonwebtoken": "^9.0.2",
     "lucide-react": "^0.453.0",
     "luxon": "^3.7.2",
-    "maplibre-gl": "^5.24.0",
+    "maplibre-gl": "^6.9.0",
     "memoizee": "^0.4.17",
     "multer": "^2.0.2",
     "nanoid": "^5.1.6",
@@ -309,7 +316,8 @@
     },
     "exceljs": {
       "uuid": "^11.1.1"
-    }
+    },
+    "qs": "^6.16.0"
   },
   "main": "dist/public/assets/mealscout-app.cjs.js",
   "module": "dist/public/assets/mealscout-app.es.js",

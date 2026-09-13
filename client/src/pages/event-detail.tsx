@@ -10,6 +10,7 @@ import { generateEventSchema } from "@/lib/schema-helpers";
 import { useAuth } from "@/hooks/useAuth";
 import { EventBookingModal } from "@/components/event-booking-modal";
 import { resolveStoredFoodBusinessType } from "@shared/businessTypes";
+import { formatDateOnly } from "@/lib/date-only";
 
 type PublicEvent = {
   id: string;
@@ -20,6 +21,8 @@ type PublicEvent = {
   endTime?: string | null;
   status?: string | null;
   requiresPayment?: boolean;
+  paymentsEnabled?: boolean;
+  paymentEligibilityReason?: string | null;
   hostPriceCents?: number | null;
   host: {
     id: string;
@@ -136,7 +139,7 @@ export default function EventDetailPage() {
     staleTime: 30_000,
   });
 
-  const dateText = data?.date ? new Date(data.date).toLocaleDateString() : null;
+  const dateText = data?.date ? formatDateOnly(data.date) : null;
   const timeText =
     data?.startTime && data?.endTime
       ? `${data.startTime}–${data.endTime}`
@@ -146,6 +149,7 @@ export default function EventDetailPage() {
     isAuthenticated &&
     Boolean(truckId) &&
     data?.requiresPayment === true &&
+    data?.paymentsEnabled === true &&
     data?.status === "open" &&
     !data?.ended;
   const eventLoading = waitingForOwnerContext || isLoading;
@@ -298,6 +302,14 @@ export default function EventDetailPage() {
                   </Button>
                 ) : null}
               </div>
+
+              {data?.requiresPayment === true &&
+              data?.paymentsEnabled !== true ? (
+                <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                  {data.paymentEligibilityReason ||
+                    "Paid booking is unavailable until the host payment account is ready."}
+                </div>
+              ) : null}
 
               {data && truckId && bookingOpen ? (
                 <EventBookingModal

@@ -3,6 +3,14 @@ import { db } from "./db";
 import { eventSeries, events, hosts, users } from "@shared/schema";
 import { emailService, isEmailConfigured } from "./emailService";
 import { storage } from "./storage";
+import {
+  addDaysToDateKey,
+  dateKeyFromUnknown,
+  dateKeyInZone,
+  utcDateFromDateKey,
+} from "./services/dateKeys";
+import { resolveCityTimeZoneStrict } from "./services/cityTimeZone";
+import { resolvePersistedEventServiceTimeZone } from "./services/persistedServiceTimeZoneRules";
 
 const isEmailNotificationsEnabled = (accountSettings: unknown) => {
   const settings =
@@ -90,10 +98,88 @@ const isHostExcluded = (host: {
   host.userType === "event_coordinator" ||
   host.locationType === "event_coordinator";
 
-async function buildOnboardingQueueInternal() {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+type UpcomingPaidEventPricingRow = {
+  id: string;
+  hostId: string;
+  seriesId: string | null;
+  date: Date;
+  startTime: string | null;
+  endTime: string | null;
+  breakfastPriceCents: number | null;
+  lunchPriceCents: number | null;
+  dinnerPriceCents: number | null;
+  dailyPriceCents: number | null;
+  weeklyPriceCents: number | null;
+  monthlyPriceCents: number | null;
+  seriesTimeZone: string | null;
+  hostCity: string | null;
+  hostState: string | null;
+};
 
+async function loadUpcomingPaidEventPricingRows(now = new Date()) {
+  // This UTC envelope is deliberately wider than every supported US venue
+  // calendar. Exact inclusion below is decided in the stored series/venue zone.
+  const broadStartKey = addDaysToDateKey(dateKeyInZone(now, "UTC"), -1);
+  const rows = (await db
+    .select({
+      id: events.id,
+      hostId: events.hostId,
+      seriesId: events.seriesId,
+      date: events.date,
+      startTime: events.startTime,
+      endTime: events.endTime,
+      breakfastPriceCents: events.breakfastPriceCents,
+      lunchPriceCents: events.lunchPriceCents,
+      dinnerPriceCents: events.dinnerPriceCents,
+      dailyPriceCents: events.dailyPriceCents,
+      weeklyPriceCents: events.weeklyPriceCents,
+      monthlyPriceCents: events.monthlyPriceCents,
+      seriesTimeZone: eventSeries.timezone,
+      hostCity: hosts.city,
+      hostState: hosts.state,
+    })
+    .from(events)
+    .innerJoin(hosts, eq(events.hostId, hosts.id))
+    .leftJoin(eventSeries, eq(events.seriesId, eventSeries.id))
+    .where(
+      and(
+        eq(events.requiresPayment, true),
+        gte(events.date, utcDateFromDateKey(broadStartKey)),
+      ),
+    )) as UpcomingPaidEventPricingRow[];
+
+  const venueZoneByLocation = new Map<string, string | null>();
+  await Promise.all(
+    [...new Set(
+      rows
+        .filter((row) => !row.seriesId)
+        .map((row) => `${String(row.hostCity || "").trim()}\u0000${String(row.hostState || "").trim()}`),
+    )].map(async (locationKey) => {
+      const [city, state] = locationKey.split("\u0000");
+      venueZoneByLocation.set(
+        locationKey,
+        await resolveCityTimeZoneStrict({ city, state }),
+      );
+    }),
+  );
+
+  return rows.filter((row) => {
+    const locationKey = `${String(row.hostCity || "").trim()}\u0000${String(row.hostState || "").trim()}`;
+    const timeZone = resolvePersistedEventServiceTimeZone({
+      seriesId: row.seriesId,
+      seriesTimeZone: row.seriesTimeZone,
+      venueTimeZone: venueZoneByLocation.get(locationKey),
+    });
+    const eventDateKey = dateKeyFromUnknown(row.date, "UTC");
+    return Boolean(
+      timeZone &&
+        eventDateKey &&
+        eventDateKey >= dateKeyInZone(now, timeZone),
+    );
+  });
+}
+
+async function buildOnboardingQueueInternal() {
   const hostRows = await db
     .select({
       hostId: hosts.id,
@@ -119,18 +205,7 @@ async function buildOnboardingQueueInternal() {
     .innerJoin(users, eq(hosts.userId, users.id))
     .where(or(eq(users.isDisabled, false), isNull(users.isDisabled)));
 
-  const upcomingRows = await db
-    .select({
-      hostId: events.hostId,
-      breakfastPriceCents: events.breakfastPriceCents,
-      lunchPriceCents: events.lunchPriceCents,
-      dinnerPriceCents: events.dinnerPriceCents,
-      dailyPriceCents: events.dailyPriceCents,
-      weeklyPriceCents: events.weeklyPriceCents,
-      monthlyPriceCents: events.monthlyPriceCents,
-    })
-    .from(events)
-    .where(and(eq(events.requiresPayment, true), gte(events.date, today)));
+  const upcomingRows = await loadUpcomingPaidEventPricingRows();
 
   const seriesRows = await db
     .select({
@@ -210,9 +285,6 @@ async function buildOnboardingQueueInternal() {
 }
 
 export async function getParkingPassPricingAudit() {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
   const hostRows = await db
     .select({
       hostId: hosts.id,
@@ -231,18 +303,7 @@ export async function getParkingPassPricingAudit() {
     .innerJoin(users, eq(hosts.userId, users.id))
     .where(or(eq(users.isDisabled, false), isNull(users.isDisabled)));
 
-  const eventRows = await db
-    .select({
-      hostId: events.hostId,
-      breakfastPriceCents: events.breakfastPriceCents,
-      lunchPriceCents: events.lunchPriceCents,
-      dinnerPriceCents: events.dinnerPriceCents,
-      dailyPriceCents: events.dailyPriceCents,
-      weeklyPriceCents: events.weeklyPriceCents,
-      monthlyPriceCents: events.monthlyPriceCents,
-    })
-    .from(events)
-    .where(and(eq(events.requiresPayment, true), gte(events.date, today)));
+  const eventRows = await loadUpcomingPaidEventPricingRows();
 
   const seriesRows = await db
     .select({
@@ -313,9 +374,6 @@ export async function getParkingPassPricingAudit() {
 }
 
 export async function repairParkingPassPricingDrift() {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
   const hostRows = await db
     .select({
       hostId: hosts.id,
@@ -349,22 +407,7 @@ export async function repairParkingPassPricingDrift() {
     .from(eventSeries)
     .where(eq(eventSeries.seriesType, "parking_pass"));
 
-  const eventRows = await db
-    .select({
-      id: events.id,
-      hostId: events.hostId,
-      startTime: events.startTime,
-      endTime: events.endTime,
-      breakfastPriceCents: events.breakfastPriceCents,
-      lunchPriceCents: events.lunchPriceCents,
-      dinnerPriceCents: events.dinnerPriceCents,
-      dailyPriceCents: events.dailyPriceCents,
-      weeklyPriceCents: events.weeklyPriceCents,
-      monthlyPriceCents: events.monthlyPriceCents,
-      date: events.date,
-    })
-    .from(events)
-    .where(and(eq(events.requiresPayment, true), gte(events.date, today)));
+  const eventRows = await loadUpcomingPaidEventPricingRows();
 
   const hostById = new Map<string, (typeof hostRows)[number]>(
     hostRows.map((row: (typeof hostRows)[number]) => [String(row.hostId), row]),

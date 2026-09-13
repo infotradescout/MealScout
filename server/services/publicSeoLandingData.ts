@@ -17,8 +17,10 @@ import {
   cities,
   deals,
   eventBookings,
+  eventSeries,
   events,
   hosts,
+  parkingPassPurchases,
   restaurants,
   users,
 } from "@shared/schema";
@@ -27,11 +29,15 @@ import { assertPublicResponseSafe } from "../publicProfiles/assertPublicResponse
 import { canExposeAnonymousEventDetail } from "../publicProfiles/publicEventDetailAccess";
 import { projectPublicRestaurantMedia } from "../publicProfiles/toPublicRestaurantProfile";
 import { publicTruckClassificationWhere } from "../seo/publicTruckClassification";
-import { resolveCityTimeZoneSync } from "./cityTimeZone";
 import { buildSlotDateTimes } from "./timeIntent";
+import {
+  persistedVenueTimeZoneSql,
+  resolvePersistedEventServiceTimeZone,
+} from "./persistedServiceTimeZone";
 import { dateKeyInZone } from "./dateKeys";
 import { isSlotPublic } from "./publicSlotGate";
 import { buildPublicTruckOperatingPlans } from "./truckOperatingPlan";
+import { publicPaidParticipationSqlCondition } from "./publicParkingPassEligibility";
 import {
   collectPublicSeoRowsInBatches,
   scanPublicSeoRowsInBatches,
@@ -329,10 +335,18 @@ const repository: PublicSeoLandingRepository = {
         hostName: hosts.businessName,
         hostCity: hosts.city,
         hostState: hosts.state,
+        seriesId: events.seriesId,
+        seriesTimeZone: eventSeries.timezone,
+        venueTimeZone: persistedVenueTimeZoneSql(hosts.city, hosts.state),
         updatedAt: events.updatedAt,
       })
       .from(eventBookings)
       .innerJoin(events, eq(eventBookings.eventId, events.id))
+      .leftJoin(eventSeries, eq(events.seriesId, eventSeries.id))
+      .leftJoin(
+        parkingPassPurchases,
+        eq(eventBookings.purchaseId, parkingPassPurchases.id),
+      )
       .innerJoin(hosts, eq(events.hostId, hosts.id))
       .innerJoin(restaurants, eq(eventBookings.truckId, restaurants.id))
       .innerJoin(users, eq(restaurants.ownerId, users.id))
@@ -341,7 +355,7 @@ const repository: PublicSeoLandingRepository = {
           eq(eventBookings.status, "confirmed"),
           isNotNull(eventBookings.bookingConfirmedAt),
           inArray(events.status, ["open", "booked", "filled"]),
-          or(eq(events.requiresPayment, false), isNull(events.requiresPayment)),
+          publicPaidParticipationSqlCondition,
           eq(restaurants.isActive, true),
           eq(users.isDisabled, false),
           sql`exists (
@@ -379,10 +393,12 @@ const repository: PublicSeoLandingRepository = {
           { city: row.hostCity, state: row.hostState },
           city,
         )) return false;
-        const timeZone = resolveCityTimeZoneSync({
-          city: row.hostCity || null,
-          state: row.hostState || null,
+        const timeZone = resolvePersistedEventServiceTimeZone({
+          seriesId: row.seriesId,
+          seriesTimeZone: row.seriesTimeZone,
+          venueTimeZone: row.venueTimeZone,
         });
+        if (!timeZone) return false;
         const interval = buildSlotDateTimes({
           timeZone,
           date: row.eventDate,
@@ -508,6 +524,9 @@ const repository: PublicSeoLandingRepository = {
         eventDate: events.date,
         eventStartTime: events.startTime,
         eventEndTime: events.endTime,
+        seriesId: events.seriesId,
+        seriesTimeZone: eventSeries.timezone,
+        venueTimeZone: persistedVenueTimeZoneSql(hosts.city, hosts.state),
         bookingConfirmedAt: eventBookings.bookingConfirmedAt,
         truckId: eventBookings.truckId,
         truckName: restaurants.name,
@@ -528,6 +547,11 @@ const repository: PublicSeoLandingRepository = {
       })
       .from(eventBookings)
       .innerJoin(events, eq(eventBookings.eventId, events.id))
+      .leftJoin(eventSeries, eq(events.seriesId, eventSeries.id))
+      .leftJoin(
+        parkingPassPurchases,
+        eq(eventBookings.purchaseId, parkingPassPurchases.id),
+      )
       .innerJoin(hosts, eq(events.hostId, hosts.id))
       .innerJoin(restaurants, eq(eventBookings.truckId, restaurants.id))
       .innerJoin(users, eq(restaurants.ownerId, users.id))
@@ -536,7 +560,7 @@ const repository: PublicSeoLandingRepository = {
           eq(eventBookings.status, "confirmed"),
           isNotNull(eventBookings.bookingConfirmedAt),
           inArray(events.status, ["open", "booked", "filled"]),
-          or(eq(events.requiresPayment, false), isNull(events.requiresPayment)),
+          publicPaidParticipationSqlCondition,
           eq(restaurants.isActive, true),
           eq(users.isDisabled, false),
           sql`exists (
@@ -603,10 +627,12 @@ const repository: PublicSeoLandingRepository = {
       ) {
         continue;
       }
-      const timeZone = resolveCityTimeZoneSync({
-        city: row.hostCity || null,
-        state: row.hostState || null,
+      const timeZone = resolvePersistedEventServiceTimeZone({
+        seriesId: row.seriesId,
+        seriesTimeZone: row.seriesTimeZone,
+        venueTimeZone: row.venueTimeZone,
       });
+      if (!timeZone) continue;
       const interval = buildSlotDateTimes({
         timeZone,
         date: row.eventDate,

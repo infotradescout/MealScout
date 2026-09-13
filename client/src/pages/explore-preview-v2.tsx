@@ -81,7 +81,14 @@ import { MapErrorBoundary } from "@/components/maps/map-error-boundary";
 import { GOOGLE_MAPS_WEB_API_KEY } from "@/lib/mapProvider";
 import { apiUrl } from "@/lib/api";
 import {
-  getEventCalendarDay,
+  eventCardWhenLabel,
+  eventServiceDateKey,
+  eventServicePhaseLabel,
+  isEventAuthoritativelyOpenNow,
+  isEventOnAuthoritativeVenueDay,
+  type PublicEventServicePhase,
+} from "@/lib/event-date-labels";
+import {
   getRestaurantOpenState,
   getScoutRecenterDecision,
   shouldShowRestaurantMarker,
@@ -89,6 +96,7 @@ import {
 import {
   getScoutHostParkingCopy,
   getScoutParkingInventoryStatus,
+  isScoutParkingPassListingVisible,
   type ScoutParkingInventoryStatus,
 } from "@/lib/scoutParkingPassTruth";
 import { toast } from "@/hooks/use-toast";
@@ -269,6 +277,12 @@ interface EventSummary {
   startsAt?: string | null;
   date?: string | null;
   startTime?: string | null;
+  endTime?: string | null;
+  serviceTimezone?: string | null;
+  serviceDateKey?: string | null;
+  servicePhase?: PublicEventServicePhase | null;
+  serviceStartsAtUtc?: string | null;
+  serviceEndsAtUtc?: string | null;
   venueName?: string | null;
   locationName?: string | null;
   imageUrl?: string | null;
@@ -1958,10 +1972,10 @@ function buildCravingBoardItems({
       href: `/events/${event.id}`,
       imageUrl: event.imageUrl || event.heroImageUrl || null,
       meta: formatEventStartLabel(event) || "Event",
-      reason: "Happening today",
+      reason: eventServicePhaseLabel(event) || "Event",
       freshnessMeta: {
         kind: "event",
-        startsAt: event.startsAt,
+        startsAt: eventServiceDateKey(event),
         startTime: event.startTime,
         updatedAt: readStringField(event, ["updatedAt", "lastUpdatedAt"]),
       },
@@ -1983,15 +1997,8 @@ function getFreshnessTimeLabel(meta: FreshnessMeta): string | null {
 }
 
 function formatEventStartLabel(event: EventSummary): string | null {
-  const raw = event.startsAt || event.startTime;
-  if (!raw) return null;
-  const time = new Date(raw).getTime();
-  if (!Number.isFinite(time)) return null;
-  return new Date(time).toLocaleString(undefined, {
-    weekday: "short",
-    hour: "numeric",
-    minute: "2-digit",
-  });
+  const label = eventCardWhenLabel(event);
+  return label || null;
 }
 
 function buildLocalActivityItems({
@@ -2085,7 +2092,7 @@ function buildLocalActivityItems({
   for (const event of events.slice(0, 4)) {
     const freshnessMeta: FreshnessMeta = {
       kind: "event",
-      startsAt: event.startsAt,
+      startsAt: eventServiceDateKey(event),
       startTime: event.startTime,
       updatedAt: readStringField(event, ["updatedAt", "lastUpdatedAt"]),
       confirmedAt: readStringField(event, ["confirmedAt", "lastConfirmedAt"]),
@@ -2093,7 +2100,7 @@ function buildLocalActivityItems({
     items.push({
       id: `event-${event.id}`,
       type: "event",
-      title: "Event today",
+      title: eventServicePhaseLabel(event) || "Event",
       subtitle: [
         event.title || event.name,
         event.venueName || event.locationName,
@@ -3226,7 +3233,7 @@ export default function ExplorePreview() {
       });
       if (!response.ok) return [];
       const data = await response.json();
-      return Array.isArray(data) ? data : [];
+      return Array.isArray(data) ? data.filter(isScoutParkingPassListingVisible) : [];
     },
     staleTime: 60_000,
     retry: false,
@@ -4048,13 +4055,13 @@ export default function ExplorePreview() {
 
   const eventMarkers = useMemo<MapAdapterMarker[]>(() => {
     return visibleEvents
-      .filter((event) => isTodayDate(getEventCalendarDay(event)))
+      .filter(isEventOnAuthoritativeVenueDay)
       .map((e) => {
         const coords = getEventCoords(e);
         if (!coords) return null;
         const freshnessMeta: FreshnessMeta = {
           kind: "event",
-          startsAt: getEventCalendarDay(e),
+          startsAt: eventServiceDateKey(e),
           startTime: e.startTime,
           updatedAt: readStringField(e, ["updatedAt", "lastUpdatedAt"]),
           confirmedAt: readStringField(e, ["confirmedAt", "lastConfirmedAt"]),
@@ -5688,12 +5695,6 @@ export default function ExplorePreview() {
                           onMarkerTap={handlePreviewMarkerTap}
                         />
                       </Suspense>
-                      {(!hasMapKey || googleMapFailed) && (
-                        <div className="pointer-events-none absolute left-1/2 top-1/2 z-10 max-w-[18rem] -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-[#211710]/92 px-5 py-4 text-center text-sm font-bold text-orange-50 ring-1 ring-white/12 backdrop-blur-xl">
-                          Full pan and zoom are loading. You can still browse
-                          nearby food.
-                        </div>
-                      )}
                     </>
                   ) : (
                     <HeroMapFallback
@@ -5719,7 +5720,7 @@ export default function ExplorePreview() {
                 type="button"
                 onClick={collapseScoutMap}
                 aria-label="Collapse map and return to discover"
-                className="absolute z-30 right-4 top-[calc(env(safe-area-inset-top)+0.75rem)] inline-flex h-12 items-center gap-2 rounded-full bg-[#1b120d]/92 px-4 font-black text-orange-50 ring-1 ring-white/14 backdrop-blur-md transition-colors hover:bg-[#2a1b13]"
+                className="scout-map-panel absolute z-30 right-4 top-[calc(env(safe-area-inset-top)+0.75rem)] inline-flex h-12 items-center gap-2 rounded-full px-4 font-black text-orange-50 ring-1 ring-white/14 backdrop-blur-md transition-colors"
                 style={{
                   boxShadow: "0 12px 30px rgba(154,72,18,0.18)",
                 }}
@@ -6641,7 +6642,9 @@ function ScoutFallbackMarketNotice({
                 ? normalizedQuery
                   ? "Showing related picks from active areas"
                   : "Showing popular picks from active areas"
-                : `No related “${normalizedQuery}” picks are active right now`}
+                : normalizedQuery
+                  ? `No related “${normalizedQuery}” picks are active right now`
+                  : "Help bring your favorite food to the map"}
             </p>
             <p className="mt-0.5 text-xs font-semibold leading-relaxed text-[color:var(--text-secondary)]">
               {hasOneNearbyResult
@@ -6650,7 +6653,9 @@ function ScoutFallbackMarketNotice({
                 ? normalizedQuery
                   ? `These are farther away, may come from any active MealScout area, and clearly relate to “${normalizedQuery}.”`
                   : "These are farther away and come from MealScout areas with current activity."
-                : "Scout will not substitute unrelated food. Request your favorite place and we’ll add it to the review queue."}
+                : normalizedQuery
+                  ? "Request your favorite place for us to review, or try another search."
+                  : "Try another area, or request a restaurant or food truck you’d like to find here."}
             </p>
           </div>
           <button
@@ -6982,13 +6987,7 @@ function ScoutImmediateCompactCard({
 
   const event = item.event;
   const title = event.title || event.name || "Food event";
-  const start = event.startsAt || event.startTime;
-  const startLabel = start
-    ? new Date(start).toLocaleDateString(undefined, {
-        month: "short",
-        day: "numeric",
-      })
-    : null;
+  const startLabel = eventCardWhenLabel(event) || null;
   const meta =
     [event.venueName || event.locationName, startLabel]
       .filter(Boolean)
@@ -9069,7 +9068,7 @@ function SceneMixedFeedCard({ item }: { item: CravingBoardItem }) {
         : item.kind === "Deal"
           ? "Deal today"
           : item.kind === "Event"
-            ? "Event today"
+            ? item.reason || "Event"
             : "Restaurant";
   const freshnessMeta = item.freshnessMeta || { kind: "restaurant" as const };
   const badges = [item.reason, ...getOperationalBadges(freshnessMeta)]
@@ -9423,7 +9422,7 @@ function CollapsedMapPinCard({
 
   return (
     <div
-      className="absolute left-3 right-3 bottom-16 z-20 rounded-2xl bg-[#0f1017]/88 px-3 py-3 text-white ring-1 ring-white/10 backdrop-blur-xl"
+      className="scout-map-panel absolute left-3 right-3 bottom-16 z-20 rounded-2xl px-3 py-3 text-white ring-1 ring-white/10 backdrop-blur-xl"
       style={{ boxShadow: "0 16px 36px rgba(0,0,0,0.48)" }}
     >
       <div className="flex items-start justify-between gap-3">
@@ -10431,24 +10430,23 @@ function EventCard({
   const cardView = viewModel || buildEventResultViewModel(event);
   const title = cardView.title;
   const venue = event.venueName || event.locationName || "";
-  const start = event.startsAt || event.startTime;
-  const startLabel = start
-    ? new Date(start).toLocaleString(undefined, {
-        weekday: "short",
-        hour: "numeric",
-        minute: "2-digit",
-      })
-    : "";
+  const startLabel = eventCardWhenLabel(event);
   const img = cardView.imageUrl;
   const cardHref = cardView.href;
   const freshnessMeta: FreshnessMeta = {
     kind: "event",
-    startsAt: event.startsAt,
+    startsAt: eventServiceDateKey(event),
     startTime: event.startTime,
     updatedAt: readStringField(event, ["updatedAt", "lastUpdatedAt"]),
     confirmedAt: readStringField(event, ["confirmedAt", "lastConfirmedAt"]),
   };
-  const badges = getOperationalBadges(freshnessMeta).slice(0, 2);
+  const badges = [
+    eventServicePhaseLabel(event),
+    ...getOperationalBadges(freshnessMeta),
+  ]
+    .filter((label): label is string => Boolean(label))
+    .filter((label, index, all) => all.indexOf(label) === index)
+    .slice(0, 2);
   const canEdit = isOwnedByCurrentUser(event, currentUserId);
   const actions = canEdit
     ? [
@@ -11254,23 +11252,15 @@ function OpenNowSection({
   menuPreviewByRestaurantId: Map<string, MenuPreviewItem[]>;
   relationshipSnapshot: RestaurantRelationshipSnapshot;
 }) {
-  const todaysEvents = useMemo(() => {
-    const now = new Date();
-    const startOfTomorrow = new Date(now);
-    startOfTomorrow.setHours(24, 0, 0, 0);
-    return events.filter((e) => {
-      const raw = e.startsAt || e.startTime;
-      if (!raw) return true; // unknown start → still surface (likely current)
-      const t = new Date(raw).getTime();
-      if (!Number.isFinite(t)) return true;
-      return t < startOfTomorrow.getTime();
-    });
-  }, [events]);
+  const openEvents = useMemo(
+    () => events.filter(isEventAuthoritativelyOpenNow),
+    [events],
+  );
 
   const hasAnyContent =
     liveTrucks.length > 0 ||
     restaurants.length > 0 ||
-    todaysEvents.length > 0 ||
+    openEvents.length > 0 ||
     deals.length > 0;
 
   // While loading and no content yet, show skeletons
@@ -11299,7 +11289,7 @@ function OpenNowSection({
   if (hasAnyContent) {
     const liveCount = liveTrucks.length;
     const restaurantCount = restaurants.length;
-    const eventsCount = todaysEvents.length;
+    const eventsCount = openEvents.length;
     const dealsCount = deals.length;
     const summaryBits = [
       restaurantCount > 0
@@ -11357,7 +11347,7 @@ function OpenNowSection({
                 />
               </li>
             ))}
-            {todaysEvents.slice(0, 6).map((ev) => (
+            {openEvents.slice(0, 6).map((ev) => (
               <li
                 key={`event-${ev.id}`}
                 className="shrink-0 w-[230px] sm:w-[260px]"
@@ -11525,7 +11515,7 @@ function MapPlaceCard({
       <div
         data-scout-map-card-kind="host"
         data-parking-truth={marker.parkingStatus || "host"}
-        className="absolute left-3 right-3 bottom-[calc(env(safe-area-inset-bottom)+7.25rem)] z-30 rounded-2xl bg-[#1b1008]/94 p-3 text-white ring-1 ring-amber-300/45 backdrop-blur-xl"
+        className="scout-map-panel absolute left-3 right-3 bottom-[calc(env(safe-area-inset-bottom)+7.25rem)] z-30 rounded-2xl p-3 text-white ring-1 ring-amber-300/45 backdrop-blur-xl sm:max-w-lg"
         style={{
           boxShadow:
             "0 18px 54px rgba(0,0,0,0.58), 0 0 22px rgba(245,158,11,0.2)",
@@ -11640,7 +11630,7 @@ function MapPlaceCard({
 
   return (
     <div
-      className="absolute left-4 right-4 bottom-[calc(env(safe-area-inset-bottom)+7.25rem)] z-30 rounded-3xl bg-[#120805]/88 p-4 text-white ring-1 ring-orange-300/40 backdrop-blur-xl"
+      className="scout-map-panel absolute left-4 right-4 bottom-[calc(env(safe-area-inset-bottom)+7.25rem)] z-30 rounded-3xl p-4 text-white ring-1 ring-orange-300/40 backdrop-blur-xl sm:max-w-lg"
       style={{
         boxShadow:
           "0 22px 70px rgba(0,0,0,0.62), 0 0 24px rgba(255,90,47,0.18)",
@@ -11788,8 +11778,8 @@ function MapLayerToggles({
   ];
 
   return (
-    <div className="absolute left-3 right-3 top-[calc(env(safe-area-inset-top)+4.7rem)] z-20 overflow-x-auto atmo-hide-scrollbar sm:left-4 sm:right-auto sm:w-[360px]">
-      <div className="flex w-max gap-1 rounded-full bg-[#120805]/66 p-1 text-[10px] font-black uppercase tracking-wide text-white/70 ring-1 ring-white/10 backdrop-blur-xl">
+    <div className="absolute left-3 right-32 top-[calc(env(safe-area-inset-top)+0.75rem)] z-20 overflow-x-auto atmo-hide-scrollbar sm:left-4 sm:right-auto sm:w-[360px]">
+      <div className="scout-map-panel flex w-max gap-1 rounded-full p-1 text-[10px] font-black uppercase tracking-wide text-white/70 ring-1 ring-white/10 backdrop-blur-xl">
         {options.map((option) => {
           const isActive = layers[option.id];
           return (
@@ -11854,7 +11844,7 @@ function ScoutMapHud({
   return (
     <div className="pointer-events-none absolute left-3 right-3 top-[calc(env(safe-area-inset-top)+4.25rem)] z-20 sm:left-4 sm:right-auto sm:w-[360px]">
       <div
-        className="pointer-events-auto rounded-2xl bg-[#120805]/88 p-3 text-white ring-1 ring-orange-200/40 backdrop-blur-xl"
+        className="scout-map-panel pointer-events-auto rounded-2xl p-3 text-white ring-1 ring-orange-200/40 backdrop-blur-xl"
         style={{
           boxShadow:
             "0 18px 54px rgba(0,0,0,0.52), 0 0 26px rgba(255,90,47,0.2)",

@@ -1,0 +1,229 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-09-12T15:35:55.2776772Z",
+  "applicationCommit": "51e18632e5acff0adfe529c263f3e4b2c6e0c772",
+  "branch": "codex/production-recovery-20260909",
+  "platform": "Windows",
+  "nodeVersion": "v24.14.1",
+  "evidenceDirectory": "D:\\ms-production-recovery-20260909\\evidence",
+  "scope": "Local candidate validation. Earlier scoped suite logs are retained for unchanged relevant code; this is not an exact-head full CI pass, live provider acceptance, or production release.",
+  "checks": [
+    {
+      "name": "TypeScript",
+      "status": "passed",
+      "localLog": "typecheck-node24-final.log",
+      "sha256": "5ab7b1e0230d9d27b50d0d6ee768ae5fc65694ab20e2d2ea7c99a075e523e292",
+      "recordedAt": "2026-09-12T13:47:53.2418953Z"
+    },
+    {
+      "name": "Production build",
+      "status": "passed",
+      "localLog": "build-node24-final.log",
+      "sha256": "cb2d81836b8c3704cc063234001013838617aa38bf9a668b92f8a3134f8ea1c7",
+      "recordedAt": "2026-09-12T13:48:07.78607Z"
+    },
+    {
+      "name": "npm install dry run",
+      "status": "passed",
+      "localLog": "npm-ci-dry-run-node24.log",
+      "sha256": "706766576d15ac55006045f21a2ec9513f9fef1e6d682fdf4d0003209037d27a",
+      "recordedAt": "2026-09-12T13:47:50.7867985Z"
+    },
+    {
+      "name": "Full npm audit",
+      "status": "passed-zero-known-vulnerabilities",
+      "localLog": "npm-audit-node24-final.json",
+      "sha256": "dd989a1212d078dfd01e8dd22b87afea5af4a415d9cf714f622464ed803dc417",
+      "recordedAt": "2026-09-12T13:47:52.682797Z"
+    },
+    {
+      "name": "Browser full matrix",
+      "status": "169-passed-1-local-asset-connection-failure",
+      "localLog": "browser-matrix-node24-final.log",
+      "sha256": "6e6eefba737b3186c777786dd6d9e25cf3be128c0b94126c64ab89ccdb092a01",
+      "recordedAt": "2026-09-12T13:51:13.0110998Z"
+    },
+    {
+      "name": "Supplier redirect focused reruns",
+      "status": "5-passed",
+      "localLog": "supplier-route-repeated.log",
+      "sha256": "8873ccd9f5df837b6ec036225d8ae3ed06fb3690a50742acbe7f7cb9bad2b0f2",
+      "recordedAt": "2026-09-12T13:52:18.3661032Z"
+    },
+    {
+      "name": "Search location focused reruns",
+      "status": "5-passed",
+      "localLog": "search-mobile-repeated.log",
+      "sha256": "7170b6d9cbe68697f576157554ff3f260fa156f31649491e95a92803d9a8c8ab",
+      "recordedAt": "2026-09-12T13:45:51.8004318Z"
+    },
+    {
+      "name": "Native PostgreSQL 16 provider stateful suite",
+      "status": "passed-with-simulated-providers",
+      "localLog": "native-stateful.log",
+      "sha256": "401637e8133bbe70cf2262a1c7e1406d3102df9a9feb1db32308375ffe020436",
+      "recordedAt": "2026-09-09T14:49:56.2613946Z"
+    },
+    {
+      "name": "Marketplace and ordering suites",
+      "status": "all-seven-passed",
+      "localLog": "behavior-checks-final.json",
+      "sha256": "81dafd5af3374534ea55831b17ee3f5e3770c4172d5eb1fbd73fc26e4734a9b0",
+      "recordedAt": "2026-09-09T14:50:59.6164508Z"
+    },
+    {
+      "name": "Other CI suites initial diagnostic",
+      "status": "two-stale-assertions-superseded-below",
+      "localLog": "remaining-ci-checks.json",
+      "sha256": "05bc674674dca633a0353e2ddebc44b101d84d1d4f4478b9905cfeae43b8d4a4",
+      "recordedAt": "2026-09-09T15:01:59.0976591Z"
+    },
+    {
+      "name": "Map truth final",
+      "status": "passed",
+      "localLog": "final-mealscout-map-truth.contract.test.log",
+      "sha256": "b697a0815377789e116f1dd0fdff5d211d9fb8ef261b68f02064f7ceca55da61",
+      "recordedAt": "2026-09-12T13:09:57.5402719Z"
+    },
+    {
+      "name": "Truck availability final",
+      "status": "passed",
+      "localLog": "final-truck-availability-truth.behavior.test.log",
+      "sha256": "64372747935f658b97b40282456d0b14dd6182f6cf06ea4eac0c3f3e876c2777",
+      "recordedAt": "2026-09-12T13:10:01.6077748Z"
+    },
+    {
+      "name": "Capacity concurrency contract final",
+      "status": "passed",
+      "localLog": "final-parking-pass-capacity-concurrency.contract.test.log",
+      "sha256": "781ad1d616a7d9344874cd05389ed227e1a673ec5deacac2113e9ebcc5850897",
+      "recordedAt": "2026-09-12T13:10:01.8646734Z"
+    },
+    {
+      "name": "Critical smoke regressions",
+      "status": "7-passed",
+      "localLog": "final-test-critical-smoke.log",
+      "sha256": "f84bd9a98800a6865ba9e1a00378a5a59e91cc84bd467f7b95947237573b1ccb",
+      "recordedAt": "2026-09-12T13:38:21.7632846Z"
+    },
+    {
+      "name": "Menu LISA built client",
+      "status": "passed-with-synthetic-apis",
+      "localLog": "menu-lisa-browser.log",
+      "sha256": "408af624fcc41dfc40a2b35e3f9b2465f8839e53fa9233dcaa1052eb92d03f41",
+      "recordedAt": "2026-09-09T14:54:36.7103368Z"
+    },
+    {
+      "name": "Mobile readiness",
+      "status": "20-passed",
+      "localLog": "mobile-readiness.log",
+      "sha256": "dc8461a4ffc66ee549641d29ed4a7db46c4c6251111466259c4c903a407137f5",
+      "recordedAt": "2026-09-09T15:01:30.658231Z"
+    },
+    {
+      "name": "Strict store metadata",
+      "status": "19-passed",
+      "localLog": "store-readiness.log",
+      "sha256": "9ab9a4fdd2fcdf20cffe69f02149be86240f7d4173c75ba64bcd2ff0063b2087",
+      "recordedAt": "2026-09-09T15:01:31.5568663Z"
+    },
+    {
+      "name": "Original work snapshot preservation",
+      "status": "139-files-unchanged",
+      "localLog": "original-wip-verification-20260912.json",
+      "sha256": "728b390e8ca43c1b568237dcd5779ca3a97af6a6431c60fe30863b55e76e759d",
+      "recordedAt": "2026-09-12T13:11:52.950117Z"
+    },
+    {
+      "name": "Live critical smoke",
+      "status": "failed-uninitialized-watchdog",
+      "localLog": "live-critical-smoke-20260912.log",
+      "sha256": "b633d58793a1dcdda1ad3960516026db105cae73a4bc4beb582eed851f5b7b91",
+      "recordedAt": "2026-09-12T13:20:05.4794971Z"
+    },
+    {
+      "name": "TypeScript after concurrency fixes",
+      "status": "passed",
+      "localLog": "typecheck-concurrency-final.log",
+      "sha256": "5ab7b1e0230d9d27b50d0d6ee768ae5fc65694ab20e2d2ea7c99a075e523e292",
+      "recordedAt": "2026-09-12T15:33:14.0054182Z"
+    },
+    {
+      "name": "Production build after concurrency fixes",
+      "status": "passed",
+      "localLog": "build-concurrency-final.log",
+      "sha256": "960e7ffe0f6d7cc8ff9d0c02465d1b370c153818fe88f312229c13e97eabd9c7",
+      "recordedAt": "2026-09-12T15:33:48.1219046Z"
+    },
+    {
+      "name": "Full browser matrix repeat on unchanged client",
+      "status": "170-passed",
+      "localLog": "browser-continuation-final.log",
+      "sha256": "5ad246d19e36cbd163a6bf35ce749209baf77740940d98822f78f9a11a5792cd",
+      "recordedAt": "2026-09-12T14:59:46.123514Z"
+    },
+    {
+      "name": "Migration 142 native PostgreSQL 16.15 acceptance",
+      "status": "apply-replay-containment-concurrency-restore-passed",
+      "localLog": "migration142-native-complete.log",
+      "sha256": "55db631dd87b25142e166785538b3e2f0e38e31ab3535079f443767040e1cb1f",
+      "recordedAt": "2026-09-12T15:11:20.3104562Z"
+    },
+    {
+      "name": "Migration 142 ambient PostgreSQL connection isolation",
+      "status": "passed",
+      "localLog": "migration142-native-isolation.log",
+      "sha256": "2c048cb31e52f8aa5f83c38c8890b2ed4858cfb4fb7185c891aefd340b2abe6b",
+      "recordedAt": "2026-09-12T15:14:07.1947311Z"
+    },
+    {
+      "name": "Restricted credit concurrent retry regression before fix",
+      "status": "expected-failure-aggregate-2300-ledger-1150",
+      "localLog": "restricted-credit-stateful-red.log",
+      "sha256": "71ff75df7162308a52f60fe868d3b575cf6fb79edb064fce96216a0c2f7c417f",
+      "recordedAt": "2026-09-12T15:32:52.5729241Z"
+    },
+    {
+      "name": "Full PostgreSQL stateful suite with concurrent credit fix",
+      "status": "passed-single-1150-credit",
+      "localLog": "restricted-credit-stateful-green.log",
+      "sha256": "f90a9a128e54a6648b2c62243713c2f869e85f900b612d76894486203cf2a5d3",
+      "recordedAt": "2026-09-12T15:33:39.1390199Z"
+    },
+    {
+      "name": "Ordering suite including eight Connect status race cases",
+      "status": "passed",
+      "localLog": "ordering-connect-continuation.log",
+      "sha256": "a0bd38b099351a00145a79466ee42a7590cd980b91c7baf30e713a6f66760cc5",
+      "recordedAt": "2026-09-12T15:30:02.3780399Z"
+    },
+    {
+      "name": "Integrated marketplace and publication safety suite",
+      "status": "passed",
+      "localLog": "financial-publication-final.log",
+      "sha256": "05af6f3f860b3bc2bc550a1c187c55244bff7299eafd36397a97ca6999bcaa0a",
+      "recordedAt": "2026-09-12T15:33:19.9844619Z"
+    },
+    {
+      "name": "Original work snapshot preservation repeat",
+      "status": "139-files-unchanged",
+      "localLog": "original-wip-verification-continuation.json",
+      "sha256": "be4daa3acc43f3475439db042e573f716ce57c10b883562b085197f3bf79e869",
+      "recordedAt": "2026-09-12T15:32:50.0895636Z"
+    },
+    {
+      "name": "Built server automatic watchdog boot acceptance",
+      "status": "passed-initial-unavailable-six-probes-empty-map-degraded-no-alerts",
+      "localLog": "built-watchdog-concurrency-final.log",
+      "sha256": "45e5282e6eac68514ac190bd4b84e93e95e074d95a77bd2993b47489ef85bd25",
+      "recordedAt": "2026-09-12T15:35:46.3414444Z"
+    },
+    {
+      "name": "Built server automatic watchdog boot acceptance",
+      "status": "passed-initial-unavailable-six-probes-empty-map-degraded-no-alerts",
+      "localLog": "built-watchdog-proof.json",
+      "sha256": "097b8f362588aeda579545d2b64a2143855ff5969e7193bc07801bd88e26d9fc",
+      "recordedAt": "2026-09-12T15:35:45.5171033Z"
+    }
+  ]
+}

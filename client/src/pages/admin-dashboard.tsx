@@ -48,6 +48,7 @@ import {
   ExternalLink,
   MessageSquare,
   Copy,
+  Utensils,
 } from "lucide-react";
 import { Link } from "wouter";
 import QuickDashboardAccess from "@/components/quick-dashboard-access";
@@ -499,7 +500,24 @@ interface HostPayoutRequestItem {
   hostId: string;
   userId: string;
   amountCents: number;
-  status: "pending" | "approved" | "paid" | "rejected" | "cancelled";
+  status:
+    | "pending"
+    | "approved"
+    | "processing"
+    | "transferred_to_connect"
+    | "failed"
+    | "paid"
+    | "rejected"
+    | "cancelled";
+  fundingTopology?: "legacy_platform_hold" | "destination_charge" | null;
+  eligibilityState?:
+    | "eligible_legacy"
+    | "requires_revalidation"
+    | "quarantined"
+    | null;
+  eligibleAmountSnapshotCents?: number | null;
+  providerTransferId?: string | null;
+  quarantineReason?: string | null;
   notes?: string | null;
   reviewedByUserId?: string | null;
   reviewedByEmail?: string | null;
@@ -519,6 +537,9 @@ interface HostPayoutRequestsResponse {
   totals: {
     pending: number;
     approved: number;
+    processing: number;
+    transferred: number;
+    failed: number;
     paid: number;
     rejected: number;
   };
@@ -3584,6 +3605,25 @@ function StaffManagementTab() {
 export default function AdminDashboard() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const providerMutationKeysRef = useRef(
+    new Map<string, { fingerprint: string; key: string }>(),
+  );
+  const providerMutationKey = (
+    scope: string,
+    id: string,
+    updates: unknown,
+  ) => {
+    const identity = `${scope}:${id}`;
+    const fingerprint = JSON.stringify(updates);
+    const existing = providerMutationKeysRef.current.get(identity);
+    if (existing?.fingerprint === fingerprint) return existing.key;
+    const key =
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `${scope}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    providerMutationKeysRef.current.set(identity, { fingerprint, key });
+    return key;
+  };
   const [selectedTab, setSelectedTab] = useState("overview");
   const [launchBoardCity, setLaunchBoardCity] = useState("all");
   const { effectiveLocationContext } = useEffectiveLocationContext();
@@ -3635,7 +3675,15 @@ export default function AdminDashboard() {
   const [selectedDeal, setSelectedDeal] = useState<any>(null);
   const [dealDetailsOpen, setDealDetailsOpen] = useState(false);
   const [payoutStatusFilter, setPayoutStatusFilter] = useState<
-    "all" | "pending" | "approved" | "paid" | "rejected" | "cancelled"
+    | "all"
+    | "pending"
+    | "approved"
+    | "processing"
+    | "transferred_to_connect"
+    | "failed"
+    | "paid"
+    | "rejected"
+    | "cancelled"
   >("all");
   const [payoutSearch, setPayoutSearch] = useState("");
   const [payoutFromDate, setPayoutFromDate] = useState("");
@@ -4780,16 +4828,31 @@ export default function AdminDashboard() {
         "PATCH",
         `/api/admin/host-payout-requests/${requestId}`,
         { status },
+        {
+          headers: {
+            "Idempotency-Key": providerMutationKey(
+              "admin-host-payout",
+              requestId,
+              { status },
+            ),
+          },
+        },
       );
       return await res.json();
     },
-    onSuccess: async (_data: any, vars: any) => {
+    onSuccess: async (data: any, vars: any) => {
       await queryClient.invalidateQueries({
         queryKey: ["/api/admin/host-payout-requests"],
       });
       toast({
         title: "Payout request updated",
-        description: `Request marked as ${vars?.status || "updated"}.`,
+        description:
+          vars?.status === "paid"
+            ? data?.request?.status === "transferred_to_connect"
+              ? "Stripe confirmed the legacy balance transfer to the host Connect account."
+              : data?.operation?.guidance ||
+                `Transfer is ${data?.request?.status || data?.operation?.status || "processing"}. Retry with the same action only when guidance allows.`
+            : `Request marked as ${vars?.status || "updated"}.`,
       });
     },
     onError: (error: any) => {
@@ -6576,6 +6639,23 @@ export default function AdminDashboard() {
       queryKey: ["/api/admin/verifications"],
       enabled: !!adminUser && selectedTab === "verifications",
     });
+  const {
+    data: orderingReviewQueue = { reviews: [] as any[] },
+    isLoading: loadingOrderingReviews,
+  } = useQuery<{ reviews: any[] }>({
+    queryKey: ["/api/admin/ordering-reviews", "pending"],
+    queryFn: async () => {
+      const res = await fetch("/api/admin/ordering-reviews?status=pending", {
+        credentials: "include",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data?.message || "Ordering review queue failed");
+      }
+      return data;
+    },
+    enabled: !!adminUser && selectedTab === "verifications",
+  });
 
   const filteredVerificationRequests = useMemo(() => {
     const search = verificationSearch.trim().toLowerCase();
@@ -7190,16 +7270,32 @@ export default function AdminDashboard() {
         "PATCH",
         `/api/admin/parking-pass/${payload.eventId}`,
         payload.updates,
+        {
+          headers: {
+            "Idempotency-Key": providerMutationKey(
+              "admin-parking-pass",
+              payload.eventId,
+              payload.updates,
+            ),
+          },
+        },
       );
       return await res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data: any) => {
       queryClient.invalidateQueries({
         queryKey: ["/api/admin/users", selectedUser?.id, "parking-pass"],
       });
       toast({
-        title: "Parking Pass Updated",
-        description: "Parking pass listing updated successfully.",
+        title:
+          data?.participationMutation?.status === "converged"
+            ? "Parking Pass Updated"
+            : "Parking Pass Change Pending",
+        description:
+          data?.participationMutation?.status === "converged"
+            ? "Parking pass listing and participant state converged."
+            : data?.participationMutation?.failureMessage ||
+              "The listing is hidden while participant remedies or notices finish. Retry the same edit to continue recovery.",
       });
     },
     onError: (error: any) => {
@@ -7449,14 +7545,33 @@ export default function AdminDashboard() {
         "PATCH",
         `/api/admin/events/${payload.eventId}`,
         payload.updates,
+        {
+          headers: {
+            "Idempotency-Key": providerMutationKey(
+              "admin-event",
+              payload.eventId,
+              payload.updates,
+            ),
+          },
+        },
       );
       return await res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data: any) => {
       queryClient.invalidateQueries({
         queryKey: ["/api/admin/users", selectedUser?.id, "events"],
       });
-      toast({ title: "Event Updated" });
+      toast({
+        title:
+          data?.participationMutation?.status === "converged"
+            ? "Event Updated"
+            : "Event Change Pending",
+        description:
+          data?.participationMutation?.status === "converged"
+            ? "Event and participant state converged."
+            : data?.participationMutation?.failureMessage ||
+              "Public participation is suppressed while remedies or notices finish.",
+      });
     },
     onError: (error: any) => {
       toast({
@@ -7473,14 +7588,33 @@ export default function AdminDashboard() {
         "PATCH",
         `/api/admin/event-series/${payload.seriesId}`,
         payload.updates,
+        {
+          headers: {
+            "Idempotency-Key": providerMutationKey(
+              "admin-event-series",
+              payload.seriesId,
+              payload.updates,
+            ),
+          },
+        },
       );
       return await res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data: any) => {
       queryClient.invalidateQueries({
         queryKey: ["/api/admin/users", selectedUser?.id, "event-series"],
       });
-      toast({ title: "Open Call Updated" });
+      toast({
+        title:
+          data?.participationMutation?.status === "converged"
+            ? "Open Call Updated"
+            : "Open Call Change Pending",
+        description:
+          data?.participationMutation?.status === "converged"
+            ? "Series and participant state converged."
+            : data?.participationMutation?.failureMessage ||
+              "Future participation is suppressed while remedies or notices finish.",
+      });
     },
     onError: (error: any) => {
       toast({
@@ -7497,10 +7631,19 @@ export default function AdminDashboard() {
         "PATCH",
         `/api/admin/parking-pass-bookings/${payload.bookingId}`,
         payload.updates,
+        {
+          headers: {
+            "Idempotency-Key": providerMutationKey(
+              "admin-parking-booking",
+              payload.bookingId,
+              payload.updates,
+            ),
+          },
+        },
       );
       return await res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data: any) => {
       queryClient.invalidateQueries({
         queryKey: [
           "/api/admin/users",
@@ -7508,7 +7651,21 @@ export default function AdminDashboard() {
           "parking-pass-bookings",
         ],
       });
-      toast({ title: "Booking Updated" });
+      const pending = Boolean(
+        data?.operation &&
+          ![
+            "provider_confirmed",
+            "credit_issued",
+            "released",
+            "no_remedy",
+          ].includes(data.operation.status),
+      );
+      toast({
+        title: pending ? "Booking Remedy Pending" : "Booking Updated",
+        description:
+          data?.operation?.guidance ||
+          "Booking state was updated through the canonical participation path.",
+      });
     },
     onError: (error: any) => {
       toast({
@@ -7617,6 +7774,44 @@ export default function AdminDashboard() {
       toast({
         title: "Error",
         description: "Failed to reject verification. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const decideOrderingReview = useMutation({
+    mutationFn: async (input: {
+      restaurantId: string;
+      requestId: string;
+      decision: "approved" | "rejected";
+      reviewNote: string;
+      rejectionReason?: string;
+    }) =>
+      apiRequest(
+        "POST",
+        `/api/admin/restaurants/${encodeURIComponent(
+          input.restaurantId,
+        )}/ordering-approval`,
+        {
+          requestId: input.requestId,
+          decision: input.decision,
+          reviewNote: input.reviewNote,
+          rejectionReason: input.rejectionReason,
+        },
+      ),
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({
+        queryKey: ["/api/admin/ordering-reviews", "pending"],
+      });
+      toast({
+        title: "Ordering review decided",
+        description: "The durable owner request and admin decision were updated.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Ordering decision failed",
+        description: error?.message || "Refresh current readiness and try again.",
         variant: "destructive",
       });
     },
@@ -8902,7 +9097,10 @@ export default function AdminDashboard() {
               <CardHeader>
                 <CardTitle>Host Payout Requests</CardTitle>
                 <CardDescription>
-                  Review and process host cash-out requests.
+                  Reconcile historical platform-held host balances through a
+                  provider-confirmed Connect transfer. New Parking Pass
+                  destination charges settle directly to the host and never
+                  enter this queue.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
@@ -8918,6 +9116,9 @@ export default function AdminDashboard() {
                               | "all"
                               | "pending"
                               | "approved"
+                              | "processing"
+                              | "transferred_to_connect"
+                              | "failed"
                               | "paid"
                               | "rejected"
                               | "cancelled",
@@ -8927,7 +9128,12 @@ export default function AdminDashboard() {
                         <option value="all">All statuses</option>
                         <option value="pending">Pending</option>
                         <option value="approved">Approved</option>
-                        <option value="paid">Paid</option>
+                        <option value="processing">Processing</option>
+                        <option value="transferred_to_connect">
+                          Transferred to Connect
+                        </option>
+                        <option value="failed">Transfer failed</option>
+                        <option value="paid">Legacy paid</option>
                         <option value="rejected">Rejected</option>
                         <option value="cancelled">Cancelled</option>
                       </select>
@@ -9059,7 +9265,7 @@ export default function AdminDashboard() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
                   <div className="rounded-md border p-3">
                     <div className="text-xs text-muted-foreground">Pending</div>
                     <div className="text-xl font-semibold">
@@ -9075,17 +9281,25 @@ export default function AdminDashboard() {
                     </div>
                   </div>
                   <div className="rounded-md border p-3">
-                    <div className="text-xs text-muted-foreground">Paid</div>
+                    <div className="text-xs text-muted-foreground">
+                      Processing
+                    </div>
                     <div className="text-xl font-semibold">
-                      {Number(hostPayoutRequests?.totals?.paid ?? 0)}
+                      {Number(hostPayoutRequests?.totals?.processing ?? 0)}
                     </div>
                   </div>
                   <div className="rounded-md border p-3">
                     <div className="text-xs text-muted-foreground">
-                      Rejected
+                      Transferred
                     </div>
                     <div className="text-xl font-semibold">
-                      {Number(hostPayoutRequests?.totals?.rejected ?? 0)}
+                      {Number(hostPayoutRequests?.totals?.transferred ?? 0)}
+                    </div>
+                  </div>
+                  <div className="rounded-md border p-3">
+                    <div className="text-xs text-muted-foreground">Failed</div>
+                    <div className="text-xl font-semibold">
+                      {Number(hostPayoutRequests?.totals?.failed ?? 0)}
                     </div>
                   </div>
                 </div>
@@ -9099,7 +9313,11 @@ export default function AdminDashboard() {
                   <div className="space-y-2">
                     {hostPayoutRequests.rows.map((row) => {
                       const canApprove = row.status === "pending";
-                      const canMarkPaid = row.status === "approved";
+                      const canStartTransfer = [
+                        "approved",
+                        "processing",
+                        "failed",
+                      ].includes(row.status);
                       return (
                         <div
                           key={row.id}
@@ -9138,6 +9356,18 @@ export default function AdminDashboard() {
                             </div>
                             <div className="flex items-center gap-2">
                               <Badge variant="outline">{row.status}</Badge>
+                              <Badge variant="secondary">
+                                {row.fundingTopology || "unclassified"}
+                              </Badge>
+                              <Badge
+                                variant={
+                                  row.eligibilityState === "eligible_legacy"
+                                    ? "outline"
+                                    : "destructive"
+                                }
+                              >
+                                {row.eligibilityState || "requires_revalidation"}
+                              </Badge>
                               <span className="font-semibold">
                                 $
                                 {(Number(row.amountCents || 0) / 100).toFixed(
@@ -9146,6 +9376,12 @@ export default function AdminDashboard() {
                               </span>
                             </div>
                           </div>
+
+                          {row.quarantineReason ? (
+                            <div className="rounded border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-900">
+                              {row.quarantineReason}
+                            </div>
+                          ) : null}
 
                           <div className="flex flex-wrap gap-2">
                             <Button
@@ -9168,7 +9404,7 @@ export default function AdminDashboard() {
                               variant="outline"
                               disabled={
                                 updateHostPayoutRequest.isPending ||
-                                !canMarkPaid
+                                !canStartTransfer
                               }
                               onClick={() =>
                                 updateHostPayoutRequest.mutate({
@@ -9177,14 +9413,20 @@ export default function AdminDashboard() {
                                 })
                               }
                             >
-                              Mark Paid
+                              {row.status === "approved"
+                                ? "Transfer to Connect"
+                                : "Resume transfer"}
                             </Button>
                             <Button
                               size="sm"
                               variant="destructive"
                               disabled={
                                 updateHostPayoutRequest.isPending ||
-                                row.status === "paid" ||
+                                [
+                                  "paid",
+                                  "transferred_to_connect",
+                                  "processing",
+                                ].includes(row.status) ||
                                 row.status === "rejected"
                               }
                               onClick={() =>
@@ -12101,6 +12343,172 @@ export default function AdminDashboard() {
 
           {/* Verifications Tab */}
           <TabsContent value="verifications" className="space-y-4">
+            <Card data-testid="admin-ordering-review-queue">
+              <CardHeader>
+                <CardTitle className="flex items-center space-x-2">
+                  <Utensils className="h-5 w-5" />
+                  <span>Native Ordering Reviews</span>
+                </CardTitle>
+                <CardDescription>
+                  Decide owner-submitted evidence only after checking the
+                  current authority version and live ordering readiness. This
+                  is separate from business verification.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {loadingOrderingReviews ? (
+                  <div className="flex items-center justify-center p-8">
+                    <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+                  </div>
+                ) : orderingReviewQueue.reviews.length === 0 ? (
+                  <p className="p-6 text-center text-sm text-muted-foreground">
+                    No owner ordering reviews are pending.
+                  </p>
+                ) : (
+                  <div className="space-y-4">
+                    {orderingReviewQueue.reviews.map((review: any) => {
+                      const request = review.request;
+                      const readiness = review.readiness;
+                      const canApprove = Boolean(
+                        !review.staleAuthority && readiness?.orderingEnabled,
+                      );
+                      return (
+                        <div
+                          key={request.id}
+                          className="rounded-lg border p-4"
+                        >
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                              <p className="font-semibold">
+                                {review.restaurantName || request.restaurantId}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                Submitted version {request.submittedAuthorityVersion}; current
+                                version {review.currentAuthorityVersion} · merchant response
+                                deadline {request.acknowledgementMinutes} minutes
+                              </p>
+                            </div>
+                            <Badge
+                              variant={
+                                review.staleAuthority
+                                  ? "destructive"
+                                  : canApprove
+                                    ? "default"
+                                    : "secondary"
+                              }
+                            >
+                              {review.staleAuthority
+                                ? "Authority changed"
+                                : canApprove
+                                  ? "Current readiness passes"
+                                  : "Current blockers remain"}
+                            </Badge>
+                          </div>
+                          <a
+                            href={request.evidenceUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="mt-3 block break-all text-sm text-blue-700 underline"
+                          >
+                            Review submitted evidence
+                          </a>
+                          {!canApprove ? (
+                            <ul className="mt-3 list-disc space-y-1 pl-5 text-xs text-amber-900">
+                              {review.staleAuthority ? (
+                                <li>
+                                  The owner must resubmit after the authority
+                                  version change.
+                                </li>
+                              ) : null}
+                              {(readiness?.blockingReasons || []).map(
+                                (reason: string) => (
+                                  <li key={reason}>{reason}</li>
+                                ),
+                              )}
+                            </ul>
+                          ) : null}
+                          <div className="mt-4 flex flex-wrap gap-2">
+                            {review.staleAuthority ? (
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                disabled={decideOrderingReview.isPending}
+                                onClick={() =>
+                                  decideOrderingReview.mutate({
+                                    restaurantId: request.restaurantId,
+                                    requestId: request.id,
+                                    decision: "rejected",
+                                    reviewNote:
+                                      "Readiness changed after the owner submitted this review.",
+                                    rejectionReason:
+                                      "Ordering readiness changed. Review the current setup and resubmit.",
+                                  })
+                                }
+                              >
+                                Mark superseded
+                              </Button>
+                            ) : (
+                              <>
+                                <Button
+                                  size="sm"
+                                  disabled={
+                                    !canApprove ||
+                                    decideOrderingReview.isPending
+                                  }
+                                  onClick={() => {
+                                    const reviewNote = window.prompt(
+                                      "Approval note (at least 10 characters):",
+                                    );
+                                    if (!reviewNote || reviewNote.trim().length < 10) return;
+                                    decideOrderingReview.mutate({
+                                      restaurantId: request.restaurantId,
+                                      requestId: request.id,
+                                      decision: "approved",
+                                      reviewNote: reviewNote.trim(),
+                                    });
+                                  }}
+                                >
+                                  Approve ordering
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="destructive"
+                                  disabled={decideOrderingReview.isPending}
+                                  onClick={() => {
+                                    const rejectionReason = window.prompt(
+                                      "Required owner-facing rejection reason (at least 10 characters):",
+                                    );
+                                    if (
+                                      !rejectionReason ||
+                                      rejectionReason.trim().length < 10
+                                    )
+                                      return;
+                                    const reviewNote = window.prompt(
+                                      "Internal review note (at least 10 characters):",
+                                    );
+                                    if (!reviewNote || reviewNote.trim().length < 10) return;
+                                    decideOrderingReview.mutate({
+                                      restaurantId: request.restaurantId,
+                                      requestId: request.id,
+                                      decision: "rejected",
+                                      reviewNote: reviewNote.trim(),
+                                      rejectionReason:
+                                        rejectionReason.trim(),
+                                    });
+                                  }}
+                                >
+                                  Reject with reason
+                                </Button>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center space-x-2">

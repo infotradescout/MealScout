@@ -28,6 +28,12 @@ const unavailableStatuses = new Set([
   "unavailable",
 ]);
 
+export function isScoutParkingPassListingVisible(
+  listing: ScoutParkingPassInventory,
+): boolean {
+  return !unavailableStatuses.has(String(listing.status || "open").trim().toLowerCase());
+}
+
 export function hasVerifiedParkingPassPrice(
   listing: ScoutParkingPassInventory,
 ): boolean {

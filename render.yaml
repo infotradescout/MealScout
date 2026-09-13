@@ -6,7 +6,8 @@ services:
     buildCommand: npm ci --include=dev && npm run build:platform
     preDeployCommand: npm run migrate:deploy
     startCommand: npm run start
+    healthCheckPath: /health/ready
     autoDeploy: true
     envVars:
       - key: NODE_VERSION
-        value: 20
+        value: "24"

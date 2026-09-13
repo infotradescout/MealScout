@@ -1,16 +1,23 @@
 import {
+  eventBookings,
   eventSeries,
+  events,
   parkingPassBlackoutDates,
   type Host,
   type ParkingPassBlackoutDate,
   type InsertParkingPassBlackoutDate,
 } from "@shared/schema";
+import crypto from "node:crypto";
 import { PARKING_PASS_MEAL_WINDOWS } from "@shared/parkingPassSlots";
 import { db, pool } from "../db";
-import { eq, and, gte, lt, asc } from "drizzle-orm";
+import { eq, and, gte, inArray, lt, asc, sql } from "drizzle-orm";
 import { isParkingPassPublicReady } from "../services/parkingPassQuality";
-import { resolveCityTimeZoneSync } from "../services/cityTimeZone";
-import { utcDateFromDateKey } from "../services/dateKeys";
+import { resolveCityTimeZoneStrict } from "../services/cityTimeZone";
+import {
+  dateKeyInZone,
+  utcDateFromDateKey,
+} from "../services/dateKeys";
+import { normalizePersistedIanaTimeZone } from "../services/persistedServiceTimeZoneRules";
 
 type ParkingPassRepoDeps = {
   getHost: (id: string) => Promise<Host | undefined>;
@@ -94,6 +101,7 @@ export function createParkingPassRepository(deps: ParkingPassRepoDeps) {
       `${has("start_date") ? `${q("start_date")} as "startDate"` : `null as "startDate"`}`,
       `${has("end_date") ? `${q("end_date")} as "endDate"` : `null as "endDate"`}`,
       `${has("status") ? `${q("status")} as "status"` : `null as "status"`}`,
+      `${has("timezone") ? `${q("timezone")} as "timezone"` : `null as "timezone"`}`,
       `${has("published_at") ? `${q("published_at")} as "publishedAt"` : `null as "publishedAt"`}`,
       `${has("default_start_time") ? `${q("default_start_time")} as "defaultStartTime"` : `null as "defaultStartTime"`}`,
       `${has("default_end_time") ? `${q("default_end_time")} as "defaultEndTime"` : `null as "defaultEndTime"`}`,
@@ -107,6 +115,10 @@ export function createParkingPassRepository(deps: ParkingPassRepoDeps) {
       `${has("default_weekly_price_cents") ? `${q("default_weekly_price_cents")} as "defaultWeeklyPriceCents"` : `null as "defaultWeeklyPriceCents"`}`,
       `${has("default_monthly_price_cents") ? `${q("default_monthly_price_cents")} as "defaultMonthlyPriceCents"` : `null as "defaultMonthlyPriceCents"`}`,
       `${has("default_host_price_cents") ? `${q("default_host_price_cents")} as "defaultHostPriceCents"` : `null as "defaultHostPriceCents"`}`,
+      `${has("participation_version") ? `${q("participation_version")} as "participationVersion"` : `0 as "participationVersion"`}`,
+      `${has("active_participation_mutation_id") ? `${q("active_participation_mutation_id")} as "activeParticipationMutationId"` : `null as "activeParticipationMutationId"`}`,
+      `${has("participation_suppressed_at") ? `${q("participation_suppressed_at")} as "participationSuppressedAt"` : `null as "participationSuppressedAt"`}`,
+      `${has("participation_suppression_reason") ? `${q("participation_suppression_reason")} as "participationSuppressionReason"` : `null as "participationSuppressionReason"`}`,
       `${has("updated_at") ? `${q("updated_at")} as "updatedAt"` : `null as "updatedAt"`}`,
     ];
 
@@ -116,9 +128,6 @@ export function createParkingPassRepository(deps: ParkingPassRepoDeps) {
   }
 
   async function createDraftParkingPassForHost(host: Host): Promise<boolean> {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
     const existing = await db
       .select({ id: eventSeries.id })
       .from(eventSeries)
@@ -163,10 +172,20 @@ export function createParkingPassRepository(deps: ParkingPassRepoDeps) {
       monthlyPriceCents: monthly,
     };
     const publicReady = isParkingPassPublicReady(listing as any);
-    const seriesTimezone = resolveCityTimeZoneSync({
+    const seriesTimezone = await resolveCityTimeZoneStrict({
       city: host.city,
       state: host.state,
     });
+    if (!seriesTimezone) {
+      console.warn(
+        "createDraftParkingPassForHost skipped host without a persisted venue timezone",
+        { hostId: host.id },
+      );
+      return false;
+    }
+    const today = utcDateFromDateKey(
+      dateKeyInZone(new Date(), seriesTimezone),
+    );
 
     const [created] = await db
       .insert(eventSeries)
@@ -208,6 +227,7 @@ export function createParkingPassRepository(deps: ParkingPassRepoDeps) {
         hostId: string;
         name: string | null;
         description: string | null;
+        timezone: string | null;
         startDate: string | null;
         endDate: string | null;
         status: string | null;
@@ -225,6 +245,10 @@ export function createParkingPassRepository(deps: ParkingPassRepoDeps) {
         defaultWeeklyPriceCents: number | null;
         defaultMonthlyPriceCents: number | null;
         defaultHostPriceCents: number | null;
+        participationVersion: number | null;
+        activeParticipationMutationId: string | null;
+        participationSuppressedAt: string | null;
+        participationSuppressionReason: string | null;
       }>
     > {
       const { columns } = await getEventSeriesTableInfo();
@@ -237,6 +261,7 @@ export function createParkingPassRepository(deps: ParkingPassRepoDeps) {
         hostId: String(row.hostId),
         name: row.name == null ? null : String(row.name),
         description: row.description == null ? null : String(row.description),
+        timezone: row.timezone == null ? null : String(row.timezone),
         startDate: row.startDate ? new Date(row.startDate).toISOString() : null,
         endDate: row.endDate ? new Date(row.endDate).toISOString() : null,
         status: row.status == null ? null : String(row.status),
@@ -283,10 +308,28 @@ export function createParkingPassRepository(deps: ParkingPassRepoDeps) {
           row.defaultHostPriceCents == null
             ? null
             : Number(row.defaultHostPriceCents),
+        participationVersion:
+          row.participationVersion == null
+            ? 0
+            : Number(row.participationVersion),
+        activeParticipationMutationId:
+          row.activeParticipationMutationId == null
+            ? null
+            : String(row.activeParticipationMutationId),
+        participationSuppressedAt: row.participationSuppressedAt
+          ? new Date(row.participationSuppressedAt).toISOString()
+          : null,
+        participationSuppressionReason:
+          row.participationSuppressionReason == null
+            ? null
+            : String(row.participationSuppressionReason),
       }));
     },
 
-    async syncParkingPassSeriesFromHost(hostId: string): Promise<string | null> {
+    async syncParkingPassSeriesFromHost(
+      hostId: string,
+      authority?: { actorUserId: string; requestId: string },
+    ): Promise<string | null> {
       const normalizedHostId = String(hostId || "").trim();
       if (!normalizedHostId) return null;
       const host = await deps.getHost(normalizedHostId);
@@ -333,7 +376,11 @@ export function createParkingPassRepository(deps: ParkingPassRepoDeps) {
       let seriesId: string | null = null;
       try {
         const existing = await db
-          .select({ id: eventSeries.id })
+          .select({
+            id: eventSeries.id,
+            timezone: eventSeries.timezone,
+            startDate: eventSeries.startDate,
+          })
           .from(eventSeries)
           .where(
             and(
@@ -351,17 +398,9 @@ export function createParkingPassRepository(deps: ParkingPassRepoDeps) {
         seriesId = match?.id ?? null;
       }
 
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-
       const updates: any = {
         name: `Parking Pass - ${host.businessName}`,
         description: host.address,
-        timezone: resolveCityTimeZoneSync({
-          city: host.city,
-          state: host.state,
-        }),
-        startDate: today,
         endDate: null,
         defaultStartTime: startTime,
         defaultEndTime: endTime,
@@ -381,20 +420,80 @@ export function createParkingPassRepository(deps: ParkingPassRepoDeps) {
 
       try {
         if (seriesId) {
+          const [storedSeries] = await db
+            .select({ timezone: eventSeries.timezone })
+            .from(eventSeries)
+            .where(eq(eventSeries.id, seriesId))
+            .limit(1);
+          if (!normalizePersistedIanaTimeZone(storedSeries?.timezone)) {
+            console.warn(
+              "syncParkingPassSeriesFromHost skipped series without a valid stored timezone",
+              { hostId: host.id, seriesId },
+            );
+            return seriesId;
+          }
+          const [participation] = await db
+            .select({ count: sql<number>`count(*)::int` })
+            .from(eventBookings)
+            .innerJoin(events, eq(events.id, eventBookings.eventId))
+            .where(
+              and(
+                eq(events.seriesId, seriesId),
+                inArray(eventBookings.status, ["pending", "confirmed"]),
+              ),
+            );
+          const hasLiveParticipation = Number(participation?.count || 0) > 0;
+          if (hasLiveParticipation) {
+            const actorUserId = String(authority?.actorUserId || "").trim();
+            if (!actorUserId) {
+              console.warn(
+                "syncParkingPassSeriesFromHost skipped participating series without mutation authority",
+                { hostId: host.id, seriesId },
+              );
+              return seriesId;
+            }
+            const { updatedAt: _updatedAt, ...seriesUpdates } = updates;
+            const factsDigest = crypto
+              .createHash("sha256")
+              .update(JSON.stringify(seriesUpdates))
+              .digest("hex")
+              .slice(0, 20);
+            const { updateCoordinatedSeries } = await import(
+              "../services/eventParticipationMutationService"
+            );
+            await updateCoordinatedSeries({
+              seriesId,
+              actor: { userId: actorUserId },
+              requestId: `${String(authority?.requestId || "series-sync").trim()}:${factsDigest}`,
+              updates: seriesUpdates,
+            });
+            return seriesId;
+          }
           await db
             .update(eventSeries)
             .set(updates)
             .where(eq(eventSeries.id, seriesId));
           return seriesId;
         }
+        const newSeriesTimeZone = await resolveCityTimeZoneStrict({
+          city: host.city,
+          state: host.state,
+        });
+        if (!newSeriesTimeZone) {
+          console.warn(
+            "syncParkingPassSeriesFromHost skipped new series without a persisted venue timezone",
+            { hostId: host.id },
+          );
+          return null;
+        }
+        const today = utcDateFromDateKey(
+          dateKeyInZone(new Date(), newSeriesTimeZone),
+        );
         const [created] = await db
           .insert(eventSeries)
           .values({
             hostId: host.id,
-            timezone: resolveCityTimeZoneSync({
-              city: host.city,
-              state: host.state,
-            }),
+            timezone: newSeriesTimeZone,
             recurrenceRule: null,
             startDate: today,
             endDate: null,

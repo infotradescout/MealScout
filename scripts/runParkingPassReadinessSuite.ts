@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import { productionFinancialSafetyViolations } from "../shared/financialTestSafety";
 
 function runStep(name: string, cmd: string, args: string[]) {
   console.log(`\n[readiness] ${name}`);
@@ -18,6 +19,17 @@ function runStep(name: string, cmd: string, args: string[]) {
 }
 
 function main() {
+  const financialSafetyViolations = productionFinancialSafetyViolations({
+    nodeEnv: process.env.NODE_ENV,
+    mealscoutBypassStripe: process.env.MEALSCOUT_BYPASS_STRIPE,
+    mealscoutTestMode: process.env.MEALSCOUT_TEST_MODE,
+  });
+  if (financialSafetyViolations.length > 0) {
+    console.error(
+      `[readiness] production financial test configuration is forbidden: ${financialSafetyViolations.join(", ")}`,
+    );
+    process.exit(1);
+  }
   const steps: Array<{ name: string; cmd: string; args: string[]; optional?: boolean }> = [
     { name: "typecheck", cmd: "npm", args: ["run", "-s", "check"] },
     {
@@ -37,8 +49,8 @@ function main() {
     { name: "datekeys", cmd: "npm", args: ["run", "-s", "test:parking-pass-datekeys"] },
     { name: "webhook audit", cmd: "npm", args: ["run", "-s", "audit:parking-pass-webhooks"] },
     { name: "demand funnel audit", cmd: "npm", args: ["run", "-s", "audit:demand-funnel"] },
-    { name: "booking concurrency (optional)", cmd: "npm", args: ["run", "-s", "test:parking-pass-concurrency"], optional: true },
-    { name: "webhook replay (optional)", cmd: "npm", args: ["run", "-s", "test:parking-pass-webhook-replay"], optional: true },
+    { name: "booking concurrency", cmd: "npm", args: ["run", "-s", "test:parking-pass-concurrency"] },
+    { name: "webhook replay", cmd: "npm", args: ["run", "-s", "test:parking-pass-webhook-replay"] },
   ];
 
   let failed = false;

@@ -27,12 +27,20 @@ import {
 } from "../services/parkingPassQuality";
 import { computeExternalReviewAdjustment } from "../services/externalReviewScoring";
 import { isLaunchDegradedMode } from "../launchMode";
-import { resolveCityTimeZoneSync } from "../services/cityTimeZone";
 import { buildSlotDateTimes } from "../services/timeIntent";
+import {
+  normalizePersistedIanaTimeZone,
+  persistedVenueTimeZoneSql,
+  resolvePersistedEventServiceTimeZone,
+} from "../services/persistedServiceTimeZone";
 import { isSlotPublic } from "../services/publicSlotGate";
 import { getSuppressedLocationResourceIds } from "../services/truckLocationTrust";
-import { isTruckOperatingPlanRowPublic } from "../services/truckOperatingPlan";
+import {
+  isTruckOperatingPlanRowPublic,
+  publicParkingPassBookingSqlCondition,
+} from "../services/truckOperatingPlan";
 import { loadConfirmedEventTrucks } from "../services/confirmedEventTrucks";
+import { loadPublicParkingPassProjections } from "../services/publicParkingPassProjection";
 import { getCached, setCached } from "../utils/googleApiCache";
 import {
   getGoogleMapsServerApiKey,
@@ -53,11 +61,13 @@ import {
   deals,
   dealViews,
   eventBookings,
+  eventSeries,
   events,
   geoLocationPings,
   hosts,
   locationRequests,
   moderationEvents,
+  parkingPassPurchases,
   restaurants,
   suppliers,
   supplierProducts,
@@ -1705,12 +1715,8 @@ export function registerPublicMapRoutes(app: Express) {
             return false;
           }
 
-          const timeZone =
-            String(schedule.timezone || "").trim() ||
-            resolveCityTimeZoneSync({
-              city: schedule.city ?? null,
-              state: schedule.state ?? null,
-            });
+          const timeZone = normalizePersistedIanaTimeZone(schedule.timezone);
+          if (!timeZone) return false;
           const servingWindow = buildSlotDateTimes({
             timeZone,
             date: schedule.date,
@@ -3280,13 +3286,23 @@ export function registerPublicMapRoutes(app: Express) {
           truckId: restaurants.id,
           truckName: restaurants.name,
           truckCuisine: restaurants.cuisineType,
+          seriesId: events.seriesId,
+          seriesTimeZone: eventSeries.timezone,
+          venueTimeZone: persistedVenueTimeZoneSql(hosts.city, hosts.state),
         })
         .from(eventBookings)
         .innerJoin(events, eq(eventBookings.eventId, events.id))
+        .leftJoin(eventSeries, eq(events.seriesId, eventSeries.id))
+        .leftJoin(
+          parkingPassPurchases,
+          eq(eventBookings.purchaseId, parkingPassPurchases.id),
+        )
+        .innerJoin(hosts, eq(events.hostId, hosts.id))
         .innerJoin(restaurants, eq(eventBookings.truckId, restaurants.id))
         .where(
           and(
             eq(eventBookings.status, "confirmed"),
+            publicParkingPassBookingSqlCondition,
             isNotNull(eventBookings.bookingConfirmedAt),
             eq(events.hostId, hostId),
             inArray(events.status, ["open", "booked", "filled"]),
@@ -3312,15 +3328,17 @@ export function registerPublicMapRoutes(app: Express) {
         rows.map((row: (typeof rows)[number]) => String(row.eventId || "")),
       );
 
-      const timeZone = resolveCityTimeZoneSync({
-        city: hostRow.city || null,
-        state: hostRow.state || null,
-      });
       const bookings = rows
         .flatMap((row: (typeof rows)[number]) => {
           const publicTruck = (
             publicTrucksByEvent.get(String(row.eventId || "")) || []
           ).find((truck) => truck.truckId === String(row.truckId || ""));
+          const timeZone = resolvePersistedEventServiceTimeZone({
+            seriesId: row.seriesId,
+            seriesTimeZone: row.seriesTimeZone,
+            venueTimeZone: row.venueTimeZone,
+          });
+          if (!timeZone) return [];
           const interval = buildSlotDateTimes({
             timeZone,
             date: row.date,
@@ -3467,10 +3485,15 @@ export function registerPublicMapRoutes(app: Express) {
         })
         .from(eventBookings)
         .innerJoin(events, eq(eventBookings.eventId, events.id))
+        .leftJoin(
+          parkingPassPurchases,
+          eq(eventBookings.purchaseId, parkingPassPurchases.id),
+        )
         .where(
           and(
             inArray(eventBookings.truckId, uniqueRestaurantIds),
             eq(eventBookings.status, "confirmed"),
+            publicParkingPassBookingSqlCondition,
             isNotNull(eventBookings.bookingConfirmedAt),
             inArray(events.status, ["open", "booked", "filled"]),
             gte(events.date, since30d),
@@ -3925,6 +3948,8 @@ export function registerPublicMapRoutes(app: Express) {
         bookingWindowStart.setUTCDate(bookingWindowStart.getUTCDate() - 1);
         const upcomingHostBookings = await db
           .select({
+            eventId: events.id,
+            requiresPayment: events.requiresPayment,
             hostId: hosts.id,
             lat: hosts.latitude,
             lng: hosts.longitude,
@@ -3936,14 +3961,23 @@ export function registerPublicMapRoutes(app: Express) {
             bookingConfirmedAt: eventBookings.bookingConfirmedAt,
             ownerDisabled: users.isDisabled,
             publicProfileSettings: users.publicProfileSettings,
+            seriesId: events.seriesId,
+            seriesTimeZone: eventSeries.timezone,
+            venueTimeZone: persistedVenueTimeZoneSql(hosts.city, hosts.state),
           })
           .from(eventBookings)
           .innerJoin(events, eq(eventBookings.eventId, events.id))
+          .leftJoin(eventSeries, eq(events.seriesId, eventSeries.id))
+          .leftJoin(
+            parkingPassPurchases,
+            eq(eventBookings.purchaseId, parkingPassPurchases.id),
+          )
           .innerJoin(hosts, eq(events.hostId, hosts.id))
           .innerJoin(users, eq(hosts.userId, users.id))
           .where(
             and(
               eq(eventBookings.status, "confirmed"),
+              publicParkingPassBookingSqlCondition,
               isNotNull(eventBookings.bookingConfirmedAt),
               inArray(events.status, ["open", "booked", "filled"]),
               gte(events.date, bookingWindowStart),
@@ -3953,6 +3987,12 @@ export function registerPublicMapRoutes(app: Express) {
           )
           .limit(6000);
 
+        const paidProjectionByEvent = await loadPublicParkingPassProjections({
+          eventIds: upcomingHostBookings
+            .filter((row: any) => row.requiresPayment === true)
+            .map((row: any) => String(row.eventId)),
+        });
+
         for (const row of upcomingHostBookings) {
           if (
             row.ownerDisabled !== false ||
@@ -3961,16 +4001,27 @@ export function registerPublicMapRoutes(app: Express) {
           ) {
             continue;
           }
-          const timeZone = resolveCityTimeZoneSync({
-            city: row.city || null,
-            state: row.state || null,
+          const paidProjection = row.requiresPayment === true
+            ? paidProjectionByEvent.get(String(row.eventId)) || null
+            : null;
+          if (row.requiresPayment === true && !paidProjection) continue;
+          const timeZone = resolvePersistedEventServiceTimeZone({
+            seriesId: row.seriesId,
+            seriesTimeZone: row.seriesTimeZone,
+            venueTimeZone: row.venueTimeZone,
           });
-          const interval = buildSlotDateTimes({
-            timeZone,
-            date: row.date,
-            startTime: String(row.startTime || ""),
-            endTime: String(row.endTime || ""),
-          });
+          if (!timeZone) continue;
+          const interval = paidProjection
+            ? {
+                startUtc: paidProjection.startsAt,
+                endUtc: paidProjection.endsAt,
+              }
+            : buildSlotDateTimes({
+                timeZone,
+                date: row.date,
+                startTime: String(row.startTime || ""),
+                endTime: String(row.endTime || ""),
+              });
           if (
             !interval ||
             !row.bookingConfirmedAt ||
@@ -3989,8 +4040,8 @@ export function registerPublicMapRoutes(app: Express) {
           ) {
             continue;
           }
-          const lat = toFiniteNumber(row.lat);
-          const lng = toFiniteNumber(row.lng);
+          const lat = toFiniteNumber(paidProjection?.latitude ?? row.lat);
+          const lng = toFiniteNumber(paidProjection?.longitude ?? row.lng);
           if (lat === null || lng === null) continue;
           upsertSupplyBucket(lat, lng, {
             hostId: String(row.hostId || ""),

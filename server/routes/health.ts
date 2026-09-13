@@ -8,9 +8,14 @@ import { getOpsCleanupSnapshot, runOpsDataCleanup } from "../opsCleanup";
 import { getJobQueueStats } from "../jobs/jobQueue";
 import { getMapEndpointWatchdogSnapshot } from "../mapEndpointWatchdog";
 import { getPaymentHealthSnapshot } from "../services/paymentHealth";
+import {
+  isTruthyFinancialTestFlag,
+  productionFinancialSafetyViolations,
+} from "@shared/financialTestSafety";
 
 export const healthRouter = Router();
 const serverStartedAt = new Date().toISOString();
+const REQUIRED_RELEASE_MIGRATION_FLOOR = 142;
 type DeploymentPlatform = "vercel" | "render" | "unknown";
 
 type BuildMetadataValue = {
@@ -140,8 +145,12 @@ function getConfigSnapshot() {
     },
     payments: {
       stripeSecretKey: envPresent("STRIPE_SECRET_KEY"),
-      mealscoutBypassStripe: String(process.env.MEALSCOUT_BYPASS_STRIPE || "").toLowerCase() === "true",
-      mealscoutTestMode: String(process.env.MEALSCOUT_TEST_MODE || "").toLowerCase() === "true",
+      mealscoutBypassStripe: isTruthyFinancialTestFlag(
+        process.env.MEALSCOUT_BYPASS_STRIPE,
+      ),
+      mealscoutTestMode: isTruthyFinancialTestFlag(
+        process.env.MEALSCOUT_TEST_MODE,
+      ),
     },
     observability: {
       healthMetricsToken: envPresent("HEALTH_METRICS_TOKEN"),
@@ -274,8 +283,83 @@ healthRouter.get("/health/payments", async (_req, res) => {
 
 healthRouter.get("/health/ready", async (_req, res) => {
   try {
+    const financialSafetyViolations = productionFinancialSafetyViolations({
+      nodeEnv: process.env.NODE_ENV,
+      mealscoutBypassStripe: process.env.MEALSCOUT_BYPASS_STRIPE,
+      mealscoutTestMode: process.env.MEALSCOUT_TEST_MODE,
+    });
+    if (financialSafetyViolations.length > 0) {
+      return res.status(503).json({
+        status: "not_ready",
+        db: "unchecked",
+        financialSafety: {
+          status: "unsafe_test_configuration",
+          variables: financialSafetyViolations,
+        },
+        ts: Date.now(),
+      });
+    }
     await db.execute(sql`SELECT 1`);
-    res.json({ status: "ready", db: "ok", ts: Date.now() });
+    const [ledgerState] = await db.execute(sql`
+      SELECT to_regclass('public.mealscout_release_migrations') IS NOT NULL AS present
+    `);
+    if (ledgerState?.present !== true) {
+      return res.status(503).json({
+        status: "not_ready",
+        db: "ok",
+        migrations: {
+          ledger: "missing",
+          requiredFloor: REQUIRED_RELEASE_MIGRATION_FLOOR,
+        },
+        ts: Date.now(),
+      });
+    }
+    const [migrationState] = await db.execute(sql`
+      SELECT
+        COALESCE(MAX(migration_number), 0)::integer AS latest,
+        bool_or(migration_number = ${REQUIRED_RELEASE_MIGRATION_FLOOR}) AS required_applied
+      FROM mealscout_release_migrations
+    `);
+    const [schemaState] = await db.execute(sql`
+      SELECT
+        to_regclass('public.ordering_review_requests') IS NOT NULL AS ordering_review,
+        to_regclass('public.parking_pass_purchases') IS NOT NULL AS purchase_aggregate,
+        to_regclass('public.parking_pass_cancellation_operations') IS NOT NULL AS cancellation_operations,
+        to_regclass('public.parking_pass_credit_ledger') IS NOT NULL AS restricted_credit,
+        to_regclass('public.parking_pass_arrival_versions') IS NOT NULL AS protected_arrival
+    `);
+    const schemaReady = Object.values(schemaState || {}).every(
+      (value) => value === true,
+    );
+    const migrationReady =
+      migrationState?.required_applied === true &&
+      Number(migrationState?.latest || 0) >= REQUIRED_RELEASE_MIGRATION_FLOOR;
+    if (!migrationReady || !schemaReady) {
+      return res.status(503).json({
+        status: "not_ready",
+        db: "ok",
+        migrations: {
+          ledger: "ok",
+          requiredFloor: REQUIRED_RELEASE_MIGRATION_FLOOR,
+          latestApplied: Number(migrationState?.latest || 0),
+          requiredApplied: migrationState?.required_applied === true,
+          schema: schemaState || {},
+        },
+        ts: Date.now(),
+      });
+    }
+    res.json({
+      status: "ready",
+      db: "ok",
+      migrations: {
+        ledger: "ok",
+        requiredFloor: REQUIRED_RELEASE_MIGRATION_FLOOR,
+        latestApplied: Number(migrationState?.latest || 0),
+        requiredApplied: true,
+        schema: schemaState,
+      },
+      ts: Date.now(),
+    });
   } catch (error: any) {
     res.status(503).json({
       status: "not_ready",
