@@ -92,6 +92,10 @@ try {
   await run("browser-tooling", process.execPath, ["node_modules/playwright/cli.js", "install", "chromium", "firefox", "webkit"]);
   const browserLibraries = await prepareRecoveryBrowserLibraries(tooling, run);
   report.browserLibraries = { packages: browserLibraries.packages, downloaded: browserLibraries.downloaded, systemPackageInstall: false };
+  await run("browser-prerequisites-with-owned-libraries", process.execPath, ["scripts/recoveryBrowserPrerequisites.mjs", tooling], browserLibraries.env);
+  const browserPrerequisites = JSON.parse(readFileSync(join(tooling, "browser-prerequisites.json"), "utf8"));
+  assert.equal(browserPrerequisites.actualGlesDlopen, true);
+  report.browserPrerequisites = browserPrerequisites;
   const express = (await import("express")).default;
   const app = express();
   app.use("/api", (_request, response) => response.status(404).json({ error: "Static proof has no application API" }));
@@ -106,6 +110,9 @@ try {
     FRONTEND_URL: `http://127.0.0.1:${server.address().port}`,
     PLAYWRIGHT_JSON_OUTPUT_FILE: browserJson,
     ...browserLibraries.env,
+    // Only after the canonical checker and actual GLES loader both ran. This
+    // adapts its system-cache assumption; every real browser test still runs.
+    ...(browserPrerequisites.adaptSystemCacheCheck ? { PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS: "1" } : {}),
   });
   const browser = JSON.parse(readFileSync(browserJson, "utf8"));
   assert.equal(browser.stats.unexpected, 0);
