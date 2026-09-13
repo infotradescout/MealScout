@@ -5,6 +5,7 @@ import { mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { prepareRecoveryBrowserLibraries } from "./recoveryBrowserLibraries.mjs";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 process.chdir(root);
@@ -89,6 +90,8 @@ try {
   await run("migration142-native-postgres16", process.execPath, ["--import", "tsx", "scripts/proveMigration142Postgres16.ts", `--native-pg-bin=${nativeBin}`]);
   await run("stateful-marketplace-native-postgres16", process.execPath, ["--import", "tsx", "scripts/recoveryNativePostgres16.mjs", nativeBin]);
   await run("browser-tooling", process.execPath, ["node_modules/playwright/cli.js", "install", "chromium", "firefox", "webkit"]);
+  const browserLibraries = await prepareRecoveryBrowserLibraries(tooling, run);
+  report.browserLibraries = { packages: browserLibraries.packages, downloaded: browserLibraries.downloaded, systemPackageInstall: false };
   const express = (await import("express")).default;
   const app = express();
   app.use("/api", (_request, response) => response.status(404).json({ error: "Static proof has no application API" }));
@@ -102,6 +105,7 @@ try {
   await run("credential-free-browser-matrix", "npm", ["run", "test:flows:e2e:no-creds", "--", "--reporter=line,json"], {
     FRONTEND_URL: `http://127.0.0.1:${server.address().port}`,
     PLAYWRIGHT_JSON_OUTPUT_FILE: browserJson,
+    ...browserLibraries.env,
   });
   const browser = JSON.parse(readFileSync(browserJson, "utf8"));
   assert.equal(browser.stats.unexpected, 0);
@@ -121,6 +125,9 @@ try {
   if (server) await new Promise((done, reject) => server.close(error => error ? reject(error) : done()));
   report.finishedAt = new Date().toISOString();
   const json = JSON.stringify(report, null, 2);
+  // Playwright clears its test-results directory at startup, including our
+  // earlier empty report directory. Recreate it for both pass and fail receipts.
+  mkdirSync(reportDir, { recursive: true });
   writeFileSync(join(reportDir, "summary.json"), `${json}\n`);
   writeFileSync(join(reportDir, "index.html"), `<!doctype html><meta charset="utf-8"><title>MealScout isolated recovery proof</title><h1>MealScout isolated recovery proof</h1><pre>${json.replaceAll("&", "&amp;").replaceAll("<", "&lt;")}</pre>`);
   console.log(`RECOVERY_PROOF_REPORT ${JSON.stringify(report)}`);
