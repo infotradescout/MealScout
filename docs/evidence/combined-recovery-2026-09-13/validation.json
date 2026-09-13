@@ -1,0 +1,270 @@
+{
+  "schemaVersion": 1,
+  "applicationCommit": "74f6db262d211891d4de2bbb3b5d883a4924b33c",
+  "runtime": "Linux Node24.19.0",
+  "nativePostgresVerified": false,
+  "browserVerified": false,
+  "hostedCIVerified": false,
+  "productionVerified": false,
+  "checks": [
+    {
+      "name": "TypeScript",
+      "status": "passed",
+      "localLog": "/workspace/scratch/08e6db36fee2/mealscout-typecheck.log",
+      "sha256": "c03d972ff5394624e5e22ae4f208694f1913dd9fa53a5f76582d4d0e881e790c"
+    },
+    {
+      "name": "Production build",
+      "status": "passed",
+      "localLog": "/workspace/scratch/08e6db36fee2/mealscout-build.log",
+      "sha256": "46e178fd8df20b28568a727cc414f8a78a15c775cd49e50f0b0a977bb7091fc3"
+    },
+    {
+      "name": "Ordering",
+      "status": "passed",
+      "localLog": "/workspace/scratch/08e6db36fee2/mealscout-ordering.log",
+      "sha256": "cff092994903151ee4a910e57c787db2c35ca52f1a3a47d61acf5c477aa39791"
+    },
+    {
+      "name": "Integrated marketplace",
+      "status": "passed",
+      "localLog": "/workspace/scratch/08e6db36fee2/mealscout-marketplace.log",
+      "sha256": "b7d0ed243f45b6ff6646a6efa3055570552acdca95b51dd064a371825b0f29c2"
+    },
+    {
+      "name": "Stripe webhook safety",
+      "status": "passed",
+      "localLog": "/workspace/scratch/08e6db36fee2/mealscout-webhook.log",
+      "sha256": "564ea81639fa96c4b5ba0be967835d4fb2fd7558f3abd44e0f3a118b888a23e7"
+    },
+    {
+      "name": "Menu and LISA",
+      "status": "passed",
+      "localLog": "/workspace/scratch/08e6db36fee2/mealscout-menu.log",
+      "sha256": "b5b14f64bb44bc70d55d3b191e675662c1c625ba102d666b1d326b80ba210453"
+    },
+    {
+      "name": "Production dependency audit",
+      "status": "passed",
+      "localLog": "/workspace/scratch/08e6db36fee2/mealscout-audit.json",
+      "sha256": "ded0d41c73c71c9f8be875c6865874922d916a19403766079a00a8a08b0f4ab9"
+    },
+    {
+      "name": "Public data boundary",
+      "status": "passed",
+      "localLog": "/workspace/scratch/08e6db36fee2/mealscout-public-boundary-direct.log",
+      "sha256": "f5f4bf04f1b1c9031de1e7a9edecf103eac308243aa7631db2c9ca6d482a725d"
+    },
+    {
+      "name": "Mobile readiness",
+      "status": "passed",
+      "localLog": "/workspace/scratch/08e6db36fee2/mealscout-mobile-direct.log",
+      "sha256": "5cf0483b20b4adab5319a1a4fbab8c9585716a419b1f1da272c7420c2483566b"
+    },
+    {
+      "name": "Strict store metadata",
+      "status": "passed",
+      "localLog": "/workspace/scratch/08e6db36fee2/mealscout-store-direct.log",
+      "sha256": "ea93968e2bf6b1322b85fa742693e3b52732a14965408e472ca8254e988b5594"
+    },
+    {
+      "name": "consumer-entity-foundation",
+      "status": "passed",
+      "executed": "node --import tsx scripts/mealscout-consumer-entity-foundation.contract.test.ts",
+      "localLog": "/workspace/scratch/08e6db36fee2/mealscout-ci-evidence/consumer-entity-foundation.log",
+      "sha256": "e631c97a4f7976006ee3f13ce1455b086c572edc0afdf2ff3a7dca0b5190373b"
+    },
+    {
+      "name": "scout-fallback",
+      "status": "passed",
+      "executed": "node --import tsx scripts/mealscout-scout-fallback.contract.test.ts",
+      "localLog": "/workspace/scratch/08e6db36fee2/mealscout-ci-evidence/scout-fallback.log",
+      "sha256": "b1b266fdcac7c146cc0f9d41b45ca382763162a47ea99994452e6e9115b128e5"
+    },
+    {
+      "name": "scout-discovery-result",
+      "status": "passed",
+      "executed": "node --import tsx scripts/mealscout-scout-discovery-result.contract.test.ts",
+      "localLog": "/workspace/scratch/08e6db36fee2/mealscout-ci-evidence/scout-discovery-result.log",
+      "sha256": "2ed55d0569662776a5ef12e5eeabcf110015e35f77508655c7f55829b1ff9158"
+    },
+    {
+      "name": "scout-result-view-model",
+      "status": "passed",
+      "executed": "node --import tsx scripts/mealscout-scout-result-view-model.contract.test.ts",
+      "localLog": "/workspace/scratch/08e6db36fee2/mealscout-ci-evidence/scout-result-view-model.log",
+      "sha256": "d947bf6299676ba88cff606109ce94cca85308a32eb554183f06c510782c4f0a"
+    },
+    {
+      "name": "map-truth",
+      "status": "passed",
+      "executed": "node --import tsx scripts/mealscout-map-truth.contract.test.ts",
+      "localLog": "/workspace/scratch/08e6db36fee2/mealscout-ci-evidence/map-truth.log",
+      "sha256": "e1abdac6a6457b9c0911c88795c9d687f9049ebd426bccb2a0544e5f50766061"
+    },
+    {
+      "name": "profile-action-policy",
+      "status": "passed",
+      "executed": "node --import tsx scripts/mealscout-profile-action-policy.contract.test.ts",
+      "localLog": "/workspace/scratch/08e6db36fee2/mealscout-ci-evidence/profile-action-policy.log",
+      "sha256": "82141ccf510e24a7633e4c4aa33293da7688ee00172d771283d0f76db2f5736f"
+    },
+    {
+      "name": "business-type-taxonomy",
+      "status": "passed",
+      "executed": "node --import tsx scripts/mealscout-business-type-taxonomy.contract.test.ts",
+      "localLog": "/workspace/scratch/08e6db36fee2/mealscout-ci-evidence/business-type-taxonomy.log",
+      "sha256": "c936e0b77ef464d90d46d03713e3c8a9582ca57840aa2571fd3a18951fa70f1d"
+    },
+    {
+      "name": "business-signup-attachment",
+      "status": "passed",
+      "executed": "node --import tsx scripts/business-signup-menu-attachment.contract.test.ts",
+      "localLog": "/workspace/scratch/08e6db36fee2/mealscout-ci-evidence/business-signup-attachment.log",
+      "sha256": "55015f4d04ccc27e99fd9f98eff376181bb96f99bb3481c6bd39fe140d96dc50"
+    },
+    {
+      "name": "food-truck-signup-funnel",
+      "status": "passed",
+      "executed": "node --import tsx scripts/food-truck-signup-funnel.contract.test.ts",
+      "localLog": "/workspace/scratch/08e6db36fee2/mealscout-ci-evidence/food-truck-signup-funnel.log",
+      "sha256": "1163a444a742ff1e75fafa335cb0cb27a300dc82aa9f7ec4f6016bb08cfc8fc8"
+    },
+    {
+      "name": "truck-availability-truth",
+      "status": "passed",
+      "executed": "node --import tsx scripts/truck-availability-truth.behavior.test.ts",
+      "localLog": "/workspace/scratch/08e6db36fee2/mealscout-ci-evidence/truck-availability-truth.log",
+      "sha256": "2ec23af42bbdfd688e492cf29da5d2be2c9cccbbe9eb292a0aa6b757465eb22c"
+    },
+    {
+      "name": "profile-completion-truth",
+      "status": "passed",
+      "executed": "node --import tsx scripts/profile-completion-truth.behavior.test.ts",
+      "localLog": "/workspace/scratch/08e6db36fee2/mealscout-ci-evidence/profile-completion-truth.log",
+      "sha256": "948ab73c7cd1a4dc0fef3aa82a019571065536cabd2bc6efef5a81e1da64bbf5"
+    },
+    {
+      "name": "profile-evidence-owner-review",
+      "status": "passed",
+      "executed": "node --import tsx scripts/profile-evidence-owner-review.behavior.test.ts && node --import tsx scripts/profile-evidence-public-projection.behavior.test.ts && node --import tsx scripts/owner-settings-boundary-concurrency.behavior.test.ts && node --import tsx scripts/admin-business-completion-settings.behavior.test.ts && node --import tsx scripts/parking-pass-dated-stop-navigation.behavior.test.ts && node --import tsx scripts/profile-evidence-owner-review.integration.contract.test.ts && node --import tsx scripts/profile-evidence-apply.contract.test.ts && node --import tsx scripts/profile-evidence-review-surface.contract.test.ts && node --import tsx scripts/owner-profile-evidence-review-ui.contract.test.ts && node --import tsx scripts/owner-settings-boundary-concurrency.contract.test.ts && node --import tsx scripts/admin-business-completion-settings.contract.test.ts",
+      "localLog": "/workspace/scratch/08e6db36fee2/mealscout-ci-evidence/profile-evidence-owner-review.log",
+      "sha256": "032dc64aa9b1bbc03f99ad33623d1f0bcc1a8135c24c41ce81a940f43e384fb0"
+    },
+    {
+      "name": "public-data-boundary",
+      "status": "passed",
+      "executed": "node --import tsx scripts/mealscout-public-data-boundary.contract.test.ts",
+      "localLog": "/workspace/scratch/08e6db36fee2/mealscout-ci-evidence/public-data-boundary.log",
+      "sha256": "f5f4bf04f1b1c9031de1e7a9edecf103eac308243aa7631db2c9ca6d482a725d"
+    },
+    {
+      "name": "public-seo-landing",
+      "status": "passed",
+      "executed": "node --import tsx scripts/public-seo-landing-pages.contract.test.ts && node --import tsx --test scripts/public-seo-landing-model.behavior.test.ts",
+      "localLog": "/workspace/scratch/08e6db36fee2/mealscout-ci-evidence/public-seo-landing.log",
+      "sha256": "4af450ff056549fb04d416f42024fbc97ffee400c001bb2f6d376e2ce2a2802a"
+    },
+    {
+      "name": "frozen-cleanup-safety",
+      "status": "passed",
+      "executed": "node --import tsx scripts/frozen-cleanup-safety.contract.test.ts",
+      "localLog": "/workspace/scratch/08e6db36fee2/mealscout-ci-evidence/frozen-cleanup-safety.log",
+      "sha256": "650dd3bd053ddeb041ae001c7c3b40a05dc28d8bddfae363f54901a630377abe"
+    },
+    {
+      "name": "quick-review-score-validation",
+      "status": "passed",
+      "executed": "node --import tsx scripts/quick-review-score-validation.contract.test.ts",
+      "localLog": "/workspace/scratch/08e6db36fee2/mealscout-ci-evidence/quick-review-score-validation.log",
+      "sha256": "3e9f90fd51c7c4053f4e0daecda6a6911329cdfbfa37dc333358b45b19da9141"
+    },
+    {
+      "name": "quick-review-idempotency",
+      "status": "passed",
+      "executed": "node --import tsx scripts/quick-review-idempotency.contract.test.ts",
+      "localLog": "/workspace/scratch/08e6db36fee2/mealscout-ci-evidence/quick-review-idempotency.log",
+      "sha256": "9271b04809e1983c0b14b53232f40ccd0d685c43f1078e644391d8aab0af1393"
+    },
+    {
+      "name": "recommend-photo-only-proof",
+      "status": "passed",
+      "executed": "node --import tsx scripts/recommend-photo-only-proof.contract.test.ts",
+      "localLog": "/workspace/scratch/08e6db36fee2/mealscout-ci-evidence/recommend-photo-only-proof.log",
+      "sha256": "667ad36232fa78984ff20bce54097f94fb4e9b865021f39530500b69be5e0212"
+    },
+    {
+      "name": "manual-asset-intake",
+      "status": "passed",
+      "executed": "node --import tsx scripts/manual-profile-asset-intake.contract.test.ts",
+      "localLog": "/workspace/scratch/08e6db36fee2/mealscout-ci-evidence/manual-asset-intake.log",
+      "sha256": "4efa5ffe5370c00574e7a1f418a4a977f20f2ad86f6cc7ea028199ab3b2751fe"
+    },
+    {
+      "name": "leaflet-removal",
+      "status": "passed",
+      "executed": "node --import tsx scripts/mealscout-leaflet-removal.contract.test.ts",
+      "localLog": "/workspace/scratch/08e6db36fee2/mealscout-ci-evidence/leaflet-removal.log",
+      "sha256": "3c3948aad8cce7f3fc5396132419644e8426cc00d607d85b881f76985e30476c"
+    },
+    {
+      "name": "event-date-normalization",
+      "status": "passed",
+      "executed": "node --import tsx scripts/event-coordinator-date-normalization.contract.test.ts",
+      "localLog": "/workspace/scratch/08e6db36fee2/mealscout-ci-evidence/event-date-normalization.log",
+      "sha256": "3ddf329ca7ce0ef7f96e98423328584f16b8ca2bdadb0c5ca138342a33286b83"
+    },
+    {
+      "name": "action-availability",
+      "status": "passed",
+      "executed": "node --import tsx scripts/mealscout-action-availability.contract.test.ts",
+      "localLog": "/workspace/scratch/08e6db36fee2/mealscout-ci-evidence/action-availability.log",
+      "sha256": "3bbd8de1f7cc6276b066105765fe382b9aee0cda38f70ffaf1ea92dd2ead7a85"
+    },
+    {
+      "name": "post-merge-safety",
+      "status": "passed",
+      "executed": "node --import tsx scripts/post-merge-safety.contract.test.ts",
+      "localLog": "/workspace/scratch/08e6db36fee2/mealscout-ci-evidence/post-merge-safety.log",
+      "sha256": "741b37e66ea04f523d76a9fc8cd1172473f6be28ca01eb10fb51dc33d6bcbbd7"
+    },
+    {
+      "name": "about-explainer",
+      "status": "passed",
+      "executed": "node --import tsx scripts/mealscout-about-explainer.contract.test.ts",
+      "localLog": "/workspace/scratch/08e6db36fee2/mealscout-ci-evidence/about-explainer.log",
+      "sha256": "a88836ee38a83e92331b3465ddec55e6359b03107ee48648ec259a6737e4e2ab"
+    },
+    {
+      "name": "3d-eats-frui-tea-sauce",
+      "status": "passed",
+      "executed": "node --import tsx scripts/3d-eats-frui-tea-sauce-update.contract.test.ts",
+      "localLog": "/workspace/scratch/08e6db36fee2/mealscout-ci-evidence/3d-eats-frui-tea-sauce.log",
+      "sha256": "faee4343c1bb30d1332a79538ced53914db179b577377cdee585d11de2baf501"
+    },
+    {
+      "name": "3d-eats-admin-verified-profile",
+      "status": "passed",
+      "executed": "node --import tsx scripts/3d-eats-admin-verified-profile.contract.test.ts",
+      "localLog": "/workspace/scratch/08e6db36fee2/mealscout-ci-evidence/3d-eats-admin-verified-profile.log",
+      "sha256": "6789006506fc9d0b12c7ce4658c08afcf02d1bf0dc518906da29290f27f71e56"
+    },
+    {
+      "name": "curated-profile-cohort-baseline",
+      "status": "passed",
+      "executed": "node --import tsx scripts/curated-profile-cohort-baseline.contract.test.ts",
+      "localLog": "/workspace/scratch/08e6db36fee2/mealscout-ci-evidence/curated-profile-cohort-baseline.log",
+      "sha256": "86e44b11ec9dd5f4dfa0575786c7d21bd5a797cdc25fc5223975b630423fd95b"
+    },
+    {
+      "name": "Calendar actual-component rendering",
+      "status": "6-passed",
+      "evidence": "Current execution transcript; node --import tsx --test scripts/parking-schedule-calendar.behavior.test.ts"
+    },
+    {
+      "name": "Critical health behavior",
+      "status": "7-passed",
+      "evidence": "Current execution transcript; node --import tsx --test scripts/smoke-critical-routes.behavior.test.mjs"
+    }
+  ]
+}
