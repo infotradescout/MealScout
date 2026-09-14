@@ -48,6 +48,8 @@ export async function prepareRecoveryBrowserLibraries(tooling, run) {
   for (const name of downloaded) {
     await run(`browser-library-extract:${name}`, "dpkg-deb", ["--extract", join(archives, name), libraries]);
   }
+  const schemaDirectory = join(libraries, "usr/share/glib-2.0/schemas");
+  await run("browser-gsettings-schema-compile", "glib-compile-schemas", [schemaDirectory]);
   assert.deepEqual(readFileSync("/var/lib/dpkg/status"), installedStatus, "System package state must remain unchanged");
   return {
     packages,
@@ -58,6 +60,7 @@ export async function prepareRecoveryBrowserLibraries(tooling, run) {
       GIO_EXTRA_MODULES: join(libraries, "usr/lib/x86_64-linux-gnu/gio/modules"),
       GST_PLUGIN_PATH: join(libraries, "usr/lib/x86_64-linux-gnu/gstreamer-1.0"),
       XDG_DATA_DIRS: `${join(libraries, "usr/share")}:/usr/local/share:/usr/share`,
+      GSETTINGS_SCHEMA_DIR: schemaDirectory,
     },
   };
 }
