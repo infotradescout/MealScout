@@ -25,6 +25,9 @@ jobs:
       - name: UI Refinement Syntax and Clipboard Regression
         run: node scripts/mealscout-ui-refinement.test.cjs
 
+      - name: Pickup Checkout State Regression
+        run: node scripts/mealscout-checkout-state.test.cjs
+
       - name: Typecheck
         run: npm run check
 
