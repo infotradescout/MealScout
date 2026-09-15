@@ -1,18 +1,783 @@
 import { useState, useEffect, useRef } from "react";
-import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
+import {
+  Elements,
+  PaymentElement,
+  useStripe,
+  useElements,
+} from "@stripe/react-stripe-js";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Loader2, MapPin, ShieldCheck, TicketCheck } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import PaymentBrowserGate from "@/components/payment-browser-gate";
 import { isPaymentHostileBrowser } from "@/lib/inAppBrowser";
 import { apiUrl } from "@/lib/api";
 import { getStripePromise } from "@/lib/stripeClient";
 
-const buildTimeStripePublicKey=import.meta.env.VITE_STRIPE_PUBLIC_KEY||"";
-function recordRouteBookingConfirmed(passId:string){try{const raw=sessionStorage.getItem("mealscout_route_booking_context");if(!raw)return;const context=JSON.parse(raw);sessionStorage.removeItem("mealscout_route_booking_context");void fetch("/api/parking-pass/routes/events",{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({eventName:"route_booking_confirmed",properties:{...context,passId}})})}catch{}}
-interface BookingPaymentModalProps{open:boolean;onOpenChange:(open:boolean)=>void;passId:string;truckId:string;slotTypes:string[];selectedDates?:string[];eventDetails:{name:string;date:string;startTime:string;endTime:string;hostName:string;hostPrice?:number;slotSummary?:string};bookingContext?:{weather:{summary:string;loading?:boolean};footTraffic:{summary:string;loading?:boolean};truckActivity:{summary:string};truckReviews:{summary:string}};onSuccess:(result:{outcome:"confirmed"|"pending"|"credited"})=>void}
-interface PaymentFormProps{clientSecret:string;paymentIntentId:string;passId:string;truckId:string;totalCents:number;breakdown:{hostPrice:number;platformFee:number;creditsApplied?:number;promoDiscount?:number;promoCode?:string};onSuccess:(outcome:"confirmed"|"pending"|"credited")=>void;onCancel:()=>void}
-function PaymentForm({paymentIntentId,passId,truckId,totalCents,breakdown,onSuccess,onCancel}:PaymentFormProps){const stripe=useStripe(),elements=useElements(),{toast}=useToast();const[isProcessing,setIsProcessing]=useState(false);const waitForBookingConfirmation=async()=>{const startedAt=Date.now();while(Date.now()-startedAt<25000){try{const res=await fetch(apiUrl(`/api/bookings/payment-intent/${encodeURIComponent(paymentIntentId)}?truckId=${encodeURIComponent(truckId)}`),{credentials:"include"});if(res.ok){const data=await res.json();if(data?.status==="confirmed")return"confirmed" as const;if(data?.status==="credited")return"credited" as const}}catch{}await new Promise(r=>setTimeout(r,1500))}return"pending" as const};const handleSubmit=async(e:React.FormEvent)=>{e.preventDefault();if(!stripe||!elements)return;setIsProcessing(true);try{const{error}=await stripe.confirmPayment({elements,confirmParams:{return_url:`${window.location.origin}/parking-pass?booking=success`},redirect:"if_required"});if(error){toast({title:"Payment failed",description:error.message||"Payment could not be completed. Your booking is not confirmed yet.",variant:"destructive"});return}const status=await waitForBookingConfirmation();if(status==="credited"){toast({title:"Spot became unavailable",description:"Payment succeeded, but the spot was no longer available. Credits were issued to your account.",variant:"destructive"});onSuccess("credited");return}toast({title:status==="pending"?"Payment received":"Parking Pass confirmed",description:status==="pending"?"We are finishing the booking confirmation. It will appear in My Schedule shortly.":"Your parking spot has been reserved."});recordRouteBookingConfirmed(passId);onSuccess(status)}catch(err:any){toast({title:"Payment error",description:err.message||"An unexpected payment error occurred. Check My Schedule before trying again.",variant:"destructive"})}finally{setIsProcessing(false)}};return <form onSubmit={handleSubmit} className="space-y-4" aria-busy={isProcessing}><div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4 space-y-2 text-sm"><div className="flex justify-between text-[color:var(--text-secondary)]"><span>Host location fee</span><span className="font-semibold">${(breakdown.hostPrice/100).toFixed(2)}</span></div><div className="flex justify-between text-[color:var(--text-secondary)]"><span>MealScout fee</span><span className="font-semibold">${(breakdown.platformFee/100).toFixed(2)}</span></div>{breakdown.creditsApplied?<div className="flex justify-between text-[color:var(--status-success)]"><span>Credits applied</span><span className="font-semibold">-${(breakdown.creditsApplied/100).toFixed(2)}</span></div>:null}{breakdown.promoDiscount?<div className="flex justify-between text-[color:var(--status-success)]"><span>Promo{breakdown.promoCode?` (${breakdown.promoCode})`:""}</span><span className="font-semibold">-${(breakdown.promoDiscount/100).toFixed(2)}</span></div>:null}<div className="flex justify-between border-t border-[var(--border-subtle)] pt-3 text-base font-black text-[color:var(--text-primary)]"><span>Total</span><span>${(totalCents/100).toFixed(2)}</span></div></div><div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4"><PaymentElement/></div><div className="grid grid-cols-1 gap-2 sm:grid-cols-2"><Button type="button" variant="outline" onClick={onCancel} disabled={isProcessing}>Cancel checkout</Button><Button type="submit" disabled={!stripe||isProcessing}>{isProcessing?<><Loader2 className="h-4 w-4 animate-spin"/>Confirming payment…</>:`Pay $${(totalCents/100).toFixed(2)}`}</Button></div><p className="text-center text-xs text-[color:var(--text-muted)]">Do not close this window while payment is confirming. If confirmation is interrupted, check My Schedule before paying again.</p></form>}
-export function BookingPaymentModal({open,onOpenChange,passId,truckId,slotTypes,selectedDates=[],eventDetails,bookingContext,onSuccess}:BookingPaymentModalProps){const{toast}=useToast();const[isLoading,setIsLoading]=useState(false),[clientSecret,setClientSecret]=useState<string|null>(null),[paymentIntentId,setPaymentIntentId]=useState<string|null>(null),[bookingData,setBookingData]=useState<any>(null),[creditBalance,setCreditBalance]=useState<number|null>(null),[creditsToApply,setCreditsToApply]=useState(""),[promoCode,setPromoCode]=useState(""),[stripePublishableKey,setStripePublishableKey]=useState(buildTimeStripePublicKey),[isStripeConfigLoading,setIsStripeConfigLoading]=useState(false),[hostPaymentsReady,setHostPaymentsReady]=useState<boolean|null>(null);const cancelOnInitiateRef=useRef(false);const stage:"review"|"pay"=clientSecret?"pay":"review";const stripePromise=getStripePromise(stripePublishableKey),hostileBrowser=isPaymentHostileBrowser();const loadCreditBalance=async()=>{try{const res=await fetch(apiUrl("/api/payout/balance"),{credentials:"include"});if(res.ok){const data=await res.json();setCreditBalance(Number(data.balance||0))}}catch{}};useEffect(()=>{let cancelled=false;if(open){cancelOnInitiateRef.current=false;if(!stripePublishableKey){setIsStripeConfigLoading(true);fetch(apiUrl("/api/payments/stripe-config")).then(async r=>r.ok?r.json():null).then(data=>{if(cancelled)return;const key=String(data?.publishableKey||"").trim();if(key)setStripePublishableKey(key);else{toast({title:"Payments unavailable",description:"Secure payment is not configured for this environment.",variant:"destructive"});onOpenChange(false)}}).catch(()=>{if(!cancelled){toast({title:"Payments unavailable",description:"Payment configuration could not be loaded.",variant:"destructive"});onOpenChange(false)}}).finally(()=>{if(!cancelled)setIsStripeConfigLoading(false)})}void loadCreditBalance()}return()=>{cancelled=true}},[open,stripePublishableKey,toast,onOpenChange]);const cancelCheckout=async(intentId:string)=>{try{await fetch(apiUrl(`/api/bookings/payment-intent/${encodeURIComponent(intentId)}/cancel?truckId=${encodeURIComponent(truckId)}`),{method:"POST",credentials:"include"})}catch{}};const resetState=()=>{setClientSecret(null);setPaymentIntentId(null);setBookingData(null);setCreditsToApply("");setPromoCode("")};const handleCancel=()=>{const intentId=paymentIntentId;cancelOnInitiateRef.current=isLoading;resetState();onOpenChange(false);if(intentId)void cancelCheckout(intentId)};const handleSuccess=(outcome:"confirmed"|"pending"|"credited")=>{resetState();onOpenChange(false);onSuccess({outcome})};const initiateBooking=async()=>{if(hostileBrowser){toast({title:"Open in browser to continue",description:"Parking Pass checkout requires Chrome or Safari.",variant:"destructive"});return}setIsLoading(true);try{const key=typeof crypto!=="undefined"&&typeof crypto.randomUUID==="function"?crypto.randomUUID():`${Date.now()}-${Math.random().toString(36).slice(2)}`;const creditCents=Math.max(0,Math.floor(Number(creditsToApply||0)*100));const normalizedSelectedDates=selectedDates.filter(v=>typeof v==="string").map(v=>v.trim()).map(v=>v.match(/^(\d{4}-\d{2}-\d{2})/)?.[1]||v).filter(Boolean);const res=await fetch(apiUrl(`/api/parking-pass/${passId}/book`),{method:"POST",credentials:"include",headers:{"Content-Type":"application/json","Idempotency-Key":key},body:JSON.stringify({truckId,slotTypes,selectedDates:normalizedSelectedDates,applyCreditsCents:creditCents>0?creditCents:undefined,promoCode:promoCode.trim()||undefined})});const data=await res.json();if(!res.ok){if(res.status===409&&(data?.code==="truck_profile_required"||data?.code==="truck_verification_required")){toast({title:data?.code==="truck_verification_required"?"Verification required":"Complete truck profile",description:data?.message||"Complete your food truck profile before booking."});window.location.assign(String(data?.onboardingPath||"/restaurant-signup?businessType=food_truck&source=parking-pass&claim=1"));return}throw new Error(data.message||"Could not start this booking")};if(data?.paymentPending){toast({title:"Request received",description:"Your spot request was received. Payment instructions will follow."});handleSuccess("pending");return}if(data?.bypassed){toast({title:"Parking Pass confirmed",description:"Your parking spot has been reserved."});recordRouteBookingConfirmed(passId);handleSuccess("confirmed");return}if(cancelOnInitiateRef.current){if(data.paymentIntentId)await cancelCheckout(String(data.paymentIntentId));return}const secret=String(data.clientSecret||"").trim(),intent=String(data.paymentIntentId||"").trim();if(!secret||!intent)throw new Error("Payment setup did not finish.");if(!stripePromise){await cancelCheckout(intent);throw new Error("Stripe is not configured for this environment.")}setClientSecret(secret);setPaymentIntentId(intent);setHostPaymentsReady(data.hostPaymentsReady!==false);setBookingData({totalCents:data.totalCents,breakdown:data.breakdown})}catch(err:any){toast({title:"Booking not started",description:err.message||"Could not initiate booking. No confirmed booking was created.",variant:"destructive"})}finally{setIsLoading(false)}};return <Dialog open={open} onOpenChange={next=>{if(!next)handleCancel()}}><DialogContent className="sm:max-w-2xl" aria-describedby="parking-pass-checkout-description"><DialogHeader><DialogTitle className="font-display">Parking Pass checkout</DialogTitle><DialogDescription id="parking-pass-checkout-description">Review the exact host, date and selected slots before creating a payment hold.</DialogDescription></DialogHeader><div className="flex items-center gap-2 text-xs" aria-label={`Checkout step ${stage==="review"?"1 of 2":"2 of 2"}`}><span className={`rounded-full border px-3 py-1.5 font-bold ${stage==="review"?"border-primary/40 bg-primary/10 text-[color:var(--text-primary)]":"border-[var(--border-subtle)] text-[color:var(--text-muted)]"}`}>1 Review</span><span className="h-px flex-1 bg-[var(--border-subtle)]"/><span className={`rounded-full border px-3 py-1.5 font-bold ${stage==="pay"?"border-primary/40 bg-primary/10 text-[color:var(--text-primary)]":"border-[var(--border-subtle)] text-[color:var(--text-muted)]"}`}>2 Pay</span></div><section className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4"><div className="flex items-start gap-3"><MapPin className="mt-0.5 h-5 w-5 shrink-0 text-primary"/><div><p className="font-black text-[color:var(--text-primary)]">{eventDetails.hostName}</p><p className="mt-1 text-sm text-[color:var(--text-secondary)]">{eventDetails.date} · {eventDetails.startTime}–{eventDetails.endTime}</p>{eventDetails.slotSummary?<p className="mt-1 text-xs text-[color:var(--text-muted)]">Selected: {eventDetails.slotSummary}</p>:null}</div></div></section>{bookingContext?<section className="grid gap-2 sm:grid-cols-2">{[["Weather",bookingContext.weather.loading?"Loading weather…":bookingContext.weather.summary],["Area activity",bookingContext.footTraffic.loading?"Loading area activity…":bookingContext.footTraffic.summary],["Truck activity",bookingContext.truckActivity.summary],["Truck reviews",bookingContext.truckReviews.summary]].map(([label,value])=><div key={label} className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-3"><p className="text-xs font-bold text-[color:var(--text-primary)]">{label}</p><p className="mt-1 text-xs text-[color:var(--text-muted)]">{value}</p></div>)}</section>:null}{!clientSecret?<><div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4 space-y-4">{hostileBrowser?<PaymentBrowserGate currentUrl={window.location.href} reason="Complete Parking Pass checkout in Chrome or Safari." compact/>:null}<div className="flex items-start justify-between gap-4"><div><p className="font-bold text-[color:var(--text-primary)]">Credits</p><p className="text-xs text-[color:var(--text-muted)]">Credits reduce the MealScout platform fee.</p></div><div className="text-right"><p className="text-xs text-[color:var(--text-muted)]">Available</p><p className="font-black">${(creditBalance||0).toFixed(2)}</p></div></div><div><div className="mb-2 flex items-center justify-between"><label htmlFor="parking-pass-credits" className="text-xs font-bold">Apply credits</label><button type="button" className="min-h-11 px-2 text-xs font-bold text-primary" onClick={()=>setCreditsToApply(String((creditBalance||0).toFixed(2)))}>Use max</button></div><Input id="parking-pass-credits" type="number" inputMode="decimal" min="0" step="0.01" value={creditsToApply} onChange={e=>setCreditsToApply(e.target.value)} placeholder="0.00"/></div><div><label htmlFor="parking-pass-promo" className="mb-2 block text-xs font-bold">Promo code</label><Input id="parking-pass-promo" value={promoCode} onChange={e=>setPromoCode(e.target.value)} placeholder="Enter promo code" autoCapitalize="characters" className="uppercase"/></div><div className="flex items-start gap-2 rounded-xl bg-[var(--bg-surface-muted)] p-3 text-xs text-[color:var(--text-muted)]"><ShieldCheck className="h-4 w-4 shrink-0"
+const buildTimeStripePublicKey = import.meta.env.VITE_STRIPE_PUBLIC_KEY || "";
+
+function recordRouteBookingConfirmed(passId: string) {
+  try {
+    const raw = sessionStorage.getItem("mealscout_route_booking_context");
+    if (!raw) return;
+    const context = JSON.parse(raw);
+    sessionStorage.removeItem("mealscout_route_booking_context");
+    void fetch("/api/parking-pass/routes/events", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        eventName: "route_booking_confirmed",
+        properties: { ...context, passId },
+      }),
+    });
+  } catch {}
+}
+
+interface BookingPaymentModalProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  passId: string;
+  truckId: string;
+  slotTypes: string[];
+  selectedDates?: string[];
+  eventDetails: {
+    name: string;
+    date: string;
+    startTime: string;
+    endTime: string;
+    hostName: string;
+    hostPrice?: number;
+    slotSummary?: string;
+  };
+  bookingContext?: {
+    weather: {
+      summary: string;
+      loading?: boolean;
+    };
+    footTraffic: {
+      summary: string;
+      loading?: boolean;
+    };
+    truckActivity: {
+      summary: string;
+    };
+    truckReviews: {
+      summary: string;
+    };
+  };
+  onSuccess: (result: { outcome: "confirmed" | "pending" | "credited" }) => void;
+}
+
+interface PaymentFormProps {
+  clientSecret: string;
+  paymentIntentId: string;
+  passId: string;
+  truckId: string;
+  totalCents: number;
+  breakdown: {
+    hostPrice: number;
+    platformFee: number;
+    creditsApplied?: number;
+    promoDiscount?: number;
+    promoCode?: string;
+  };
+  onSuccess: (outcome: "confirmed" | "pending" | "credited") => void;
+  onCancel: () => void;
+}
+
+function PaymentForm({
+  clientSecret,
+  paymentIntentId,
+  passId,
+  truckId,
+  totalCents,
+  breakdown,
+  onSuccess,
+  onCancel,
+}: PaymentFormProps) {
+  const stripe = useStripe();
+  const elements = useElements();
+  const { toast } = useToast();
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  const waitForBookingConfirmation = async () => {
+    const startedAt = Date.now();
+    const timeoutMs = 25_000;
+
+    while (Date.now() - startedAt < timeoutMs) {
+      try {
+        const res = await fetch(
+          apiUrl(
+            `/api/bookings/payment-intent/${encodeURIComponent(
+              paymentIntentId,
+            )}?truckId=${encodeURIComponent(truckId)}`,
+          ),
+          {
+            credentials: "include",
+          },
+        );
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.status === "confirmed") return "confirmed" as const;
+          if (data?.status === "credited") return "credited" as const;
+        }
+      } catch {
+        // ignore transient network issues; keep polling
+      }
+
+      await new Promise((r) => setTimeout(r, 1500));
+    }
+
+    return "pending" as const;
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!stripe || !elements) {
+      return;
+    }
+
+    setIsProcessing(true);
+
+    try {
+      const { error } = await stripe.confirmPayment({
+        elements,
+        confirmParams: {
+          return_url: `${window.location.origin}/parking-pass?booking=success`,
+        },
+        redirect: "if_required",
+      });
+
+      if (error) {
+        toast({
+          title: "Payment Failed",
+          description: error.message || "An error occurred during payment.",
+          variant: "destructive",
+        });
+      } else {
+        const status = await waitForBookingConfirmation();
+        if (status === "credited") {
+          toast({
+            title: "Booking Unavailable",
+            description:
+              "Payment succeeded but the spot was no longer available. Credits were issued to your account.",
+            variant: "destructive",
+          });
+          onSuccess("credited");
+          return;
+        }
+
+        toast({
+          title: "Parking Pass Confirmed!",
+          description:
+            status === "pending"
+              ? "Payment received. Your booking will appear shortly."
+              : "Your parking spot has been reserved.",
+        });
+        recordRouteBookingConfirmed(passId);
+        onSuccess(status);
+      }
+    } catch (err: any) {
+      toast({
+        title: "Payment Error",
+        description: err.message || "An unexpected error occurred.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      {/* Pricing Breakdown */}
+      <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4 space-y-2 text-sm">
+        <div className="flex items-center justify-between text-[color:var(--text-secondary)]">
+          <span>Host Location Fee</span>
+          <span className="font-medium">
+            ${(breakdown.hostPrice / 100).toFixed(2)}
+          </span>
+        </div>
+        <div className="flex items-center justify-between text-[color:var(--text-secondary)]">
+          <span>MealScout Platform Fee</span>
+          <span className="font-medium">
+            ${(breakdown.platformFee / 100).toFixed(2)}
+          </span>
+        </div>
+        {breakdown.creditsApplied ? (
+          <div className="flex items-center justify-between text-[color:var(--status-success)]">
+            <span>Credits Applied</span>
+            <span className="font-medium">
+              -${(breakdown.creditsApplied / 100).toFixed(2)}
+            </span>
+          </div>
+        ) : null}
+        {breakdown.promoDiscount ? (
+          <div className="flex items-center justify-between text-[color:var(--status-success)]">
+            <span>
+              Promo Applied{breakdown.promoCode ? ` (${breakdown.promoCode})` : ""}
+            </span>
+            <span className="font-medium">
+              -${(breakdown.promoDiscount / 100).toFixed(2)}
+            </span>
+          </div>
+        ) : null}
+        <div className="border-t border-[var(--border-subtle)] pt-2 flex items-center justify-between font-semibold text-[color:var(--text-primary)]">
+          <span>Total</span>
+          <span className="text-lg">${(totalCents / 100).toFixed(2)}</span>
+        </div>
+        <p className="text-xs text-[color:var(--text-muted)] pt-1">
+          All fees included. No hidden charges.
+        </p>
+      </div>
+
+      {/* Stripe Payment Element */}
+      <div className="border border-[var(--border-subtle)] rounded-lg p-4 bg-[var(--bg-surface)]">
+        <PaymentElement />
+      </div>
+
+      {/* Action Buttons */}
+      <div className="flex gap-3 pt-2">
+        <Button
+          type="button"
+          variant="outline"
+          className="flex-1"
+          onClick={onCancel}
+          disabled={isProcessing}
+        >
+          Cancel
+        </Button>
+        <Button
+          type="submit"
+          className="flex-1"
+          disabled={!stripe || isProcessing}
+        >
+          {isProcessing ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Processing...
+            </>
+          ) : (
+            `Pay $${(totalCents / 100).toFixed(2)}`
+          )}
+        </Button>
+      </div>
+
+      {/* Terms Notice */}
+      <p className="text-xs text-[color:var(--text-muted)] text-center">
+        By confirming payment, you acknowledge bookings are non-refundable once confirmed.
+      </p>
+    </form>
+  );
+}
+
+export function BookingPaymentModal({
+  open,
+  onOpenChange,
+  passId,
+  truckId,
+  slotTypes,
+  selectedDates = [],
+  eventDetails,
+  bookingContext,
+  onSuccess,
+}: BookingPaymentModalProps) {
+  const { toast } = useToast();
+  const [isLoading, setIsLoading] = useState(false);
+  const [clientSecret, setClientSecret] = useState<string | null>(null);
+  const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null);
+  const [bookingData, setBookingData] = useState<{
+    totalCents: number;
+    breakdown: {
+      hostPrice: number;
+      platformFee: number;
+      creditsApplied?: number;
+      promoDiscount?: number;
+      promoCode?: string;
+    };
+  } | null>(null);
+  const [creditBalance, setCreditBalance] = useState<number | null>(null);
+  const [creditsToApply, setCreditsToApply] = useState("");
+  const [promoCode, setPromoCode] = useState("");
+  const [stripePublishableKey, setStripePublishableKey] = useState(
+    buildTimeStripePublicKey,
+  );
+  const [isStripeConfigLoading, setIsStripeConfigLoading] = useState(false);
+  // true = host has Stripe Connect ready; false = payment held on platform, host payout deferred
+  const [hostPaymentsReady, setHostPaymentsReady] = useState<boolean | null>(null);
+  const cancelOnInitiateRef = useRef(false);
+  const idempotencyKeyRef = useRef<string | null>(null);
+  const stage: "review" | "pay" = clientSecret ? "pay" : "review";
+  const stripePromise = getStripePromise(stripePublishableKey);
+  const hostileBrowser = isPaymentHostileBrowser();
+
+  useEffect(() => {
+    let cancelled = false;
+    if (open) {
+      cancelOnInitiateRef.current = false;
+      if (!stripePublishableKey) {
+        setIsStripeConfigLoading(true);
+        fetch(apiUrl("/api/payments/stripe-config"))
+          .then(async (res) => {
+            if (!res.ok) return null;
+            return res.json();
+          })
+          .then((data) => {
+            if (cancelled) return;
+            const runtimeKey = String(data?.publishableKey || "").trim();
+            if (runtimeKey) {
+              setStripePublishableKey(runtimeKey);
+            } else {
+              toast({
+                title: "Payments Unavailable",
+                description: "Stripe is not configured for this environment.",
+                variant: "destructive",
+              });
+              onOpenChange(false);
+            }
+          })
+          .catch(() => {
+            if (cancelled) return;
+            toast({
+              title: "Payments Unavailable",
+              description: "Stripe configuration could not be loaded.",
+              variant: "destructive",
+            });
+            onOpenChange(false);
+          })
+          .finally(() => {
+            if (!cancelled) setIsStripeConfigLoading(false);
+          });
+      }
+      loadCreditBalance();
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [open, stripePublishableKey, toast, onOpenChange]);
+
+  const cancelCheckout = async (intentId: string) => {
+    try {
+      await fetch(
+        apiUrl(
+          `/api/bookings/payment-intent/${encodeURIComponent(intentId)}/cancel?truckId=${encodeURIComponent(
+            truckId,
+          )}`,
+        ),
+        { method: "POST", credentials: "include" },
+      );
+    } catch {
+      // Best effort; pending holds will eventually expire.
+    }
+  };
+
+  const loadCreditBalance = async () => {
+    try {
+      const res = await fetch(apiUrl("/api/payout/balance"), {
+        credentials: "include",
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      setCreditBalance(Number(data.balance || 0));
+    } catch (error) {
+      console.error("Failed to load credit balance:", error);
+    }
+  };
+
+  const initiateBooking = async () => {
+    if (hostileBrowser) {
+      toast({
+        title: "Open in browser to continue",
+        description: "Checkout is blocked in this in-app browser.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setIsLoading(true);
+    try {
+      const requestIdempotencyKey =
+        typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      idempotencyKeyRef.current = requestIdempotencyKey;
+
+      const creditCents = Math.max(
+        0,
+        Math.floor(Number(creditsToApply || 0) * 100),
+      );
+      const normalizedSelectedDates = Array.isArray(selectedDates)
+        ? selectedDates
+            .filter((value): value is string => typeof value === "string")
+            .map((value) => value.trim())
+            .map((value) => {
+              const match = value.match(/^(\d{4}-\d{2}-\d{2})/);
+              return match ? match[1] : value;
+            })
+            .filter((value) => value.length > 0)
+        : [];
+      const res = await fetch(apiUrl(`/api/parking-pass/${passId}/book`), {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": requestIdempotencyKey,
+        },
+        body: JSON.stringify({
+          truckId,
+          slotTypes,
+          selectedDates: normalizedSelectedDates,
+          applyCreditsCents: creditCents > 0 ? creditCents : undefined,
+          promoCode: promoCode.trim() ? promoCode.trim() : undefined,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        if (
+          res.status === 409 &&
+          (data?.code === "truck_profile_required" ||
+            data?.code === "truck_verification_required")
+        ) {
+          toast({
+            title:
+              data?.code === "truck_verification_required"
+                ? "Verification required"
+                : "Complete truck profile",
+            description:
+              data?.message ||
+              "Complete your food truck profile before booking Parking Pass spots.",
+          });
+          const nextPath = String(
+            data?.onboardingPath ||
+              "/restaurant-signup?businessType=food_truck&source=parking-pass&claim=1",
+          );
+          window.location.assign(nextPath);
+          return;
+        }
+        throw new Error(data.message || "Failed to initiate booking");
+      }
+
+      const data = await res.json();
+      if (data?.paymentPending) {
+        toast({
+          title: "Request received",
+          description:
+            "Your spot request was received. We'll send payment instructions.",
+        });
+        handleSuccess("pending");
+        return;
+      }
+      if (data?.bypassed) {
+        toast({
+          title: "Parking Pass Confirmed!",
+          description: "Your parking spot has been reserved.",
+        });
+        recordRouteBookingConfirmed(passId);
+        handleSuccess("confirmed");
+        return;
+      }
+
+      if (cancelOnInitiateRef.current) {
+        const intentId = String(data.paymentIntentId || "").trim();
+        if (intentId) {
+          await cancelCheckout(intentId);
+        }
+        return;
+      }
+      const nextClientSecret = String(data.clientSecret || "").trim();
+      const nextPaymentIntentId = String(data.paymentIntentId || "").trim();
+      if (!nextClientSecret || !nextPaymentIntentId) {
+        throw new Error("Payment setup did not return a client secret.");
+      }
+      if (!stripePromise) {
+        await cancelCheckout(nextPaymentIntentId);
+        throw new Error("Stripe is not configured for this environment.");
+      }
+      setClientSecret(nextClientSecret);
+      setPaymentIntentId(nextPaymentIntentId);
+      setHostPaymentsReady(data.hostPaymentsReady !== false);
+      setBookingData({
+        totalCents: data.totalCents,
+        breakdown: data.breakdown,
+      });
+    } catch (err: any) {
+      toast({
+        title: "Booking Failed",
+        description:
+          err.message || "Could not initiate booking. Please try again.",
+        variant: "destructive",
+      });
+      onOpenChange(false);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const resetState = () => {
+    setClientSecret(null);
+    setPaymentIntentId(null);
+    setBookingData(null);
+    setCreditsToApply("");
+    setPromoCode("");
+    idempotencyKeyRef.current = null;
+  };
+
+  const handleClose = () => {
+    resetState();
+    onOpenChange(false);
+  };
+
+  const handleCancel = () => {
+    const intentId = paymentIntentId;
+    cancelOnInitiateRef.current = isLoading;
+    resetState();
+    onOpenChange(false);
+
+    if (intentId) {
+      void cancelCheckout(intentId);
+    }
+  };
+
+  const handleSuccess = (outcome: "confirmed" | "pending" | "credited") => {
+    handleClose();
+    onSuccess({ outcome });
+  };
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) {
+          handleCancel();
+        }
+      }}
+    >
+      <DialogContent className="sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle className="font-display">Parking Pass Checkout</DialogTitle>
+          <DialogDescription>
+            <div className="space-y-3 pt-2">
+              <div className="flex items-center gap-2 text-[11px]">
+                <span
+                  className={`rounded-full border px-2.5 py-1 font-semibold ${
+                    stage === "review"
+                      ? "border-orange-200 bg-orange-50 text-orange-900"
+                      : "border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[color:var(--text-muted)]"
+                  }`}
+                >
+                  1. Review
+                </span>
+                <span className="h-px flex-1 bg-[var(--bg-subtle)]" />
+                <span
+                  className={`rounded-full border px-2.5 py-1 font-semibold ${
+                    stage === "pay"
+                      ? "border-orange-200 bg-orange-50 text-orange-900"
+                      : "border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[color:var(--text-muted)]"
+                  }`}
+                >
+                  2. Pay
+                </span>
+              </div>
+
+              <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-3 text-sm text-[color:var(--text-secondary)]">
+                <p className="font-semibold text-[color:var(--text-primary)]">{eventDetails.hostName}</p>
+                <p className="text-xs text-[color:var(--text-muted)]">
+                  {eventDetails.date} · {eventDetails.startTime} - {eventDetails.endTime}
+                </p>
+                {eventDetails.slotSummary ? (
+                  <p className="mt-1 text-xs text-[color:var(--text-muted)]">
+                    Slots: {eventDetails.slotSummary}
+                  </p>
+                ) : null}
+              </div>
+
+              {bookingContext ? (
+                <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[color:var(--text-muted)]">
+                    Booking snapshot
+                  </p>
+                  <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                    <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-card)] p-2">
+                      <p className="text-[11px] font-semibold text-[color:var(--text-primary)]">Weather</p>
+                      <p className="text-xs text-[color:var(--text-muted)]">
+                        {bookingContext.weather.loading ? "Loading weather..." : bookingContext.weather.summary}
+                      </p>
+                    </div>
+                    <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-card)] p-2">
+                      <p className="text-[11px] font-semibold text-[color:var(--text-primary)]">Area activity</p>
+                      <p className="text-xs text-[color:var(--text-muted)]">
+                        {bookingContext.footTraffic.loading
+                          ? "Loading area activity..."
+                          : bookingContext.footTraffic.summary}
+                      </p>
+                    </div>
+                    <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-card)] p-2">
+                      <p className="text-[11px] font-semibold text-[color:var(--text-primary)]">Truck activity</p>
+                      <p className="text-xs text-[color:var(--text-muted)]">{bookingContext.truckActivity.summary}</p>
+                    </div>
+                    <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-card)] p-2">
+                      <p className="text-[11px] font-semibold text-[color:var(--text-primary)]">Truck reviews</p>
+                      <p className="text-xs text-[color:var(--text-muted)]">{bookingContext.truckReviews.summary}</p>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </DialogDescription>
+        </DialogHeader>
+
+        {!clientSecret && (
+          <>
+            {hostileBrowser ? (
+              <PaymentBrowserGate
+                currentUrl={window.location.href}
+                reason="Complete Parking Pass checkout in Chrome or Safari."
+                compact
+              />
+            ) : null}
+          <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4 space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-[color:var(--text-primary)]">Credits</p>
+                <p className="text-xs text-[color:var(--text-muted)]">
+                  Credits reduce the MealScout platform fee.
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-[11px] text-[color:var(--text-muted)]">Available</p>
+                <p className="text-base font-semibold text-[color:var(--text-primary)]">
+                  ${(creditBalance || 0).toFixed(2)}
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <label className="text-xs font-semibold text-[color:var(--text-muted)]">
+                  Apply credits
+                </label>
+                <button
+                  type="button"
+                  className="text-xs text-[color:var(--text-muted)] underline"
+                  onClick={() =>
+                    setCreditsToApply(String((creditBalance || 0).toFixed(2)))
+                  }
+                >
+                  Use max
+                </button>
+              </div>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={creditsToApply}
+                onChange={(e) => setCreditsToApply(e.target.value)}
+                className="w-full rounded-md border border-[var(--border-subtle)] px-3 py-2 text-sm"
+                placeholder="0.00"
+              />
+              <p className="text-[11px] text-[color:var(--text-muted)]">
+                Your spot is held briefly while you check out. Closing this window releases the hold.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-[color:var(--text-muted)]">
+                Promo code
+              </label>
+              <input
+                type="text"
+                value={promoCode}
+                onChange={(e) => setPromoCode(e.target.value)}
+                className="w-full rounded-md border border-[var(--border-subtle)] px-3 py-2 text-sm uppercase"
+                placeholder="Enter promo code"
+                autoCapitalize="characters"
+              />
+            </div>
+
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1"
+                onClick={handleCancel}
+                disabled={isLoading}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                className="flex-1"
+                onClick={initiateBooking}
+                disabled={isLoading || isStripeConfigLoading || hostileBrowser}
+              >
+                Continue
+              </Button>
+            </div>
+          </div>
+          </>
+        )}
+
+        {clientSecret ? (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+            Pricing locked. Complete payment to confirm your booking.
+          </div>
+        ) : null}
+
+        {clientSecret && hostPaymentsReady === false ? (
+          <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs text-blue-900">
+            <strong>Note:</strong> Your booking is guaranteed. If payout routing is still finalizing,
+            MealScout will securely process this payment and complete settlement automatically.
+          </div>
+        ) : null}
+
+        {(isLoading || isStripeConfigLoading) && (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin text-orange-600" />
+            <span className="ml-3 text-[color:var(--text-muted)]">
+              Preparing payment...
+            </span>
+          </div>
+        )}
+
+        {!isLoading &&
+          !isStripeConfigLoading &&
+          stripePromise &&
+          clientSecret &&
+          paymentIntentId &&
+          bookingData && (
+          <Elements
+            stripe={stripePromise}
+            options={{
+              clientSecret,
+              appearance: {
+                theme: "stripe",
+                variables: {
+                  colorPrimary: "#ea580c",
+                },
+              },
+            }}
+          >
+            <PaymentForm
+              clientSecret={clientSecret}
+              paymentIntentId={paymentIntentId}
+              passId={passId}
+              truckId={truckId}
+              totalCents={bookingData.totalCents}
+              breakdown={bookingData.breakdown}
+              onSuccess={handleSuccess}
+              onCancel={handleCancel}
+            />
+          </Elements>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
