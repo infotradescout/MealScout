@@ -22,6 +22,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: UI Refinement Syntax and Clipboard Regression
+        run: node scripts/mealscout-ui-refinement.test.cjs
+
       - name: Typecheck
         run: npm run check
 
@@ -118,6 +121,9 @@ jobs:
 
       - name: Install Playwright Browsers
         run: npx playwright install --with-deps chromium firefox webkit
+
+      - name: UI Refinement Isolated Layout Regression
+        run: node scripts/mealscout-ui-refinement.browser.test.cjs
 
       - name: Cross-Browser Route Regression (Chromium/Firefox/WebKit + Mobile)
         run: npm run test:flows:e2e:no-creds
