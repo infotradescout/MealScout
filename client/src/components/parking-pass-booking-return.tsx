@@ -22,6 +22,14 @@ export function parkingReturnQuery(search: string): string {
   return params.toString();
 }
 
+// Login already validates internal redirects. Keep the same booking reference
+// without forwarding the Stripe client secret or accepting an external target.
+export function parkingLoginHref(search: string): string {
+  const query = parkingReturnQuery(search);
+  const destination = `/parking-pass${query ? `?${query}` : ""}`;
+  return `/login?${new URLSearchParams({ redirect: destination }).toString()}`;
+}
+
 export function parkingScheduleHref(search: string, truckId: string): string {
   const params = new URLSearchParams(parkingReturnQuery(search));
   params.delete("booking");
@@ -206,7 +214,7 @@ function BookingReturnSession({ search, intentId, requestedTruckId, signedIn, au
             <p className="text-sm text-[color:var(--text-muted)]">No food truck is attached to this account. Check the account used for the booking.</p>
           ) : null}
           <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-            {!signedIn && !authLoading ? <Button asChild><Link href="/login">Sign in</Link></Button> : null}
+            {!signedIn && !authLoading ? <Button asChild><Link href={parkingLoginHref(search)}>Sign in</Link></Button> : null}
             {accessError ? <Button type="button" variant="outline" disabled={accessLoading}
               onClick={() => setAccessAttempt((value) => value + 1)}>Retry truck access</Button> : null}
             {signedIn && intentId && truckId ? (
@@ -217,7 +225,7 @@ function BookingReturnSession({ search, intentId, requestedTruckId, signedIn, au
                 setAttempt((value) => value + 1);
               }}>{checking ? "Checking booking status…" : "Check booking status"}</Button>
             ) : null}
-            <Button type="button" variant="outline" disabled={checking}
+            <Button type="button" variant="outline" disabled={!signedIn || authLoading || accessLoading || checking || !truckId}
               onClick={() => navigate(scheduleHref)}>View My Schedule</Button>
           </div>
           <p className="text-xs leading-relaxed text-[color:var(--text-muted)]">

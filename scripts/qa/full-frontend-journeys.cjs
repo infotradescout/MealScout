@@ -13,6 +13,7 @@ const root = path.resolve(__dirname, '../..');
 const dist = path.join(root, 'client/dist');
 const evidence = path.resolve(process.env.QA_EVIDENCE_DIR || path.join(root, '.qa-evidence'));
 require('./parking-return-policy.test.cjs');
+require('./parking-calendar-date.test.cjs');
 const results = [];
 const simulator = () => {
   function Stripe() {
@@ -254,6 +255,7 @@ async function run() {
         await expect(gas).toBeEnabled();
         assert.equal(world.requests.filter((r) => r.method !== 'GET').length, 0);
       });
+      await require('./parking-continuation-journeys.cjs')(scenario);
       await scenario('guest can browse an active menu without account or payment mutations', async ({ world, openActor }) => {
         const guest = await openActor(null, `/menu/${world.restaurant.id}`);
         await expect(guest.getByRole('heading', { name: world.restaurant.name, exact: true })).toBeVisible();

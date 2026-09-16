@@ -1223,6 +1223,9 @@ export default function ParkingPassPage() {
     ).padStart(2, "0")}`;
   }, []);
   const [liveLeaveTime, setLiveLeaveTime] = useState(defaultLeaveTime);
+  const [scheduleInitialDate] = useState(() =>
+    new URLSearchParams(window.location.search).get("date") || undefined,
+  );
   const [ownerNavigation] = useState(() =>
     parseParkingPassOwnerNavigation(window.location.search),
   );
@@ -6865,6 +6868,7 @@ export default function ParkingPassPage() {
             <Card className="order-[-9998] rounded-2xl pp-glass border border-[color:var(--border-subtle)]">
               <CardContent className="p-5 space-y-6">
                 <ParkingScheduleCalendar
+                  initialDate={scheduleInitialDate}
                   items={parkingScheduleItems}
                   allowManualEdits={hasProfileTruckTools}
                   onDeleteManual={handleDeleteSchedule}

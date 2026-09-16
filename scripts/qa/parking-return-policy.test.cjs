@@ -15,7 +15,7 @@ vm.runInNewContext(ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020, jsx: ts.JsxEmit.ReactJSX },
 }).outputText, { module: mod, exports: mod.exports, URLSearchParams,
   require(name) { assert.ok(imports.has(name), `Unexpected dependency ${name}`); return {}; } });
-const { bookingReturnOutcome, parkingReturnQuery, parkingScheduleHref } = mod.exports;
+const { bookingReturnOutcome, parkingReturnQuery, parkingScheduleHref, parkingLoginHref } = mod.exports;
 let count = 0;
 function test(name, fn) { fn(); count++; console.log('PASS parking return policy: ' + name); }
 for (const status of ['confirmed', 'credited', 'pending']) {
@@ -38,6 +38,17 @@ test('schedule action retains location and attribution, not payment secrets', ()
   assert.equal(url.searchParams.get('date'), '2026-09-18'); assert.equal(url.searchParams.get('ref'), 'qa');
   for (const key of ['booking', 'payment_intent', 'payment_intent_client_secret', 'setup', 'redirect_status']) assert.equal(url.searchParams.has(key), false);
 });
+for (const search of ['', '?booking=success&payment_intent=pi_qa&truckId=truck-qa&hostId=host-qa&date=2026-09-18&ref=qa', '?booking=success&payment_intent=pi_qa&payment_intent_client_secret=first&payment_intent_client_secret=second&redirect=https%3A%2F%2Fexample.invalid']) {
+  test('login retains a same-origin booking reference without client secrets: ' + search, () => {
+    const login = new URL(parkingLoginHref(search), 'http://localhost');
+    assert.equal(login.pathname, '/login'); assert.equal(login.origin, 'http://localhost');
+    const returnTo = new URL(login.searchParams.get('redirect'), 'http://localhost');
+    assert.equal(returnTo.origin, 'http://localhost'); assert.equal(returnTo.pathname, '/parking-pass');
+    const expected = new URLSearchParams(parkingReturnQuery(search));
+    for (const [key, value] of expected) assert.equal(returnTo.searchParams.get(key), value);
+    assert.equal(returnTo.searchParams.has('payment_intent_client_secret'), false);
+  });
+}
 test('the reconciliation component has only read requests', () => {
   let reads = 0;
   function visit(node) {

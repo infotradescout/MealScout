@@ -40,6 +40,11 @@ jobs:
       - name: Parking Pass Repair Behavior Regression
         run: node scripts/qa/parking-repair.behavior.test.mjs
 
+      - name: Parking Pass Return URL and Calendar Date Regression
+        run: |
+          node scripts/qa/parking-return-policy.test.cjs
+          node scripts/qa/parking-calendar-date.test.cjs
+
       - name: Typecheck
         run: npm run check
 

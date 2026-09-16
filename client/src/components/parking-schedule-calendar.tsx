@@ -43,6 +43,7 @@ export type ParkingScheduleItem = {
 
 type ParkingScheduleCalendarProps = {
   items: ParkingScheduleItem[];
+  initialDate?: string;
   title?: string;
   subtitle?: string;
   allowManualEdits?: boolean;
@@ -71,8 +72,18 @@ const toDate = (value: string | Date) =>
 
 const toDateKey = (value: string | Date) => format(toDate(value), "yyyy-MM-dd");
 
+// Treat date-only links as local calendar dates; invalid input falls back safely.
+export function resolveScheduleInitialDate(value?: string, now = new Date()): Date {
+  if (value && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const date = parseISO(value);
+    if (!Number.isNaN(date.getTime()) && format(date, "yyyy-MM-dd") === value) return date;
+  }
+  return now;
+}
+
 export function ParkingScheduleCalendar({
   items,
+  initialDate,
   title = "Parking Schedule",
   subtitle = "Auto-updated by Parking Pass bookings. Add manual stops anytime.",
   allowManualEdits = false,
@@ -83,8 +94,9 @@ export function ParkingScheduleCalendar({
   onAddReport,
   className,
 }: ParkingScheduleCalendarProps) {
-  const [monthAnchor, setMonthAnchor] = useState(() => startOfMonth(new Date()));
-  const [activeDate, setActiveDate] = useState(() => new Date());
+  const [initialAnchor] = useState(() => resolveScheduleInitialDate(initialDate));
+  const [monthAnchor, setMonthAnchor] = useState(() => startOfMonth(initialAnchor));
+  const [activeDate, setActiveDate] = useState(() => initialAnchor);
 
   const itemsByDate = useMemo(() => {
     const map = new Map<string, ParkingScheduleItem[]>();
@@ -174,6 +186,8 @@ export function ParkingScheduleCalendar({
               <button
                 key={key}
                 type="button"
+                aria-label={format(day, "EEEE, MMMM d, yyyy")}
+                aria-pressed={isActive}
                 onClick={() => setActiveDate(day)}
                 className={`pp-calendar-day h-14 sm:h-auto sm:min-h-[84px] rounded-lg border px-2 py-2 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background ${
                   isActive ? "pp-calendar-day--active" : "pp-calendar-day--idle"
