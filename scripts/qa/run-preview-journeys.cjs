@@ -38,8 +38,28 @@ execute('order-status-state', ['scripts/mealscout-order-status-state.test.cjs'])
 execute('owner-kitchen-state', ['scripts/mealscout-owner-orders-state.test.cjs']);
 execute('full-typecheck', [require.resolve('typescript/bin/tsc'), '--noEmit'], 180000);
 execute('database-menu-actors', [path.join(path.dirname(require.resolve('tsx/package.json')), 'dist/cli.mjs'), 'scripts/menu-creation-lisa.integration.test.ts'], 120000);
-const cli = path.join(path.dirname(require.resolve('playwright/package.json')), 'cli.js');
-if (execute('install-chromium', [cli, 'install', '--only-shell', 'chromium'], 180000)) {
+// Vercel's build image lacks the distro libraries required by stock Chromium.
+// Install a pinned, matching-major serverless binary into an ephemeral directory;
+// this does not alter package.json/lockfiles or ship browser code to users.
+const browserPrefix = fs.mkdtempSync(path.join(os.tmpdir(), 'mealscout-qa-chromium-'));
+const npmCli = path.resolve(path.dirname(process.execPath), '../lib/node_modules/npm/bin/npm-cli.js');
+const browserConfig = path.join(evidence, 'browser-runtime.json');
+const installBrowser = execute('install-serverless-chromium', [npmCli, 'install', '--prefix', browserPrefix,
+  '--ignore-scripts', '--package-lock=false', '--no-audit', '--no-fund', '--no-save', '@sparticuz/chromium@143.0.0'], 180000);
+const setupSource = `
+  process.env.VERCEL = '1';
+  const fs = require('node:fs');
+  const chromium = require(${JSON.stringify(path.join(browserPrefix, 'node_modules/@sparticuz/chromium'))});
+  chromium.executablePath().then(executable => {
+    fs.writeFileSync(${JSON.stringify(browserConfig)}, JSON.stringify({ executable,
+      libraryPath: process.env.LD_LIBRARY_PATH || '', fontconfig: process.env.FONTCONFIG_PATH || '' }));
+    console.log('QA browser runtime extracted; binary package 143.0.0');
+  }).catch(error => { console.error(error); process.exitCode = 1; });`;
+if (installBrowser && execute('extract-serverless-chromium', ['-e', setupSource], 60000)) {
+  const runtime = JSON.parse(fs.readFileSync(browserConfig, 'utf8'));
+  env.UI_CHROMIUM_EXECUTABLE = runtime.executable;
+  env.LD_LIBRARY_PATH = runtime.libraryPath;
+  env.FONTCONFIG_PATH = runtime.fontconfig;
   execute('full-frontend-journeys', ['scripts/qa/full-frontend-journeys.cjs'], 300000);
   execute('checkout-browser', ['scripts/mealscout-checkout-browser.test.cjs'], 120000);
   execute('parking-payment-browser', ['scripts/mealscout-parking-payment.browser.test.cjs'], 120000);
