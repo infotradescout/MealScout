@@ -31,6 +31,9 @@ jobs:
       - name: Order Status Recovery Regression
         run: node scripts/mealscout-order-status-state.test.cjs
 
+      - name: Owner Orders and Kitchen State Regression
+        run: node scripts/mealscout-owner-orders-state.test.cjs
+
       - name: Typecheck
         run: npm run check
 
