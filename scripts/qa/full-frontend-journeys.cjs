@@ -12,6 +12,7 @@ const { createTestWorld } = require('./test-world.cjs');
 const root = path.resolve(__dirname, '../..');
 const dist = path.join(root, 'client/dist');
 const evidence = path.resolve(process.env.QA_EVIDENCE_DIR || path.join(root, '.qa-evidence'));
+require('./parking-return-policy.test.cjs');
 const results = [];
 const simulator = () => {
   function Stripe() {
@@ -171,6 +172,69 @@ async function run() {
         await page.getByRole('button', { name: 'Retry status', exact: true }).click();
         await expect(page.getByText('Status update interrupted', { exact: true })).toHaveCount(0);
         assert.equal(world.orders.size, 1);
+      });
+      await scenario('Parking Pass failed return keeps its reference and recovers with a read-only retry', async ({ world, openActor }) => {
+        const intent = `pi_qa_${world.runId}_return`;
+        const endpoint = `/api/bookings/payment-intent/${intent}`;
+        world.faults.set(endpoint, { status: 503, body: { message: 'QA interrupted lookup' } });
+        const page = await openActor(world.actors.truck, `/parking-pass?booking=success&payment_intent=${intent}&payment_intent_client_secret=qa_secret&truckId=${world.truck.id}`);
+        await expect(page.getByRole('heading', { name: 'Booking status could not be verified', exact: true })).toBeVisible();
+        await expect(page.getByText('Payment received', { exact: true })).toHaveCount(0);
+        const pendingUrl = new URL(page.url());
+        assert.equal(pendingUrl.searchParams.get('payment_intent'), intent);
+        assert.equal(pendingUrl.searchParams.get('booking'), 'success');
+        assert.equal(pendingUrl.searchParams.has('payment_intent_client_secret'), false);
+        world.faults.set(endpoint, { status: 200, body: { status: 'confirmed' } });
+        await page.getByRole('button', { name: 'Check booking status', exact: true }).click();
+        await expect(page.getByRole('heading', { name: 'Your booking is confirmed', exact: true })).toBeVisible();
+        assert.equal(world.requests.filter((r) => r.path === endpoint).length, 2);
+        assert.equal(world.requests.filter((r) => r.method !== 'GET').length, 0);
+      });
+      await scenario('Parking Pass pending return survives reload without claiming a reservation', async ({ world, openActor }) => {
+        const intent = `pi_qa_${world.runId}_pending`, endpoint = `/api/bookings/payment-intent/${intent}`;
+        const pending = { status: 200, body: { status: 'pending' } };
+        world.faults.set(endpoint, pending);
+        const page = await openActor(world.actors.truck, `/parking-pass?booking=success&payment_intent=${intent}`);
+        await expect(page.getByRole('heading', { name: 'Booking confirmation pending', exact: true })).toBeVisible();
+        world.faults.set(endpoint, pending);
+        await page.reload({ waitUntil: 'domcontentloaded' });
+        await expect(page.getByRole('heading', { name: 'Booking confirmation pending', exact: true })).toBeVisible();
+        await expect(page.getByText('Payment received', { exact: true })).toHaveCount(0);
+        assert.equal(new URL(page.url()).searchParams.get('payment_intent'), intent);
+        assert.equal(world.requests.filter((r) => r.method !== 'GET').length, 0);
+      });
+      await scenario('Parking Pass credited return remains distinct from a confirmed spot', async ({ world, openActor }) => {
+        const intent = `pi_qa_${world.runId}_credited`;
+        world.faults.set(`/api/bookings/payment-intent/${intent}`, { status: 200, body: { status: 'credited' } });
+        const page = await openActor(world.actors.truck, `/parking-pass?booking=success&payment_intent=${intent}`);
+        await expect(page.getByRole('heading', { name: 'Booking unavailable — credits issued', exact: true })).toBeVisible();
+        await expect(page.getByRole('heading', { name: 'Your booking is confirmed', exact: true })).toHaveCount(0);
+        await expect(page.getByRole('button', { name: 'View My Schedule', exact: true })).toBeVisible();
+        assert.equal(world.requests.filter((r) => r.method !== 'GET').length, 0);
+      });
+      await scenario('Parking Pass missing reference does not turn a redirect flag into payment proof', async ({ world, openActor }) => {
+        const page = await openActor(world.actors.truck, '/parking-pass?booking=success');
+        await expect(page.getByRole('heading', { name: 'Booking reference missing', exact: true })).toBeVisible();
+        assert.equal(world.requests.filter((r) => r.path.startsWith('/api/bookings/payment-intent/')).length, 0);
+        assert.equal(world.requests.filter((r) => r.method !== 'GET').length, 0);
+      });
+      await scenario('Parking Pass wrong account cannot query an unavailable truck intent', async ({ world, openActor }) => {
+        const page = await openActor(world.actors.otherOwner, `/parking-pass?booking=success&payment_intent=pi_qa_wrong_account&truckId=${world.truck.id}`);
+        await expect(page.getByText('No food truck is attached to this account. Check the account used for the booking.', { exact: true })).toBeVisible();
+        assert.equal(world.requests.filter((r) => r.path.startsWith('/api/bookings/payment-intent/')).length, 0);
+        assert.equal(world.requests.filter((r) => r.method !== 'GET').length, 0);
+      });
+      await scenario('Parking Pass multiple trucks require explicit selection before status lookup', async ({ world, openActor }) => {
+        const intent = `pi_qa_${world.runId}_choose`, endpoint = `/api/bookings/payment-intent/${intent}`;
+        world.businesses.set(`${world.truck.id}-second`, { ...world.truck, id: `${world.truck.id}-second`, name: 'QA ONLY second truck' });
+        const page = await openActor(world.actors.truck, `/parking-pass?booking=success&payment_intent=${intent}`);
+        await expect(page.getByRole('heading', { name: 'Choose the truck used for checkout', exact: true })).toBeVisible();
+        assert.equal(world.requests.filter((r) => r.path === endpoint).length, 0);
+        world.faults.set(endpoint, { status: 200, body: { status: 'confirmed' } });
+        const request = page.waitForRequest((r) => new URL(r.url()).pathname === endpoint);
+        await page.getByLabel('Truck for this booking').selectOption(world.truck.id);
+        assert.equal(new URL((await request).url()).searchParams.get('truckId'), world.truck.id);
+        await expect(page.getByRole('heading', { name: 'Your booking is confirmed', exact: true })).toBeVisible();
       });
       await scenario('guest can browse an active menu without account or payment mutations', async ({ world, openActor }) => {
         const guest = await openActor(null, `/menu/${world.restaurant.id}`);
