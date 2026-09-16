@@ -108,6 +108,13 @@ interface OrderingReadiness {
 
 export default function CheckoutPage() {
   const { restaurantId } = useParams<{ restaurantId: string }>();
+  // Wouter can reuse this route component for another merchant. A new key
+  // isolates cart, access token, replay identity and in-flight payment state.
+  return <CheckoutSession key={restaurantId ?? ""} />;
+}
+
+function CheckoutSession() {
+  const { restaurantId } = useParams<{ restaurantId: string }>();
   const [, navigate] = useLocation();
   const [cart, setCart] = useState<CartItem[]>(() =>
     getCart().filter((item) => item.restaurantId === restaurantId),
@@ -117,6 +124,11 @@ export default function CheckoutPage() {
   const [menuInfoLoading, setMenuInfoLoading] = useState(true);
   const [menuInfoAttempt, setMenuInfoAttempt] = useState(0);
   const createOrderPendingRef = useRef(false);
+  const checkoutActiveRef = useRef(true);
+  useEffect(() => {
+    checkoutActiveRef.current = true;
+    return () => { checkoutActiveRef.current = false; };
+  }, []);
   const [contactTouched, setContactTouched] = useState({
     name: false,
     email: false,
@@ -135,7 +147,12 @@ export default function CheckoutPage() {
   const [restoredCheckout] = useState(() =>
     readPickupCheckoutRecovery(restaurantId ?? ""),
   );
-  const restoredCheckoutAttempted = useRef(false);
+  // Reattach to the same request after an effect cleanup/setup cycle, rather
+  // than leaving recovery stuck or submitting a second checkout request.
+  const restoredCheckoutRequestRef = useRef<Promise<{
+    response: Response;
+    data: any;
+  }> | null>(null);
   const [isCreating, setIsCreating] = useState(
     Boolean(restoredCheckout?.checkoutPayload),
   );
@@ -257,26 +274,22 @@ export default function CheckoutPage() {
   }, [restaurantId, menuInfoAttempt]);
 
   useEffect(() => {
-    if (
-      restoredCheckoutAttempted.current ||
-      !restoredCheckout?.checkoutPayload
-    ) {
-      return;
-    }
-    restoredCheckoutAttempted.current = true;
+    if (!restoredCheckout?.checkoutPayload) return;
     let cancelled = false;
 
     const reconcileRestoredCheckout = async () => {
       setIsCreating(true);
       setOrderError(null);
       try {
-        const response = await fetch("/api/pickup-orders", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify(restoredCheckout.checkoutPayload),
-        });
-        const data = await response.json();
+        if (!restoredCheckoutRequestRef.current) {
+          restoredCheckoutRequestRef.current = fetch("/api/pickup-orders", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify(restoredCheckout.checkoutPayload),
+          }).then(async (response) => ({ response, data: await response.json() }));
+        }
+        const { response, data } = await restoredCheckoutRequestRef.current;
         if (cancelled) return;
         if (!response.ok) {
           const code = String(data.code || "");
@@ -623,6 +636,9 @@ export default function CheckoutPage() {
         body: JSON.stringify(payload),
       });
       const data = await res.json();
+      // The request may still finish after leaving this merchant. Its saved
+      // identity remains recoverable, but it must not redirect another page.
+      if (!checkoutActiveRef.current) return;
       if (!res.ok) {
         const code = String(data.code || "");
         if (TERMINAL_CHECKOUT_RECOVERY_CODES.has(code)) {
@@ -669,10 +685,10 @@ export default function CheckoutPage() {
       setClientSecret(data.clientSecret);
     } catch (err: any) {
       const message = String(err?.message || "Failed to create order");
-      setOrderError(message);
+      if (checkoutActiveRef.current) setOrderError(message);
     } finally {
       createOrderPendingRef.current = false;
-      setIsCreating(false);
+      if (checkoutActiveRef.current) setIsCreating(false);
     }
   };
 
@@ -751,7 +767,11 @@ export default function CheckoutPage() {
             <StripePaymentForm
               orderId={orderId}
               restaurantId={restaurantId ?? ""}
+              onCheckStatus={() => {
+                if (checkoutActiveRef.current) navigate(`/order-confirmation/${orderId}`);
+              }}
               onSuccess={() => {
+                if (!checkoutActiveRef.current) return;
                 clearPickupCheckoutRecovery(restaurantId ?? "");
                 clearCartForRestaurant(restaurantId ?? "");
                 navigate(`/order-confirmation/${orderId}`);
@@ -1105,25 +1125,35 @@ function StripePaymentForm({
   orderId,
   restaurantId,
   onSuccess,
+  onCheckStatus,
 }: {
   orderId: string;
   restaurantId: string;
   onSuccess: () => void;
+  onCheckStatus: () => void;
 }) {
   const stripe = useStripe();
   const elements = useElements();
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [needsStatusCheck, setNeedsStatusCheck] = useState(false);
+  const processingRef = useRef(false);
+  const activeRef = useRef(true);
+  useEffect(() => {
+    activeRef.current = true;
+    return () => { activeRef.current = false; };
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!stripe || !elements) return;
+    if (!stripe || !elements || processingRef.current || needsStatusCheck) return;
 
+    processingRef.current = true;
     setIsProcessing(true);
     setError(null);
 
     try {
-      const { error: stripeError } = await stripe.confirmPayment({
+      const { error: stripeError, paymentIntent } = await stripe.confirmPayment({
         elements,
         confirmParams: {
           return_url: `${window.location.origin}/order-confirmation/${orderId}`,
@@ -1131,33 +1161,59 @@ function StripePaymentForm({
         redirect: "if_required",
       });
 
+      if (!activeRef.current) return;
       if (stripeError) {
-        setError(stripeError.message ?? "Payment failed");
+        setError(stripeError.message ?? "Payment could not be confirmed.");
+        setNeedsStatusCheck(
+          stripeError.type !== "card_error" && stripeError.type !== "validation_error",
+        );
         return;
       }
 
-      // Payment succeeded without redirect
-      onSuccess();
+      if (paymentIntent?.status === "succeeded") {
+        onSuccess();
+      } else if (paymentIntent?.status === "processing" || paymentIntent?.status === "requires_capture") {
+        // Confirmation is not final settlement. Keep cart/replay access until
+        // the existing order status is reconciled by the server.
+        onCheckStatus();
+      } else {
+        setError("Payment status could not be confirmed. Check this order before trying again.");
+        setNeedsStatusCheck(true);
+      }
     } catch (err: any) {
-      setError(err.message || "Payment failed");
+      if (activeRef.current) {
+        setError(err.message || "The connection was interrupted. Payment status is unknown.");
+        setNeedsStatusCheck(true);
+      }
     } finally {
-      setIsProcessing(false);
+      processingRef.current = false;
+      if (activeRef.current) setIsProcessing(false);
     }
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-4" aria-busy={isProcessing}>
       <PaymentElement />
       {error && (
-        <div className="flex items-center gap-2 text-destructive text-sm bg-destructive/10 px-4 py-3 rounded-lg">
+        <div role="alert" className="flex items-center gap-2 text-destructive text-sm bg-destructive/10 px-4 py-3 rounded-lg">
           <AlertCircle className="w-4 h-4 shrink-0" />
           {error}
         </div>
       )}
+      {needsStatusCheck ? (
+        <div className="space-y-2">
+          <p className="text-sm" role="status">
+            Check the existing order before submitting another payment. Your checkout is preserved.
+          </p>
+          <Button type="button" variant="outline" className="w-full" onClick={onCheckStatus}>
+            Check order status
+          </Button>
+        </div>
+      ) : null}
       <Button
         type="submit"
         className="h-12 w-full rounded-full bg-[#d84a12] text-base font-black text-white hover:bg-[#b83a0a]"
-        disabled={!stripe || isProcessing}
+        disabled={!stripe || !elements || isProcessing || needsStatusCheck}
       >
         {isProcessing && <Loader2 className="w-5 h-5 mr-2 animate-spin" />}
         Confirm Payment

@@ -60,12 +60,12 @@ function harness({ cart = [item], recovery = null, stripe = true, hostile = fals
     useEffect(fn, deps) {
       const n = index++, old = slots[n];
       if (!old || !deps || deps.some((value, i) => !Object.is(value, old.deps[i]))) {
-        slots[n] = { deps, cleanup: old?.cleanup };
+        slots[n] = { deps, fn, cleanup: old?.cleanup };
         effects.push(() => { slots[n].cleanup?.(); slots[n].cleanup = fn(); });
       }
     },
   };
-  const jsx = (type, props) => ({ type, props: props || {} });
+  const jsx = (type, props, key) => ({ type, props: props || {}, key });
   const navigate = (destination) => routes.push(destination);
   const imports = {
     react: hooks, "react/jsx-runtime": { jsx, jsxs: jsx, Fragment: "Fragment" },
@@ -100,7 +100,25 @@ function harness({ cart = [item], recovery = null, stripe = true, hostile = fals
     fetch: (url, options = {}) => new Promise((resolve, reject) => requests.push({ url, options, resolve, reject })),
     console, setTimeout, clearTimeout,
   });
-  function render() { index = 0; dirty = false; tree = mod.exports.default(); return tree; }
+  let renderKey;
+  function render() {
+    index = 0; dirty = false; tree = mod.exports.default();
+    // Follow the keyed session wrapper without discarding any old assertions.
+    if (typeof tree?.type === "function") {
+      if (renderKey !== tree.key) {
+        slots.forEach((slot) => slot?.cleanup?.());
+        slots.length = 0; effects.length = 0; index = 0; renderKey = tree.key;
+      }
+      tree = tree.type(tree.props);
+    }
+    return tree;
+  }
+  async function reconnectEffects() {
+    const current = slots.filter((slot) => slot?.fn);
+    current.forEach((slot) => slot.cleanup?.());
+    current.forEach((slot) => { slot.cleanup = slot.fn(); });
+    await flush();
+  }
   async function flush() {
     for (let iteration = 0; iteration < 25; iteration++) {
       if (dirty) render();
@@ -115,7 +133,7 @@ function harness({ cart = [item], recovery = null, stripe = true, hostile = fals
   async function fill(id, value) { input(id).props.onChange({ target: { value } }); await flush(); }
   async function respond(request, body, status = 200) { request.resolve({ ok: status < 400, status, json: async () => body }); await flush(); }
   render();
-  return { render, flush, find, button, input, fill, respond, requests, writes, routes, session, store,
+  return { render, flush, reconnectEffects, find, button, input, fill, respond, requests, writes, routes, session, store,
     text: () => text(tree), nodes: () => nodes(tree),
     navigateRestaurant: async (next) => { restaurantId = next; render(); await flush(); },
     reloads: () => reloads, recoveryClears: () => recoveryClears,
@@ -251,6 +269,14 @@ async function run() {
   await test("invoking continue before readiness cannot create an order", async () => {
     const h = harness(); await h.button("Continue to secure payment").props.onClick(); await h.flush();
     assert.equal(h.requests.filter((r) => r.options.method === "POST").length, 0);
+  });
+  await test("effect cleanup/setup reattaches saved recovery without a second POST", async () => {
+    const h = harness({ cart: [], recovery: saved() }); await h.flush();
+    const request = h.requests.find((r) => r.options.method === "POST");
+    await h.reconnectEffects();
+    assert.equal(h.requests.filter((r) => r.options.method === "POST").length, 1);
+    await h.respond(request, paymentResponse);
+    assert.equal(h.find((n) => n.type === "Elements").props.options.clientSecret, "server-verified-secret");
   });
   console.log(`PASS: ${count} checkout state scenarios (stubbed hook/UI/network harness; no real transactions).`);
 }

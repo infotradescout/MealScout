@@ -128,6 +128,9 @@ jobs:
       - name: UI Refinement Isolated Layout Regression
         run: node scripts/mealscout-ui-refinement.browser.test.cjs
 
+      - name: Pickup Checkout React Browser Regression
+        run: node scripts/mealscout-checkout-browser.test.cjs
+
       - name: Cross-Browser Route Regression (Chromium/Firefox/WebKit + Mobile)
         run: npm run test:flows:e2e:no-creds
 
