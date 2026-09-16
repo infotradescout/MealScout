@@ -34,6 +34,7 @@ globalThis.fetch = (input, options) => {
 globalThis.__msQaMail = [];
 globalThis.__msQaSms = [];
 const sink = `export const emailService = new Proxy({}, { get(_target, name) {
+  if (name === "isAvailable") return () => true;
   return async (...args) => { globalThis.__msQaMail.push({ name: String(name), args }); return true; };
 }});`;
 const replacements = {
@@ -225,17 +226,63 @@ export async function run() {
       assert.equal(denied.status, 403);
       const first = await request(endpoint, body, owner.cookie, { 'Idempotency-Key': key });
       assert.equal(first.status, 201, JSON.stringify(first.data));
+      assert.equal(first.data.replayed, false);
       const rows = await database.select().from(schema.menus).where(eq(schema.menus.id, key));
       assert.equal(rows.length, 1); assert.equal(rows[0].restaurantId, restaurantId);
       const receipts = await database.select().from(schema.lisaClaims).where(eq(schema.lisaClaims.id, key));
       assert.equal(receipts.length, 1); assert.equal(receipts[0].actorId, owner.user.id);
       const replay = await request(endpoint, body, owner.cookie, { 'Idempotency-Key': key });
-      assert.equal(replay.status, 200, JSON.stringify(replay.data));
+      // This existing endpoint returns 201 for both creation and receipt replay.
+      assert.equal(replay.status, 201, JSON.stringify(replay.data));
+      assert.equal(replay.data.replayed, true);
+      assert.equal(replay.data.menu.id, first.data.menu.id);
       const changed = await request(endpoint, { ...body, name: 'Changed request' }, owner.cookie, { 'Idempotency-Key': key });
       assert.equal(changed.status, 409);
       const stolen = await request(endpoint, body, other.cookie, { 'Idempotency-Key': key });
       assert.equal(stolen.status, 403);
       assert.equal((await database.select().from(schema.menus).where(eq(schema.menus.id, key))).length, 1);
+    });
+    await test('forgot-password and reset recover the same registered account and consume the token', async () => {
+      const actor = actors.find(a => a.input.lastName === 'other-customer');
+      assert.ok(actor, 'Registered customer required');
+      const unknown = await request('/api/auth/forgot-password', { email: 'qa-absent@example.invalid' });
+      const known = await request('/api/auth/forgot-password', { email: actor.input.email });
+      assert.equal(known.status, 200); assert.deepEqual(known.data, unknown.data);
+      const mail = globalThis.__msQaMail.filter(m => m.name === 'sendPasswordResetEmail' && m.args[0]?.id === actor.user.id).at(-1);
+      const link = new URL(mail.args[1]); assert.equal(link.origin, origin);
+      const token = link.searchParams.get('token'); assert.ok(token);
+      const tokenBefore = await request('/api/auth/reset-password/validate?token=' + encodeURIComponent(token));
+      assert.equal(tokenBefore.data.valid, true);
+      const weak = await request('/api/auth/reset-password', { token, password: 'weak' });
+      assert.equal(weak.status, 400);
+      assert.equal((await request('/api/auth/reset-password/validate?token=' + encodeURIComponent(token))).data.valid, true);
+      const replacement = 'QA-reset-' + randomBytes(16).toString('hex') + '!8aA';
+      const reset = await request('/api/auth/reset-password', { token, password: replacement });
+      assert.equal(reset.status, 200);
+      assert.equal((await request('/api/auth/login', { email: actor.input.email, password })).status, 401);
+      const login = await request('/api/auth/login', { email: actor.input.email, password: replacement });
+      assert.equal(login.status, 200); assert.equal(login.data.user.id, actor.user.id);
+      assert.equal((await request('/api/auth/reset-password/validate?token=' + encodeURIComponent(token))).data.valid, false);
+      assert.equal((await request('/api/auth/reset-password', { token, password })).status, 400);
+      assert.equal((await storage.getUserByEmail(actor.input.email)).id, actor.user.id);
+    });
+    await test('a newer password reset invalidates the older link without resetting the account', async () => {
+      const actor = actors.find(a => a.input.lastName === 'supplier'); assert.ok(actor);
+      const capture = async () => {
+        assert.equal((await request('/api/auth/forgot-password', { email: actor.input.email })).status, 200);
+        const mail = globalThis.__msQaMail.filter(m => m.name === 'sendPasswordResetEmail' && m.args[0]?.id === actor.user.id).at(-1);
+        return new URL(mail.args[1]).searchParams.get('token');
+      };
+      const first = await capture(), second = await capture(); assert.notEqual(first, second);
+      assert.equal((await request('/api/auth/reset-password/validate?token=' + encodeURIComponent(first))).data.valid, false);
+      assert.equal((await request('/api/auth/reset-password/validate?token=' + encodeURIComponent(second))).data.valid, true);
+      assert.equal((await request('/api/auth/login', { email: actor.input.email, password })).status, 200);
+    });
+    await test('disabled registered accounts cannot log in or reuse an existing session', async () => {
+      const actor = actors.find(a => a.input.lastName === 'host'); assert.ok(actor);
+      await database.update(schema.users).set({ isDisabled: true }).where(eq(schema.users.id, actor.user.id));
+      assert.equal((await request('/api/auth/login', { email: actor.input.email, password })).status, 401);
+      assert.equal((await request('/__qa/session', undefined, actor.cookie)).status, 401);
     });
     // Drain the explicitly fire-and-forget welcome/email bookkeeping before close.
     await pause(200);
