@@ -97,7 +97,7 @@ try {
   assert.equal(blob, sourceConfigBlob, "Downloaded config must match the tested Git blob");
   const configPath = path.join(temp, "vercel.json");
   writeFileSync(configPath, text);
-  const result = spawnSync(process.execPath, ["--test", "scripts/acquisition-edge-routing.contract.test.mjs", "scripts/acquisition-release-gate.contract.test.mjs"], {
+  const result = spawnSync(process.execPath, ["--test", "--test-reporter=tap", "scripts/acquisition-edge-routing.contract.test.mjs", "scripts/acquisition-release-gate.contract.test.mjs"], {
     env: { ...process.env, ACQUISITION_ROUTING_CONFIG: configPath }, encoding: "utf8", timeout: 60000,
   });
   const output = `${result.stdout || ""}${result.stderr || ""}`;
