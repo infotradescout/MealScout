@@ -37,7 +37,7 @@ const sink = `export const emailService = new Proxy({}, { get(_target, name) {
   return async (...args) => { globalThis.__msQaMail.push({ name: String(name), args }); return true; };
 }});`;
 const replacements = {
-  [path.join(root, 'server/db.ts')]: `export let db; export const pool = undefined; export function initQaDatabase(value) { db = value; }`,
+  [path.join(root, 'server/db.ts')]: `export let db, pool; export function initQaDatabase(value, driver) { db = value; const query = (text, values) => driver.query(text, values); pool = { query, connect: async () => ({ query, release() {} }) }; }`,
   [path.join(root, 'server/emailService.ts')]: sink,
   [path.join(root, 'server/smsService.ts')]: `export async function sendSms(...args) { globalThis.__msQaSms.push(args); return true; }`,
 };
@@ -55,17 +55,19 @@ import * as schema from './shared/schema';
 import { initQaDatabase } from './server/db';
 import { setupUnifiedAuth, isAuthenticated } from './server/unifiedAuth';
 import { storage } from './server/storage';
+import { registerMenuRoutes } from './server/routes/menuRoutes';
 
 export async function run() {
   const pg = new PGlite();
   const database = drizzle(pg, { schema });
-  initQaDatabase(database);
+  initQaDatabase(database, pg);
   const quote = value => '"' + value.replaceAll('"', '""') + '"';
   const dialect = new PgDialect();
   const names = ['users', 'restaurants', 'emailVerificationTokens', 'passwordResetTokens',
     'phoneVerificationTokens', 'accountSetupTokens', 'emailSequenceSends', 'referrals',
     'affiliateLinks', 'affiliateClicks', 'affiliateCommissions', 'affiliateWallet',
-    'businessTeamMembers', 'businessTeamInvites', 'restaurantSubscriptions', 'hosts'];
+    'businessTeamMembers', 'businessTeamInvites', 'restaurantSubscriptions', 'hosts',
+    'menus', 'lisaClaims', 'telemetryEvents'];
   for (const name of names) {
     const table = schema[name];
     if (!table) continue;
@@ -96,15 +98,16 @@ export async function run() {
     try { await body(); results.push({ name, status: 'pass' }); console.log('QA AUTH PASS ' + name); }
     catch (error) { results.push({ name, status: 'fail', error: error.message }); console.error('QA AUTH FAIL ' + name + ': ' + error.message); }
   }
-  async function request(route, body, cookie) {
+  async function request(route, body, cookie, headers = {}) {
     const response = await fetch(origin + route, { method: body === undefined ? 'GET' : 'POST',
-      redirect: 'manual', headers: { ...(body === undefined ? {} : { 'Content-Type': 'application/json' }), ...(cookie ? { Cookie: cookie } : {}) },
+      redirect: 'manual', headers: { ...(body === undefined ? {} : { 'Content-Type': 'application/json' }), ...(cookie ? { Cookie: cookie } : {}), ...headers },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
     const text = await response.text(); let data; try { data = JSON.parse(text); } catch { data = text; }
     return { status: response.status, data, location: response.headers.get('location'), cookie: response.headers.get('set-cookie')?.split(';')[0], cookieHeader: response.headers.get('set-cookie') };
   }
   try {
     await setupUnifiedAuth(app);
+    registerMenuRoutes(app);
     // Test-only probe. Authorization is the actual exported production middleware.
     app.get('/__qa/session', isAuthenticated, (req, res) => res.json({ id: req.user.id, userType: req.user.userType }));
     const registered = app._router.stack.filter(layer => layer.route).map(layer => ({ path: layer.route.path, methods: layer.route.methods }));
@@ -197,6 +200,36 @@ export async function run() {
       const result = await request(logout.path, logout.methods.post ? {} : undefined, actors[0]?.cookie);
       assert.ok([200, 204, 302, 303].includes(result.status));
       assert.equal((await request('/__qa/session', undefined, actors[0]?.cookie)).status, 401);
+    });
+    await test('registered restaurant owner creates a persisted menu over authenticated HTTP', async () => {
+      const owner = actors.find(actor => actor.input.lastName === 'restaurant');
+      const other = actors.find(actor => actor.input.lastName === 'other-restaurant');
+      assert.ok(owner && other, 'Registered owners required');
+      const restaurantId = randomUUID();
+      await database.insert(schema.restaurants).values({ id: restaurantId, ownerId: owner.user.id,
+        name: 'QA ONLY isolated restaurant', address: 'QA fixture address, not a public location', isActive: false });
+      const body = { restaurantId, name: 'QA ONLY lunch menu', serviceType: 'lunch' };
+      const key = randomUUID();
+      const endpoint = '/api/owner/menus/create';
+      const anonymous = await request(endpoint, body, undefined, { 'Idempotency-Key': key });
+      assert.equal(anonymous.status, 401);
+      const customer = await request(endpoint, body, actors[1].cookie, { 'Idempotency-Key': key });
+      assert.equal(customer.status, 403);
+      const denied = await request(endpoint, body, other.cookie, { 'Idempotency-Key': key });
+      assert.equal(denied.status, 403);
+      const first = await request(endpoint, body, owner.cookie, { 'Idempotency-Key': key });
+      assert.equal(first.status, 201, JSON.stringify(first.data));
+      const rows = await database.select().from(schema.menus).where(eq(schema.menus.id, key));
+      assert.equal(rows.length, 1); assert.equal(rows[0].restaurantId, restaurantId);
+      const receipts = await database.select().from(schema.lisaClaims).where(eq(schema.lisaClaims.id, key));
+      assert.equal(receipts.length, 1); assert.equal(receipts[0].actorId, owner.user.id);
+      const replay = await request(endpoint, body, owner.cookie, { 'Idempotency-Key': key });
+      assert.equal(replay.status, 200, JSON.stringify(replay.data));
+      const changed = await request(endpoint, { ...body, name: 'Changed request' }, owner.cookie, { 'Idempotency-Key': key });
+      assert.equal(changed.status, 409);
+      const stolen = await request(endpoint, body, other.cookie, { 'Idempotency-Key': key });
+      assert.equal(stolen.status, 403);
+      assert.equal((await database.select().from(schema.menus).where(eq(schema.menus.id, key))).length, 1);
     });
     // Drain the explicitly fire-and-forget welcome/email bookkeeping before close.
     await pause(200);
