@@ -46,6 +46,7 @@ import assert from 'node:assert/strict';
 import { randomUUID, randomBytes } from 'node:crypto';
 import { setTimeout as pause } from 'node:timers/promises';
 import express from 'express';
+import passport from 'passport';
 import bcrypt from 'bcryptjs';
 import { PGlite } from '@electric-sql/pglite';
 import { drizzle } from 'drizzle-orm/pglite';
@@ -53,7 +54,7 @@ import { is, SQL, eq } from 'drizzle-orm';
 import { getTableConfig, PgDialect } from 'drizzle-orm/pg-core';
 import * as schema from './shared/schema';
 import { initQaDatabase } from './server/db';
-import { setupUnifiedAuth, isAuthenticated } from './server/unifiedAuth';
+import { setupUnifiedAuth, isAuthenticated, getSession } from './server/unifiedAuth';
 import { storage } from './server/storage';
 import { registerMenuRoutes } from './server/routes/menuRoutes';
 
@@ -106,6 +107,11 @@ export async function run() {
     return { status: response.status, data, location: response.headers.get('location'), cookie: response.headers.get('set-cookie')?.split(';')[0], cookieHeader: response.headers.get('set-cookie') };
   }
   try {
+    // Same middleware order as server/index.ts; keep real Passport sessions.
+    app.set('trust proxy', 1);
+    app.use(getSession());
+    app.use(passport.initialize());
+    app.use(passport.session());
     await setupUnifiedAuth(app);
     registerMenuRoutes(app);
     // Test-only probe. Authorization is the actual exported production middleware.
