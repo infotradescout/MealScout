@@ -38,6 +38,7 @@ execute('order-status-state', ['scripts/mealscout-order-status-state.test.cjs'])
 execute('owner-kitchen-state', ['scripts/mealscout-owner-orders-state.test.cjs']);
 execute('full-typecheck', [require.resolve('typescript/bin/tsc'), '--noEmit'], 180000);
 execute('database-menu-actors', [path.join(path.dirname(require.resolve('tsx/package.json')), 'dist/cli.mjs'), 'scripts/menu-creation-lisa.integration.test.ts'], 120000);
+execute('auth-http-database', ['scripts/qa/auth-http-database.cjs'], 180000);
 // Vercel's build image lacks the distro libraries required by stock Chromium.
 // Install a pinned, matching-major serverless binary into an ephemeral directory;
 // this does not alter package.json/lockfiles or ship browser code to users.
