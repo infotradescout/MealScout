@@ -75,6 +75,8 @@ interface BookingPaymentModalProps {
   onSuccess: (result: { outcome: "confirmed" | "pending" | "credited" }) => void;
 }
 
+type PaymentActivity = "idle" | "processing" | "uncertain";
+
 interface PaymentFormProps {
   clientSecret: string;
   paymentIntentId: string;
@@ -90,6 +92,7 @@ interface PaymentFormProps {
   };
   onSuccess: (outcome: "confirmed" | "pending" | "credited") => void;
   onCancel: () => void;
+  onActivityChange: (activity: PaymentActivity) => void;
 }
 
 function PaymentForm({
@@ -101,17 +104,26 @@ function PaymentForm({
   breakdown,
   onSuccess,
   onCancel,
+  onActivityChange,
 }: PaymentFormProps) {
   const stripe = useStripe();
   const elements = useElements();
   const { toast } = useToast();
   const [isProcessing, setIsProcessing] = useState(false);
+  const [needsStatusCheck, setNeedsStatusCheck] = useState(false);
+  const [paymentMessage, setPaymentMessage] = useState<string | null>(null);
+  const processingRef = useRef(false);
+  const activeRef = useRef(true);
+  useEffect(() => {
+    activeRef.current = true;
+    return () => { activeRef.current = false; };
+  }, []);
 
   const waitForBookingConfirmation = async () => {
     const startedAt = Date.now();
     const timeoutMs = 25_000;
 
-    while (Date.now() - startedAt < timeoutMs) {
+    while (activeRef.current && Date.now() - startedAt < timeoutMs) {
       try {
         const res = await fetch(
           apiUrl(
@@ -138,66 +150,101 @@ function PaymentForm({
     return "pending" as const;
   };
 
+  const completeBooking = (status: "confirmed" | "pending" | "credited") => {
+    if (!activeRef.current) return;
+    if (status === "credited") {
+      toast({
+        title: "Booking Unavailable",
+        description:
+          "Payment succeeded but the spot was no longer available. Credits were issued to your account.",
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: status === "confirmed" ? "Parking Pass Confirmed!" : "Booking confirmation pending",
+        description: status === "confirmed"
+          ? "Your parking spot has been reserved."
+          : "Your booking is not confirmed yet. Check My Schedule before paying again.",
+      });
+      // Only a server-confirmed booking is a confirmed conversion.
+      if (status === "confirmed") recordRouteBookingConfirmed(passId);
+    }
+    onSuccess(status);
+  };
+
+  const checkBookingStatus = async () => {
+    if (processingRef.current) return;
+    processingRef.current = true;
+    setIsProcessing(true);
+    onActivityChange("processing");
+    let settled = false;
+    try {
+      const status = await waitForBookingConfirmation();
+      if (!activeRef.current) return;
+      if (status === "confirmed" || status === "credited") {
+        settled = true;
+        completeBooking(status);
+      } else {
+        setPaymentMessage("Booking status is still pending. Check My Schedule before starting another payment.");
+      }
+    } finally {
+      processingRef.current = false;
+      if (activeRef.current) {
+        setIsProcessing(false);
+        onActivityChange(settled ? "idle" : "uncertain");
+      }
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!stripe || !elements || processingRef.current || needsStatusCheck) return;
 
-    if (!stripe || !elements) {
-      return;
-    }
-
+    processingRef.current = true;
     setIsProcessing(true);
-
+    setPaymentMessage(null);
+    onActivityChange("processing");
+    let unresolved = false;
     try {
-      const { error } = await stripe.confirmPayment({
+      const { error, paymentIntent } = await stripe.confirmPayment({
         elements,
         confirmParams: {
           return_url: `${window.location.origin}/parking-pass?booking=success`,
         },
         redirect: "if_required",
       });
-
+      if (!activeRef.current) return;
       if (error) {
-        toast({
-          title: "Payment Failed",
-          description: error.message || "An error occurred during payment.",
-          variant: "destructive",
-        });
-      } else {
-        const status = await waitForBookingConfirmation();
-        if (status === "credited") {
-          toast({
-            title: "Booking Unavailable",
-            description:
-              "Payment succeeded but the spot was no longer available. Credits were issued to your account.",
-            variant: "destructive",
-          });
-          onSuccess("credited");
-          return;
-        }
-
-        toast({
-          title: "Parking Pass Confirmed!",
-          description:
-            status === "pending"
-              ? "Payment received. Your booking will appear shortly."
-              : "Your parking spot has been reserved.",
-        });
-        recordRouteBookingConfirmed(passId);
-        onSuccess(status);
+        unresolved = error.type !== "card_error" && error.type !== "validation_error";
+        setNeedsStatusCheck(unresolved);
+        setPaymentMessage(error.message || "Payment could not be confirmed.");
+        return;
       }
+      if (!paymentIntent || !["succeeded", "processing", "requires_capture"].includes(paymentIntent.status)) {
+        unresolved = true;
+        setNeedsStatusCheck(true);
+        setPaymentMessage("Payment status is unknown. Check this booking before paying again.");
+        return;
+      }
+      const status = await waitForBookingConfirmation();
+      completeBooking(status);
     } catch (err: any) {
-      toast({
-        title: "Payment Error",
-        description: err.message || "An unexpected error occurred.",
-        variant: "destructive",
-      });
+      unresolved = true;
+      if (activeRef.current) {
+        setNeedsStatusCheck(true);
+        setPaymentMessage(err.message || "The connection was interrupted. Payment status is unknown.");
+      }
     } finally {
-      setIsProcessing(false);
+      processingRef.current = false;
+      if (activeRef.current) {
+        setIsProcessing(false);
+        onActivityChange(unresolved ? "uncertain" : "idle");
+      }
     }
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-4" aria-busy={isProcessing}>
       {/* Pricing Breakdown */}
       <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4 space-y-2 text-sm">
         <div className="flex items-center justify-between text-[color:var(--text-secondary)]">
@@ -244,6 +291,16 @@ function PaymentForm({
         <PaymentElement />
       </div>
 
+      {paymentMessage ? <p role="alert" className="text-sm text-destructive">{paymentMessage}</p> : null}
+      {isProcessing ? <p role="status" className="text-sm">Checking payment and booking status. Please keep this checkout open.</p> : null}
+      {needsStatusCheck ? (
+        <div className="space-y-2">
+          <p className="text-sm" role="status">Do not submit another payment until the existing booking has been checked.</p>
+          <Button type="button" variant="outline" className="w-full" disabled={isProcessing} onClick={checkBookingStatus}>
+            Check booking status
+          </Button>
+        </div>
+      ) : null}
       {/* Action Buttons */}
       <div className="flex gap-3 pt-2">
         <Button
@@ -253,12 +310,12 @@ function PaymentForm({
           onClick={onCancel}
           disabled={isProcessing}
         >
-          Cancel
+          {needsStatusCheck ? "Close checkout" : "Cancel"}
         </Button>
         <Button
           type="submit"
           className="flex-1"
-          disabled={!stripe || isProcessing}
+          disabled={!stripe || !elements || isProcessing || needsStatusCheck}
         >
           {isProcessing ? (
             <>
@@ -305,6 +362,10 @@ export function BookingPaymentModal({
     };
   } | null>(null);
   const [creditBalance, setCreditBalance] = useState<number | null>(null);
+  const [creditStatus, setCreditStatus] = useState<"loading" | "ready" | "unavailable">("loading");
+  const creditRequestRef = useRef(0);
+  const initiatePendingRef = useRef(false);
+  const paymentActivityRef = useRef<PaymentActivity>("idle");
   const [creditsToApply, setCreditsToApply] = useState("");
   const [promoCode, setPromoCode] = useState("");
   const [stripePublishableKey, setStripePublishableKey] = useState(
@@ -361,6 +422,7 @@ export function BookingPaymentModal({
     }
     return () => {
       cancelled = true;
+      creditRequestRef.current++;
     };
   }, [open, stripePublishableKey, toast, onOpenChange]);
 
@@ -380,19 +442,29 @@ export function BookingPaymentModal({
   };
 
   const loadCreditBalance = async () => {
+    const request = ++creditRequestRef.current;
+    setCreditBalance(null);
+    setCreditStatus("loading");
     try {
       const res = await fetch(apiUrl("/api/payout/balance"), {
         credentials: "include",
       });
-      if (!res.ok) return;
+      if (!res.ok) throw new Error("Credit balance unavailable");
       const data = await res.json();
-      setCreditBalance(Number(data.balance || 0));
-    } catch (error) {
-      console.error("Failed to load credit balance:", error);
+      if (request !== creditRequestRef.current) return;
+      const balance = Number(data.balance);
+      if (data.balance == null || !Number.isFinite(balance) || balance < 0) {
+        throw new Error("Credit balance unavailable");
+      }
+      setCreditBalance(balance);
+      setCreditStatus("ready");
+    } catch {
+      if (request === creditRequestRef.current) setCreditStatus("unavailable");
     }
   };
 
   const initiateBooking = async () => {
+    if (initiatePendingRef.current || isLoading || clientSecret) return;
     if (hostileBrowser) {
       toast({
         title: "Open in browser to continue",
@@ -401,6 +473,7 @@ export function BookingPaymentModal({
       });
       return;
     }
+    initiatePendingRef.current = true;
     setIsLoading(true);
     try {
       const requestIdempotencyKey =
@@ -517,6 +590,7 @@ export function BookingPaymentModal({
       });
       onOpenChange(false);
     } finally {
+      initiatePendingRef.current = false;
       setIsLoading(false);
     }
   };
@@ -528,6 +602,7 @@ export function BookingPaymentModal({
     setCreditsToApply("");
     setPromoCode("");
     idempotencyKeyRef.current = null;
+    paymentActivityRef.current = "idle";
   };
 
   const handleClose = () => {
@@ -536,8 +611,16 @@ export function BookingPaymentModal({
   };
 
   const handleCancel = () => {
+    // Radix close, Escape and outside-click all use this same guard. A
+    // connection error is not permission to cancel a potentially paid intent.
+    if (paymentActivityRef.current === "processing") return;
+    if (paymentActivityRef.current === "uncertain") {
+      toast({ title: "Check My Schedule", description: "Payment status is unresolved. Check the existing booking before paying again." });
+      handleClose();
+      return;
+    }
     const intentId = paymentIntentId;
-    cancelOnInitiateRef.current = isLoading;
+    cancelOnInitiateRef.current = initiatePendingRef.current;
     resetState();
     onOpenChange(false);
 
@@ -563,7 +646,7 @@ export function BookingPaymentModal({
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle className="font-display">Parking Pass Checkout</DialogTitle>
-          <DialogDescription>
+          <DialogDescription asChild>
             <div className="space-y-3 pt-2">
               <div className="flex items-center gap-2 text-[11px]">
                 <span
@@ -654,19 +737,26 @@ export function BookingPaymentModal({
               <div className="text-right">
                 <p className="text-[11px] text-[color:var(--text-muted)]">Available</p>
                 <p className="text-base font-semibold text-[color:var(--text-primary)]">
-                  ${(creditBalance || 0).toFixed(2)}
+                  {creditStatus === "loading" ? "Checking credits…" : creditStatus === "unavailable" ? "Unavailable" : `$${(creditBalance ?? 0).toFixed(2)}`}
                 </p>
               </div>
             </div>
 
+            {creditStatus === "unavailable" ? (
+              <div role="status" className="text-xs">
+                Credit balance could not be loaded.
+                <Button type="button" variant="outline" className="ml-2" onClick={() => void loadCreditBalance()}>Retry credits</Button>
+              </div>
+            ) : null}
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-3">
-                <label className="text-xs font-semibold text-[color:var(--text-muted)]">
+                <label htmlFor="parking-pass-credits" className="text-xs font-semibold text-[color:var(--text-muted)]">
                   Apply credits
                 </label>
                 <button
                   type="button"
-                  className="text-xs text-[color:var(--text-muted)] underline"
+                  className="min-h-11 px-2 text-xs text-[color:var(--text-muted)] underline disabled:opacity-50"
+                  disabled={creditStatus !== "ready" || isLoading}
                   onClick={() =>
                     setCreditsToApply(String((creditBalance || 0).toFixed(2)))
                   }
@@ -675,6 +765,8 @@ export function BookingPaymentModal({
                 </button>
               </div>
               <input
+                id="parking-pass-credits"
+                inputMode="decimal"
                 type="number"
                 min="0"
                 step="0.01"
@@ -684,15 +776,16 @@ export function BookingPaymentModal({
                 placeholder="0.00"
               />
               <p className="text-[11px] text-[color:var(--text-muted)]">
-                Your spot is held briefly while you check out. Closing this window releases the hold.
+                Continuing checks availability and may create a temporary hold. Before payment, cancelling requests release of that hold.
               </p>
             </div>
 
             <div className="space-y-2">
-              <label className="text-xs font-semibold text-[color:var(--text-muted)]">
+              <label htmlFor="parking-pass-promo" className="text-xs font-semibold text-[color:var(--text-muted)]">
                 Promo code
               </label>
               <input
+                id="parking-pass-promo"
                 type="text"
                 value={promoCode}
                 onChange={(e) => setPromoCode(e.target.value)}
@@ -733,8 +826,7 @@ export function BookingPaymentModal({
 
         {clientSecret && hostPaymentsReady === false ? (
           <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs text-blue-900">
-            <strong>Note:</strong> Your booking is guaranteed. If payout routing is still finalizing,
-            MealScout will securely process this payment and complete settlement automatically.
+            <strong>Note:</strong> Host payout setup is still being finalized. Your spot is not reserved until the booking is confirmed.
           </div>
         ) : null}
 
@@ -774,6 +866,7 @@ export function BookingPaymentModal({
               breakdown={bookingData.breakdown}
               onSuccess={handleSuccess}
               onCancel={handleCancel}
+              onActivityChange={(activity) => { paymentActivityRef.current = activity; }}
             />
           </Elements>
         )}

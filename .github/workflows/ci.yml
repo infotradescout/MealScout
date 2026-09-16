@@ -131,6 +131,9 @@ jobs:
       - name: Pickup Checkout React Browser Regression
         run: node scripts/mealscout-checkout-browser.test.cjs
 
+      - name: Parking Pass Payment React Browser Regression
+        run: node scripts/mealscout-parking-payment.browser.test.cjs
+
       - name: Cross-Browser Route Regression (Chromium/Firefox/WebKit + Mobile)
         run: npm run test:flows:e2e:no-creds
 
