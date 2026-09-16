@@ -42,11 +42,16 @@ function run(cmd, args, env = {}) {
 }
 
 async function main() {
+  const acquisitionContracts = [
+    "scripts/acquisition-edge-routing.contract.test.mjs",
+    "scripts/request-logging-degraded-mode.contract.test.mjs",
+  ];
   const steps = [
     {
       name: "Acquisition crawler edge routing",
       cmd: process.execPath,
-      args: ["--test", "scripts/acquisition-edge-routing.contract.test.mjs"],
+      args: ["--test", ...acquisitionContracts],
+      requiredFiles: acquisitionContracts,
     },
     { name: "Typecheck", cmd: "npm", args: ["run", "check"] },
     { name: "Mobile readiness", cmd: "npm", args: ["run", "check:mobile-readiness"] },
@@ -70,6 +75,12 @@ async function main() {
 
   for (const step of steps) {
     console.log(`\n[release-readiness] ${step.name}`);
+    for (const requiredPath of step.requiredFiles || []) {
+      if (!existsSync(requiredPath)) {
+        console.error(`\n[release-readiness] FAILED: ${step.name} (missing ${requiredPath})`);
+        process.exit(1);
+      }
+    }
     const code = await run(step.cmd, step.args, step.env);
     if (code !== 0) {
       console.error(`\n[release-readiness] FAILED: ${step.name} (exit ${code})`);

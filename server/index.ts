@@ -652,6 +652,8 @@ const extractRestaurantEntity = (pathValue: string) => {
 app.use((req, res, next) => {
   const start = Date.now();
   res.on("finish", () => {
+    // The documented no-database development mode has no request-log sink.
+    if (!db) return;
     const pathValue = req.originalUrl || req.url || "";
     if (
       pathValue.startsWith("/assets") ||

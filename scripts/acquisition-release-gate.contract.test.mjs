@@ -19,13 +19,17 @@ const expectedCommands = [
   "run cap:prepare", "run smoke:mobile-deeplinks:with-server",
 ];
 
-function exercise({ routingExit = 0, npmExit = 0, omitRouting = false } = {}) {
+function exercise({ routingExit = 0, npmExit = 0, omitRouting = false, omitBootstrap = false } = {}) {
   const root = mkdtempSync(path.join(tmpdir(), "mealscout-release-gate-"));
   try {
     mkdirSync(path.join(root, "scripts"));
     mkdirSync(path.join(root, "bin"));
     writeFileSync(path.join(root, "scripts/releaseReadinessCheck.mjs"), gateSource);
     const logPath = path.join(root, "commands.jsonl");
+    if (!omitBootstrap) {
+      writeFileSync(path.join(root, "scripts/request-logging-degraded-mode.contract.test.mjs"),
+        'import { test } from "node:test"; test("isolated request logging fixture", () => {});\n');
+    }
     if (!omitRouting) {
       writeFileSync(path.join(root, "scripts/acquisition-edge-routing.contract.test.mjs"), `
 import { appendFileSync } from "node:fs";
@@ -103,4 +107,13 @@ test("routing runs first and all five existing steps and strict metadata are pre
   assert.equal(npm[2].strict, "true");
   assert.ok(npm.filter((_, index) => index !== 2).every((entry) => entry.strict === null));
   assert.match(result.output, /All checks passed/);
+});
+
+
+test("a missing request-logging contract cannot silently pass release readiness", () => {
+  const result = exercise({ omitBootstrap: true });
+  assert.notEqual(result.status, 0);
+  assert.equal(result.commands.filter((entry) => entry.kind === "npm").length, 0);
+  assert.match(result.output, /FAILED: Acquisition crawler edge routing/);
+  assert.doesNotMatch(result.output, /All checks passed/);
 });
