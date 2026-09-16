@@ -564,8 +564,9 @@ export function BookingPaymentModal({
         const data = await res.json();
         if (requestScopeRef.current !== activeScope) return;
         // These responses are emitted before a new hold/payment is created.
-        // Conflicts, rate limits, server errors and existing bookings remain recoverable.
-        if ([400, 401, 403, 404, 422].includes(res.status) && !data?.bookingId && typeof data?.message === "string") clearSaved();
+        // Authentication loss, revoked access, conflicts, rate limits and server errors
+        // do not prove that an earlier booking was never created. Keep its identity.
+        if ([400, 404, 422].includes(res.status) && !data?.bookingId && typeof data?.message === "string") clearSaved();
         if (
           res.status === 409 &&
           (data?.code === "truck_profile_required" ||
@@ -593,6 +594,14 @@ export function BookingPaymentModal({
 
       const data = await res.json();
       if (requestScopeRef.current !== activeScope) return;
+      if (data?.bookingRecovery === true) {
+        const intent = String(data.paymentIntentId || "").trim();
+        if (!intent.startsWith("pi_")) throw new Error("Recovered booking reference is invalid.");
+        const params = new URLSearchParams({ booking: "success", payment_intent: intent, truckId });
+        if (/^\d{4}-\d{2}-\d{2}$/.test(String(data.bookingStartDate || ""))) params.set("date", data.bookingStartDate);
+        window.location.assign(`/parking-pass?${params.toString()}`);
+        return;
+      }
       if (data?.paymentPending) {
         // A manual-review request is acknowledged, not completed. Retain its identity.
         toast({

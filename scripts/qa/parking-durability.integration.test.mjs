@@ -35,6 +35,7 @@ function load(file) {
     } });
   return mod.exports;
 }
+const isReceiptWrite = text => /UPDATE\s+idempotency_keys\s+SET\b/i.test(text) && /\bstatus_code\s*=/.test(text) && /\bresponse_body\s*=/.test(text) && /\bstate\s*=\s*(?:'completed'|CASE\b)/i.test(text);
 let executions = 0, allowed = true, resultCode = 200;
 const receipt = { paymentIntentId: 'pi_qa_only', clientSecret: 'qa-not-a-real-secret', totalCents: 2500 };
 const route = '/api/parking-pass/qa-listing/book';
@@ -101,7 +102,7 @@ try {
     await check('shared response recorder handles an asynchronous store failure', async () => {
       const unexpected=[]; const catchUnexpected=error=>unexpected.push(error); process.on('unhandledRejection',catchUnexpected);
       const key=crypto.randomUUID();
-      intercept=async(q,run)=>{if(q.sql.includes("SET state = 'completed'"))throw new Error('QA completion failure');return run();};
+      intercept=async(q,run)=>{if(isReceiptWrite(q.sql))throw new Error('QA completion failure');return run();};
       try {
         const response=await fetch(origins[0]+'/__qa/general',{method:'POST',headers:{'Content-Type':'application/json','Idempotency-Key':key},body:'{}'});
         assert.equal(response.status,202); await response.json(); await pause(60);
@@ -126,21 +127,21 @@ try {
     });
     await check('receipt persistence delay prevents an early successful response', async () => {
       let release; const gate = new Promise(resolve => { release = resolve; }); let entered = false, settled = false;
-      intercept = async (q, run) => { if (q.sql.includes("SET state = 'completed'")) { entered = true; await gate; } return run(); };
+      intercept = async (q, run) => { if (isReceiptWrite(q.sql)) { entered = true; await gate; } return run(); };
       const pending = request(crypto.randomUUID()).then(r => { settled = true; return r; });
       try { await waitFor(() => entered); await pause(40); assert.equal(settled, false); }
       finally { release(); }
       assert.equal((await pending).status, 200);
     });
     await check('failed receipt write exposes uncertainty and cannot reexecute after lock expiry', async () => {
-      const key = crypto.randomUUID(); intercept = async (q, run) => { if (q.sql.includes("SET state = 'completed'")) throw new Error('QA save failed'); return run(); };
+      const key = crypto.randomUUID(); intercept = async (q, run) => { if (isReceiptWrite(q.sql)) throw new Error('QA save failed'); return run(); };
       assert.equal((await request(key)).status, 503); assert.equal((await rows(key))[0].state, 'processing');
       await pg.query("UPDATE idempotency_keys SET locked_until=now()-interval '2 minutes' WHERE idem_key=$1", [key]);
       assert.equal((await request(key, undefined, 1)).status, 409); assert.equal(executions, 1);
     });
     await check('lost database commit acknowledgement recovers the persisted result', async () => {
       const key = crypto.randomUUID(); let fail = true;
-      intercept = async (q, run) => { const value = await run(); if (fail && q.sql.includes("SET state = 'completed'")) { fail = false; throw new Error('QA lost commit acknowledgement'); } return value; };
+      intercept = async (q, run) => { const value = await run(); if (fail && isReceiptWrite(q.sql)) { fail = false; throw new Error('QA lost commit acknowledgement'); } return value; };
       assert.equal((await request(key)).status, 503); assert.equal((await request(key, undefined, 1)).status, 200); assert.equal(executions, 1);
     });
     await check('uncertain admission acknowledgement cannot fall back into a second execution', async () => {
@@ -173,7 +174,7 @@ try {
     });
     await check('disconnected client does not prevent recording and recovering the original result', async () => {
       let release; const gate = new Promise(resolve => { release = resolve; }); let entered = false;
-      intercept = async (q, run) => { if (q.sql.includes("SET state = 'completed'")) { entered = true; await gate; } return run(); };
+      intercept = async (q, run) => { if (isReceiptWrite(q.sql)) { entered = true; await gate; } return run(); };
       const key = crypto.randomUUID(), controller = new AbortController();
       const pending = request(key, undefined, 0, 'qa-owner', controller.signal).catch(() => null);
       try { await waitFor(() => entered); controller.abort(); await pending; } finally { release(); }

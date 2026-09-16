@@ -40,6 +40,8 @@ execute('parking-source-contracts', ['scripts/qa/parking-source-contracts.cjs'],
 execute('parking-repair-behavior', ['scripts/qa/parking-repair.behavior.test.mjs']);
 execute('parking-request-policy', ['scripts/qa/parking-booking-request.test.cjs']);
 execute('parking-durability', ['scripts/qa/parking-durability.integration.test.mjs'], 120000);
+execute('parking-reconciliation', ['scripts/qa/parking-reconciliation.integration.test.mjs'], 120000);
+execute('parking-recovered-navigation', ['scripts/qa/parking-recovered-navigation.test.cjs']);
 execute('full-typecheck', [require.resolve('typescript/bin/tsc'), '--noEmit'], 180000);
 execute('database-menu-actors', [path.join(path.dirname(require.resolve('tsx/package.json')), 'dist/cli.mjs'), 'scripts/menu-creation-lisa.integration.test.ts'], 120000);
 execute('auth-http-database', ['scripts/qa/auth-http-database.cjs'], 180000);

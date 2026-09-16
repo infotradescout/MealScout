@@ -69,4 +69,12 @@ module.exports = async ({ test, paymentSetup }) => {
     assert.deepEqual(await page.evaluate(()=>window.__outcomes),[{outcome:'pending'}]);assert.equal(await page.evaluate(()=>window.__stripeCalls.length),0);
     assert.equal(await page.evaluate(()=>[...window.__storage.keys()].filter(k=>k.startsWith('mealscout:parking-request:')).length),1);
   });
+  for (const status of [401,403]) await test('HTTP '+status+' retains the original request through restored access',async({page,calls,setHandler,start})=>{
+    let denied=true;setHandler(async url=>url.endsWith('/book')&&denied?{status,body:{code:'booking_replay_forbidden',message:'Access must be restored'}}:common(url));
+    await start();await startRequest(page);await page.getByRole('alert').waitFor();
+    await page.getByRole('button',{name:'Retry same booking request',exact:true}).waitFor();
+    assert.equal(await page.evaluate(()=>[...window.__storage.keys()].filter(k=>k.startsWith('mealscout:parking-request:')).length),1);
+    denied=false;await page.getByRole('button',{name:'Retry same booking request',exact:true}).click();await page.getByTestId('card-field').waitFor();
+    const [a,b]=requestCalls(calls);assert.equal(a.headers['Idempotency-Key'],b.headers['Idempotency-Key']);assert.deepEqual(a.body,b.body);
+  });
 };

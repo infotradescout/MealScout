@@ -75,6 +75,7 @@ import { logAudit } from "../auditLogger";
 import { getHostEarningsSummary } from "../hostEarningsService";
 import { resolveCityTimeZoneSync } from "../services/cityTimeZone";
 import { requireDurableIdempotencyKey, parkingBookingProviderKey } from "../middleware/durableIdempotency";
+import { recordParkingBookingHolds, reconcileParkingBooking } from "../services/parkingBookingRecovery";
 import { distributedRateLimit } from "../middleware/distributedRateLimit";
 import { registerHostProfileRoutes } from "./hosts/profileRoutes";
 import { registerHostParkingPassRoutes } from "./hosts/eventsRoutes";
@@ -1117,6 +1118,13 @@ export function registerHostRoutes(app: Express) {
       authorizeReplay: async (req) => storage.verifyRestaurantOwnership(
         String(req.body?.truckId || ""), String((req as any).user.id), "manageParkingPass",
       ),
+      reconcile: (req, checkpoint) => reconcileParkingBooking(req, checkpoint, stripe?.paymentIntents || null, async () => {
+        const truck = await storage.getRestaurant(String(req.body?.truckId || ""));
+        if (!truck) return false;
+        const gate = assessParkingPassTruckEligibility({ user: (req as any).user, truck });
+        return gate.isTruckProfile && gate.roleAllowed &&
+          (gate.shouldBypassVerificationGate || (gate.emailVerified && gate.storedInsuranceValid));
+      }),
     }),
     async (req: any, res) => {
       try {
@@ -1901,6 +1909,17 @@ export function registerHostRoutes(app: Express) {
               inserted.push(created);
             }
 
+            // The checkpoint and all holds commit together or roll back together.
+            await recordParkingBookingHolds(tx, String(req.get("Idempotency-Key") || "").trim(), {
+              userId, route: req.path, passId: String(event.id), truckId, hostId: String(host.id),
+              bookingStartDate: sortedDateKeys[0], slotTypes: selectedSlotTypes.join(","),
+              destination: hostStripeAccountId || null, holds: inserted,
+              setup: { totalCents, hostPaymentsReady: hostPaymentsEnabled, breakdown: {
+                hostPrice: adjustedHostPriceCents, platformFee: adjustedPlatformFeeCents,
+                creditsApplied: creditAppliedCents, promoDiscount: promoDiscountCents,
+                promoCode: normalizedPromoCode || undefined,
+              } },
+            });
             return inserted;
           });
         } catch (error: any) {
@@ -1985,6 +2004,7 @@ export function registerHostRoutes(app: Express) {
             amount: totalCents,
             currency: "usd",
             metadata: {
+              bookingRequestKey: parkingBookingProviderKey(userId, req.path, String(req.get("Idempotency-Key") || "").trim()),
               passId: event.id,
               hostId: host.id,
               truckId,
