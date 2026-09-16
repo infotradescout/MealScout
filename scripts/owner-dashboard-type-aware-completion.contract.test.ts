@@ -5,7 +5,7 @@ const ownerDashboard = readFileSync(
   "utf8",
 ).replace(/\r\n/g, "\n");
 const parkingPass = readFileSync(
-  "client/src/pages/parking-pass.tsx",
+  "client/src/pages/parking-pass-content.tsx",
   "utf8",
 ).replace(/\r\n/g, "\n");
 const parkingPassManage = readFileSync(

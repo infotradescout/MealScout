@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 
 const routes = readFileSync("server/routes/publicMapRoutes.ts", "utf8");
 const cache = readFileSync("server/utils/googleApiCache.ts", "utf8");
-const parkingPass = readFileSync("client/src/pages/parking-pass.tsx", "utf8");
+const parkingPass = readFileSync("client/src/pages/parking-pass-content.tsx", "utf8");
 const mapPicker = readFileSync(
   "client/src/components/maps/GoogleMapPicker.tsx",
   "utf8",
