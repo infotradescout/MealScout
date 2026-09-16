@@ -34,6 +34,12 @@ jobs:
       - name: Owner Orders and Kitchen State Regression
         run: node scripts/mealscout-owner-orders-state.test.cjs
 
+      - name: Parking Pass Source Contracts
+        run: node scripts/qa/parking-source-contracts.cjs
+
+      - name: Parking Pass Repair Behavior Regression
+        run: node scripts/qa/parking-repair.behavior.test.mjs
+
       - name: Typecheck
         run: npm run check
 

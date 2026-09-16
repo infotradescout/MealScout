@@ -236,6 +236,24 @@ async function run() {
         assert.equal(new URL((await request).url()).searchParams.get('truckId'), world.truck.id);
         await expect(page.getByRole('heading', { name: 'Your booking is confirmed', exact: true })).toBeVisible();
       });
+      await scenario('Parking Pass gas controls include host prices when provider results are empty', async ({ world, openActor }) => {
+        world.faults.set('/api/map/locations', { status: 200, body: {
+          hostLocations: [{ id: 'qa-fuel-only', hostId: 'qa-fuel-host', type: 'host_location', name: 'QA ONLY host fuel',
+            latitude: '30.0', longitude: '-90.0', address: 'QA fixture address', city: 'QA town', state: 'LA',
+            showFuelPrices: true, fuelPrices: { regularCents: 329 } }], eventLocations: [], supplierLocations: [],
+        } });
+        world.faults.set('/api/map/operator-support', { status: 200, body: {
+          available: true, categories: { gas: [], propane: [], supply: [], support: [] },
+        } });
+        const page = await openActor(world.actors.truck, '/parking-pass');
+        await page.getByRole('button', { name: 'Map', exact: true }).click();
+        await page.locator('summary').filter({ hasText: 'Map tools' }).click();
+        const gas = page.getByRole('button', { name: 'Gas (1)', exact: true });
+        await expect(gas).toBeEnabled();
+        await gas.click();
+        await expect(gas).toBeEnabled();
+        assert.equal(world.requests.filter((r) => r.method !== 'GET').length, 0);
+      });
       await scenario('guest can browse an active menu without account or payment mutations', async ({ world, openActor }) => {
         const guest = await openActor(null, `/menu/${world.restaurant.id}`);
         await expect(guest.getByRole('heading', { name: world.restaurant.name, exact: true })).toBeVisible();

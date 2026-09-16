@@ -4424,6 +4424,11 @@ export default function ParkingPassPage() {
         } => item !== null,
       );
   }, [parkingPassMapLocations?.hostLocations]);
+  // The gas layer includes provider results AND host-published fuel prices.
+  const gasLayerCount = supplierLayerCounts.gas + gasPricePins.length;
+  const gasLayerSummary = gasLayerCount > 0
+    ? String(gasLayerCount)
+    : isOperatorSupportFetching ? "Loading" : "Unavailable";
   const fallbackMapCenter = useMemo(() => {
     const requestedPin = requestedHostId
       ? fallbackHostPins.find((pin) => pin.hostId === requestedHostId)
@@ -7390,10 +7395,10 @@ export default function ParkingPassPage() {
                               size="sm"
                               variant={showGasLayer ? "default" : "outline"}
                               onClick={() => setShowGasLayer((value) => !value)}
-                              disabled={supplierLayerCounts.gas === 0}
+                              disabled={gasLayerCount === 0}
                               className="w-full"
                             >
-                              {`Gas (${supplierLayerSummary.gas})`}
+                              {`Gas (${gasLayerSummary})`}
                             </Button>
                             <Button
                               type="button"

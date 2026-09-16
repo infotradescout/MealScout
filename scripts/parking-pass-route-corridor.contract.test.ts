@@ -22,7 +22,6 @@ for (const snippet of [
   "routes.polyline.encodedPolyline",
   "decodeGooglePolyline",
   "locatePointAlongRoute",
-  'getCached<any>("route_corridor"',
   "ROUTE_CORRIDOR_HOST_RADIUS_MILES",
   "ROUTE_CORRIDOR_MAX_HOSTS",
   "storage.getAllHosts()",
@@ -42,8 +41,19 @@ for (const snippet of [
   }
 }
 
-if (!/setCached\(\s*"route_corridor"/.test(routes)) {
-  throw new Error("Route corridor cache write is missing");
+// Current route privacy policy deliberately bypasses cached host results.
+if (/\b(?:getCached|setCached)\s*(?:<[^>]*>)?\s*\(/.test(corridorRoute)) {
+  throw new Error("Route corridor must recheck host visibility, not replay cached hosts");
+}
+for (const snippet of [
+  'res.setHeader("Cache-Control", "no-store")',
+  "activeStoredHostByUserId.get(userId)",
+  "owner.isDisabled !== false",
+  "resolvePublicProfileVisibility(owner.publicProfileSettings)",
+  ".showAddress",
+  "isHostProfileMapEligible({",
+]) {
+  if (!corridorRoute.includes(snippet)) throw new Error("Route corridor privacy guard missing: " + snippet);
 }
 
 if (corridorRoute.includes("googleMapsApiKey:")) {
@@ -75,9 +85,10 @@ for (const snippet of [
 for (const snippet of [
   "routePath?: GeoPoint[]",
   "new g.maps.Polyline",
-  "<Polyline",
-  'strokeColor: "#ea580c"',
-  "detachGoogleMarker(marker)",
+  'strokeColor: "#f97316"',
+  "path: validPath",
+  "routePolylineRef.current?.setMap?.(null)",
+  "removeGoogleMarker(marker)",
   'typeof marker.setPosition === "function"',
   "marker.position = position",
 ]) {

@@ -28,7 +28,7 @@ function recordRouteBookingConfirmed(passId: string) {
     if (!raw) return;
     const context = JSON.parse(raw);
     sessionStorage.removeItem("mealscout_route_booking_context");
-    void fetch("/api/parking-pass/routes/events", {
+    void fetch(apiUrl("/api/parking-pass/routes/events"), {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
@@ -36,6 +36,8 @@ function recordRouteBookingConfirmed(passId: string) {
         eventName: "route_booking_confirmed",
         properties: { ...context, passId },
       }),
+    }).catch(() => {
+      // Telemetry failure must not interrupt a confirmed booking.
     });
   } catch {}
 }

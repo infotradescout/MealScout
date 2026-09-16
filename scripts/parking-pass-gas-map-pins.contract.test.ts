@@ -12,8 +12,10 @@ const requiredSnippets = [
   "Premium",
   "Diesel",
   "...(showGasLayer ? gasPricePins : []).map((pin) => ({",
-  "operationalSupportPins.length",
-  "showGasLayer ? gasPricePins.length : 0",
+  "const parkingPassHostPinCount = mapPins.length + unlistedHostPins.length",
+  "const gasLayerCount = supplierLayerCounts.gas + gasPricePins.length",
+  "disabled={gasLayerCount === 0}",
+  "Gas (${gasLayerSummary})",
 ];
 
 for (const snippet of requiredSnippets) {

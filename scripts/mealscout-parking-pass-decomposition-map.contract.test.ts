@@ -126,8 +126,10 @@ function requireMatch(source: string, pattern: RegExp, label: string) {
 
 [
   "BookingPaymentModal",
-  'useState<"book" | "schedule" | "host">("book")',
-  '"listings" | "location" | "payments"',
+  "useState<ParkingPassTopTab>",
+  "parseParkingPassOwnerNavigation(window.location.search)",
+  "ParkingPassHostToolsTab",
+  "reconcileParkingPassTopTab",
   "handleBookSelected",
   "handleCreatePass",
   "handleCreateSchedule",

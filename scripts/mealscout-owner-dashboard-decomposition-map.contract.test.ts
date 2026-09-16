@@ -273,7 +273,11 @@ requireIncludes(
 
 [
   'queryKey: ["/api/owner/menus", restaurantId]',
-  'apiRequest("POST", "/api/owner/menus"',
+  'apiRequest("POST", "/api/owner/menus/create"',
+  '"Idempotency-Key": attempt.requestId',
+  "prepareMenuCreationAttempt",
+  "assertMenuCreationReceipt",
+  "confirmMenuCreationAttempt",
   'apiRequest("POST", "/api/owner/menu-categories"',
   'apiRequest("POST", "/api/owner/menu-items"',
   "/api/owner/restaurants/${encodeURIComponent(restaurantId)}/ordering-readiness",
