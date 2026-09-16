@@ -16,7 +16,7 @@ Entry: Scout/profile/event/Parking Pass → find host → map/list → date → 
 
 Must preserve: stored non-expired insurance verification gate, truck profile/verification gate, selected dates and slot types, host pricing/platform fees/credits/promos, idempotency, payment-intent cancellation, hostile-browser handoff, payment polling, booking return recovery, and schedule refresh.
 
-UX acceptance: selected host/date/slots remain visible through checkout; review/pay progress is explicit; payment preparation cannot look frozen; pending means payment received but reconciliation incomplete; credited means paid but inventory lost and credits issued; closing checkout explains/release behavior; failure never implies a booking exists when it does not.
+UX acceptance: selected host/date/slots remain visible through checkout; review/pay progress is explicit; payment preparation cannot look frozen; pending is an unresolved booking outcome, not proof of received payment; payment receipt requires explicit provider/backend evidence; credited means paid but inventory lost and credits issued; closing checkout explains/release behavior; failure never implies a booking exists when it does not.
 
 ### Parking Pass — host lifecycle
 Entry: host signup → host identity/location → coordinates/photos/amenities → listing → price/capacity/days → blackout dates → publish → booking activity → payout/payment readiness.
@@ -67,7 +67,7 @@ Event coordinator: create/manage event → requests/participants → public even
 
 Supplier: discover/catalog → request/cart/order → payment/status → supplier fulfillment and management.
 Affiliate/referral/share: create/share attributed link → click → signup/claim/conversion → earnings/status, without obscuring attribution state.
-Subscription: plan/readiness → checkout → active/pending/failure → account entitlement.
+Profile access / legacy subscriptions: verify the existing non-expiring free-trial toolset without a card, paid conversion or new monthly bill; retain access/status and cancellation of legacy recurring billing. Separate transaction charges remain unchanged. Source of truth: `shared/profileAccessPolicy.ts`; do not restore retired monthly profile checkout.
 Hiring/jobs where routed: discovery/create/apply/manage states.
 
 ## P2 support/admin flows

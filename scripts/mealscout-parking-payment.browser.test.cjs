@@ -16,10 +16,11 @@ const code = ts.transpileModule(source.replace('import.meta.env.VITE_STRIPE_PUBL
 }).outputText;
 const runtime = process.env.UI_REACT_RUNTIME ? fs.readFileSync(process.env.UI_REACT_RUNTIME,'utf8') :
   require('esbuild').buildSync({stdin:{contents:'import * as React from "react"; import * as ReactDOM from "react-dom/client"; window.ReactTestRuntime={React,ReactDOM};',resolveDir:root},bundle:true,write:false,format:'iife',define:{'process.env.NODE_ENV':'"development"'},logLevel:'silent'}).outputFiles[0].text;
+const requestCode = ts.transpileModule(fs.readFileSync(path.join(root, "client/src/lib/parking-booking-request.ts"), "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText;
 const fixture = `
 const React=ReactTestRuntime.React;const {createRoot}=ReactTestRuntime.ReactDOM;
 const storage=new Map();Object.defineProperty(window,'sessionStorage',{value:{getItem:k=>storage.get(k)??null,setItem:(k,v)=>storage.set(k,v),removeItem:k=>storage.delete(k)},configurable:true});
-window.__toasts=[];window.__outcomes=[];window.__closes=[];window.__stripeCalls=[];
+window.__storage=storage;window.__userId="qa-user-a";window.__toasts=[];window.__outcomes=[];window.__closes=[];window.__stripeCalls=[];
 window.__confirm=async()=>({paymentIntent:{status:'succeeded'}});
 window.fetch=async(url,options={})=>{const r=await window.__api(String(url),options);if(r.abort)throw new TypeError('Connection interrupted');return new Response(JSON.stringify(r.body),{status:r.status||200,headers:{'Content-Type':'application/json'}});};
 // Accelerate only the modal's polling clock, never the test runner or React.
@@ -32,10 +33,12 @@ function Description({children,asChild}){return asChild?children:React.createEle
 function primitive(tag){return ({children,variant,...props})=>React.createElement(tag,props,children);}
 const modules={react:React,'@stripe/react-stripe-js':{Elements:({children})=>React.createElement('div',{},children),PaymentElement:()=>React.createElement('div',{'data-testid':'card-field'},'Card fixture'),useStripe:()=>({confirmPayment:options=>{window.__stripeCalls.push(options);return window.__confirm(options);}}),useElements:()=>({fixture:true})},
 '@/components/ui/button':{Button:primitive('button')},'@/components/ui/dialog':{Dialog,DialogContent,DialogDescription:Description,DialogHeader:primitive('header'),DialogTitle:primitive('h2')},'lucide-react':{Loader2:()=>null},'@/hooks/use-toast':{useToast:()=>({toast})},'@/components/payment-browser-gate':{__esModule:true,default:()=>null},'@/lib/inAppBrowser':{isPaymentHostileBrowser:()=>false},'@/lib/api':{apiUrl:p=>p},'@/lib/stripeClient':{getStripePromise:()=>({fixture:true})}};
+modules["@/hooks/useAuth"]={useAuth:()=>({user:window.__userId?{id:window.__userId}:null})};
+modules["@/lib/parking-booking-request"]={};new Function("exports",${JSON.stringify(requestCode)})(modules["@/lib/parking-booking-request"]);
 const mod={exports:{}};new Function('require','exports','module','React','Date','setTimeout',${JSON.stringify(code)})(id=>{if(!(id in modules))throw new Error('Unstubbed '+id);return modules[id];},mod.exports,mod,React,DateFixture,(fn,delay)=>window.setTimeout(fn,delay===1500?0:delay));
 const Modal=mod.exports.BookingPaymentModal;
 function App(){const [open,setOpen]=React.useState(true);const close=React.useCallback(value=>{window.__closes.push(value);setOpen(value);},[]);const success=React.useCallback(value=>window.__outcomes.push(value),[]);return React.createElement(Modal,{open,onOpenChange:close,onSuccess:success,passId:'pass-a',truckId:'truck-a',slotTypes:['lunch'],selectedDates:['2026-10-01'],eventDetails:{name:'Test pass',hostName:'Test host',date:'2026-10-01',startTime:'11:00',endTime:'14:00',slotSummary:'Lunch'}});}
-window.__start=()=>{sessionStorage.setItem('mealscout_route_booking_context',JSON.stringify({routeId:'test-route'}));createRoot(document.getElementById('root')).render(React.createElement(App));};window.__ready=true;
+let testRoot;window.__start=()=>{sessionStorage.setItem('mealscout_route_booking_context',JSON.stringify({routeId:'test-route'}));testRoot=createRoot(document.getElementById('root'));testRoot.render(React.createElement(App));};window.__remount=()=>{testRoot.unmount();testRoot=createRoot(document.getElementById('root'));testRoot.render(React.createElement(App));};window.__ready=true;
 `;
 const paymentSetup={paymentIntentId:'pi_test',clientSecret:'secret_test',totalCents:2100,breakdown:{hostPrice:1800,platformFee:300},hostPaymentsReady:false};
 (async()=>{
@@ -43,7 +46,7 @@ const paymentSetup={paymentIntentId:'pi_test',clientSecret:'secret_test',totalCe
  const results=[];let reactVersion;
  async function test(name,run){const context=await browser.newContext({viewport:{width:390,height:844}});const page=await context.newPage();page.setDefaultTimeout(2500);const calls=[],errors=[];page.on('pageerror',e=>errors.push(e.message));
  let handler=async(url)=>({body:url==='/api/payout/balance'?{balance:5}:url.includes('/bookings/payment-intent/')?{status:'confirmed'}:url.endsWith('/book')?paymentSetup:{}});
- try{await page.route('**/*',r=>r.abort());await page.exposeFunction('__api',async(url,options)=>{const c={url,method:options.method||'GET',body:options.body?JSON.parse(options.body):null};calls.push(c);return handler(url,c);});await page.setContent('<div id="root"></div>');await page.addScriptTag({type:'module',content:runtime});await page.waitForFunction(()=>!!window.ReactTestRuntime);await page.addScriptTag({type:'module',content:fixture});await page.waitForFunction(()=>window.__ready);reactVersion=await page.evaluate(()=>ReactTestRuntime.React.version);
+ try{await page.route('**/*',r=>r.abort());await page.exposeFunction('__api',async(url,options)=>{const c={url,method:options.method||'GET',headers:options.headers||{},body:options.body?JSON.parse(options.body):null};calls.push(c);return handler(url,c);});await page.setContent('<div id="root"></div>');await page.addScriptTag({type:'module',content:runtime});await page.waitForFunction(()=>!!window.ReactTestRuntime);await page.addScriptTag({type:'module',content:fixture});await page.waitForFunction(()=>window.__ready);reactVersion=await page.evaluate(()=>ReactTestRuntime.React.version);
  await run({page,calls,setHandler:h=>handler=h,start:()=>page.evaluate(()=>window.__start())});assert.deepEqual(errors,[]);results.push({name,status:'pass'});
  }catch(e){results.push({name,status:'fail',error:e.message});}finally{await context.close();}}
  const pay=async(page)=>{await page.getByRole('button',{name:'Continue',exact:true}).click();await page.getByTestId('card-field').waitFor();};
@@ -63,6 +66,7 @@ const paymentSetup={paymentIntentId:'pi_test',clientSecret:'secret_test',totalCe
  await test('credit failure has a read-only retry and retains entered promo',async({page,calls,setHandler,start})=>{let fail=true;setHandler(async()=>fail?{status:503,body:{}}:{body:{balance:7}});await start();await page.getByRole('button',{name:'Retry credits'}).waitFor();await page.locator('#parking-pass-promo').fill('KEEP');fail=false;await page.getByRole('button',{name:'Retry credits'}).click();await page.getByText('$7.00',{exact:true}).waitFor();assert.equal(await page.locator('#parking-pass-promo').inputValue(),'KEEP');assert.ok(calls.every(c=>c.method==='GET'));});
  await test('payout setup does not promise a reservation before confirmation',async({page,start})=>{await start();await pay(page);assert.ok(!(await page.getByRole('dialog').innerText()).includes('Your booking is guaranteed'));assert.ok((await page.getByRole('dialog').innerText()).includes('not reserved until'));});
  await test('terms and server prices remain visible before paying',async({page,start})=>{await start();await pay(page);await page.getByText('$18.00',{exact:true}).waitFor();await page.getByText('$3.00',{exact:true}).waitFor();await page.getByText('By confirming payment, you acknowledge bookings are non-refundable once confirmed.').waitFor();});
+ await require('./qa/parking-request-browser-cases.cjs')({test,paymentSetup});
  }finally{await browser.close();}
  console.log(JSON.stringify({scope:'React/Chromium checkout component with native UI and mocked storage/API/Stripe',reactVersion,runtimeOverride:!!process.env.UI_REACT_RUNTIME,results},null,2));if(results.some(r=>r.status!=='pass'))process.exitCode=1;
 })().catch(e=>{console.error(e);process.exitCode=1;});

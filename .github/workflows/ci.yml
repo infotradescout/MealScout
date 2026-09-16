@@ -45,6 +45,9 @@ jobs:
           node scripts/qa/parking-return-policy.test.cjs
           node scripts/qa/parking-calendar-date.test.cjs
 
+      - name: Parking Pass Request Recovery Policy
+        run: node scripts/qa/parking-booking-request.test.cjs
+
       - name: Typecheck
         run: npm run check
 

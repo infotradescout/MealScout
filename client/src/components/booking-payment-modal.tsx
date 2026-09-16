@@ -19,6 +19,8 @@ import PaymentBrowserGate from "@/components/payment-browser-gate";
 import { isPaymentHostileBrowser } from "@/lib/inAppBrowser";
 import { apiUrl } from "@/lib/api";
 import { getStripePromise } from "@/lib/stripeClient";
+import { useAuth } from "@/hooks/useAuth";
+import { loadParkingBookingRequest, prepareParkingBookingRequest, clearParkingBookingRequest, assertParkingBookingReplayAge, type ParkingBookingRequest } from "@/lib/parking-booking-request";
 
 const buildTimeStripePublicKey = import.meta.env.VITE_STRIPE_PUBLIC_KEY || "";
 
@@ -350,6 +352,18 @@ export function BookingPaymentModal({
   onSuccess,
 }: BookingPaymentModalProps) {
   const { toast } = useToast();
+  const { user } = useAuth();
+  const userId = user?.id || "";
+  const requestScope = { userId, passId, truckId };
+  const [savedRequest, setSavedRequest] = useState<ParkingBookingRequest | null>(null);
+  const [requestMessage, setRequestMessage] = useState("");
+  const [recoveryBlocked, setRecoveryBlocked] = useState(false);
+  const requestScopeRef = useRef("");
+  requestScopeRef.current = JSON.stringify([userId, passId, truckId, open]);
+  useEffect(() => {
+    requestScopeRef.current = JSON.stringify([userId, passId, truckId, open]);
+    return () => { requestScopeRef.current = ""; };
+  }, [userId, passId, truckId, open]);
   const [isLoading, setIsLoading] = useState(false);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null);
@@ -428,6 +442,26 @@ export function BookingPaymentModal({
     };
   }, [open, stripePublishableKey, toast, onOpenChange]);
 
+  useEffect(() => {
+    if (!open) return;
+    setSavedRequest(null);
+    setRequestMessage("");
+    setRecoveryBlocked(false);
+    if (!userId) return;
+    try {
+      const saved = loadParkingBookingRequest({ userId, passId, truckId });
+      setSavedRequest(saved);
+      if (saved) {
+        setCreditsToApply(saved.body.applyCreditsCents ? String(saved.body.applyCreditsCents / 100) : "");
+        setPromoCode(saved.body.promoCode || "");
+        assertParkingBookingReplayAge(saved);
+      }
+    } catch (error) {
+      setRecoveryBlocked(true);
+      setRequestMessage(error instanceof Error ? error.message : "Booking recovery is unavailable.");
+    }
+  }, [open, userId, passId, truckId]);
+
   const cancelCheckout = async (intentId: string) => {
     try {
       await fetch(
@@ -466,7 +500,8 @@ export function BookingPaymentModal({
   };
 
   const initiateBooking = async () => {
-    if (initiatePendingRef.current || isLoading || clientSecret) return;
+    if (initiatePendingRef.current || isLoading || clientSecret || recoveryBlocked) return;
+    if (!userId) { setRequestMessage("Sign in before starting this booking."); return; }
     if (hostileBrowser) {
       toast({
         title: "Open in browser to continue",
@@ -477,12 +512,17 @@ export function BookingPaymentModal({
     }
     initiatePendingRef.current = true;
     setIsLoading(true);
+    setRequestMessage("");
+    const activeScope = requestScopeRef.current;
+    let requestTimer: ReturnType<typeof setTimeout> | undefined;
+    const clearSaved = () => {
+      if (!idempotencyKeyRef.current) return;
+      try {
+        clearParkingBookingRequest(requestScope, idempotencyKeyRef.current);
+        setSavedRequest(null);
+      } catch { /* Retaining a receipt is safer than silently creating a new request. */ }
+    };
     try {
-      const requestIdempotencyKey =
-        typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-          ? crypto.randomUUID()
-          : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-      idempotencyKeyRef.current = requestIdempotencyKey;
 
       const creditCents = Math.max(
         0,
@@ -498,6 +538,16 @@ export function BookingPaymentModal({
             })
             .filter((value) => value.length > 0)
         : [];
+      const request = prepareParkingBookingRequest(requestScope, {
+        truckId, slotTypes, selectedDates: normalizedSelectedDates,
+        applyCreditsCents: creditCents > 0 ? creditCents : undefined,
+        promoCode: promoCode.trim() ? promoCode.trim() : undefined,
+      });
+      const requestIdempotencyKey = request.requestId;
+      idempotencyKeyRef.current = requestIdempotencyKey;
+      setSavedRequest(request);
+      const controller = new AbortController();
+      requestTimer = setTimeout(() => controller.abort(), 15_000);
       const res = await fetch(apiUrl(`/api/parking-pass/${passId}/book`), {
         method: "POST",
         credentials: "include",
@@ -505,22 +555,23 @@ export function BookingPaymentModal({
           "Content-Type": "application/json",
           "Idempotency-Key": requestIdempotencyKey,
         },
-        body: JSON.stringify({
-          truckId,
-          slotTypes,
-          selectedDates: normalizedSelectedDates,
-          applyCreditsCents: creditCents > 0 ? creditCents : undefined,
-          promoCode: promoCode.trim() ? promoCode.trim() : undefined,
-        }),
+        signal: controller.signal,
+        body: JSON.stringify(request.body),
       });
 
+      if (requestScopeRef.current !== activeScope) return;
       if (!res.ok) {
         const data = await res.json();
+        if (requestScopeRef.current !== activeScope) return;
+        // These responses are emitted before a new hold/payment is created.
+        // Conflicts, rate limits, server errors and existing bookings remain recoverable.
+        if ([400, 401, 403, 404, 422].includes(res.status) && !data?.bookingId && typeof data?.message === "string") clearSaved();
         if (
           res.status === 409 &&
           (data?.code === "truck_profile_required" ||
             data?.code === "truck_verification_required")
         ) {
+          clearSaved();
           toast({
             title:
               data?.code === "truck_verification_required"
@@ -541,7 +592,9 @@ export function BookingPaymentModal({
       }
 
       const data = await res.json();
+      if (requestScopeRef.current !== activeScope) return;
       if (data?.paymentPending) {
+        // A manual-review request is acknowledged, not completed. Retain its identity.
         toast({
           title: "Request received",
           description:
@@ -551,6 +604,7 @@ export function BookingPaymentModal({
         return;
       }
       if (data?.bypassed) {
+        clearSaved();
         toast({
           title: "Parking Pass Confirmed!",
           description: "Your parking spot has been reserved.",
@@ -576,6 +630,7 @@ export function BookingPaymentModal({
         await cancelCheckout(nextPaymentIntentId);
         throw new Error("Stripe is not configured for this environment.");
       }
+      clearSaved();
       setClientSecret(nextClientSecret);
       setPaymentIntentId(nextPaymentIntentId);
       setHostPaymentsReady(data.hostPaymentsReady !== false);
@@ -584,16 +639,14 @@ export function BookingPaymentModal({
         breakdown: data.breakdown,
       });
     } catch (err: any) {
-      toast({
-        title: "Booking Failed",
-        description:
-          err.message || "Could not initiate booking. Please try again.",
-        variant: "destructive",
-      });
-      onOpenChange(false);
+      if (requestScopeRef.current !== activeScope) return;
+      setRequestMessage(err?.name === "AbortError"
+        ? "The request timed out. Its outcome is unknown; retry the same request or check My Schedule."
+        : err.message || "The booking response was interrupted. Retry the same request before starting another booking.");
     } finally {
+      if (requestTimer !== undefined) clearTimeout(requestTimer);
       initiatePendingRef.current = false;
-      setIsLoading(false);
+      if (requestScopeRef.current === activeScope) setIsLoading(false);
     }
   };
 
@@ -615,7 +668,7 @@ export function BookingPaymentModal({
   const handleCancel = () => {
     // Radix close, Escape and outside-click all use this same guard. A
     // connection error is not permission to cancel a potentially paid intent.
-    if (paymentActivityRef.current === "processing") return;
+    if (initiatePendingRef.current || paymentActivityRef.current === "processing") return;
     if (paymentActivityRef.current === "uncertain") {
       toast({ title: "Check My Schedule", description: "Payment status is unresolved. Check the existing booking before paying again." });
       handleClose();
@@ -729,6 +782,18 @@ export function BookingPaymentModal({
               />
             ) : null}
           <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4 space-y-3">
+            {savedRequest ? (
+              <section aria-label="Saved booking request" className="rounded-xl border border-[var(--border-subtle)] p-3 space-y-2">
+                <p className="font-semibold">Unfinished booking request</p>
+                <p className="text-sm">Retry uses the original truck, slots, dates, credits and promo code. A missing response does not mean the booking failed.</p>
+                <p className="text-xs">Saved slots: {savedRequest.body.slotTypes.join(", ")}</p>
+                <p className="text-xs">Saved dates: {savedRequest.body.selectedDates.join(", ") || "Original listing date"}</p>
+                <p className="break-all text-xs">Request reference: {savedRequest.requestId}</p>
+              </section>
+            ) : null}
+            {requestMessage ? <p role="alert" className="text-sm text-destructive">{requestMessage}</p> : null}
+            {(savedRequest || recoveryBlocked) && userId ? <Button type="button" variant="outline" disabled={isLoading}
+              onClick={() => window.location.assign(`/parking-pass?setup=schedule&truckId=${encodeURIComponent(truckId)}`)}>Check My Schedule</Button> : null}
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="text-sm font-semibold text-[color:var(--text-primary)]">Credits</p>
@@ -758,7 +823,7 @@ export function BookingPaymentModal({
                 <button
                   type="button"
                   className="min-h-11 px-2 text-xs text-[color:var(--text-muted)] underline disabled:opacity-50"
-                  disabled={creditStatus !== "ready" || isLoading}
+                  disabled={creditStatus !== "ready" || isLoading || Boolean(savedRequest) || recoveryBlocked}
                   onClick={() =>
                     setCreditsToApply(String((creditBalance || 0).toFixed(2)))
                   }
@@ -768,6 +833,7 @@ export function BookingPaymentModal({
               </div>
               <input
                 id="parking-pass-credits"
+                disabled={isLoading || Boolean(savedRequest) || recoveryBlocked}
                 inputMode="decimal"
                 type="number"
                 min="0"
@@ -788,6 +854,7 @@ export function BookingPaymentModal({
               </label>
               <input
                 id="parking-pass-promo"
+                disabled={isLoading || Boolean(savedRequest) || recoveryBlocked}
                 type="text"
                 value={promoCode}
                 onChange={(e) => setPromoCode(e.target.value)}
@@ -797,7 +864,7 @@ export function BookingPaymentModal({
               />
             </div>
 
-            <div className="flex gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row">
               <Button
                 type="button"
                 variant="outline"
@@ -805,15 +872,15 @@ export function BookingPaymentModal({
                 onClick={handleCancel}
                 disabled={isLoading}
               >
-                Cancel
+                {savedRequest ? "Close (request saved)" : "Cancel"}
               </Button>
               <Button
                 type="button"
                 className="flex-1"
                 onClick={initiateBooking}
-                disabled={isLoading || isStripeConfigLoading || hostileBrowser}
+                disabled={isLoading || isStripeConfigLoading || hostileBrowser || !userId || recoveryBlocked}
               >
-                Continue
+                {isLoading ? "Checking booking request…" : savedRequest ? "Retry same booking request" : "Continue"}
               </Button>
             </div>
           </div>
