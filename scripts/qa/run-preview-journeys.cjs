@@ -39,6 +39,7 @@ execute('owner-kitchen-state', ['scripts/mealscout-owner-orders-state.test.cjs']
 execute('parking-source-contracts', ['scripts/qa/parking-source-contracts.cjs'], 180000);
 execute('parking-repair-behavior', ['scripts/qa/parking-repair.behavior.test.mjs']);
 execute('parking-request-policy', ['scripts/qa/parking-booking-request.test.cjs']);
+execute('parking-durability', ['scripts/qa/parking-durability.integration.test.mjs'], 120000);
 execute('full-typecheck', [require.resolve('typescript/bin/tsc'), '--noEmit'], 180000);
 execute('database-menu-actors', [path.join(path.dirname(require.resolve('tsx/package.json')), 'dist/cli.mjs'), 'scripts/menu-creation-lisa.integration.test.ts'], 120000);
 execute('auth-http-database', ['scripts/qa/auth-http-database.cjs'], 180000);

@@ -53,10 +53,19 @@ export async function runOpsDataCleanup(): Promise<CleanupSnapshot> {
   state.error = null;
 
   try {
+    // Keep Parking Pass request tombstones: an expired response is not permission
+    // to execute its financial operation again. Remove sensitive replay bodies.
+    await db.execute(sql`
+      UPDATE idempotency_keys SET response_body = NULL, status_code = NULL,
+        state = 'expired', updated_at = now()
+      WHERE split_part(scope, ':', 1) = 'parking_pass_booking'
+        AND expires_at < now() AND state <> 'expired';
+    `);
     const idempotencyResult: any = await db.execute(sql`
       WITH deleted AS (
         DELETE FROM idempotency_keys
         WHERE expires_at < (now() - (${idempotencyGraceHours}::int * interval '1 hour'))
+          AND split_part(scope, ':', 1) <> 'parking_pass_booking'
         RETURNING 1
       )
       SELECT count(*)::int AS count FROM deleted;

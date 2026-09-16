@@ -74,7 +74,7 @@ import { imageUploads } from "@shared/schema";
 import { logAudit } from "../auditLogger";
 import { getHostEarningsSummary } from "../hostEarningsService";
 import { resolveCityTimeZoneSync } from "../services/cityTimeZone";
-import { requireIdempotencyKey } from "../middleware/idempotency";
+import { requireDurableIdempotencyKey, parkingBookingProviderKey } from "../middleware/durableIdempotency";
 import { distributedRateLimit } from "../middleware/distributedRateLimit";
 import { registerHostProfileRoutes } from "./hosts/profileRoutes";
 import { registerHostParkingPassRoutes } from "./hosts/eventsRoutes";
@@ -1111,8 +1111,13 @@ export function registerHostRoutes(app: Express) {
     "/api/parking-pass/:passId/book",
     parkingPassBookingBurstLimiter,
     parkingPassBookingDayLimiter,
-    requireIdempotencyKey({ scope: "parking_pass_booking" }),
     isAuthenticated,
+    requireDurableIdempotencyKey({
+      scope: "parking_pass_booking",
+      authorizeReplay: async (req) => storage.verifyRestaurantOwnership(
+        String(req.body?.truckId || ""), String((req as any).user.id), "manageParkingPass",
+      ),
+    }),
     async (req: any, res) => {
       try {
         const testModeEnabled =
@@ -1395,9 +1400,11 @@ export function registerHostRoutes(app: Express) {
         const existingBooking = await db
           .select()
           .from(eventBookings)
-          .where(eq(eventBookings.eventId, passId))
-          .where(eq(eventBookings.truckId, truckId))
-          .where(inArray(eventBookings.status, ["pending", "confirmed"]))
+          .where(and(
+            eq(eventBookings.eventId, event.id),
+            eq(eventBookings.truckId, truckId),
+            inArray(eventBookings.status, ["pending", "confirmed"]),
+          ))
           .limit(1);
 
         if (existingBooking.length > 0) {
@@ -2001,7 +2008,9 @@ export function registerHostRoutes(app: Express) {
             };
           }
 
-          paymentIntent = await stripe.paymentIntents.create(intentParams);
+          paymentIntent = await stripe.paymentIntents.create(intentParams, {
+            idempotencyKey: parkingBookingProviderKey(userId, req.path, String(req.get("Idempotency-Key") || "").trim()),
+          });
         } catch (error: any) {
           // Preserve booking intent for manual follow-up if Stripe fails.
           try {

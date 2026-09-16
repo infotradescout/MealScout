@@ -48,6 +48,9 @@ jobs:
       - name: Parking Pass Request Recovery Policy
         run: node scripts/qa/parking-booking-request.test.cjs
 
+      - name: Parking Pass Durable Request Integration
+        run: node scripts/qa/parking-durability.integration.test.mjs
+
       - name: Typecheck
         run: npm run check
 

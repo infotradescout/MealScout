@@ -133,13 +133,17 @@ export function requireIdempotencyKey(options: Options) {
           UPDATE idempotency_keys
           SET state = 'completed',
               status_code = ${Number(res.statusCode || 200)},
-              response_body = CASE WHEN ${bodyJson} IS NULL THEN NULL ELSE CAST(${bodyJson} AS jsonb) END,
+              response_body = CAST(${bodyJson} AS jsonb),
               expires_at = ${expiresAt},
               updated_at = now()
           WHERE scope = ${scope}
             AND identity_key = ${identityKey}
             AND idem_key = ${idempotencyKey};
-        `);
+        `).catch(() => {
+          // The response has already been sent on this legacy path. Do not
+          // turn persistence failure into an unhandled process rejection.
+          console.error("[idempotency] Completed response could not be persisted.");
+        });
       });
 
       return next();
