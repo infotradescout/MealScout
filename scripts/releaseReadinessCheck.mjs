@@ -43,6 +43,11 @@ function run(cmd, args, env = {}) {
 
 async function main() {
   const steps = [
+    {
+      name: "Acquisition crawler edge routing",
+      cmd: process.execPath,
+      args: ["--test", "scripts/acquisition-edge-routing.contract.test.mjs"],
+    },
     { name: "Typecheck", cmd: "npm", args: ["run", "check"] },
     { name: "Mobile readiness", cmd: "npm", args: ["run", "check:mobile-readiness"] },
     {
