@@ -94,20 +94,35 @@ function killTree(child) {
 }
 
 async function main() {
+  const argumentsList = process.argv.slice(2);
+  if (argumentsList.some((argument) => argument !== "--built")) {
+    throw new Error("Unsupported mobile smoke argument; only --built is accepted");
+  }
+  const useBuilt = argumentsList.includes("--built");
+  if (useBuilt) {
+    for (const requiredPath of ["dist/server/index.js", "dist/public/index.html"]) {
+      if (!existsSync(requiredPath)) {
+        throw new Error(`Built mobile smoke requires ${requiredPath}; run the build first`);
+      }
+    }
+  }
   const port = await getFreePort(5002);
-  const baseUrl = `http://localhost:${port}`;
+  const baseUrl = `http://${useBuilt ? "127.0.0.1" : "localhost"}:${port}`;
   const livenessUrl = `${baseUrl}/api/auth/user`;
 
   log(`Using PORT=${port}`);
-  log("Starting backend (dev:server)...");
+  log(useBuilt ? "Starting compiled backend in loopback test mode..." : "Starting backend (dev:server)...");
 
   const serverEnv = {
     ...process.env,
     PORT: String(port),
+    ...(useBuilt ? { NODE_ENV: "test" } : {}),
     CLIENT_ORIGIN: process.env.CLIENT_ORIGIN || "http://localhost:5174",
   };
 
-  const server = spawnCmd("npm", ["run", "dev:server"], { env: serverEnv });
+  const server = useBuilt
+    ? spawnCmd(process.execPath, ["dist/server/index.js"], { env: serverEnv })
+    : spawnCmd("npm", ["run", "dev:server"], { env: serverEnv });
   let serverExited = false;
   server.on("exit", () => {
     serverExited = true;

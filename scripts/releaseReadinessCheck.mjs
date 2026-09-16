@@ -69,7 +69,7 @@ async function main() {
     {
       name: "Mobile deep-link smoke (with server)",
       cmd: "npm",
-      args: ["run", "smoke:mobile-deeplinks:with-server"],
+      args: ["run", "smoke:mobile-deeplinks:with-server", "--", "--built"],
     },
   ];
 

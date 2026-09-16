@@ -16,7 +16,7 @@ const gatePath = process.env.ACQUISITION_RELEASE_GATE_SOURCE ||
 const gateSource = readFileSync(gatePath, "utf8");
 const expectedCommands = [
   "run check", "run check:mobile-readiness", "run check:store-readiness",
-  "run cap:prepare", "run smoke:mobile-deeplinks:with-server",
+  "run cap:prepare", "run smoke:mobile-deeplinks:with-server -- --built",
 ];
 
 function exercise({ routingExit = 0, npmExit = 0, omitRouting = false, omitBootstrap = false } = {}) {
@@ -117,3 +117,31 @@ test("a missing request-logging contract cannot silently pass release readiness"
   assert.match(result.output, /FAILED: Acquisition crawler edge routing/);
   assert.doesNotMatch(result.output, /All checks passed/);
 });
+
+
+for (const [name, args, prepareServer, expected] of [
+  ["missing server bundle", ["--built"], false, /requires dist\/server\/index\.js/],
+  ["missing frontend bundle", ["--built"], true, /requires dist\/public\/index\.html/],
+  ["unrecognized mode", ["--unknown-mode"], false, /Unsupported mobile smoke argument/],
+]) {
+  test(`compiled deep-link smoke rejects ${name} before starting a backend`, () => {
+    const root = mkdtempSync(path.join(tmpdir(), "mealscout-built-smoke-"));
+    try {
+      if (prepareServer) {
+        mkdirSync(path.join(root, "dist/server"), { recursive: true });
+        writeFileSync(path.join(root, "dist/server/index.js"), 'throw new Error("fixture must never execute");\n');
+      }
+      const entry = fileURLToPath(new URL("./mobileDeepLinkSmokeWithServer.mjs", import.meta.url));
+      const result = spawnSync(process.execPath, [entry, ...args], {
+        cwd: root, encoding: "utf8", timeout: 5000,
+      });
+      assert.equal(result.error, undefined, result.error?.message);
+      assert.equal(result.status, 1);
+      const output = `${result.stdout}${result.stderr}`;
+      assert.match(output, expected);
+      assert.doesNotMatch(output, /Starting backend|Starting compiled backend|fixture must never execute/);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+}
