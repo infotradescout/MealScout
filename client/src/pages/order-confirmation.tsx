@@ -2,7 +2,7 @@
  * Order status page
  * Shows live order status with auto-polling.
  */
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useParams, useSearch } from "wouter";
 import { PublicOrderingTopBar } from "@/components/public-ordering/PublicOrderingTopBar";
 import { Badge } from "@/components/ui/badge";
@@ -205,55 +205,132 @@ function normalizeOrderPayload(payload: any): Order | null {
 export default function OrderConfirmationPage() {
   const { orderId } = useParams<{ orderId: string }>();
   const search = useSearch();
-  const accessToken =
-    new URLSearchParams(search).get("accessToken") ||
-    window.sessionStorage.getItem(`mealscout:order-access:${orderId}`);
+  const params = new URLSearchParams(search);
+  let accessToken = params.get("accessToken");
+  let storageUnavailable = false;
+  if (!accessToken) {
+    try {
+      accessToken = window.sessionStorage.getItem(`mealscout:order-access:${orderId}`);
+    } catch {
+      // Authenticated requests and Stripe-return lookup can still work.
+      storageUnavailable = true;
+    }
+  }
+  const paymentIntentId = params.get("payment_intent");
+  // Reused routes must never show another order's data or reuse its credentials.
+  // The React key is not rendered into the DOM or sent to analytics.
+  return (
+    <OrderStatusSession
+      key={JSON.stringify([orderId, accessToken, paymentIntentId])}
+      orderId={orderId ?? ""}
+      accessToken={accessToken}
+      paymentIntentId={paymentIntentId}
+      storageUnavailable={storageUnavailable}
+    />
+  );
+}
+
+function OrderStatusSession({
+  orderId,
+  accessToken,
+  paymentIntentId,
+  storageUnavailable,
+}: {
+  orderId: string;
+  accessToken: string | null;
+  paymentIntentId: string | null;
+  storageUnavailable: boolean;
+}) {
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const mountedRef = useRef(false);
+  const requestRef = useRef<AbortController | null>(null);
 
-  const fetchOrder = async () => {
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      requestRef.current?.abort();
+      requestRef.current = null;
+    };
+  }, []);
+
+  const fetchOrder = useCallback(async () => {
+    // Polling and repeated clicks share one read request, never a transaction.
+    if (!mountedRef.current || requestRef.current) return;
+    const controller = new AbortController();
+    requestRef.current = controller;
+    setRefreshing(true);
+    let timedOut = false;
+    let failureMessage = "Order status could not be refreshed. Check your connection and retry the existing order.";
+    const timeout = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, 15_000);
+    const isCurrent = () => mountedRef.current && requestRef.current === controller;
     try {
       const res = await fetch(
         `/api/pickup-orders/${encodeURIComponent(orderId ?? "")}`,
         {
           credentials: "include",
           headers: accessToken ? { "X-Order-Access-Token": accessToken } : {},
+          signal: controller.signal,
         },
       );
+      if (!isCurrent()) return;
       if (!res.ok) {
-        // Try by payment_intent (Stripe redirect case)
-        const url = new URL(window.location.href);
-        const piId = url.searchParams.get("payment_intent");
-        if (piId) {
+        // Do not retain private details after access is lost or an order is removed.
+        if ([401, 403, 404].includes(res.status)) setOrder(null);
+        // Preserve the existing authenticated Stripe-return fallback.
+        if (paymentIntentId) {
           const piRes = await fetch(
-            `/api/pickup-orders/by-intent/${encodeURIComponent(piId)}`,
-            { credentials: "include" },
+            `/api/pickup-orders/by-intent/${encodeURIComponent(paymentIntentId)}`,
+            { credentials: "include", signal: controller.signal },
           );
+          if (!isCurrent()) return;
           if (piRes.ok) {
             const data = await piRes.json();
+            if (!isCurrent()) return;
             const normalized = normalizeOrderPayload(data);
-            if (!normalized) throw new Error("Order not found");
+            if (!normalized) throw new Error("Order status could not be verified.");
             setOrder(normalized);
+            setError(null);
             return;
           }
+          if ([401, 403, 404].includes(piRes.status)) setOrder(null);
         }
-        throw new Error("Order not found");
+        failureMessage = [401, 403].includes(res.status)
+          ? "Order access could not be verified. Open the original order link or sign in with the account used for checkout."
+          : "Order status could not be loaded. Retry before placing another order.";
+        throw new Error(failureMessage);
       }
       const data = await res.json();
+      if (!isCurrent()) return;
       const normalized = normalizeOrderPayload(data);
-      if (!normalized) throw new Error("Order not found");
+      if (!normalized) throw new Error("Order status could not be verified.");
       setOrder(normalized);
-    } catch (err: any) {
-      setError(err.message);
+      setError(null);
+    } catch {
+      if (isCurrent()) {
+        setError(timedOut
+          ? "The status check timed out. Retry to check the existing order; do not place another payment."
+          : failureMessage);
+      }
     } finally {
-      setLoading(false);
+      clearTimeout(timeout);
+      if (isCurrent()) {
+        requestRef.current = null;
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
-  };
+  }, [orderId, accessToken, paymentIntentId]);
 
   useEffect(() => {
-    fetchOrder();
-  }, [orderId]);
+    void fetchOrder();
+  }, [fetchOrder]);
 
   // Poll for status updates on active orders
   useEffect(() => {
@@ -272,7 +349,9 @@ export default function OrderConfirmationPage() {
     order?.stripeDisputeStatus,
     order?.stripeRefundStatus,
     order?.stripeRefundAmountCents,
-    orderId,
+    order?.stripeDisputeAmountCents,
+    order?.totalCents,
+    fetchOrder,
   ]);
 
   if (loading) {
@@ -283,7 +362,7 @@ export default function OrderConfirmationPage() {
       >
         <PublicOrderingTopBar />
         <main className="mx-auto flex min-h-[70vh] w-full max-w-2xl items-center justify-center px-4 py-20">
-          <div className="profile-surface flex items-center gap-3 rounded-3xl px-6 py-5 text-[color:var(--profile-ink-soft)]">
+          <div role="status" className="profile-surface flex items-center gap-3 rounded-3xl px-6 py-5 text-[color:var(--profile-ink-soft)]">
             <Loader2 className="h-5 w-5 animate-spin text-[color:var(--profile-accent)]" />
             <span className="font-bold">Loading order status</span>
           </div>
@@ -292,7 +371,7 @@ export default function OrderConfirmationPage() {
     );
   }
 
-  if (error || !order) {
+  if (!order) {
     return (
       <div
         className="mealscout-public-profile min-h-screen bg-[color:var(--profile-page)]"
@@ -306,8 +385,24 @@ export default function OrderConfirmationPage() {
               Order status unavailable
             </h1>
             <p className="mt-2 text-sm text-[color:var(--profile-muted)]">
-              {error ?? "Order not found."}
+              {error ?? "Order status has not been verified yet."}
             </p>
+            {storageUnavailable ? (
+              <p className="mt-3 text-sm text-[color:var(--profile-muted)]">
+                Browser storage is blocked. Open the original order link or allow
+                storage in the checkout browser, then retry. A failed status check
+                does not mean payment failed.
+              </p>
+            ) : null}
+            <Button
+              type="button"
+              className="mt-5 min-h-11"
+              onClick={() => void fetchOrder()}
+              disabled={refreshing}
+              aria-busy={refreshing}
+            >
+              {refreshing ? "Checking order status…" : "Retry status"}
+            </Button>
             <Link
               href="/scout"
               className="profile-action-primary mt-6 inline-flex min-h-11 items-center rounded-full px-5 text-sm font-black"
@@ -463,8 +558,20 @@ export default function OrderConfirmationPage() {
     >
       <PublicOrderingTopBar />
       <main className="mx-auto w-full max-w-2xl px-4 py-6 sm:py-8">
+        {error ? (
+          <section className="profile-surface mb-4 rounded-2xl p-4" aria-label="Status update interrupted">
+            <p className="font-bold" role="alert">Status update interrupted</p>
+            <p className="mt-1 text-sm text-[color:var(--profile-muted)]">
+              Showing the last known status below; it may have changed. {error}
+            </p>
+            <Button type="button" variant="outline" className="mt-3 min-h-11"
+              onClick={() => void fetchOrder()} disabled={refreshing} aria-busy={refreshing}>
+              {refreshing ? "Checking order status…" : "Retry status"}
+            </Button>
+          </section>
+        ) : null}
         {/* Status hero */}
-        <div className="profile-surface mb-8 rounded-[2rem] p-6 text-center sm:p-8">
+        <div role="status" aria-live="polite" aria-atomic="true" className="profile-surface mb-8 rounded-[2rem] p-6 text-center sm:p-8">
           <StatusIcon className={`mx-auto mb-3 h-16 w-16 ${config.color}`} />
           <h1 className="text-2xl font-black tracking-tight text-[color:var(--profile-ink)]">
             {config.label}
@@ -584,13 +691,15 @@ export default function OrderConfirmationPage() {
         {!["cancelled", "cancellation_pending", "payment_disputed"].includes(
           order.status,
         ) && (
-          <div className="flex items-center justify-between mb-8 px-2">
+          <div role="list" aria-label="Order progress" className="flex items-center justify-between mb-8 px-2">
             {statusOrder.slice(0, -1).map((s, idx) => {
               const stepIdx = statusOrder.indexOf(order.status);
               const isDone = idx < stepIdx;
               const isCurrent = idx === stepIdx;
               return (
-                <div key={s} className="flex items-center flex-1">
+                <div key={s} role="listitem" aria-current={isCurrent ? "step" : undefined}
+                  aria-label={`${STATUS_CONFIG[s]?.label ?? s}: ${isDone ? "complete" : isCurrent ? "current" : "upcoming"}`}
+                  className="flex items-center flex-1">
                   <div
                     className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
                       isDone
@@ -624,8 +733,8 @@ export default function OrderConfirmationPage() {
           </CardHeader>
           <CardContent className="space-y-2">
             {order.items.map((item) => (
-              <div key={item.id} className="flex justify-between text-sm">
-                <span>
+              <div key={item.id} className="flex justify-between gap-3 text-sm">
+                <span className="min-w-0 break-words">
                   {item.quantity}× {item.itemName}
                   {item.variantLabel && (
                     <span className="text-muted-foreground">
@@ -634,7 +743,7 @@ export default function OrderConfirmationPage() {
                     </span>
                   )}
                 </span>
-                <span>{formatMoney(item.lineTotalCents)}</span>
+                <span className="shrink-0 tabular-nums">{formatMoney(item.lineTotalCents)}</span>
               </div>
             ))}
             <div className="mt-2 space-y-1 border-t border-[color:var(--profile-border)] pt-2">
@@ -725,9 +834,10 @@ export default function OrderConfirmationPage() {
             </Button>
           </Link>
           {!isTerminal && (
-            <Button variant="ghost" className="shrink-0" onClick={fetchOrder}>
-              <Loader2 className="w-4 h-4 mr-1" />
-              Refresh
+            <Button type="button" variant="ghost" className="min-h-11 shrink-0"
+              onClick={() => void fetchOrder()} disabled={refreshing} aria-busy={refreshing}>
+              <Loader2 className={`mr-1 h-4 w-4 ${refreshing ? "animate-spin" : ""}`} aria-hidden="true" />
+              {refreshing ? "Refreshing…" : "Refresh"}
             </Button>
           )}
         </div>

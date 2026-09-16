@@ -28,6 +28,9 @@ jobs:
       - name: Pickup Checkout State Regression
         run: node scripts/mealscout-checkout-state.test.cjs
 
+      - name: Order Status Recovery Regression
+        run: node scripts/mealscout-order-status-state.test.cjs
+
       - name: Typecheck
         run: npm run check
 
