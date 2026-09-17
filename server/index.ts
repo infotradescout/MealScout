@@ -652,6 +652,8 @@ const extractRestaurantEntity = (pathValue: string) => {
 app.use((req, res, next) => {
   const start = Date.now();
   res.on("finish", () => {
+    // The documented no-database development mode has no request-log sink.
+    if (!db) return;
     const pathValue = req.originalUrl || req.url || "";
     if (
       pathValue.startsWith("/assets") ||
@@ -1399,7 +1401,7 @@ app.use((req, res, next) => {
   server.listen(
     {
       port,
-      host: "0.0.0.0",
+      host: app.get("env") === "test" ? "127.0.0.1" : "0.0.0.0",
     },
     () => {
       console.log(`[express] serving on port ${port}`);

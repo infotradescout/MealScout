@@ -79,6 +79,28 @@
       ]
     },
     {
+      "source": "/for-hosts",
+      "destination": "https://mealscout.onrender.com/for-hosts",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*([Bb][Oo][Tt]|[Cc][Rr][Aa][Ww][Ll][Ee][Rr]|[Ss][Pp][Ii][Dd][Ee][Rr]|[Ss][Ll][Uu][Rr][Pp]|[Cc][Hh][Aa][Tt][Gg][Pp][Tt]-[Uu][Ss][Ee][Rr]|[Aa][Nn][Tt][Hh][Rr][Oo][Pp][Ii][Cc]-[Aa][Ii]|[Cc][Oo][Hh][Ee][Rr][Ee]-[Aa][Ii]).*"
+        }
+      ]
+    },
+    {
+      "source": "/host-location-partner",
+      "destination": "https://mealscout.onrender.com/host-location-partner",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*([Bb][Oo][Tt]|[Cc][Rr][Aa][Ww][Ll][Ee][Rr]|[Ss][Pp][Ii][Dd][Ee][Rr]|[Ss][Ll][Uu][Rr][Pp]|[Cc][Hh][Aa][Tt][Gg][Pp][Tt]-[Uu][Ss][Ee][Rr]|[Aa][Nn][Tt][Hh][Rr][Oo][Pp][Ii][Cc]-[Aa][Ii]|[Cc][Oo][Hh][Ee][Rr][Ee]-[Aa][Ii]).*"
+        }
+      ]
+    },
+    {
       "source": "/food-trucks/:city/:cuisine",
       "destination": "https://mealscout.onrender.com/food-trucks/:city/:cuisine"
     },
@@ -222,6 +244,28 @@
     {
       "src": "/for-restaurants",
       "dest": "https://mealscout.onrender.com/for-restaurants",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*([Bb][Oo][Tt]|[Cc][Rr][Aa][Ww][Ll][Ee][Rr]|[Ss][Pp][Ii][Dd][Ee][Rr]|[Ss][Ll][Uu][Rr][Pp]|[Cc][Hh][Aa][Tt][Gg][Pp][Tt]-[Uu][Ss][Ee][Rr]|[Aa][Nn][Tt][Hh][Rr][Oo][Pp][Ii][Cc]-[Aa][Ii]|[Cc][Oo][Hh][Ee][Rr][Ee]-[Aa][Ii]).*"
+        }
+      ]
+    },
+    {
+      "src": "/for-hosts",
+      "dest": "https://mealscout.onrender.com/for-hosts",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*([Bb][Oo][Tt]|[Cc][Rr][Aa][Ww][Ll][Ee][Rr]|[Ss][Pp][Ii][Dd][Ee][Rr]|[Ss][Ll][Uu][Rr][Pp]|[Cc][Hh][Aa][Tt][Gg][Pp][Tt]-[Uu][Ss][Ee][Rr]|[Aa][Nn][Tt][Hh][Rr][Oo][Pp][Ii][Cc]-[Aa][Ii]|[Cc][Oo][Hh][Ee][Rr][Ee]-[Aa][Ii]).*"
+        }
+      ]
+    },
+    {
+      "src": "/host-location-partner",
+      "dest": "https://mealscout.onrender.com/host-location-partner",
       "has": [
         {
           "type": "header",

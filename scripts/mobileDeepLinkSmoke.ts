@@ -31,9 +31,25 @@ async function probe(path: string): Promise<SmokeResult> {
     const res = await fetch(url, {
       method: "GET",
       headers: { Accept: "text/html" },
-      redirect: "follow",
+      redirect: "manual",
+      signal: AbortSignal.timeout(15_000),
     });
     const body = await res.text();
+    // These fixed fixtures deliberately name no existing public profile and
+    // carry no authenticated owner session. Their denial is the required result.
+    const expectedBoundaryStatus =
+      path === "/p/food-truck/test-profile-id/test-profile-slug" ? 404 :
+      path === "/restaurant-owner-dashboard" ? 401 : null;
+    if (expectedBoundaryStatus !== null) {
+      return {
+        path,
+        ok: res.status === expectedBoundaryStatus,
+        status: res.status,
+        ...(res.status !== expectedBoundaryStatus
+          ? { reason: `Expected anonymous boundary HTTP ${expectedBoundaryStatus}, received ${res.status}` }
+          : {}),
+      };
+    }
     if (!res.ok) {
       return {
         path,
@@ -78,7 +94,8 @@ async function main() {
     console.error(
       `\nMobile deep-link smoke failed (${failures.length}/${results.length}).`,
     );
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
 
   console.log(`\nMobile deep-link smoke passed (${results.length} routes).`);
@@ -86,5 +103,5 @@ async function main() {
 
 main().catch((err) => {
   console.error(err);
-  process.exit(1);
+  process.exitCode = 1;
 });
