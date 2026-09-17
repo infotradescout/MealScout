@@ -240,6 +240,7 @@ async function main() {
           await expect(page.getByTestId('scout-data-status')).toHaveAttribute('data-state','unavailable');
           await expect(page.getByText('No food results yet',{exact:true})).toHaveCount(0);
           await expect(page.getByText('Nearby food is quiet right now.',{exact:true})).toHaveCount(0);
+          if (failure === 503) await page.screenshot({path:path.join(evidence,`discovery-unavailable-${viewport.width}.png`),fullPage:true});
           state.discoveryOverride=null; await page.getByRole('button',{name:'Retry discovery',exact:true}).click();
           await expect(page.getByRole('link',{name:'View profile',exact:true}).first()).toBeVisible();
           await expect(page.getByTestId('scout-data-status')).toHaveCount(0);
@@ -257,6 +258,7 @@ async function main() {
         state.discoveryOverride='empty';await page.goto(origin+'/scout');
         await expect(page.getByTestId('scout-fallback-market-notice')).toContainText(/No nearby listings yet/i);
         await expect(page.getByText('No nearby listings are available for this area yet',{exact:true})).toBeVisible();
+        await page.screenshot({path:path.join(evidence,`discovery-empty-${viewport.width}.png`),fullPage:true});
         await expect(page.getByTestId('scout-data-status')).toHaveCount(0);assert.equal(state.writes.length,0);
       });
       await scenario('profile actions have 44px targets without horizontal overflow', async ({ page, origin }) => {
