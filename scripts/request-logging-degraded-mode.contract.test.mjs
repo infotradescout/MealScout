@@ -109,3 +109,62 @@ test("a rejected insert remains observed without an unhandled rejection", async 
   assert.equal(result.errors[0][0], "Failed to write request log:");
   assert.equal(result.errors[0][1], result.failure);
 });
+
+
+// Execute the actual mobile-smoke script with bounded HTTP fixtures. Correct
+// anonymous denial is not a successful authenticated owner journey.
+async function exerciseMobileSmoke(overrides = {}) {
+  const filename = "scripts/mobileDeepLinkSmoke.ts";
+  const actual = readFileSync(filename, "utf8");
+  assert.equal(actual.split("main().catch((err) => {").length, 2);
+  const instrumented = actual.replace("main().catch((err) => {", "globalThis.finished = main().catch((err) => {");
+  const code = ts.transpileModule(instrumented, {
+    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None },
+  }).outputText;
+  const fixtureProcess = { env: { SMOKE_BASE_URL: "http://127.0.0.1:5100" }, exitCode: 0,
+    exit(code) { this.exitCode = code; } };
+  const visited = [];
+  const output = [];
+  const context = {
+    process: fixtureProcess, AbortSignal,
+    console: { log: (...args) => output.push(args.join(" ")), error: (...args) => output.push(args.join(" ")) },
+    fetch: async (url) => {
+      const pathname = new URL(url).pathname;
+      visited.push(pathname);
+      const defaults = pathname === "/p/food-truck/test-profile-id/test-profile-slug"
+        ? { status: 404, body: '{"error":"Profile not found"}' }
+        : pathname === "/restaurant-owner-dashboard"
+          ? { status: 401, body: '{"error":"Not authenticated"}' }
+          : { status: 200, body: '<!doctype html><html><body>Public application shell</body></html>' };
+      const selected = { ...defaults, ...overrides[pathname] };
+      if (selected.throw) throw new Error("Isolated network failure");
+      return { status: selected.status, ok: selected.status >= 200 && selected.status < 300,
+        text: async () => selected.body };
+    },
+  };
+  vm.runInNewContext(code, context, { timeout: 2000 });
+  await context.finished;
+  return { status: fixtureProcess.exitCode, visited, output: output.join("\n") };
+}
+
+test("anonymous deep links require five public shells plus actual 404/401 boundaries", async () => {
+  const result = await exerciseMobileSmoke();
+  assert.equal(result.status, 0, result.output);
+  assert.equal(result.visited.length, 7);
+  assert.match(result.output, /passed \(7 routes\)/);
+});
+
+for (const [label, pathname, override] of [
+  ["nonexistent profile must not silently become a public shell", "/p/food-truck/test-profile-id/test-profile-slug", { status: 200, body: "<!doctype html><html>Wrong catch-all</html>" }],
+  ["anonymous owner page must not expose an application document", "/restaurant-owner-dashboard", { status: 200, body: "<!doctype html><html>Private owner content</html>" }],
+  ["server failure is not an authorization denial", "/restaurant-owner-dashboard", { status: 500 }],
+  ["valid public route must not return an API object", "/scout", { body: '{"unexpected":"json"}' }],
+  ["valid public route must not become missing", "/scout", { status: 404 }],
+  ["network failure cannot pass", "/scout", { throw: true }],
+]) {
+  test(`mobile routing contract: ${label}`, async () => {
+    const result = await exerciseMobileSmoke({ [pathname]: override });
+    assert.equal(result.status, 1, result.output);
+    assert.match(result.output, /Mobile deep-link smoke failed/);
+  });
+}
