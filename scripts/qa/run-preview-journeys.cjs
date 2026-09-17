@@ -71,6 +71,7 @@ if (installBrowser && execute('extract-serverless-chromium', ['-e', setupSource]
   env.FONTCONFIG_PATH = runtime.fontconfig;
   execute('full-frontend-journeys', ['scripts/qa/full-frontend-journeys.cjs'], 300000);
   execute('public-profile-browser', ['scripts/qa/public-profile-browser.cjs'], 180000);
+  execute('scout-persistence-timing', ['scripts/qa/scout-persistence-browser.cjs'], 60000);
   execute('checkout-browser', ['scripts/mealscout-checkout-browser.test.cjs'], 120000);
   execute('parking-payment-browser', ['scripts/mealscout-parking-payment.browser.test.cjs'], 120000);
 }

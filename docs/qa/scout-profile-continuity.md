@@ -37,3 +37,23 @@ All browser APIs/auth responses and restaurant data are synthetic; external requ
 
 Next unproved UI acceptance: fuller-market map/result selection and menu/order/book/share continuation, followed by the existing onboarding/claim work. Do not restart completed recovery tests, Parking Pass polish or GitHub Actions startup investigation.
 PR #381 remains separate. No merge or production migration. Retain migration 142 rollout order, drain legacy destructive expiry workers before new-worker activation, retain terminal booking history and earlier request tombstones.
+
+## September 17 continuation: persistence timing under active renders
+
+Base: `7fbd35bc3b4a485093acde86b58824d6e985bd50`.
+The actual hook's reset-on-every-render debounce can indefinitely postpone a checkpoint while Scout keeps rendering. Two new actual React/browser cases reproduce this on the base: both fail to save the entered search within 1.5 seconds while rendering every 20ms (one with stationary view values, one with changing map coordinates).
+
+The repair retains the first 250ms save deadline and writes the latest view. Repeated renders do not reset a pending timer. Account/unmount cleanup cancels the pending callback and retains the existing final flush. This changes no state schema, lifetime, account-key policy, route, API or provider integration.
+
+Observed verification:
+- Baseline timing suite: 0/2 passed. Corrected suite: 2/2 passed in installed Windows Chrome and 2/2 with pinned Linux serverless Chromium 143.
+- The tests also require bounded writes, the final unmount flush, and no timer writes after unmount.
+- Existing recovery/state suites: 41/41 passed; full TypeScript check exited 0.
+- Rebuilt actual frontend successfully; all 32 existing profile/Scout desktop/mobile browser scenarios passed after the hook repair.
+- The preview executor retains its previous 22 stages and adds `scout-persistence-timing`. Configured stage count is not hosted acceptance.
+
+Evidence: `.qa-evidence/scout-persistence-timing/` (baseline, candidate, regression and typecheck); Linux evidence at `/home/flavorgood/.local/share/si-verification/mealscout-hosted-7fbd35bc/evidence/`.
+
+The original failed hosted build log remains unavailable: the Vercel log action is missing, local CLI requires a new Vercel login, and the authorized preview-share log link still reaches Vercel login. This timing defect was independently reproduced; it is NOT established as the original hosted failure's root cause. The original 41 state and 32 browser cases also passed a clean Linux reproduction with the hosted default temp/font configuration. An initial custom-temp reproduction had missing fonts because the browser's fontconfig references `/tmp/fonts`; its failed receipts were retained and are not application-defect evidence.
+
+The requests to execute the native full release gate and to write a full-preview Linux reproduction wrapper were blocked before execution/write. Neither blocked operation was rerouted. No production change or full native release pass is claimed.

@@ -5,6 +5,7 @@ export function useScoutJourneyPersistence(account: string | null, value: ScoutJ
   const latest = useRef(value);
   latest.current = value;
   const scroll = useRef(restoredScroll);
+  const scheduledSave = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (!account) return;
     let restoring = restoredScroll > 0;
@@ -33,6 +34,10 @@ export function useScoutJourneyPersistence(account: string | null, value: ScoutJ
     window.addEventListener("keydown", stopRestore);
     return () => {
       save(); stopRestore();
+      if (scheduledSave.current !== null) {
+        clearTimeout(scheduledSave.current);
+        scheduledSave.current = null;
+      }
       window.removeEventListener("scroll", rememberScroll);
       window.removeEventListener("pagehide", save);
       document.removeEventListener("visibilitychange", visibility);
@@ -42,7 +47,12 @@ export function useScoutJourneyPersistence(account: string | null, value: ScoutJ
     };
   }, [account, restoredScroll]);
   useEffect(() => {
-    const timer = setTimeout(() => writeScoutJourney(account, { ...latest.current, scrollY: scroll.current }), 250);
-    return () => clearTimeout(timer);
+    // Keep the first deadline: live map renders must not postpone saving forever.
+    if (!account || scheduledSave.current !== null) return;
+    scheduledSave.current = setTimeout(() => {
+      scheduledSave.current = null;
+      writeScoutJourney(account, { ...latest.current, scrollY: scroll.current });
+    }, 250);
+    // The account/unmount effect cancels this timer and flushes the final view.
   }, [account, value]);
 }
