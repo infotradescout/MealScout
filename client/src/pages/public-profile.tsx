@@ -2650,7 +2650,7 @@ export default function PublicProfilePage() {
   const { user, isAuthenticated, authState } = useAuth();
   const scoutJourney = readScoutJourney(authState === "loading" ? null : String(user?.id || "guest"));
   const scoutHref = scoutJourney?.route || "/scout";
-  const scoutLabel = scoutJourney ? "Back to Scout" : "Scout";
+  const scoutLabel = "Scout";
   const params = useParams<Record<string, string | undefined>>();
   const pathname =
     typeof window !== "undefined" ? window.location.pathname : "";
