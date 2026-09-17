@@ -10376,7 +10376,7 @@ function LocalMenuItemCard({
           Dish
         </span>
         {price && (
-          <span className="absolute right-2 top-2 rounded-md bg-[#120805]/86 px-2 py-0.5 text-[11px] font-black text-orange-100 ring-1 ring-orange-300/24">
+          <span className="absolute right-2 top-2 rounded-md bg-[#120805]/90 px-2 py-0.5 text-[11px] font-black text-orange-100 ring-1 ring-orange-300/24">
             {price}
           </span>
         )}
@@ -10385,15 +10385,15 @@ function LocalMenuItemCard({
         <p className="line-clamp-2 min-h-[2.25rem] text-sm font-bold leading-tight text-orange-50">
           {cardTitle}
         </p>
-        <p className="mt-1 truncate text-xs font-semibold text-orange-200/84">
+        <p className="mt-1 truncate text-xs font-semibold text-[#fed7aa]">
           {item.restaurantName || "Local spot"}
         </p>
-        <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-orange-50/44">
+        <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-[#fed7aa]">
           {displayCategory && <span>{displayCategory}</span>}
           {distLabel && <span>{distLabel}</span>}
         </div>
         {item.description && (
-          <p className="mt-2 line-clamp-1 text-xs leading-snug text-orange-50/58">
+          <p className="mt-2 line-clamp-1 text-xs leading-snug text-[#ffedd5]">
             {item.description}
           </p>
         )}
@@ -10403,7 +10403,7 @@ function LocalMenuItemCard({
             type="button"
             onClick={handleRecommendClick}
             disabled={isTogglingRecommend}
-            className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide disabled:opacity-60 ${
+            className={`inline-flex min-h-11 min-w-11 items-center gap-1 py-2 text-[10px] font-bold uppercase tracking-wide disabled:opacity-60 ${
               hasRecommended
                 ? "text-emerald-300"
                 : "text-orange-300 hover:text-orange-200"

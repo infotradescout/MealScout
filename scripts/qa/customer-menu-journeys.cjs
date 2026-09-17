@@ -42,6 +42,20 @@ async function runCustomerMenuJourneys({ scenario, profile, profilePath, evidenc
     await expect(page).toHaveURL(origin + profilePath + '?ref=qa#menu');
     assert.equal(state.writes.length, 0, 'Cart browsing does not place an order or charge');
   });
+  await scenario('Scout to profile to menu to cart and back preserves discovery', async ({ page, state, origin }) => {
+    state.menuPayload = fixtureMenu();
+    state.profileBody = { ...profile, activeMenuId: id + '-dinner', menuSections: [{ name:'Tacos', items:[{name:'QA dinner tacos',priceLabel:'$15',priceCents:1500,description:null,imageUrl:null,featured:true}] }] };
+    await page.goto(origin + '/scout?ref=qa');
+    await page.getByRole('link', {name:'View profile',exact:true}).first().click(); const originalProfile=page.url();
+    await page.getByRole('link', {name:'View full menu',exact:false}).first().click();
+    await page.getByRole('button', {name:'Add QA dinner tacos to cart',exact:true}).click();
+    await page.getByRole('dialog').getByRole('button', {name:/Add to Cart/i}).click();
+    await page.reload(); await page.getByRole('link', {name:'Back to profile',exact:true}).click();
+    await expect(page).toHaveURL(originalProfile);
+    await page.locator('header').getByRole('link', {name:'Scout',exact:true}).click();
+    await expect(page).toHaveURL(origin + '/scout?ref=qa');
+    assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('mealscout_cart')).length),1); assert.equal(state.writes.length,0);
+  });
   await scenario('menu tabs persist selected menu without discarding attribution', async ({ page, state, origin }) => {
     state.menuPayload = fixtureMenu(); await page.goto(origin + '/menu/' + id + '?ref=qa');
     await page.getByRole('button', { name: 'QA Dinner', exact: true }).click();
