@@ -9,10 +9,13 @@ import {
 
 import type { ScoutSearchFilterId } from "@/components/scout/ScoutSearchDock";
 
+import type { ScoutJourney } from "@/lib/scout-journey-state";
+
 type ScoutNavSearchValue = {
   searchMode: boolean;
   query: string;
   activeFilter: ScoutSearchFilterId | null;
+  restoreSearch: (search: ScoutJourney["search"]) => void;
   openSearch: () => void;
   closeSearch: () => void;
   setQuery: (value: string) => void;
@@ -34,17 +37,22 @@ export function ScoutNavSearchProvider({ children }: { children: ReactNode }) {
     setActiveFilter(null);
   }, []);
 
+  const restoreSearch = useCallback((search: ScoutJourney["search"]) => {
+    setSearchMode(search.open); setQuery(search.query); setActiveFilter(search.filter);
+  }, []);
+
   const value = useMemo(
     () => ({
       searchMode,
       query,
       activeFilter,
+      restoreSearch,
       openSearch,
       closeSearch,
       setQuery,
       setActiveFilter,
     }),
-    [activeFilter, closeSearch, openSearch, query, searchMode],
+    [activeFilter, closeSearch, openSearch, query, searchMode, restoreSearch],
   );
 
   return (

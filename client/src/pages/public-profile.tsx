@@ -1,3 +1,4 @@
+import { readScoutJourney } from "@/lib/scout-journey-state";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiUrl } from "@/lib/api";
 import { readPublicProfileJson, isMissingPublicProfile, isPrivatePublicProfile, publicProfileLoginHref } from "@/lib/public-profile-recovery";
@@ -2646,7 +2647,10 @@ function PublicProfileRelatedDiscoveryLinks({
 }
 
 export default function PublicProfilePage() {
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, authState } = useAuth();
+  const scoutJourney = readScoutJourney(authState === "loading" ? null : String(user?.id || "guest"));
+  const scoutHref = scoutJourney?.route || "/scout";
+  const scoutLabel = scoutJourney ? "Back to Scout" : "Scout";
   const params = useParams<Record<string, string | undefined>>();
   const pathname =
     typeof window !== "undefined" ? window.location.pathname : "";
@@ -3040,7 +3044,7 @@ export default function PublicProfilePage() {
             {accessDenied && !isAuthenticated && (
               <Link href={publicProfileLoginHref()} className="inline-flex min-h-11 items-center px-4 font-bold">Sign in</Link>
             )}
-            <Link href="/scout">
+            <Link href={scoutHref}>
               <Button className="profile-action-primary min-h-11">Scout</Button>
             </Link>
           </div>
@@ -3120,10 +3124,10 @@ export default function PublicProfilePage() {
           </Link>
           <div className="flex items-center gap-2 text-xs sm:text-sm">
             <Link
-              href="/scout"
-              className="profile-action-primary inline-flex min-h-9 items-center rounded-full px-4 font-black"
+              href={scoutHref}
+              className="profile-action-primary inline-flex min-h-11 items-center rounded-full px-4 font-black"
             >
-              Scout
+              {scoutLabel}
             </Link>
             {showPageClaimPrompts ? (
               <Link
@@ -3354,8 +3358,8 @@ export default function PublicProfilePage() {
         <div className="mx-auto flex w-full max-w-5xl flex-col gap-2 px-4 py-5 text-sm text-[color:var(--profile-muted)] sm:flex-row sm:items-center sm:justify-between">
           <p className="font-black text-[color:var(--profile-ink)]">MealScout</p>
           <div className="flex items-center gap-4">
-            <Link href="/scout" className="font-bold hover:text-[color:var(--profile-accent)]">
-              Scout
+            <Link href={scoutHref} className="font-bold hover:text-[color:var(--profile-accent)]">
+              {scoutLabel}
             </Link>
             {showPageClaimPrompts ? (
               <Link href="/claim-business" className="hover:text-[color:var(--profile-accent)]">

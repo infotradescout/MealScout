@@ -1,3 +1,5 @@
+import { readScoutJourney, scoutJourneyRoute } from "@/lib/scout-journey-state";
+import { useScoutJourneyPersistence } from "@/hooks/useScoutJourneyPersistence";
 import {
   DEFAULT_TRUCK_BROADCAST_FRESHNESS_MS,
   deriveTruckPresence,
@@ -2641,6 +2643,14 @@ function shiftCenterForRightQuadrant(
    ============================================================ */
 
 export default function ExplorePreview() {
+  const { user, authState } = useAuth();
+  const account = authState === "loading" ? null : String(user?.id || "guest");
+  return <ScoutDiscoveryView key={account || "loading"} account={account} />;
+}
+
+function ScoutDiscoveryView({ account }: { account: string | null }) {
+  const [restoredJourney] = useState(() => readScoutJourney(account));
+  const [journeyRoute] = useState(() => scoutJourneyRoute(window.location.pathname + window.location.search) || "/scout");
   const { user } = useAuth();
   const authEffectiveLocationContext = useMemo(
     () =>
@@ -2671,7 +2681,7 @@ export default function ExplorePreview() {
     lng: number;
   } | null>(null);
   const [discoveryRadiusKm, setDiscoveryRadiusKm] = useState<number>(() =>
-    readDiscoveryRadiusKm(),
+    restoredJourney?.radiusKm ?? readDiscoveryRadiusKm(),
   );
   const [deviceLocationName, setDeviceLocationName] =
     useState<string>("Your area");
@@ -2680,10 +2690,10 @@ export default function ExplorePreview() {
   >("idle");
   const [currentDaypart] = useState<Daypart>(() => getDaypart());
   const [selectedCravingId, setSelectedCravingId] = useState<string>(
-    () => DAYPART_DEFAULT_INTENT[getDaypart()],
+    () => SCOUT_SEARCH_OPTIONS.some(option => option.id === restoredJourney?.craving) ? restoredJourney!.craving : DAYPART_DEFAULT_INTENT[getDaypart()],
   );
   const [activeSceneLaneId, setActiveSceneLaneId] =
-    useState<ScoutSceneLaneId>("for_you");
+    useState<ScoutSceneLaneId>(restoredJourney?.scene ?? "for_you");
   const [scoutSpotRotationBucket, setScoutSpotRotationBucket] =
     useState<number>(() => getScoutSpotRotationBucket());
   useEffect(() => {
@@ -2697,7 +2707,11 @@ export default function ExplorePreview() {
     query: scoutSearchQuery,
     activeFilter: scoutSearchFilter,
     closeSearch: closeScoutSearch,
+    restoreSearch,
   } = useScoutNavSearch();
+  useEffect(() => {
+    restoreSearch(restoredJourney?.search ?? { open: false, query: "", filter: null });
+  }, [restoredJourney, restoreSearch]);
   const [resultsSheet, setResultsSheet] =
     useState<ScoutResultsSheetData | null>(null);
   const [isPlaceRequestOpen, setIsPlaceRequestOpen] = useState(false);
@@ -4243,7 +4257,7 @@ export default function ExplorePreview() {
     hostMarkers.length,
   ]);
 
-  const [activeMapLayers, setActiveMapLayers] = useState<MapLayerState>({
+  const [activeMapLayers, setActiveMapLayers] = useState<MapLayerState>(restoredJourney?.layers ?? {
     openNow: true,
     foodTrucks: true,
     deals: true,
@@ -4374,7 +4388,10 @@ export default function ExplorePreview() {
     }));
   }, []);
 
+  const previousSceneLane = useRef(activeSceneLaneId);
   useEffect(() => {
+    if (previousSceneLane.current === activeSceneLaneId) return;
+    previousSceneLane.current = activeSceneLaneId;
     if (activeSceneLaneId === "food_trucks") {
       setActiveMapLayers({
         openNow: true,
@@ -4422,22 +4439,36 @@ export default function ExplorePreview() {
   /* --------- map state --------- */
 
   const HERO_ZOOM = 14;
-  const [mapZoom, setMapZoom] = useState<number>(HERO_ZOOM);
+  const [mapZoom, setMapZoom] = useState<number>(restoredJourney?.map.zoom ?? HERO_ZOOM);
   const [mapCenter, setMapCenter] = useState<{
     lat: number;
     lng: number;
-  } | null>(null);
-  const userPushedMapRef = useRef(false);
+  } | null>(restoredJourney?.map.center ?? null);
+  const userPushedMapRef = useRef(Boolean(restoredJourney?.map.center));
   const lastCenteredScoutSourceRef = useRef<string | null>(null);
   const [sheetState, setSheetState] = useState<"default" | "fullMap">(
-    "default",
+    restoredJourney?.map.expanded ? "fullMap" : "default",
   );
   const [selectedLiveTruck, setSelectedLiveTruck] =
     useState<LiveTruckSummary | null>(null);
   const [selectedMapMarker, setSelectedMapMarker] =
     useState<MapAdapterMarker | null>(null);
-  const [selectedMarkerId, setSelectedMarkerId] = useState<string | null>(null);
+  const [selectedMarkerId, setSelectedMarkerId] = useState<string | null>(restoredJourney?.map.selectedMarkerId ?? null);
   const [mapBounds, setMapBounds] = useState<MapBoundsLike | null>(null);
+  useScoutJourneyPersistence(account, {
+    route: journeyRoute, search: { open: scoutSearchMode, query: scoutSearchQuery, filter: scoutSearchFilter },
+    scene: activeSceneLaneId, craving: selectedCravingId, radiusKm: discoveryRadiusKm, layers: activeMapLayers,
+    map: { center: mapCenter, zoom: mapZoom, expanded: sheetState === "fullMap", selectedMarkerId }, scrollY: 0,
+  }, restoredJourney?.scrollY ?? 0);
+  const restoredMarker = useRef(false);
+  useEffect(() => {
+    if (restoredMarker.current || !restoredJourney?.map.selectedMarkerId) return;
+    const marker = allMapMarkers.find(item => item.id === restoredJourney.map.selectedMarkerId);
+    if (!marker) return;
+    restoredMarker.current = true;
+    if (marker.kind === "truck") setSelectedLiveTruck(liveTruckById.get(String(marker.sourceId)) ?? null);
+    else setSelectedMapMarker(marker);
+  }, [allMapMarkers, liveTruckById, restoredJourney]);
   const googleMapContainerRef = useRef<HTMLDivElement | null>(null);
   const [googleMapFailed, setGoogleMapFailed] = useState(false);
   const { data: mapRuntime } = useQuery<MapRuntimeResponse>({
@@ -4522,6 +4553,9 @@ export default function ExplorePreview() {
   // When we first get coords, set the map center to the right-quadrant offset.
   useEffect(() => {
     const source = resolvedScoutLocation?.source || null;
+    if (restoredJourney?.map.center && lastCenteredScoutSourceRef.current === null) {
+      lastCenteredScoutSourceRef.current = source; return;
+    }
     const { freshDeviceLocation, shouldRecenter } = getScoutRecenterDecision({
       source,
       lastCenteredSource: lastCenteredScoutSourceRef.current,
