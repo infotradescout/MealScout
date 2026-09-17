@@ -4,6 +4,18 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { expect } = require('@playwright/test');
 async function runScoutMenuCardJourneys({ scenario, evidence, viewport }) {
+  await scenario('trending dish inherits its matching public truck owner instead of linking to a missing restaurant', async ({page,state,origin})=>{
+    const id='11111111-1111-4111-8111-111111111111', other='22222222-2222-4222-8222-222222222222';
+    state.trendingPayload={generatedAt:new Date().toISOString(),windowDays:7,
+      items:[{id:'qa-truck-dish',name:'QA truck poke',restaurantId:id,restaurantName:'QA Truck',restaurantCity:'Pensacola',restaurantState:'FL',priceCents:1800,description:'Fixture dish'},
+        {id:'qa-other-dish',name:'QA other dish',restaurantId:other,restaurantName:'QA Other',restaurantCity:'Pensacola',restaurantState:'FL',priceCents:1100}],
+      places:[{id,name:'QA Truck',city:'Pensacola',state:'FL',businessType:'food_truck',isFoodTruck:true},{id:other,name:'QA Other',city:'Pensacola',state:'FL',businessType:'restaurant',isFoodTruck:false}]};
+    state.profileBody={...state.profileBody,id,entity:'truck',profileType:'truck',displayName:'QA Truck'};state.requiredProfileType='truck';
+    await page.goto(origin+'/scout');const dish=page.getByTestId('scout-local-menu-item-card').filter({hasText:'QA truck poke'}).first();
+    await expect(dish).toBeVisible();await expect(dish).toHaveAttribute('href','/truck/qa-truck--'+id);
+    await dish.click({position:{x:20,y:20}});await expect(page.getByRole('button',{name:'Save to favorites',exact:true})).toBeVisible();
+    assert.equal(new URL(page.url()).pathname,'/truck/qa-truck--'+id);assert.equal(state.writes.length,0);
+  });
   await scenario('Scout dish card text is readable and still opens its business', async ({ page, state, origin }) => {
     state.localMenuItems = ['11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222'].map((restaurantId, index) => ({
       id: restaurantId + '-dish', restaurantId, restaurantName: index ? 'QA OTHER Profile' : 'QA ONLY Profile',

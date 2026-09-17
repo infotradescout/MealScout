@@ -58,6 +58,7 @@ async function main() {
           if (pathname.startsWith('/api/')) {
             state.requests.push({ pathname, method: request.method() });
             if (pathname.startsWith('/api/menus/') && state.menuPayload !== undefined) return json(state.menuPayload, state.menuStatus || 200);
+            if (pathname === '/api/public/trending' && state.trendingPayload) return json(state.trendingPayload);
             if (pathname === '/api/menus/local-items' && state.localMenuItems) return json({items:state.localMenuItems});
             if (pathname.endsWith('/related')) return json({ items: [] });
             if (/\/api\/restaurants\/[^/]+\/featured-item$/.test(pathname)) {
@@ -66,6 +67,7 @@ async function main() {
               if (closing) return route.abort().catch(() => {});
               return json({ item: null });
             }
+            if (pathname.startsWith('/api/public/profiles/') && state.requiredProfileType && !pathname.startsWith('/api/public/profiles/' + state.requiredProfileType + '/')) return json({message:'Fixture profile type mismatch'},404);
             if (pathname.startsWith('/api/public/profiles/')) return json(state.profileBody, state.profileStatus);
             if (pathname.startsWith('/api/public/resolve-business/')) return json({ id, entityType: 'truck', businessSlug: 'qa-only' }, state.resolverStatus);
             if (pathname === '/api/favorites/restaurants') return json(state.saved ? [{ restaurantId: id }] : []);

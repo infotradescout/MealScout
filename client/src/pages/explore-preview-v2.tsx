@@ -112,6 +112,7 @@ import {
   assignScoutBusinessCardsBySection,
   getScoutCanonicalBusinessKey,
   normalizeScoutBusinessKind,
+  withScoutDishOwners,
   rotateScoutSpots,
   selectDistinctScoutMenuBusinesses,
   type ScoutHorizontalRowId,
@@ -1043,6 +1044,7 @@ function getMenuItemProfilePath(item: LocalMenuItemFeedItem): string {
       entityType: ownerKind === "food_truck" ? "truck" : "restaurant",
       id: item.restaurantId,
       name: item.restaurantName,
+      businessType: item.businessType,
     }) || `/restaurant/${encodeURIComponent(String(item.restaurantId))}`
   );
 }
@@ -3587,7 +3589,11 @@ function ScoutDiscoveryView({ account }: { account: string | null }) {
           places: [],
         };
       }
-      return response.json();
+      const data: ScoutTrendingResponse = await response.json();
+      return {
+        ...data,
+        items: withScoutDishOwners(Array.isArray(data?.items) ? data.items : [], Array.isArray(data?.places) ? data.places : []),
+      };
     },
     staleTime: 60_000,
     retry: false,
