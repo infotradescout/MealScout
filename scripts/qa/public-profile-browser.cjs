@@ -28,7 +28,7 @@ async function main() {
   const leakedApi = [];
   const server = http.createServer((req, res) => {
     const url = new URL(req.url, 'http://127.0.0.1');
-    if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/socket.io')) { leakedApi.push(url.pathname); res.writeHead(503); res.end('Unintercepted API'); return; }
+    if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/socket.io')) { leakedApi.push({ path: url.pathname, scenario: req.headers['x-qa-scenario'] || null }); res.writeHead(503); res.end('Unintercepted API'); return; }
     let file = path.resolve(dist, '.' + url.pathname);
     if (!file.startsWith(dist + path.sep) && file !== dist) { res.writeHead(403); res.end(); return; }
     if (!fs.existsSync(file) || fs.statSync(file).isDirectory()) file = path.join(dist, 'index.html');
@@ -44,16 +44,24 @@ async function main() {
     for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 }]) {
       async function scenario(name, run, options = {}) {
         const world = createTestWorld(), identity = { actorId: options.guest ? null : world.actors.customer.id };
-        const state = { profileStatus: 200, resolverStatus: 200, profileBody: profile, actionStatus: 200, delay: 0, saved: false, writes: [], requests: [] };
-        const context = await browser.newContext({ viewport, serviceWorkers: 'block' }); context.setDefaultTimeout(12000);
+        const state = { profileStatus: 200, resolverStatus: 200, profileBody: profile, actionStatus: 200, delay: 0, saved: false, writes: [], requests: [], holdFeatured: false, featuredSeen: 0, featuredWaiters: [] };
+        const context = await browser.newContext({ viewport, serviceWorkers: 'block', extraHTTPHeaders: { 'x-qa-scenario': encodeURIComponent(viewport.width + ':' + name) } }); context.setDefaultTimeout(12000);
+        let closing = false;
         const errors = []; const page = await context.newPage(); page.on('pageerror', error => errors.push(error.message));
         await context.routeWebSocket('**/*', socket => socket.close());
         await context.route('**/*', async route => {
+          if (closing) return route.abort();
           const request = route.request(), url = new URL(request.url()), pathname = url.pathname;
           const json = (body, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
           if (pathname.startsWith('/api/')) {
             state.requests.push({ pathname, method: request.method() });
             if (pathname.endsWith('/related')) return json({ items: [] });
+            if (/\/api\/restaurants\/[^/]+\/featured-item$/.test(pathname)) {
+              state.featuredSeen += 1;
+              if (state.holdFeatured) await new Promise(resolve => state.featuredWaiters.push(resolve));
+              if (closing) return route.abort().catch(() => {});
+              return json({ item: null });
+            }
             if (pathname.startsWith('/api/public/profiles/')) return json(state.profileBody, state.profileStatus);
             if (pathname.startsWith('/api/public/resolve-business/')) return json({ id, entityType: 'truck', businessSlug: 'qa-only' }, state.resolverStatus);
             if (pathname === '/api/favorites/restaurants') return json(state.saved ? [{ restaurantId: id }] : []);
@@ -88,7 +96,12 @@ async function main() {
           results.push({ name, width: viewport.width, passed: false, error: error.message, errors, body: (await page.locator('body').innerText().catch(() => '')).slice(0, 6000), requests: state.requests.slice(-15) });
           await page.screenshot({ path: path.join(evidence, `profile-failed-${viewport.width}-${results.length}.png`), fullPage: true }).catch(() => {});
           console.log(`PROFILE FAIL ${viewport.width} ${name}: ${error.message.slice(0, 1200)}`);
-        } finally { await context.close(); fs.writeFileSync(path.join(evidence, 'profile-browser-results.json'), JSON.stringify({ results, isolation: 'Compiled frontend with synthetic APIs/auth; no production or provider writes' }, null, 2)); }
+        } finally { closing = true; state.featuredWaiters.forEach(resume => resume());
+          // Discard the document while interception is still active. Page close alone
+          // can release a paused fetch before Chromium destroys its target.
+          await Promise.all(context.pages().map(openPage => openPage.goto('about:blank', { waitUntil: 'commit' })));
+          await Promise.all(context.pages().map(openPage => openPage.close()));
+          await context.close(); fs.writeFileSync(path.join(evidence, 'profile-browser-results.json'), JSON.stringify({ results, isolation: 'Compiled frontend with synthetic APIs/auth; no production or provider writes' }, null, 2)); }
       }
       for (const action of ['Save to favorites', 'Recommend this place']) {
         await scenario(`guest ${action}: login returns to exact profile, then explicit action`, async ({ page, state, world, origin }) => {
@@ -102,7 +115,7 @@ async function main() {
           await page.getByTestId('button-login-submit').click(); await expect(page).toHaveURL(origin + destination);
           assert.equal(state.writes.length, 0, 'Login does not automatically repeat a mutation');
           await page.getByRole('button', { name: action, exact: true }).click();
-          if (action === 'Recommend this place') { await expect(page.getByRole('dialog')).toBeVisible(); await page.keyboard.press('Escape'); }
+          if (action === 'Recommend this place') { const dialog = page.getByRole('dialog'); await expect(dialog).toBeVisible(); await dialog.getByRole('button', { name: 'Done', exact: true }).click(); await expect(dialog).toHaveCount(0); }
           await expect(page.getByRole('button', { name: action === 'Save to favorites' ? 'Remove from favorites' : 'Recommended', exact: true })).toHaveAttribute('aria-pressed', 'true');
           assert.equal(state.writes.length, 1);
         }, { guest: true });
@@ -114,7 +127,7 @@ async function main() {
           await expect(page.getByText(action === 'Save to favorites' ? 'Save not confirmed' : 'Recommendation not confirmed', { exact: true })).toBeVisible();
           assert.equal(state.writes.length, 1); await expect(button).toBeEnabled();
           state.actionStatus = 200; await button.click();
-          if (action === 'Recommend this place') { await expect(page.getByRole('dialog')).toBeVisible(); await page.keyboard.press('Escape'); }
+          if (action === 'Recommend this place') { const dialog = page.getByRole('dialog'); await expect(dialog).toBeVisible(); await dialog.getByRole('button', { name: 'Done', exact: true }).click(); await expect(dialog).toHaveCount(0); }
           await expect(page.getByRole('button', { name: action === 'Save to favorites' ? 'Remove from favorites' : 'Recommended', exact: true })).toHaveAttribute('aria-pressed', 'true');
           assert.equal(state.writes.length, 2);
         });
@@ -193,6 +206,26 @@ async function main() {
           await expect(page.getByRole('textbox', { name: 'Search dishes, cravings, places, trucks, and events', exact: true })).toHaveValue('');
         });
       }
+      await scenario('leaving Scout cancels an in-flight featured-menu read', async ({ page, context, state, origin }) => {
+        state.holdFeatured = true;
+        await context.addInitScript(() => {
+          window.__featuredSignalAborts = 0;
+          const original = window.fetch;
+          window.fetch = function(input, init) {
+            if (String(input).endsWith('/featured-item') && init?.signal) {
+              init.signal.addEventListener('abort', () => { window.__featuredSignalAborts += 1; }, { once: true });
+            }
+            return original.call(this, input, init);
+          };
+        });
+        await page.goto(origin + '/scout?ref=qa');
+        await page.evaluate(() => { window.__sameScoutDocument = true; });
+        await expect.poll(() => state.featuredSeen).toBeGreaterThan(0);
+        await page.getByRole('link', { name: 'View profile', exact: true }).first().click();
+        await expect(page.getByRole('button', { name: 'Save to favorites', exact: true })).toBeVisible();
+        assert.equal(await page.evaluate(() => window.__sameScoutDocument), true, 'Actual client-side navigation, not a reload');
+        await expect.poll(() => page.evaluate(() => window.__featuredSignalAborts), { timeout: 1500 }).toBeGreaterThan(0);
+      });
       await scenario('profile actions have 44px targets without horizontal overflow', async ({ page, origin }) => {
         await page.goto(origin + profilePath); const save = page.getByRole('button', { name: 'Save to favorites', exact: true });
         await expect(save).toBeVisible(); const saveBox = await save.boundingBox(); assert.ok(saveBox.height >= 44 && saveBox.width >= 44);
@@ -201,6 +234,11 @@ async function main() {
         await page.screenshot({ path: path.join(evidence, `profile-controls-${viewport.width}.png`), fullPage: true });
       });
     }
+    fs.writeFileSync(path.join(evidence, 'profile-browser-suite.json'), JSON.stringify({
+      completed: true, scenarios: results.length, failedScenarios: results.filter(result => !result.passed).length,
+      uninterceptedApi: leakedApi, passed: leakedApi.length === 0 && results.every(result => result.passed),
+      scope: 'Compiled UI with synthetic APIs; the isolation guard is part of suite acceptance',
+    }, null, 2));
     assert.deepEqual(leakedApi, [], 'Every API request must be intercepted');
     const failed = results.filter(result => !result.passed);
     console.log(JSON.stringify({ passed: results.length - failed.length, failed: failed.length, total: results.length }));

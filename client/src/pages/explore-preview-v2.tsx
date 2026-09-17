@@ -3519,10 +3519,10 @@ function ScoutDiscoveryView({ account }: { account: string | null }) {
   const restaurantMenuPreviewQueries = useQueries({
     queries: nearbyRestaurants.slice(0, 8).map((restaurant) => ({
       queryKey: ["/api/restaurants", restaurant.id, "featured-item"],
-      queryFn: async (): Promise<MenuPreviewItem[]> => {
+      queryFn: async ({ signal }: { signal: AbortSignal }): Promise<MenuPreviewItem[]> => {
         const response = await fetch(
           `/api/restaurants/${encodeURIComponent(String(restaurant.id))}/featured-item`,
-          { credentials: "include" },
+          { credentials: "include", signal },
         );
         if (!response.ok) return [];
         const data = await response.json();

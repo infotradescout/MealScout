@@ -57,3 +57,26 @@ Evidence: `.qa-evidence/scout-persistence-timing/` (baseline, candidate, regress
 The original failed hosted build log remains unavailable: the Vercel log action is missing, local CLI requires a new Vercel login, and the authorized preview-share log link still reaches Vercel login. This timing defect was independently reproduced; it is NOT established as the original hosted failure's root cause. The original 41 state and 32 browser cases also passed a clean Linux reproduction with the hosted default temp/font configuration. An initial custom-temp reproduction had missing fonts because the browser's fontconfig references `/tmp/fonts`; its failed receipts were retained and are not application-defect evidence.
 
 The requests to execute the native full release gate and to write a full-preview Linux reproduction wrapper were blocked before execution/write. Neither blocked operation was rerouted. No production change or full native release pass is claimed.
+
+## Recovered hosted failure and featured-menu cancellation
+
+The log-access limitation above is resolved. Authorized `vercel login` completed, and the authenticated CLI retrieved the actual original `7fbd35bc` deployment log. It showed 21/22 stages passed. All 32 individual profile scenarios passed, but the final **Every API request must be intercepted** guard correctly failed because a featured-item request reached the loopback fixture server. This was not a Vite compile failure or evidence of a production request. Do not confuse individual scenario passes with full-suite acceptance.
+
+The separate persistence-timing head `1651d7d7bc26b4ded076527c6b747674b37d17e8` subsequently completed hosted verification: `dpl_BRrn7DpjvAtY7jMfSwBnKj9Awmbo`, 23/23 actual QA stages passed in its retrieved execution summary. GitHub independently reported successful deployment. That success alone does not eliminate the original teardown race.
+
+This continuation addresses both lifecycle owners:
+- The active Scout featured-menu fetch consumes its existing TanStack Query AbortSignal, so leaving Scout cancels the obsolete read rather than letting it continue after navigation. Endpoint, credentials and response interpretation remain unchanged.
+- The browser fixture explicitly handles featured items, stops its document while routing is still active, then closes pages/context. Pending held fixtures are released for abort, not forwarded. The fixture server still rejects every escaped API request, and its empty-leak assertion remains unchanged. Leaks now carry a synthetic scenario identifier for diagnosis.
+- Quick-review scenarios dismiss with the actual Done control and verify the dialog is gone before checking its background action; no mutation-count assertion was removed. A final suite receipt separately records scenario outcomes and isolation-guard acceptance.
+
+Two new actual compiled-UI cases (desktop/mobile) hold a featured read, use client-side View profile navigation, prove it is the same browser document and require the request's AbortSignal to fire. Both failed on the prior application and passed after signal wiring.
+
+Observed local acceptance of the functional repair:
+- New cancellation baseline: 32 existing scenarios passed, two cancellation cases failed.
+- Initial cancellation candidate: all 34 scenarios passed but the global isolation guard still failed; retained as failure evidence.
+- Final document-drain lifecycle: two consecutive Windows runs passed all 34 and the isolation guard. The rebuilt Linux app with pinned Chromium 143 also passed all 34 and the guard.
+- Full TypeScript check exited 0; 13 affected existing contracts passed. Frontend builds passed on Windows and Linux. Existing 48 frontend journeys passed at the immediately preceding timing head; exact latest hosted regression must be observed before claiming the new candidate's release status.
+
+Evidence: `.qa-evidence/scout-featured-cancellation/` (baseline, candidate, drain, final-1, final-2, contracts/typecheck); Linux `evidence/featured-cancellation/`. Recovered original log and the actual 23-stage predecessor summary are under `.qa-evidence/scout-persistence-timing/` as `original-hosted-build-7fbd35bc.log` and `hosted-1651d7d7.json/log`.
+
+No release stage, authorization rule, fee, booking policy or provider requirement was removed. PR381/native full release remains separate and unpassed; no production migration or customer transaction occurred.
