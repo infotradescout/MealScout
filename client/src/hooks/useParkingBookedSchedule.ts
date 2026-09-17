@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiUrl } from "@/lib/api";
+import { parseISO } from "date-fns";
 
 type Entry = { type: string; status: string; event?: { requiresPayment?: boolean | null } };
 type Snapshot<T> = { scope: string; entries: T[]; loading: boolean; error: string | null; updatedAt: number | null };
@@ -40,6 +41,12 @@ export function useParkingBookedSchedule<T extends Entry>(accountId: string | un
         throw new Error("The schedule response was incomplete. Retry before relying on these reservations.");
       }
       const entries = (rows as T[]).filter(row => row.type === "booking" && row.status === "confirmed" && row.event?.requiresPayment === true);
+      if (entries.some(row => {
+        const event = row.event as { id?: unknown; date?: unknown; startTime?: unknown; endTime?: unknown };
+        return typeof event.id !== "string" || !event.id || typeof event.date !== "string" ||
+          !Number.isFinite(parseISO(event.date).getTime()) ||
+          typeof event.startTime !== "string" || typeof event.endTime !== "string";
+      })) throw new Error("A booked stop has incomplete date or time details. Retry to verify the schedule.");
       if (!current()) return false;
       setSnapshot({ scope, entries, loading: false, error: null, updatedAt: Date.now() });
       return true;

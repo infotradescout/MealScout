@@ -23,3 +23,9 @@ The new hook owns both initial fetch and refresh, keyed to account and truck. Ne
 `parking-hold-expiry.integration.test.mjs`: 40 scenarios passed against actual expiry service/Drizzle/PGlite and migration142, with synthetic provider responses. This includes grouped holds, cancellation races, failed database writes, history retention, rebooking, active uniqueness and repeat invocations. Native PostgreSQL multi-process and real Stripe-provider execution are not claimed. Docker was probed on the connected computer; its Linux engine was not running. No production accounts, bookings, payments, messages or database migrations were touched.
 
 `parking-schedule-reliability-journeys.cjs` adds built-frontend mobile/desktop checks to the existing runner. Final integration results and exact revision are recorded in the PR checkpoint after verification. GitHub Actions is not a work dependency and its configuration is unchanged.
+
+## Calendar navigation and final local integration
+
+Added Today and Next scheduled day, 44px month controls, and selected-date URL persistence. An invalid booked date becomes a recoverable schedule error instead of crashing the calendar. Actual mobile/desktop screenshot review found crowded date/count text and the final spacing change has a geometry regression.
+
+Final local results: 48/48 compiled-frontend scenarios (32 previous plus 16 schedule scenarios at desktop/mobile), 40/40 expiry cases, 22 Parking Pass source contracts, full repository typecheck and both builds. Capacity/host-truth, all six existing webhook-safety scripts and frozen-cleanup safety also passed. Final screenshots and reports are in .qa-evidence/calendar-visual-final; prior integration reports remain in expiry-schedule-apply and expiry-schedule-calendar-final. Runtime browser API/auth/Stripe are synthetic; SQL expiry tests are separate integration evidence. Actions and production remain untouched.

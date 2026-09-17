@@ -6797,7 +6797,7 @@ export default function ParkingPassPage() {
                 <section aria-label="Booked stops status" className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface-muted)] p-4 space-y-3">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div role="status" aria-live="polite">
-                      <p className="text-sm font-semibold">{bookingSchedule.loading ? "Checking booked stops…" : bookingSchedule.error ? "Booked stops need verification" : "Bookings up to date"}</p>
+                      <p className="text-sm font-semibold">{!truckId ? "Choose a truck to view booked stops" : bookingSchedule.loading ? "Checking booked stops…" : bookingSchedule.error ? "Booked stops need verification" : "Bookings up to date"}</p>
                       {bookingSchedule.updatedAt ? <p className="text-xs text-[color:var(--text-muted)]">Last checked {new Date(bookingSchedule.updatedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</p> : null}
                     </div>
                     <Button type="button" variant="outline" disabled={bookingSchedule.loading || !truckId} onClick={() => void bookingSchedule.refresh()}>{bookingSchedule.loading ? "Checking bookings…" : bookingSchedule.error ? "Retry booked stops" : "Refresh bookings"}</Button>
@@ -6806,6 +6806,11 @@ export default function ParkingPassPage() {
                 </section>
                 <ParkingScheduleCalendar
                   initialDate={scheduleInitialDate}
+                  onDateChange={(date) => {
+                    const params = new URLSearchParams(window.location.search);
+                    params.set("date", date);
+                    window.history.replaceState(window.history.state, "", `${window.location.pathname}?${params}${window.location.hash}`);
+                  }}
                   bookingsState={bookingSchedule.error ? "unavailable" : bookingSchedule.loading ? "loading" : "ready"}
                   bookingActionsDisabled={bookingSchedule.loading || Boolean(bookingSchedule.error)}
                   items={parkingScheduleItems}

@@ -44,6 +44,7 @@ export type ParkingScheduleItem = {
 type ParkingScheduleCalendarProps = {
   items: ParkingScheduleItem[];
   initialDate?: string;
+  onDateChange?: (date: string) => void;
   bookingsState?: "loading" | "unavailable" | "ready";
   bookingActionsDisabled?: boolean;
   title?: string;
@@ -86,6 +87,7 @@ export function resolveScheduleInitialDate(value?: string, now = new Date()): Da
 export function ParkingScheduleCalendar({
   items,
   initialDate,
+  onDateChange,
   bookingsState = "ready",
   bookingActionsDisabled = false,
   title = "Parking Schedule",
@@ -101,6 +103,11 @@ export function ParkingScheduleCalendar({
   const [initialAnchor] = useState(() => resolveScheduleInitialDate(initialDate));
   const [monthAnchor, setMonthAnchor] = useState(() => startOfMonth(initialAnchor));
   const [activeDate, setActiveDate] = useState(() => initialAnchor);
+  const selectDate = (date: Date, showMonth = false) => {
+    setActiveDate(date);
+    if (showMonth) setMonthAnchor(startOfMonth(date));
+    onDateChange?.(toDateKey(date));
+  };
 
   const itemsByDate = useMemo(() => {
     const map = new Map<string, ParkingScheduleItem[]>();
@@ -119,6 +126,8 @@ export function ParkingScheduleCalendar({
     }
     return map;
   }, [items]);
+
+  const nextDayKey = [...itemsByDate.keys()].filter(key => key > toDateKey(activeDate)).sort()[0];
 
   const calendarDays = useMemo(() => {
     const start = startOfWeek(startOfMonth(monthAnchor), { weekStartsOn: 0 });
@@ -151,7 +160,7 @@ export function ParkingScheduleCalendar({
               <Button
                 variant="outline"
                 size="icon"
-                className="h-8 w-8"
+                className="h-11 w-11"
                 onClick={() => setMonthAnchor((current) => addMonths(current, -1))}
                 aria-label="Previous month"
               >
@@ -163,13 +172,17 @@ export function ParkingScheduleCalendar({
               <Button
                 variant="outline"
                 size="icon"
-                className="h-8 w-8"
+                className="h-11 w-11"
                 onClick={() => setMonthAnchor((current) => addMonths(current, 1))}
                 aria-label="Next month"
               >
                 <ChevronRight className="h-4 w-4" />
               </Button>
             </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="outline" className="min-h-11" aria-pressed={isToday(activeDate)} onClick={() => selectDate(new Date(), true)}>Today</Button>
+            <Button type="button" variant="outline" className="min-h-11" disabled={!nextDayKey} onClick={() => { if (nextDayKey) selectDate(parseISO(nextDayKey), true); }}>Next scheduled day</Button>
           </div>
           <div className="grid grid-cols-7 gap-2 text-[11px] text-muted-foreground">
             {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((label) => (
@@ -192,8 +205,8 @@ export function ParkingScheduleCalendar({
                 type="button"
                 aria-label={format(day, "EEEE, MMMM d, yyyy")}
                 aria-pressed={isActive}
-                onClick={() => setActiveDate(day)}
-                className={`pp-calendar-day h-14 sm:h-auto sm:min-h-[84px] rounded-lg border px-2 py-2 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background ${
+                onClick={() => selectDate(day)}
+                className={`pp-calendar-day h-14 sm:h-auto sm:min-h-[84px] rounded-lg border px-1 py-2 text-left transition sm:px-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background ${
                   isActive ? "pp-calendar-day--active" : "pp-calendar-day--idle"
                 } ${isCurrentMonth ? "pp-calendar-day--in-month" : "pp-calendar-day--out-month"}`}
               >

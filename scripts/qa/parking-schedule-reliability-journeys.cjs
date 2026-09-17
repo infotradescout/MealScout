@@ -55,4 +55,25 @@ module.exports=async function scheduleReliability(scenario){
     try{await page.getByRole('button',{name:'Refresh bookings',exact:true}).click();await expect(page.getByRole('region',{name:'Booked stops status'}).getByText('Checking booked stops…',{exact:true})).toBeVisible();await expect(page.getByText(f.host,{exact:true}).last()).toBeVisible();await expect(page.getByRole('button',{name:'Cancel booking',exact:true})).toBeDisabled();}finally{release();}
     await expect(page.getByRole('button',{name:'Refresh bookings',exact:true})).toBeEnabled();readonly(world);
   });
+  await scenario('Schedule invalid booked date recovers without crashing the calendar',async({world,openActor})=>{
+    const f=setup(world);f.set({status:200,body:{schedule:[{...f.rows[0],event:{...f.rows[0].event,date:'not-a-date'}}]}});
+    const page=await openActor(world.actors.truck,f.route);await expect(page.getByRole('button',{name:'Retry booked stops',exact:true})).toBeVisible();
+    await expect(page.getByText('No stops scheduled',{exact:true})).toHaveCount(0);f.set({status:200,body:{schedule:f.rows}});
+    await page.getByRole('button',{name:'Retry booked stops',exact:true}).click();await expect(page.getByText(f.host,{exact:true}).last()).toBeVisible();readonly(world);
+  });
+  await scenario('Schedule Today and next scheduled day preserve navigation through reload',async({world,openActor})=>{
+    const f=setup(world),page=await openActor(world.actors.truck,f.route);await expect(page.getByText(f.host,{exact:true}).last()).toBeVisible();
+    await page.getByRole('button',{name:'Today',exact:true}).click();
+    const today=await page.evaluate(()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');});
+    assert.equal(new URL(page.url()).searchParams.get('date'),today);
+    const next=page.getByRole('button',{name:'Next scheduled day',exact:true});await expect(next).toBeEnabled();await next.click();
+    assert.equal(new URL(page.url()).searchParams.get('date'),f.day);await expect(page.getByText(f.host,{exact:true}).last()).toBeVisible();
+    const cellText=await page.locator('.pp-calendar-day--active').locator('div').first().locator('span').evaluateAll(nodes=>nodes.map(n=>({left:n.getBoundingClientRect().left,right:n.getBoundingClientRect().right})));
+    assert.ok(cellText.length===2 && cellText[1].left-cellText[0].right>=2,'Day number and stop count must not collide');
+    for(const name of ['Today','Previous month','Next month']){const box=await page.getByRole('button',{name,exact:true}).boundingBox();assert.ok(box&&box.height>=44,name+' touch target');}
+    await page.reload({waitUntil:'domcontentloaded'});await expect(page.getByText(f.host,{exact:true}).last()).toBeVisible();
+    const region=page.getByRole('region',{name:'Booked stops status'});await region.evaluate(e=>e.scrollIntoView({block:'start'}));
+    const evidence=process.env.QA_EVIDENCE_DIR;if(evidence)await page.screenshot({path:require('node:path').join(evidence,page.viewportSize().width+'-parking-schedule.png')});
+    readonly(world);
+  });
 };
