@@ -1,3 +1,5 @@
+import { readScoutFeed } from "@/lib/scout-feed-read";
+import { ScoutReadStatus } from "@/components/scout/ScoutReadStatus";
 import { readScoutJourney, scoutJourneyRoute } from "@/lib/scout-journey-state";
 import { useScoutJourneyPersistence } from "@/hooks/useScoutJourneyPersistence";
 import {
@@ -3042,9 +3044,11 @@ function ScoutDiscoveryView({ account }: { account: string | null }) {
   /* --------- trucks --------- */
 
   const {
-    data: liveTrucksData,
+    data: liveTrucksRaw,
     isLoading: liveTrucksLoading,
     isError: liveTrucksError,
+    isFetching: liveTrucksFetching,
+    refetch: retryLiveTrucks,
   } = useQuery<LiveTrucksResponse>({
     queryKey: resolvedScoutLocation
       ? [
@@ -3055,20 +3059,16 @@ function ScoutDiscoveryView({ account }: { account: string | null }) {
         ]
       : ["/api/trucks/live", "no-location"],
     enabled: !!resolvedScoutLocation,
-    queryFn: async () => {
-      if (!resolvedScoutLocation) return { trucks: [] };
-      const response = await fetch(
-        `/api/trucks/live?lat=${resolvedScoutLocation.lat}&lng=${resolvedScoutLocation.lng}&radiusKm=${discoveryRadiusKm}`,
-        { credentials: "include" },
-      );
-      recordScoutSourceStatus("trucks", response.status);
-      if (!response.ok) throw new Error("Failed to load trucks");
-      return response.json();
-    },
+    queryFn: ({ signal }) => readScoutFeed<LiveTrucksResponse>(
+      `/api/trucks/live?lat=${resolvedScoutLocation?.lat}&lng=${resolvedScoutLocation?.lng}&radiusKm=${discoveryRadiusKm}`,
+      "trucks", signal, status => recordScoutSourceStatus("trucks", status),
+    ),
+    retry: false,
     staleTime: 15_000,
     refetchInterval: 20_000,
   });
 
+  const liveTrucksData = liveTrucksError ? undefined : liveTrucksRaw;
   const liveTrucks = useMemo<LiveTruckSummary[]>(() => {
     if (!liveTrucksData) return [];
     const raw = Array.isArray(liveTrucksData)
@@ -3420,7 +3420,7 @@ function ScoutDiscoveryView({ account }: { account: string | null }) {
 
   /* --------- nearby restaurants --------- */
 
-  const { data: nearbyRestaurantsData, isLoading: nearbyRestaurantsLoading } =
+  const { data: nearbyRestaurantsRaw, isLoading: nearbyRestaurantsLoading, isError: subscribedRestaurantsError, isFetching: subscribedRestaurantsFetching, refetch: retrySubscribedRestaurants } =
     useQuery<RestaurantSummary[]>({
       queryKey: resolvedScoutLocation
         ? [
@@ -3431,22 +3431,20 @@ function ScoutDiscoveryView({ account }: { account: string | null }) {
           ]
         : ["/api/restaurants/subscribed", "no-location"],
       enabled: !!resolvedScoutLocation,
-      queryFn: async () => {
-        if (!resolvedScoutLocation) return [];
-        const response = await fetch(
-          `/api/restaurants/subscribed/${resolvedScoutLocation.lat}/${resolvedScoutLocation.lng}?radius=${discoveryRadiusKm}`,
-          { credentials: "include" },
-        );
-        recordScoutSourceStatus("restaurants", response.status);
-        if (!response.ok) return [];
-        return response.json();
-      },
+      queryFn: ({ signal }) => readScoutFeed<RestaurantSummary[]>(
+        `/api/restaurants/subscribed/${resolvedScoutLocation?.lat}/${resolvedScoutLocation?.lng}?radius=${discoveryRadiusKm}`,
+        null, signal, status => recordScoutSourceStatus("restaurants", status),
+      ),
+      retry: false,
       staleTime: 120_000,
     });
 
   const {
-    data: nearbyPublicRestaurantsData,
+    data: nearbyPublicRestaurantsRaw,
     isLoading: nearbyPublicRestaurantsLoading,
+    isError: nearbyPublicRestaurantsError,
+    isFetching: nearbyPublicRestaurantsFetching,
+    refetch: retryNearbyPublicRestaurants,
   } = useQuery<RestaurantSummary[]>({
     queryKey: resolvedScoutLocation
       ? [
@@ -3457,19 +3455,16 @@ function ScoutDiscoveryView({ account }: { account: string | null }) {
         ]
       : ["/api/restaurants/nearby", "no-location"],
     enabled: !!resolvedScoutLocation,
-    queryFn: async () => {
-      if (!resolvedScoutLocation) return [];
-      const response = await fetch(
-        `/api/restaurants/nearby/${resolvedScoutLocation.lat}/${resolvedScoutLocation.lng}?radius=${discoveryRadiusKm}`,
-        { credentials: "include" },
-      );
-      if (!response.ok) return [];
-      const data = await response.json();
-      return Array.isArray(data) ? data : [];
-    },
+    queryFn: ({ signal }) => readScoutFeed<RestaurantSummary[]>(
+      `/api/restaurants/nearby/${resolvedScoutLocation?.lat}/${resolvedScoutLocation?.lng}?radius=${discoveryRadiusKm}`,
+      null, signal,
+    ),
+    retry: false,
     staleTime: 120_000,
   });
 
+  const nearbyRestaurantsData = subscribedRestaurantsError ? undefined : nearbyRestaurantsRaw;
+  const nearbyPublicRestaurantsData = nearbyPublicRestaurantsError ? undefined : nearbyPublicRestaurantsRaw;
   const nearbyFoodBusinesses = useMemo<RestaurantSummary[]>(() => {
     const byId = new Map<string, RestaurantSummary>();
     for (const restaurant of [
@@ -5569,6 +5564,19 @@ function ScoutDiscoveryView({ account }: { account: string | null }) {
     (sceneWantsNewMenus && localMenuItems.length > 0) ||
     (sceneWantsWorthDiscovering && visibleMoreFoodRestaurants.length > 0) ||
     (sceneWantsCommunity && topLocalFavoriteRestaurants.length > 0);
+  const discoveryReadFailures = [
+    ...(liveTrucksError ? ["truck listings"] : []),
+    ...(subscribedRestaurantsError ? ["featured restaurants"] : []),
+    ...(nearbyPublicRestaurantsError ? ["nearby restaurants"] : []),
+  ];
+  const discoveryLoading = liveTrucksLoading || nearbyRestaurantsLoading || nearbyPublicRestaurantsLoading;
+  const discoveryRetrying = liveTrucksFetching || subscribedRestaurantsFetching || nearbyPublicRestaurantsFetching;
+  const readIncomplete = discoveryReadFailures.length > 0 || discoveryLoading;
+  const retryDiscovery = () => {
+    if (liveTrucksError) void retryLiveTrucks();
+    if (subscribedRestaurantsError) void retrySubscribedRestaurants();
+    if (nearbyPublicRestaurantsError) void retryNearbyPublicRestaurants();
+  };
   const showForYouWorthFallback =
     activeSceneLaneId === "for_you" &&
     sceneMixedFeedItems.length === 0 &&
@@ -5894,7 +5902,9 @@ function ScoutDiscoveryView({ account }: { account: string | null }) {
         ============================================================ */}
         {sheetState !== "fullMap" && (
           <ActiveScenePanel>
-            <ActiveSceneContent
+            <ScoutReadStatus failures={discoveryReadFailures} loading={discoveryLoading} retrying={discoveryRetrying} onRetry={retryDiscovery} />
+            {(!readIncomplete || localSearchContentCount > 0) && <ActiveSceneContent
+              readIncomplete={readIncomplete}
               laneId={activeSceneLaneId}
               sceneMixedFeedItems={sceneMixedFeedItems}
               visibleMoreFoodRestaurants={visibleMoreFoodRestaurants}
@@ -5954,7 +5964,7 @@ function ScoutDiscoveryView({ account }: { account: string | null }) {
               activitySupplementDishes={activitySupplementDishes}
               nearbyResultCount={localSearchContentCount}
               onRequestPlace={openFavoritePlaceRequest}
-            />
+            />}
           </ActiveScenePanel>
         )}
         <Dialog
@@ -6675,7 +6685,9 @@ function ScoutFallbackMarketNotice({
                 ? normalizedQuery
                   ? "Showing related picks from active areas"
                   : "Showing popular picks from active areas"
-                : `No related “${normalizedQuery}” picks are active right now`}
+                : normalizedQuery
+                  ? `No related “${normalizedQuery}” picks are active right now`
+                  : "No nearby listings are available for this area yet"}
             </p>
             <p className="mt-0.5 text-xs font-semibold leading-relaxed text-[color:var(--text-secondary)]">
               {hasOneNearbyResult
@@ -6704,13 +6716,16 @@ function ScoutFallbackMarketNotice({
 function ScoutFirstScreenDecisionStack({
   items,
   thinMarket,
+  readIncomplete = false,
 }: {
   items: ScoutImmediateDecisionItem[];
   thinMarket: boolean;
+  readIncomplete?: boolean;
 }) {
   const primary = items[0] ?? null;
 
   if (!primary) {
+    if (readIncomplete) return null;
     return (
       <section
         className="px-4 pb-2 pt-2 sm:h-full sm:px-0"
@@ -6744,7 +6759,7 @@ function ScoutFirstScreenDecisionStack({
           <span className="sr-only">{primary.summary}</span>
         </div>
         <ScoutImmediateCompactCard item={primary} />
-        {thinMarket ? (
+        {thinMarket && !readIncomplete ? (
           <div
             className="mt-2.5 rounded-2xl bg-[color:var(--action-primary)]/6 px-3 py-3 ring-1 ring-[color:var(--action-primary)]/18"
             data-testid="scout-thin-market-state"
@@ -7301,6 +7316,7 @@ type ScoutRotatingSpot = {
 };
 
 function ActiveSceneContent({
+  readIncomplete = false,
   laneId,
   sceneMixedFeedItems,
   visibleMoreFoodRestaurants,
@@ -7361,6 +7377,7 @@ function ActiveSceneContent({
   nearbyResultCount,
   onRequestPlace,
 }: {
+  readIncomplete?: boolean;
   laneId: ScoutSceneLaneId;
   sceneMixedFeedItems: CravingBoardItem[];
   visibleMoreFoodRestaurants: RestaurantSummary[];
@@ -7974,6 +7991,7 @@ function ActiveSceneContent({
       return (
         <>
           <ScoutFirstScreenDecisionStack
+            readIncomplete={readIncomplete}
             items={firstScreenDecisionItems}
             thinMarket={
               !showActivityFallback &&
@@ -7982,7 +8000,7 @@ function ActiveSceneContent({
               firstScreenDecisionItems.length <= 1
             }
           />
-          <ScoutSceneEmptyState laneId="for_you" />
+          {!readIncomplete && <ScoutSceneEmptyState laneId="for_you" />}
         </>
       );
     }
@@ -8458,6 +8476,7 @@ function ActiveSceneContent({
           }
         >
           <ScoutFirstScreenDecisionStack
+            readIncomplete={readIncomplete}
             items={firstScreenDecisionItems}
             thinMarket={
               !showActivityFallback &&
@@ -8528,7 +8547,7 @@ function ActiveSceneContent({
         </section>
       );
     }
-    return <ScoutSceneEmptyState laneId="community" />;
+    return readIncomplete ? null : <ScoutSceneEmptyState laneId="community" />;
   }
 
   return (
@@ -8891,7 +8910,7 @@ function ActiveSceneContent({
         visibleDeals.length === 0 &&
         visibleSceneEvents.length === 0 &&
         visibleHosts.length === 0) ? (
-        <ScoutSceneEmptyState laneId={laneId} />
+        !readIncomplete && <ScoutSceneEmptyState laneId={laneId} />
       ) : null}
     </>
   );

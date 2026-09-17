@@ -71,6 +71,13 @@ async function main() {
               if (state.actionStatus < 300 && pathname.endsWith('/favorite')) state.saved = request.method() === 'POST';
               return json({ success: state.actionStatus < 300, contextAlreadySaved: false }, state.actionStatus);
             }
+            const coreDiscovery = pathname === '/api/trucks/live' || /^\/api\/restaurants\/(nearby|subscribed)\//.test(pathname);
+            if (coreDiscovery && state.discoveryOverride != null) {
+              if (state.discoveryOverride === 'empty') return json([]);
+              if (state.discoveryOverride === 'malformed') return json({ invalidCollection: true });
+              return json({ message: 'Synthetic discovery unavailable' }, state.discoveryOverride);
+            }
+            if (pathname === '/api/trucks/live' && state.trucksUnavailable) return json({ message: 'Synthetic truck failure' }, 503);
             if (pathname.startsWith('/api/restaurants/nearby/')) return json([{ id, name: profile.displayName, businessName: profile.displayName,
               businessType: 'restaurant', profileType: 'restaurant', entityType: 'restaurant', isFoodTruck: false, isActive: true,
               latitude: 30.4213, longitude: -87.2169, city: 'Pensacola', state: 'FL', cuisineType: 'Tacos', cuisineTags: ['Tacos'],
@@ -225,6 +232,32 @@ async function main() {
         await expect(page.getByRole('button', { name: 'Save to favorites', exact: true })).toBeVisible();
         assert.equal(await page.evaluate(() => window.__sameScoutDocument), true, 'Actual client-side navigation, not a reload');
         await expect.poll(() => page.evaluate(() => window.__featuredSignalAborts), { timeout: 1500 }).toBeGreaterThan(0);
+      });
+      for (const failure of [503, 'malformed']) {
+        await scenario('discovery '+failure+' is retryable without inventing an empty market', async ({page,state,origin}) => {
+          state.discoveryOverride = failure;
+          await page.goto(origin+'/scout?ref=qa');
+          await expect(page.getByTestId('scout-data-status')).toHaveAttribute('data-state','unavailable');
+          await expect(page.getByText('No food results yet',{exact:true})).toHaveCount(0);
+          await expect(page.getByText('Nearby food is quiet right now.',{exact:true})).toHaveCount(0);
+          state.discoveryOverride=null; await page.getByRole('button',{name:'Retry discovery',exact:true}).click();
+          await expect(page.getByRole('link',{name:'View profile',exact:true}).first()).toBeVisible();
+          await expect(page.getByTestId('scout-data-status')).toHaveCount(0);
+          await expect(page).toHaveURL(origin+'/scout?ref=qa');assert.equal(state.writes.length,0);
+        });
+      }
+      await scenario('partial discovery keeps readable results without claiming complete coverage',async ({page,state,origin})=>{
+        state.trucksUnavailable=true;await page.goto(origin+'/scout');
+        await expect(page.getByTestId('scout-data-status')).toHaveAttribute('data-state','unavailable');
+        await expect(page.getByRole('link',{name:'View profile',exact:true}).first()).toBeVisible();
+        await expect(page.getByTestId('scout-thin-market-state')).toHaveCount(0);
+        assert.equal(state.writes.length,0);
+      });
+      await scenario('a successful empty discovery remains distinct from unavailable data',async ({page,state,origin})=>{
+        state.discoveryOverride='empty';await page.goto(origin+'/scout');
+        await expect(page.getByTestId('scout-fallback-market-notice')).toContainText(/No nearby listings yet/i);
+        await expect(page.getByText('No nearby listings are available for this area yet',{exact:true})).toBeVisible();
+        await expect(page.getByTestId('scout-data-status')).toHaveCount(0);assert.equal(state.writes.length,0);
       });
       await scenario('profile actions have 44px targets without horizontal overflow', async ({ page, origin }) => {
         await page.goto(origin + profilePath); const save = page.getByRole('button', { name: 'Save to favorites', exact: true });
