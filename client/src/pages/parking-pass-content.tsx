@@ -52,6 +52,7 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
+import { useParkingBookedSchedule } from "@/hooks/useParkingBookedSchedule";
 import { useEffectiveLocationContext } from "@/hooks/useEffectiveLocationContext";
 import ShareButton from "@/components/share-button";
 import LongPressHelp from "@/components/long-press-help";
@@ -957,9 +958,8 @@ export default function ParkingPassPage() {
   const [manualSchedules, setManualSchedules] = useState<ManualScheduleEntry[]>(
     [],
   );
-  const [bookedSchedule, setBookedSchedule] = useState<TruckScheduleEntry[]>(
-    [],
-  );
+  const bookingSchedule = useParkingBookedSchedule<TruckScheduleEntry>(user?.id, truckId);
+  const bookedSchedule = bookingSchedule.entries;
   const [cancelingBookingId, setCancelingBookingId] = useState<string | null>(
     null,
   );
@@ -1312,43 +1312,13 @@ export default function ParkingPassPage() {
     }
   };
 
-  const reloadBookedSchedule = async (
-    selectedTruckId: string,
-    options?: { silent?: boolean },
-  ) => {
-    if (!selectedTruckId) return;
-    try {
-      const res = await fetch(
-        apiUrl(`/api/bookings/truck/${selectedTruckId}/schedule`),
-      );
-      if (!res.ok) {
-        throw new Error("Failed to load booked schedule");
-      }
-      const data = await res.json();
-      const schedule = Array.isArray(data?.schedule) ? data.schedule : [];
-      const parkingBookings = schedule.filter(
-        (entry: TruckScheduleEntry) =>
-          entry.type === "booking" &&
-          entry.status === "confirmed" &&
-          entry.event?.requiresPayment,
-      );
-      setBookedSchedule(parkingBookings);
-    } catch (error) {
-      if (!options?.silent) {
-        toast({
-          title: "Schedule Error",
-          description:
-            error instanceof Error
-              ? error.message
-              : "Failed to load booked schedule.",
-          variant: "destructive",
-        });
-      }
-    }
+  const reloadBookedSchedule = async (selectedTruckId: string, _options?: { silent?: boolean }) => {
+    if (selectedTruckId !== truckId) return;
+    await bookingSchedule.refresh();
   };
 
   const handleCancelBooking = async (bookingId: string) => {
-    if (!bookingId || !truckId) return;
+    if (!bookingId || !truckId || bookingSchedule.loading || bookingSchedule.error) return;
     if (!window.confirm("Cancel this booking? This cannot be undone.")) {
       return;
     }
@@ -1789,49 +1759,6 @@ export default function ParkingPassPage() {
       cancelled = true;
     };
   }, [hasProfileTruckTools, toast, truckId]);
-
-  useEffect(() => {
-    if (!truckId) {
-      setBookedSchedule([]);
-      return;
-    }
-    let cancelled = false;
-    const loadBookedSchedule = async () => {
-      try {
-        const res = await fetch(apiUrl(`/api/bookings/truck/${truckId}/schedule`));
-        if (!res.ok) {
-          throw new Error("Failed to load booked schedule");
-        }
-        const data = await res.json();
-        const schedule = Array.isArray(data?.schedule) ? data.schedule : [];
-        const parkingBookings = schedule.filter(
-          (entry: TruckScheduleEntry) =>
-            entry.type === "booking" &&
-            entry.status === "confirmed" &&
-            entry.event?.requiresPayment,
-        );
-        if (!cancelled) {
-          setBookedSchedule(parkingBookings);
-        }
-      } catch (error) {
-        if (!cancelled) {
-          toast({
-            title: "Schedule Error",
-            description:
-              error instanceof Error
-                ? error.message
-                : "Failed to load booked schedule.",
-            variant: "destructive",
-          });
-        }
-      }
-    };
-
-    loadBookedSchedule();
-    return () => {
-      cancelled = true;
-    };
-  }, [truckId, toast]);
 
   useEffect(() => {
     if (!truckId) {
@@ -6867,8 +6794,20 @@ export default function ParkingPassPage() {
           {topTab === "schedule" && isTruckViewUser && (
             <Card className="order-[-9998] rounded-2xl pp-glass border border-[color:var(--border-subtle)]">
               <CardContent className="p-5 space-y-6">
+                <section aria-label="Booked stops status" className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface-muted)] p-4 space-y-3">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div role="status" aria-live="polite">
+                      <p className="text-sm font-semibold">{bookingSchedule.loading ? "Checking booked stops…" : bookingSchedule.error ? "Booked stops need verification" : "Bookings up to date"}</p>
+                      {bookingSchedule.updatedAt ? <p className="text-xs text-[color:var(--text-muted)]">Last checked {new Date(bookingSchedule.updatedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</p> : null}
+                    </div>
+                    <Button type="button" variant="outline" disabled={bookingSchedule.loading || !truckId} onClick={() => void bookingSchedule.refresh()}>{bookingSchedule.loading ? "Checking bookings…" : bookingSchedule.error ? "Retry booked stops" : "Refresh bookings"}</Button>
+                  </div>
+                  {bookingSchedule.error ? <div role="alert" className="space-y-1 text-sm"><p>{bookingSchedule.error}</p><p>{bookingSchedule.updatedAt ? "Last-known booked stops remain visible and may have changed. Refresh before cancelling a booking." : "We cannot confirm whether you have booked stops. This is not an empty-schedule confirmation."}</p></div> : null}
+                </section>
                 <ParkingScheduleCalendar
                   initialDate={scheduleInitialDate}
+                  bookingsState={bookingSchedule.error ? "unavailable" : bookingSchedule.loading ? "loading" : "ready"}
+                  bookingActionsDisabled={bookingSchedule.loading || Boolean(bookingSchedule.error)}
                   items={parkingScheduleItems}
                   allowManualEdits={hasProfileTruckTools}
                   onDeleteManual={handleDeleteSchedule}

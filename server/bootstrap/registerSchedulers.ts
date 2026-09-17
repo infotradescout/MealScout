@@ -576,55 +576,24 @@ export async function registerSchedulers(app: Express): Promise<void> {
     }
   });
 
-  // Parking Pass booking hold cleanup — every minute
+  // Sweep verified unpaid holds without discarding uncertain payment evidence.
+  let holdExpiryRunning = false;
+  let holdExpiryCursor: string | null = null;
   scheduleCron("* * * * *", async () => {
+    if (holdExpiryRunning) return;
+    holdExpiryRunning = true;
     try {
-      const { eventBookings } = await import("@shared/schema");
-      const cutoff = new Date(Date.now() - getParkingPassHoldTtlMs());
-      const now = new Date();
-
-      // Cancel any PaymentIntents tied to expired holds
-      try {
-        const expiredRows: Array<{ paymentIntentId: string | null }> = await db
-          .select({ paymentIntentId: (eventBookings as any).paymentIntentId })
-          .from(eventBookings)
-          .where(
-            and(
-              (sql as any)`${(eventBookings as any).status} = 'pending'`,
-              lt((eventBookings as any).createdAt, cutoff),
-            ),
-          )
-          .limit(50);
-
-        for (const row of expiredRows) {
-          if (row.paymentIntentId) {
-            try {
-              const stripe = (await import("stripe")).default;
-              const stripeClient = new stripe(
-                process.env.STRIPE_SECRET_KEY || "",
-              );
-              await stripeClient.paymentIntents.cancel(row.paymentIntentId);
-            } catch {
-              // Best-effort — don't block cleanup on Stripe errors
-            }
-          }
-        }
-      } catch {
-        // Best-effort PaymentIntent cancellation
-      }
-
-      // Delete expired holds
-      await db
-        .delete(eventBookings as any)
-        .where(
-          and(
-            (sql as any)`${(eventBookings as any).status} = 'pending'`,
-            lt((eventBookings as any).createdAt, cutoff),
-          ),
-        );
-    } catch (error) {
-      console.error("❌ Parking Pass hold cleanup failed:", error);
-    }
+      const { expireParkingPassHolds } = await import("../services/parkingHoldExpiry");
+      const Stripe = (await import("stripe")).default;
+      const key = process.env.STRIPE_SECRET_KEY;
+      const provider = key ? new Stripe(key, { timeout: 8000, maxNetworkRetries: 0 }).paymentIntents : null;
+      const outcome = await expireParkingPassHolds(provider, {
+        ttlMs: getParkingPassHoldTtlMs(), afterIntentId: holdExpiryCursor,
+      });
+      holdExpiryCursor = outcome.nextCursor;
+      if (outcome.expired || outcome.deferred || outcome.errors) console.info("[parking-pass] hold expiry", { scanned: outcome.scanned, expired: outcome.expired, deferred: outcome.deferred, errors: outcome.errors });
+    } catch { console.error("[parking-pass] Hold expiry could not be verified; reservations retained."); }
+    finally { holdExpiryRunning = false; }
   });
 
   // IndexNow daily sitemap submission — 4:00 AM (feature-flagged)

@@ -3757,7 +3757,8 @@ export const eventBookings = pgTable(
     index("idx_bookings_payment_intent").on(table.stripePaymentIntentId),
     index("idx_bookings_created").on(table.createdAt),
     // One booking per truck per event
-    unique("uq_bookings_event_truck").on(table.eventId, table.truckId),
+    uniqueIndex("uq_bookings_event_truck_active").on(table.eventId, table.truckId)
+      .where(sql`${table.status} IN ('pending', 'confirmed')`),
   ],
 );
 

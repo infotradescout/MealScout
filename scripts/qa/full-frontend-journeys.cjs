@@ -256,6 +256,7 @@ async function run() {
         assert.equal(world.requests.filter((r) => r.method !== 'GET').length, 0);
       });
       await require('./parking-continuation-journeys.cjs')(scenario);
+      await require('./parking-schedule-reliability-journeys.cjs')(scenario);
       await scenario('guest can browse an active menu without account or payment mutations', async ({ world, openActor }) => {
         const guest = await openActor(null, `/menu/${world.restaurant.id}`);
         await expect(guest.getByRole('heading', { name: world.restaurant.name, exact: true })).toBeVisible();

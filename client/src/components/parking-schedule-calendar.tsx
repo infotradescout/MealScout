@@ -44,6 +44,8 @@ export type ParkingScheduleItem = {
 type ParkingScheduleCalendarProps = {
   items: ParkingScheduleItem[];
   initialDate?: string;
+  bookingsState?: "loading" | "unavailable" | "ready";
+  bookingActionsDisabled?: boolean;
   title?: string;
   subtitle?: string;
   allowManualEdits?: boolean;
@@ -84,6 +86,8 @@ export function resolveScheduleInitialDate(value?: string, now = new Date()): Da
 export function ParkingScheduleCalendar({
   items,
   initialDate,
+  bookingsState = "ready",
+  bookingActionsDisabled = false,
   title = "Parking Schedule",
   subtitle = "Auto-updated by Parking Pass bookings. Add manual stops anytime.",
   allowManualEdits = false,
@@ -256,7 +260,9 @@ export function ParkingScheduleCalendar({
                   ? `${activeItems.length} stop${
                       activeItems.length === 1 ? "" : "s"
                     } scheduled`
-                  : "No stops scheduled"}
+                  : bookingsState === "loading" ? "Checking booked stops…"
+                    : bookingsState === "unavailable" ? "Booked stops could not be verified"
+                    : "No stops scheduled"}
               </p>
             </div>
           </div>
@@ -332,7 +338,7 @@ export function ParkingScheduleCalendar({
                           variant="outline"
                           size="sm"
                           onClick={() => onCancelBooking(item.bookingId!, item)}
-                          disabled={cancelingBookingId === item.bookingId}
+                          disabled={bookingActionsDisabled || cancelingBookingId === item.bookingId}
                         >
                           {cancelingBookingId === item.bookingId
                             ? "Cancelling..."
@@ -369,7 +375,9 @@ export function ParkingScheduleCalendar({
             </div>
           ) : (
             <div className="mt-4 rounded-xl border border-dashed border-[color:var(--border-subtle)] pp-glass-muted p-6 text-center text-xs text-muted-foreground">
-              Choose another day to see scheduled stops.
+              {bookingsState === "loading" ? "Your booked stops are still loading. Manual stops remain available."
+                : bookingsState === "unavailable" ? "Retry the booked-stops check above. A failed lookup does not mean there are no reservations."
+                : "Choose another day to see scheduled stops."}
             </div>
           )}
         </CardContent>
