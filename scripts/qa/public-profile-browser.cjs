@@ -59,6 +59,7 @@ async function main() {
           if (pathname.startsWith('/api/')) {
             state.requests.push({ pathname, method: request.method() });
             if (['/api/truck-claims/search', '/api/truck-claims/public-search'].includes(pathname) && request.method() === 'GET' && state.claimSearch) return state.claimSearch({ route, url, json });
+            if (pathname === '/api/truck-claims/request' && request.method() === 'POST' && state.claimRequest) return state.claimRequest({ request, json });
             if (pathname.startsWith('/api/menus/') && state.menuPayload !== undefined) return json(state.menuPayload, state.menuStatus || 200);
             if (pathname === '/api/public/trending' && state.trendingPayload) return json(state.trendingPayload);
             if (pathname === '/api/menus/local-items' && state.localMenuItems) return json({items:state.localMenuItems});

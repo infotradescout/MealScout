@@ -152,6 +152,7 @@ export default function ClaimTruckPage() {
   }, [initialQuery, isAuthLoading]);
 
   const handleRequest = async (listingId: string) => {
+    const version = searchVersion.current;
     setRequestingId(listingId);
     setError("");
     try {
@@ -180,10 +181,10 @@ export default function ClaimTruckPage() {
           "If setup can be sent for this listing, the owner will receive it.",
       });
 
-      // Refresh cooldown/status display.
-      await handleSearch();
+      // Refresh only if the owner is still viewing the same search.
+      if (version === searchVersion.current) await handleSearch();
     } catch (err: any) {
-      setError(err?.message || "Request failed.");
+      if (version === searchVersion.current) setError(err?.message || "Request failed.");
     } finally {
       setRequestingId(null);
     }

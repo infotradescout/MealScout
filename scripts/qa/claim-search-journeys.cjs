@@ -8,6 +8,30 @@ const input = page => page.getByLabel('Search by food truck name, license ID, ci
 const search = async (page, q) => { await input(page).fill(q); await input(page).press('Enter'); };
 const paint = page => page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
 async function runClaimSearchJourneys({ scenario, evidence, viewport }) {
+  for (const status of [200, 503]) {
+    await scenario(`late setup response ${status} cannot replace the current claim search`, async ({ page, state, origin }) => {
+      let release, received = false;
+      const pending = new Promise(resolve => { release = resolve; });
+      state.claimSearch = ({ url, json }) => json([url.searchParams.get('q') === 'earlier' ? { ...oldTruck, canRequest: true } : newTruck]);
+      state.claimRequest = async ({ request, json }) => {
+        assert.equal(request.postDataJSON().listingId, oldTruck.id);
+        received = true; await pending;
+        return json({ message: status === 200 ? 'Synthetic setup receipt; no message sent' : 'Synthetic setup failure' }, status);
+      };
+      try {
+        await page.goto(origin + '/claim-business'); await search(page, 'earlier');
+        await page.getByRole('button', { name: 'Request setup', exact: true }).click();
+        await expect.poll(() => received).toBe(true);
+        await search(page, 'current'); await expect(page.getByText(newTruck.name, { exact: true })).toBeVisible();
+        const setupResponse = page.waitForResponse(response => new URL(response.url()).pathname === '/api/truck-claims/request');
+        release(); await (await setupResponse).finished(); await paint(page);
+        await expect(page.getByText(newTruck.name, { exact: true })).toBeVisible();
+        await expect(page.getByText(oldTruck.name, { exact: true })).toHaveCount(0);
+        await expect(page.locator('[role="alert"].text-destructive')).toHaveCount(0);
+        assert.equal(state.requests.filter(r => r.pathname === '/api/truck-claims/request').length, 1);
+      } finally { release(); }
+    });
+  }
   for (const failure of ['503', 'invalid-json', 'invalid-collection', 'invalid-row']) {
     await scenario(`claim search ${failure} clears prior results and remains retryable`, async ({ page, state, origin }) => {
       let failed = false;
