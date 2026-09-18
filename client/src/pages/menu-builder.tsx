@@ -783,6 +783,10 @@ export default function MenuBuilderPage() {
               queryClient.invalidateQueries({
                 queryKey: ["/api/owner/menus", restaurantId],
               });
+              queryClient.invalidateQueries({
+                queryKey: ["/api/owner/restaurants", restaurantId, "ordering-readiness"],
+                exact: true,
+              });
             }}
           />
         ) : null}
@@ -1299,9 +1303,6 @@ function MenuEditor({
     try {
       await apiRequest("PATCH", `/api/owner/menus/${menu.id}`, menuSettings);
       onRefresh();
-      queryClient.invalidateQueries({
-        queryKey: ["/api/owner/restaurants", restaurantId, "ordering-readiness"],
-      });
       toast({ title: "Settings saved" });
     } catch (err: any) {
       toast({

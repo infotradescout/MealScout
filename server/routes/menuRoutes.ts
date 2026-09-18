@@ -452,10 +452,10 @@ export async function buildOrderingReadiness(
     },
     {
       id: "pickup_location",
-      label: "A customer pickup location is published",
+      label: "Pickup location label is available",
       ok: Boolean(pickupAddressLabel),
       blocking: true,
-      action: "Publish the address customers should use for pickup.",
+      action: "Set the address or location label customers should use for pickup.",
     },
     {
       id: "hours",
@@ -482,11 +482,11 @@ export async function buildOrderingReadiness(
       ? [
           {
             id: "current_truck_stop",
-            label: "A confirmed current service stop is published",
+            label: "Current service stop is confirmed for pickup",
             ok: truckOrderableNow,
             blocking: true,
             action:
-              "Publish and confirm the truck's current service window and pickup location before taking orders.",
+              "Confirm the truck's current service window and pickup location before taking orders.",
           },
         ]
       : []),
