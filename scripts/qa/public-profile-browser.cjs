@@ -8,6 +8,7 @@ const { createTestWorld } = require('./test-world.cjs');
 const { runCustomerMenuJourneys } = require('./customer-menu-journeys.cjs');
 const { runScoutMenuCardJourneys } = require('./scout-menu-card-journeys.cjs');
 const { runClaimSearchJourneys } = require('./claim-search-journeys.cjs');
+const { runOwnerMenuReadinessJourneys } = require('./owner-menu-readiness-journeys.cjs');
 const root = path.resolve(__dirname, '../..');
 const dist = path.join(root, 'client/dist');
 const evidence = process.env.QA_EVIDENCE_DIR || path.join(root, '.qa-evidence/scout-continuity-20260917');
@@ -60,6 +61,9 @@ async function main() {
             state.requests.push({ pathname, method: request.method() });
             if (['/api/truck-claims/search', '/api/truck-claims/public-search'].includes(pathname) && request.method() === 'GET' && state.claimSearch) return state.claimSearch({ route, url, json });
             if (pathname === '/api/truck-claims/request' && request.method() === 'POST' && state.claimRequest) return state.claimRequest({ request, json });
+            if (request.method() === 'GET' && /^\/api\/owner\/menus\/[^/]+$/.test(pathname) && state.ownerMenus) return json(state.ownerMenus);
+            if (request.method() === 'GET' && /^\/api\/owner\/menus\/[^/]+\/details$/.test(pathname) && state.ownerMenuDetails) return json(state.ownerMenuDetails);
+            if (request.method() === 'GET' && /^\/api\/owner\/restaurants\/[^/]+\/ordering-readiness$/.test(pathname) && state.ownerReadiness) return state.ownerReadiness({ route, url, json });
             if (pathname.startsWith('/api/menus/') && state.menuPayload !== undefined) return json(state.menuPayload, state.menuStatus || 200);
             if (pathname === '/api/public/trending' && state.trendingPayload) return json(state.trendingPayload);
             if (pathname === '/api/menus/local-items' && state.localMenuItems) return json({items:state.localMenuItems});
@@ -121,6 +125,7 @@ async function main() {
       }
       await runScoutMenuCardJourneys({ scenario, evidence, viewport });
       await runClaimSearchJourneys({ scenario, evidence, viewport });
+      await runOwnerMenuReadinessJourneys({ scenario, evidence, viewport });
       await runCustomerMenuJourneys({ scenario, profile, profilePath, evidence, viewport });
       for (const action of ['Save to favorites', 'Recommend this place']) {
         await scenario(`guest ${action}: login returns to exact profile, then explicit action`, async ({ page, state, world, origin }) => {

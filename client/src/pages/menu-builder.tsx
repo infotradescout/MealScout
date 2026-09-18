@@ -60,6 +60,7 @@ import {
   SlidersHorizontal,
 } from "lucide-react";
 import { Link, useLocation, useSearch } from "wouter";
+import { z } from "zod";
 import type { Restaurant } from "@shared/schema";
 import { isBarBusinessType, isTruckBusinessType } from "@shared/businessTypes";
 import { buildPublicProfilePath } from "@/lib/public-profile-path";
@@ -127,28 +128,27 @@ interface FullMenu extends Menu {
   uncategorizedItems?: MenuItem[];
 }
 
-interface OrderingReadiness {
-  orderingEnabled: boolean;
-  blockingReasons: string[];
-  paymentMethods?: {
-    card: boolean;
-    cash: boolean;
-  };
-  checks: Array<{
-    id: string;
-    label: string;
-    ok: boolean;
-    blocking: boolean;
-    action: string;
-  }>;
-  payout?: {
-    connected: boolean;
-    chargesEnabled: boolean;
-    payoutsEnabled: boolean;
-    status: string;
-    message: string;
-  };
-}
+// Validate the fields this view displays. Readiness authority stays on the server.
+const orderingReadinessSchema = z.object({
+  orderingEnabled: z.boolean(),
+  blockingReasons: z.array(z.string()),
+  paymentMethods: z.object({ card: z.boolean(), cash: z.boolean() }).optional(),
+  checks: z.array(z.object({
+    id: z.string(),
+    label: z.string(),
+    ok: z.boolean(),
+    blocking: z.boolean(),
+    action: z.string(),
+  })),
+  payout: z.object({
+    connected: z.boolean(),
+    chargesEnabled: z.boolean(),
+    payoutsEnabled: z.boolean(),
+    status: z.string(),
+    message: z.string(),
+  }).optional(),
+});
+type OrderingReadiness = z.infer<typeof orderingReadinessSchema>;
 
 // ──────────────────────────────── helpers ─────────────────────────────────────
 function useRestaurantId(): string | null {
@@ -1111,16 +1111,16 @@ function MenuEditor({
   const [savingSettings, setSavingSettings] = useState(false);
   const readinessQuery = useQuery<OrderingReadiness>({
     queryKey: ["/api/owner/restaurants", restaurantId, "ordering-readiness"],
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const res = await fetch(
         `/api/owner/restaurants/${encodeURIComponent(restaurantId)}/ordering-readiness`,
-        { credentials: "include" },
+        { credentials: "include", signal },
       );
-      const data = await res.json().catch(() => ({}));
+      const data = await res.json();
       if (!res.ok) {
         throw new Error(data?.message || "Failed to load ordering readiness");
       }
-      return data;
+      return orderingReadinessSchema.parse(data);
     },
     enabled: !!restaurantId,
   });
@@ -1506,7 +1506,18 @@ function MenuEditor({
         </div>
       ) : readinessQuery.isError ? (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          Online ordering status is unavailable. Menu editing still works.
+          <p role="status">
+            Online ordering status is unavailable. Menu editing still works.
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            className="mt-3 min-h-11"
+            disabled={readinessQuery.isFetching}
+            onClick={() => void readinessQuery.refetch()}
+          >
+            {readinessQuery.isFetching ? "Checking ordering status…" : "Check ordering status again"}
+          </Button>
         </div>
       ) : readiness ? (
         <details
