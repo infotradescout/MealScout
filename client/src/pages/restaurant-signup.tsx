@@ -1,4 +1,4 @@
-import { useReducer, useState, useEffect, useMemo } from "react";
+import { useReducer, useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -421,6 +421,15 @@ export default function RestaurantSignup() {
       ? signupRouteIntent.passthrough.claimListingId || ""
       : "",
   );
+  const claimSearchVersion = useRef(0);
+  const invalidateClaimSearch = useCallback(() => {
+    claimSearchVersion.current += 1;
+    setClaimSelection(null);
+    setClaimResults([]);
+    setClaimError("");
+    setClaimSearchCompleted(false);
+    setClaimLoading(false);
+  }, []);
   const [licenseNumber, setLicenseNumber] = useState("");
   const [websiteImportLoading, setWebsiteImportLoading] = useState(false);
   const [importedFields, setImportedFields] = useState<string[]>([]);
@@ -597,6 +606,10 @@ export default function RestaurantSignup() {
   });
 
   const selectedBusinessType = form.watch("businessType");
+  useEffect(() => {
+    invalidateClaimSearch();
+    return () => { claimSearchVersion.current += 1; };
+  }, [user?.id, isAuthenticated, selectedBusinessType, invalidateClaimSearch]);
   const ownerAiSetupHref = useMemo(
     () =>
       buildOwnerAiHref({
@@ -1239,16 +1252,13 @@ export default function RestaurantSignup() {
     const claimListingId = signupRouteIntent.isClaim
       ? pendingClaimListingId
       : "";
+    invalidateClaimSearch();
+    const version = claimSearchVersion.current;
     if (!query && !claimListingId) {
-      setClaimResults([]);
-      setClaimError("");
-      setClaimSearchCompleted(false);
       return;
     }
 
     setClaimLoading(true);
-    setClaimError("");
-    setClaimSearchCompleted(false);
     try {
       const params = new URLSearchParams();
       if (query) params.set("q", query);
@@ -1258,6 +1268,7 @@ export default function RestaurantSignup() {
         `/api/truck-claims/search?${params.toString()}`,
       );
       const data = await res.json();
+      if (version !== claimSearchVersion.current) return;
       const rows = Array.isArray(data) ? data : [];
       setClaimResults(rows);
       setClaimSearchCompleted(true);
@@ -1293,10 +1304,12 @@ export default function RestaurantSignup() {
         );
       }
     } catch (error: any) {
-      setClaimSearchCompleted(false);
-      setClaimError(error.message || COPY.forms.restaurant.claimNoResults);
+      if (version === claimSearchVersion.current) {
+        setClaimSearchCompleted(false);
+        setClaimError(error.message || COPY.forms.restaurant.claimNoResults);
+      }
     } finally {
-      setClaimLoading(false);
+      if (version === claimSearchVersion.current) setClaimLoading(false);
     }
   };
 
@@ -2238,9 +2251,8 @@ export default function RestaurantSignup() {
                         <Input
                           value={claimQuery}
                           onChange={(e) => {
+                            invalidateClaimSearch();
                             setClaimQuery(e.target.value);
-                            setClaimSelection(null);
-                            setClaimSearchCompleted(false);
                             setPendingClaimListingId("");
                           }}
                           placeholder={
@@ -2271,7 +2283,7 @@ export default function RestaurantSignup() {
                             variant="ghost"
                             size="sm"
                             onClick={() => {
-                              setClaimSelection(null);
+                              invalidateClaimSearch();
                               setPendingClaimListingId("");
                             }}
                             data-testid="button-claim-clear"

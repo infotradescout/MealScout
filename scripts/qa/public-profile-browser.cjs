@@ -9,6 +9,7 @@ const { runCustomerMenuJourneys } = require('./customer-menu-journeys.cjs');
 const { runScoutMenuCardJourneys } = require('./scout-menu-card-journeys.cjs');
 const { runClaimSearchJourneys } = require('./claim-search-journeys.cjs');
 const { runOwnerMenuReadinessJourneys } = require('./owner-menu-readiness-journeys.cjs');
+const { runSignupClaimContinuityJourneys } = require('./signup-claim-continuity-journeys.cjs');
 const root = path.resolve(__dirname, '../..');
 const dist = path.join(root, 'client/dist');
 const evidence = process.env.QA_EVIDENCE_DIR || path.join(root, '.qa-evidence/scout-continuity-20260917');
@@ -126,6 +127,7 @@ async function main() {
       await runScoutMenuCardJourneys({ scenario, evidence, viewport });
       await runClaimSearchJourneys({ scenario, evidence, viewport });
       await runOwnerMenuReadinessJourneys({ scenario, evidence, viewport });
+      await runSignupClaimContinuityJourneys({ scenario, evidence, viewport });
       await runCustomerMenuJourneys({ scenario, profile, profilePath, evidence, viewport });
       for (const action of ['Save to favorites', 'Recommend this place']) {
         await scenario(`guest ${action}: login returns to exact profile, then explicit action`, async ({ page, state, world, origin }) => {
