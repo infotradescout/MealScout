@@ -1334,6 +1334,17 @@ function MenuEditor({
               <p className="mt-2 max-w-xl text-sm text-muted-foreground" role="status" data-testid="menu-publication-message">
                 {publicationMessage}
               </p>
+              {menu.isActive && !publicMenuVisible && !readinessQuery.isError ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="mt-3 min-h-11"
+                  disabled={readinessQuery.isFetching}
+                  onClick={() => void readinessQuery.refetch()}
+                >
+                  {readinessQuery.isFetching ? "Checking public visibility…" : "Check public visibility"}
+                </Button>
+              ) : null}
             </div>
             <div className="flex flex-wrap gap-2">
               <Button type="button" variant="outline" size="sm" onClick={onImport}>

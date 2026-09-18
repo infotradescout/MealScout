@@ -114,6 +114,12 @@ async function runOwnerMenuReadinessJourneys({ scenario, evidence, viewport }) {
       await toggle.click();
       await expect(page.getByTestId('menu-publication-badge')).toHaveText(label);
       await expect(page.getByTestId('menu-settings')).toContainText('when your business profile is public');
+      if (publication === 'private-business') {
+        payload.publicMenuBusinessVisible = true;
+        await page.getByRole('button', { name: 'Check public visibility', exact: true }).click();
+        await expect(page.getByTestId('menu-publication-badge')).toHaveText('Public menu');
+        await expect(toggle).not.toBeChecked();
+      }
       assertReadOnly(state);
       assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1));
     });
