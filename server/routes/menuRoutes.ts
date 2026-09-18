@@ -60,6 +60,7 @@ import {
   sql,
 } from "drizzle-orm";
 import { isAuthenticated, isStaffOrAdmin } from "../unifiedAuth";
+import { isStaffOrAdminUserType } from "@shared/profileAccessPolicy";
 import { distributedRateLimit } from "../middleware/distributedRateLimit";
 import { storage } from "../storage";
 import {
@@ -127,7 +128,7 @@ const canManageMenu = (req: any, res: any, next: any) => {
 };
 
 async function assertOwnsRestaurant(reqUser: any, restaurantId: string) {
-  if (reqUser?.userType && reqUser.userType !== "restaurant_owner") {
+  if (isStaffOrAdminUserType(reqUser?.userType)) {
     return;
   }
   const ok = await storage.verifyRestaurantOwnership(restaurantId, reqUser.id);
