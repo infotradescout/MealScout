@@ -7,6 +7,7 @@ const { chromium, expect } = require('@playwright/test');
 const { createTestWorld } = require('./test-world.cjs');
 const { runCustomerMenuJourneys } = require('./customer-menu-journeys.cjs');
 const { runScoutMenuCardJourneys } = require('./scout-menu-card-journeys.cjs');
+const { runClaimSearchJourneys } = require('./claim-search-journeys.cjs');
 const root = path.resolve(__dirname, '../..');
 const dist = path.join(root, 'client/dist');
 const evidence = process.env.QA_EVIDENCE_DIR || path.join(root, '.qa-evidence/scout-continuity-20260917');
@@ -57,6 +58,7 @@ async function main() {
           const json = (body, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
           if (pathname.startsWith('/api/')) {
             state.requests.push({ pathname, method: request.method() });
+            if (['/api/truck-claims/search', '/api/truck-claims/public-search'].includes(pathname) && request.method() === 'GET' && state.claimSearch) return state.claimSearch({ route, url, json });
             if (pathname.startsWith('/api/menus/') && state.menuPayload !== undefined) return json(state.menuPayload, state.menuStatus || 200);
             if (pathname === '/api/public/trending' && state.trendingPayload) return json(state.trendingPayload);
             if (pathname === '/api/menus/local-items' && state.localMenuItems) return json({items:state.localMenuItems});
@@ -117,6 +119,7 @@ async function main() {
           await context.close(); fs.writeFileSync(path.join(evidence, 'profile-browser-results.json'), JSON.stringify({ results, isolation: 'Compiled frontend with synthetic APIs/auth; no production or provider writes' }, null, 2)); }
       }
       await runScoutMenuCardJourneys({ scenario, evidence, viewport });
+      await runClaimSearchJourneys({ scenario, evidence, viewport });
       await runCustomerMenuJourneys({ scenario, profile, profilePath, evidence, viewport });
       for (const action of ['Save to favorites', 'Recommend this place']) {
         await scenario(`guest ${action}: login returns to exact profile, then explicit action`, async ({ page, state, world, origin }) => {
