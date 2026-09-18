@@ -1757,7 +1757,13 @@ export function registerMenuRoutes(app: Express) {
     wrap(async (req, res) => {
       const { restaurantId } = req.params;
       await assertOwnsRestaurant(req.user, restaurantId);
-      res.json(await buildOrderingReadiness(restaurantId));
+      const [readiness, publicParent] = await Promise.all([
+        buildOrderingReadiness(restaurantId),
+        loadPublicMenuParent(restaurantId),
+      ]);
+      // Report the same business visibility decision used by the public menu
+      // route. An enabled menu alone does not publish an unapproved business.
+      res.json({ ...readiness, publicMenuBusinessVisible: Boolean(publicParent) });
     }),
   );
 

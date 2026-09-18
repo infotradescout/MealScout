@@ -12,6 +12,7 @@ function prepareOwner({ world, identity, state }) {
 }
 const readiness = (enabled = false) => ({
   orderingEnabled: enabled,
+  publicMenuBusinessVisible: true,
   blockingReasons: enabled ? [] : ['merchant_not_ready'],
   paymentMethods: { card: enabled, cash: false },
   checks: [{ id: 'merchant_ready', label: 'Merchant setup', ok: enabled, blocking: true, action: 'Complete merchant setup before taking orders.' }],
@@ -25,7 +26,7 @@ function assertReadOnly(state) {
 }
 
 async function runOwnerMenuReadinessJourneys({ scenario, evidence, viewport }) {
-  for (const failure of ['503', 'invalid-json', 'missing-checks', 'invalid-boolean', 'invalid-check', 'invalid-payment-method', 'invalid-payout']) {
+  for (const failure of ['503', 'invalid-json', 'missing-checks', 'invalid-boolean', 'invalid-check', 'invalid-payment-method', 'invalid-payout', 'invalid-public-visibility']) {
     await scenario(`owner menu ${failure} readiness remains editable and recovers by retry`, async ({ page, world, identity, state, origin }) => {
       const route = prepareOwner({ world, identity, state });
       let repaired = false, reads = 0;
@@ -41,12 +42,14 @@ async function runOwnerMenuReadinessJourneys({ scenario, evidence, viewport }) {
         if (failure === 'invalid-check') broken.checks = [null];
         if (failure === 'invalid-payment-method') broken.paymentMethods.card = 'false';
         if (failure === 'invalid-payout') broken.payout = { message: { invalid: true } };
+        if (failure === 'invalid-public-visibility') broken.publicMenuBusinessVisible = 'true';
         return json(broken);
       };
       await page.goto(origin + route);
       await expect(page.getByText('Online ordering status is unavailable. Menu editing still works.', { exact: true })).toBeVisible({ timeout: 6500 });
       await expectEditing(page);
       await expect(page.getByTestId('menu-ordering-readiness')).toHaveCount(0);
+      await expect(page.getByTestId('menu-publication-badge')).toHaveText('Visibility unconfirmed');
       const retry = page.getByRole('button', { name: 'Check ordering status again', exact: true });
       await expect(retry).toBeVisible({ timeout: 1500 });
       const bounds = await retry.boundingBox();
@@ -56,6 +59,7 @@ async function runOwnerMenuReadinessJourneys({ scenario, evidence, viewport }) {
       await retry.click();
       const panel = page.getByTestId('menu-ordering-readiness');
       await expect(panel).toContainText('Needs setup');
+      await expect(page.getByTestId('menu-publication-badge')).toHaveText('Public menu');
       await panel.locator('summary').click();
       await expect(panel).toContainText('Complete merchant setup before taking orders.');
       await expectEditing(page);
@@ -77,11 +81,39 @@ async function runOwnerMenuReadinessJourneys({ scenario, evidence, viewport }) {
       await page.goto(origin + route);
       await expectEditing(page);
       const panel = page.getByTestId('menu-ordering-readiness');
-      await expect(panel).toContainText(enabled ? 'Customers can place pickup orders.' : 'Setup is incomplete. Your visible menu can still be viewed.');
+      await expect(panel).toContainText(enabled ? 'Customers can place pickup orders.' : 'Online ordering needs setup.');
+      await expect(page.getByTestId('menu-publication-badge')).toHaveText('Public menu');
       await panel.locator('summary').click();
       await expect(panel.getByText(enabled ? 'Done' : 'Required', { exact: true })).toBeVisible();
       await expect(panel).toContainText(payoutMessage);
       await expect(page.getByRole('button', { name: 'Check ordering status again', exact: true })).toHaveCount(0);
+      assertReadOnly(state);
+      assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1));
+    });
+  }
+  for (const publication of ['private-business', 'missing-visibility', 'disabled-menu']) {
+    await scenario(`owner menu reports ${publication} without inventing public availability`, async ({ page, world, identity, state, origin }) => {
+      const route = prepareOwner({ world, identity, state });
+      if (publication === 'disabled-menu') {
+        state.ownerMenus = state.ownerMenus.map(menu => ({ ...menu, isActive: false }));
+        state.ownerMenuDetails = { ...state.ownerMenuDetails, isActive: false };
+      }
+      const payload = readiness();
+      if (publication === 'private-business') payload.publicMenuBusinessVisible = false;
+      if (publication === 'missing-visibility') delete payload.publicMenuBusinessVisible;
+      state.ownerReadiness = ({ json }) => json(payload);
+      await page.goto(origin + route);
+      await expectEditing(page);
+      const label = publication === 'private-business' ? 'Not public yet'
+        : publication === 'missing-visibility' ? 'Visibility unconfirmed' : 'Menu disabled';
+      await expect(page.getByTestId('menu-publication-badge')).toHaveText(label);
+      await expect(page.getByTestId('menu-publication-message')).not.toContainText('Customers can view this menu.');
+      await page.getByTestId('menu-settings').locator('summary').click();
+      const toggle = page.getByRole('switch', { name: 'Enable this menu', exact: true });
+      await expect(toggle).toBeVisible();
+      await toggle.click();
+      await expect(page.getByTestId('menu-publication-badge')).toHaveText(label);
+      await expect(page.getByTestId('menu-settings')).toContainText('when your business profile is public');
       assertReadOnly(state);
       assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1));
     });
