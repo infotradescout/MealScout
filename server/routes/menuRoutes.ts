@@ -585,10 +585,10 @@ export async function buildOrderingReadiness(
       id: "active_menu",
       label: requestedMenuId
         ? "Requested menu is active"
-        : "At least one active menu is published",
+        : "At least one menu is enabled",
       ok: restaurantMenus.length > 0,
       blocking: true,
-      action: "Publish an active menu.",
+      action: "Enable a menu.",
     },
     {
       id: "menu_items",
