@@ -922,7 +922,7 @@ export default function RestaurantSignup() {
         completionKind: "create" as const,
       };
     },
-    onSuccess: (result: any) => {
+    onSuccess: async (result: any) => {
       const restaurant = result?.restaurant;
       const created = result?.created === true;
       if (restaurant?.requiresEmailVerification) {
@@ -943,6 +943,17 @@ export default function RestaurantSignup() {
         )}&signup=1`;
         return;
       }
+
+      // A claim or profile promotion changes the server's role and scoped
+      // business access. Refresh even inactive caches before the SPA handoff;
+      // the mutation response itself must not grant client-side permissions.
+      // Read failures stay stale for normal query recovery and must not turn
+      // an already committed claim into a failed, retryable write.
+      await Promise.all(
+        ["/api/auth/user", "/api/business-access/me", "/api/restaurants/my-restaurants"].map(
+          (key) => queryClient.invalidateQueries({ queryKey: [key], exact: true, refetchType: "all" }),
+        ),
+      );
 
       trackFunnelEvent(FUNNEL_EVENTS.activationStarted, {
         page: "restaurant-signup",
