@@ -28,15 +28,15 @@ async function main(){
  fs.mkdirSync(evidence,{recursive:true}); const server=http.createServer((req,res)=>{if(req.url==='/assets/'+workerName){res.setHeader('Content-Type','application/javascript');res.end(fs.readFileSync(path.join(assets,workerName)));return;}res.setHeader('Content-Type','text/html');res.end('<!doctype html><div id="root"></div>')});
  await new Promise(r=>server.listen(0,'127.0.0.1',r)); const origin=`http://127.0.0.1:${server.address().port}`;
  const browser=await chromium.launch({headless:true,executablePath:process.env.UI_CHROMIUM_EXECUTABLE||undefined,args:['--no-sandbox','--disable-dev-shm-usage']});
- try{for(const legacy of [false,true])for(const width of [390,1440])for(const mode of ['missing','configured','denied','webgl-unavailable']){
+ try{for(const legacy of [false,true])for(const width of [390,1440])for(const mode of ['missing','configured','denied','webgl-unavailable','webgl2-unavailable']){
   const context=await browser.newContext({viewport:{width,height:700},serviceWorkers:'block'}); const requests=[],errors=[];let denied=mode==='denied';
   await context.routeWebSocket('**/*',s=>s.close());
   await context.route('**/*',route=>{const u=new URL(route.request().url());if(u.hostname.endsWith('.cartocdn.com')){requests.push({host:u.hostname,path:u.pathname,key:u.searchParams.get('key')});return route.fulfill({status:denied?403:200,contentType:denied?'text/plain':'image/png',body:denied?'Denied fixture':tile,headers:{'Access-Control-Allow-Origin':'*'}});}return u.origin===origin?route.continue():route.abort();});
-  const page=await context.newPage();if(mode==='webgl-unavailable')await page.addInitScript(()=>{const original=HTMLCanvasElement.prototype.getContext;HTMLCanvasElement.prototype.getContext=function(type,...args){return /webgl/i.test(type)?null:original.call(this,type,...args);};});page.on('pageerror',e=>errors.push(e.message));const name=`${legacy?'legacy':'active'} ${width} ${mode}`;
+  const page=await context.newPage();if(mode.startsWith('webgl'))await page.addInitScript(onlyWebGL2=>{const original=HTMLCanvasElement.prototype.getContext;HTMLCanvasElement.prototype.getContext=function(type,...args){return (onlyWebGL2?type==='webgl2':/webgl/i.test(type))?null:original.call(this,type,...args);};},mode==='webgl2-unavailable');page.on('pageerror',e=>errors.push(e.message));const name=`${legacy?'legacy':'active'} ${width} ${mode}`;
   try{
    await page.goto(origin);tile=Buffer.from(await page.evaluate(()=>{const c=document.createElement('canvas');c.width=256;c.height=256;const x=c.getContext('2d');x.fillStyle='#eee8de';x.fillRect(0,0,256,256);return c.toDataURL('image/png').split(',')[1]}),'base64');await page.addStyleTag({content:css});await page.addScriptTag({content:mode==='missing'?codeMissing:codeConfigured});await page.evaluate(v=>window.mountMap(v),legacy);
    const unavailable=page.getByTestId('scout-street-map-unavailable');
-   if(mode==='missing'||mode==='webgl-unavailable'){
+   if(mode==='missing'||mode.startsWith('webgl')){
     await expect(unavailable).toBeVisible();assert.equal(requests.length,0,'No anonymous tile requests');
     await page.locator('.msm-fallback-pin').click();assert.equal(await page.evaluate(()=>window.selected),'qa-place');
     if(mode==='missing')await expect(page.getByRole('button',{name:'Retry street map'})).toHaveCount(0,'Missing configuration is not repaired by retry');
@@ -44,7 +44,9 @@ async function main(){
     await expect.poll(()=>requests.length,{timeout:12000}).toBeGreaterThan(0);assert.ok(requests.every(r=>r.key==='qa-carto-fixture'));
     if(denied){await expect(unavailable).toBeVisible();denied=false;await page.getByRole('button',{name:'Retry street map'}).click();}
     await expect(unavailable).toHaveCount(0);await expect(page.locator('.maplibregl-canvas')).toBeVisible();
+    const pin=page.getByRole('button',{name:'QA fixture pin',exact:true});await expect(pin).toBeVisible();await pin.click();assert.equal(await page.evaluate(()=>window.selected),'qa-place');await page.evaluate(()=>{window.selected=null});await pin.focus();await page.keyboard.press('Enter');assert.equal(await page.evaluate(()=>window.selected),'qa-place');
    }
+   if(mode!=='missing')await page.screenshot({path:path.join(evidence,name.replaceAll(' ','-')+'.png'),fullPage:true});
    assert.deepEqual(errors,[]);results.push({name,passed:true,tileRequests:requests.length});console.log('MAP PASS '+name);
   }catch(error){results.push({name,passed:false,error:error.message,errors});console.log('MAP FAIL '+name+': '+error.message);}
   finally{await page.goto('about:blank').catch(()=>{});await page.close();await context.close();}

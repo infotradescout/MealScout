@@ -545,7 +545,8 @@ export function ThemedScoutMapV2({
         frameTimeoutIds.forEach((id) => window.clearTimeout(id));
       };
     }
-  }, [interactive, markerKey, markers, onMarkerTap, selectedMarkerId, zoom]);
+    // Tile recovery replaces the Map even when marker props are unchanged.
+  }, [interactive, markerKey, markers, onMarkerTap, selectedMarkerId, tilesUnavailable, zoom]);
 
   const fallbackPositions = useMemo(
     () =>
