@@ -1,0 +1,1703 @@
+{
+  "schemaVersion": 1,
+  "project": "MealScout",
+  "recordedAt": "2026-09-19T22:30:33.605Z",
+  "baseCommit": "7cb37c68409f6558dfd4c572adf1a96c99d34d81",
+  "applicationCommit": "9f9b64970785364728d4f887afee2645986a6174",
+  "branch": "codex/ui-ux-front-end-overhaul-20260915",
+  "pr": 380,
+  "identity": "Application built/served at applicationCommit; final native harness is bound to its Git blob and SHA-256 in native. The containing commit changes this test/evidence only, not the application.",
+  "change": "401-only full-document Sign in again action preserves Orders/Kitchen and restaurantId and removes stale client auth state. Permission denial (403), payments and fulfillment authority remain unchanged.",
+  "native": {
+    "applicationSource": "9f9b64970785364728d4f887afee2645986a6174",
+    "nativeHarnessGitBlob": "c111646b004462d46ab5f7cac4e96e0646e270ea",
+    "nativeHarnessSha256": "f388959d50fa71cad8434a0475a3e8c707aaaaec8814ece2bb8baa09de4413ef",
+    "sourceManifestFiles": [
+      {
+        "file": "client/src/components/owner-orders-workspace.tsx",
+        "gitBlob": "adc86c94a83f241d5ed7173a227f13f69c41f7ed",
+        "sha256": "065fe5121eb6c1690f8f65539ac05f425fe19cc7f1f05b29d76b3f9531b83cea"
+      },
+      {
+        "file": "client/src/lib/owner-orders-response.ts",
+        "gitBlob": "56ea9bb3d929f2728de5768428e0317e25429f3e",
+        "sha256": "8bf786cf3640fa612ab2e54181ac83afcff7d5bbe9bffb60bdeeb01c6ed4bc84"
+      },
+      {
+        "file": "server/index.ts",
+        "gitBlob": "e1cf9931191602d357c8b189acdb3000e8425490",
+        "sha256": "ca698cf3ea16bbff111a2159d11a084eac79911564e2c78c3e9d9ab361383a52"
+      },
+      {
+        "file": "server/routes/pickupOrderRoutes.ts",
+        "gitBlob": "599a503daff20944dc026af7c863d0e4e423d505",
+        "sha256": "41a54dcf034855a43726ed096368f7c09b6d4f2a2ae52a7fc3b47f25569a167a"
+      },
+      {
+        "file": "server/unifiedAuth.ts",
+        "gitBlob": "5d658fc94fe3fe066c4c73e7bf472678afe9755c",
+        "sha256": "194198675ea3fb386d63b224c96036a750ebb914029272751c0c99d84662ea0b"
+      },
+      {
+        "file": "scripts/qa/owner-orders-native-browser.cjs",
+        "gitBlob": "c111646b004462d46ab5f7cac4e96e0646e270ea",
+        "sha256": "f388959d50fa71cad8434a0475a3e8c707aaaaec8814ece2bb8baa09de4413ef"
+      },
+      {
+        "file": "scripts/qa/owner-orders-recovery-journeys.cjs",
+        "gitBlob": "84bd5536166336c63e1aaac3dcd7f4cad687d7d8",
+        "sha256": "610ba13be04bb6a6adb210525452abd13fb5bcdf779c14f5c338ed220135694b"
+      }
+    ],
+    "runs": [
+      {
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "applicationSource": "9f9b64970785364728d4f887afee2645986a6174",
+        "pass": 23,
+        "fail": 0,
+        "pageErrors": [],
+        "cases": [
+          {
+            "name": "real owner registration, local verification, password session and exact claim",
+            "status": "pass",
+            "elapsedMs": 1262
+          },
+          {
+            "name": "second real owner has an isolated business/session",
+            "status": "pass",
+            "elapsedMs": 979
+          },
+          {
+            "name": "seed 55 explicit order fixtures without activating ordering or Stripe",
+            "status": "pass",
+            "elapsedMs": 4960
+          },
+          {
+            "name": "actual PostgreSQL history: 50 + 5 records, preserved notes, distinct page identities",
+            "status": "pass",
+            "elapsedMs": 314
+          },
+          {
+            "name": "actual kitchen response is accepted without invented unpaid/completed entries",
+            "status": "pass",
+            "elapsedMs": 135
+          },
+          {
+            "name": "real guest and wrong-owner reads return 401/403 without exposing order rows",
+            "status": "pass",
+            "elapsedMs": 242
+          },
+          {
+            "name": "orders 1440: real browser password login and server-owned order details",
+            "status": "pass",
+            "elapsedMs": 3616
+          },
+          {
+            "name": "orders 1440: real native SQL read failure hides stale actions and retries successfully",
+            "status": "pass",
+            "elapsedMs": 955
+          },
+          {
+            "name": "orders 1440: html read fault is rejected and the next real server read recovers",
+            "status": "pass",
+            "elapsedMs": 936
+          },
+          {
+            "name": "orders 1440: mixed-business read fault is rejected and the next real server read recovers",
+            "status": "pass",
+            "elapsedMs": 925
+          },
+          {
+            "name": "orders 1440: a held real response cannot announce zero counts or accept duplicate retry",
+            "status": "pass",
+            "elapsedMs": 484
+          },
+          {
+            "name": "orders 1440: a different owned business has a truly empty database response",
+            "status": "pass",
+            "elapsedMs": 2457
+          },
+          {
+            "name": "orders 1440: a real expired session provides a sign-in route back to this exact business",
+            "status": "pass",
+            "elapsedMs": 3761
+          },
+          {
+            "name": "orders 1440: recovery made no order writes and raised no page exceptions",
+            "status": "pass",
+            "elapsedMs": 0
+          },
+          {
+            "name": "kitchen 1440: real browser password login and server-owned order details",
+            "status": "pass",
+            "elapsedMs": 2384
+          },
+          {
+            "name": "kitchen 1440: real native SQL read failure hides stale actions and retries successfully",
+            "status": "pass",
+            "elapsedMs": 1056
+          },
+          {
+            "name": "kitchen 1440: html read fault is rejected and the next real server read recovers",
+            "status": "pass",
+            "elapsedMs": 935
+          },
+          {
+            "name": "kitchen 1440: mixed-business read fault is rejected and the next real server read recovers",
+            "status": "pass",
+            "elapsedMs": 915
+          },
+          {
+            "name": "kitchen 1440: a held real response cannot announce zero counts or accept duplicate retry",
+            "status": "pass",
+            "elapsedMs": 400
+          },
+          {
+            "name": "kitchen 1440: a different owned business has a truly empty database response",
+            "status": "pass",
+            "elapsedMs": 2408
+          },
+          {
+            "name": "kitchen 1440: a real expired session provides a sign-in route back to this exact business",
+            "status": "pass",
+            "elapsedMs": 3163
+          },
+          {
+            "name": "kitchen 1440: recovery made no order writes and raised no page exceptions",
+            "status": "pass",
+            "elapsedMs": 1
+          },
+          {
+            "name": "all order/item/financial fields remain byte-identical after recovery",
+            "status": "pass",
+            "elapsedMs": 4
+          }
+        ],
+        "database": {
+          "version": "PostgreSQL 18.4 on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 7.5.0-3ubuntu1~18.04) 7.5.0, 64-bit",
+          "current_database": "mealscout_owner_journey_test",
+          "listen": "127.0.0.1",
+          "timezone": "UTC"
+        },
+        "unchangedOrderSnapshotSha256": "a3f9ba8ac47920ddafa01b26c20d3b6402f7f3040ae83673c452ae76402bd701",
+        "receipt": ".qa-evidence/native-orders/runs/2026-09-19T22-19-30-627Z/native-orders-2026-09-19T22-19-49-394Z/receipt.json",
+        "receiptSha256": "27725d4645409e7d5086da511882b046563d7c036b7fd81f9fafbb91ea517e6e",
+        "traceCount": 2,
+        "realHttpResponses": 15,
+        "realBrowserResponseObservations": 82,
+        "injectedResponseFaults": [
+          {
+            "label": "orders 1440",
+            "type": "html",
+            "method": "GET",
+            "upstreamStatus": 200
+          },
+          {
+            "label": "orders 1440",
+            "type": "mixed-business",
+            "method": "GET",
+            "upstreamStatus": 200
+          },
+          {
+            "label": "orders 1440",
+            "type": "503 then held real 200",
+            "method": "GET"
+          },
+          {
+            "label": "kitchen 1440",
+            "type": "html",
+            "method": "GET",
+            "upstreamStatus": 200
+          },
+          {
+            "label": "kitchen 1440",
+            "type": "mixed-business",
+            "method": "GET",
+            "upstreamStatus": 200
+          },
+          {
+            "label": "kitchen 1440",
+            "type": "503 then held real 200",
+            "method": "GET"
+          }
+        ],
+        "cleanup": {
+          "serverStopped": true,
+          "serverPortObservation": {
+            "host": "127.0.0.1",
+            "port": 59090,
+            "observedAt": "2026-09-19T22:20:24.303Z",
+            "closed": true,
+            "connected": false,
+            "errorCode": "ECONNREFUSED"
+          },
+          "serverPortClosed": true,
+          "database": {
+            "type": "database-cleanup",
+            "stopped": true,
+            "removed": true,
+            "directory": "/tmp/mealscout-owner-journey-c9bjXG",
+            "errors": []
+          },
+          "databasePortObservation": {
+            "host": "127.0.0.1",
+            "port": 35891,
+            "observedAt": "2026-09-19T22:20:24.996Z",
+            "closed": true,
+            "connected": false,
+            "errorCode": "ECONNREFUSED"
+          },
+          "databasePortClosed": true
+        }
+      },
+      {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "applicationSource": "9f9b64970785364728d4f887afee2645986a6174",
+        "pass": 23,
+        "fail": 0,
+        "pageErrors": [],
+        "cases": [
+          {
+            "name": "real owner registration, local verification, password session and exact claim",
+            "status": "pass",
+            "elapsedMs": 1145
+          },
+          {
+            "name": "second real owner has an isolated business/session",
+            "status": "pass",
+            "elapsedMs": 968
+          },
+          {
+            "name": "seed 55 explicit order fixtures without activating ordering or Stripe",
+            "status": "pass",
+            "elapsedMs": 4918
+          },
+          {
+            "name": "actual PostgreSQL history: 50 + 5 records, preserved notes, distinct page identities",
+            "status": "pass",
+            "elapsedMs": 323
+          },
+          {
+            "name": "actual kitchen response is accepted without invented unpaid/completed entries",
+            "status": "pass",
+            "elapsedMs": 153
+          },
+          {
+            "name": "real guest and wrong-owner reads return 401/403 without exposing order rows",
+            "status": "pass",
+            "elapsedMs": 246
+          },
+          {
+            "name": "orders 390: real browser password login and server-owned order details",
+            "status": "pass",
+            "elapsedMs": 3217
+          },
+          {
+            "name": "orders 390: real native SQL read failure hides stale actions and retries successfully",
+            "status": "pass",
+            "elapsedMs": 874
+          },
+          {
+            "name": "orders 390: html read fault is rejected and the next real server read recovers",
+            "status": "pass",
+            "elapsedMs": 918
+          },
+          {
+            "name": "orders 390: mixed-business read fault is rejected and the next real server read recovers",
+            "status": "pass",
+            "elapsedMs": 899
+          },
+          {
+            "name": "orders 390: a held real response cannot announce zero counts or accept duplicate retry",
+            "status": "pass",
+            "elapsedMs": 392
+          },
+          {
+            "name": "orders 390: a different owned business has a truly empty database response",
+            "status": "pass",
+            "elapsedMs": 2202
+          },
+          {
+            "name": "orders 390: a real expired session provides a sign-in route back to this exact business",
+            "status": "pass",
+            "elapsedMs": 3345
+          },
+          {
+            "name": "orders 390: recovery made no order writes and raised no page exceptions",
+            "status": "pass",
+            "elapsedMs": 0
+          },
+          {
+            "name": "kitchen 390: real browser password login and server-owned order details",
+            "status": "pass",
+            "elapsedMs": 2252
+          },
+          {
+            "name": "kitchen 390: real native SQL read failure hides stale actions and retries successfully",
+            "status": "pass",
+            "elapsedMs": 825
+          },
+          {
+            "name": "kitchen 390: html read fault is rejected and the next real server read recovers",
+            "status": "pass",
+            "elapsedMs": 965
+          },
+          {
+            "name": "kitchen 390: mixed-business read fault is rejected and the next real server read recovers",
+            "status": "pass",
+            "elapsedMs": 902
+          },
+          {
+            "name": "kitchen 390: a held real response cannot announce zero counts or accept duplicate retry",
+            "status": "pass",
+            "elapsedMs": 419
+          },
+          {
+            "name": "kitchen 390: a different owned business has a truly empty database response",
+            "status": "pass",
+            "elapsedMs": 3421
+          },
+          {
+            "name": "kitchen 390: a real expired session provides a sign-in route back to this exact business",
+            "status": "pass",
+            "elapsedMs": 2960
+          },
+          {
+            "name": "kitchen 390: recovery made no order writes and raised no page exceptions",
+            "status": "pass",
+            "elapsedMs": 1
+          },
+          {
+            "name": "all order/item/financial fields remain byte-identical after recovery",
+            "status": "pass",
+            "elapsedMs": 6
+          }
+        ],
+        "database": {
+          "version": "PostgreSQL 18.4 on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 7.5.0-3ubuntu1~18.04) 7.5.0, 64-bit",
+          "current_database": "mealscout_owner_journey_test",
+          "listen": "127.0.0.1",
+          "timezone": "UTC"
+        },
+        "unchangedOrderSnapshotSha256": "f80b5bf49fdefbd213ea02d3c3be21d6de4fa67c092728d9092ff90ced7f2782",
+        "receipt": ".qa-evidence/native-orders/runs/2026-09-19T22-20-25-178Z/native-orders-2026-09-19T22-20-42-907Z/receipt.json",
+        "receiptSha256": "58476e89b471e4117e626c6fd434e4995c00a5841f90536cdaebcf6163d2510a",
+        "traceCount": 2,
+        "realHttpResponses": 15,
+        "realBrowserResponseObservations": 77,
+        "injectedResponseFaults": [
+          {
+            "label": "orders 390",
+            "type": "html",
+            "method": "GET",
+            "upstreamStatus": 200
+          },
+          {
+            "label": "orders 390",
+            "type": "mixed-business",
+            "method": "GET",
+            "upstreamStatus": 200
+          },
+          {
+            "label": "orders 390",
+            "type": "503 then held real 200",
+            "method": "GET"
+          },
+          {
+            "label": "kitchen 390",
+            "type": "html",
+            "method": "GET",
+            "upstreamStatus": 200
+          },
+          {
+            "label": "kitchen 390",
+            "type": "mixed-business",
+            "method": "GET",
+            "upstreamStatus": 200
+          },
+          {
+            "label": "kitchen 390",
+            "type": "503 then held real 200",
+            "method": "GET"
+          }
+        ],
+        "cleanup": {
+          "serverStopped": true,
+          "serverPortObservation": {
+            "host": "127.0.0.1",
+            "port": 58977,
+            "observedAt": "2026-09-19T22:21:16.541Z",
+            "closed": true,
+            "connected": false,
+            "errorCode": "ECONNREFUSED"
+          },
+          "serverPortClosed": true,
+          "database": {
+            "type": "database-cleanup",
+            "stopped": true,
+            "removed": true,
+            "directory": "/tmp/mealscout-owner-journey-RnrH3W",
+            "errors": []
+          },
+          "databasePortObservation": {
+            "host": "127.0.0.1",
+            "port": 46549,
+            "observedAt": "2026-09-19T22:21:17.138Z",
+            "closed": true,
+            "connected": false,
+            "errorCode": "ECONNREFUSED"
+          },
+          "databasePortClosed": true
+        }
+      }
+    ],
+    "cleanup": [
+      {
+        "run": "2026-09-19T22-05-49-042Z",
+        "source": "7cb37c68409f6558dfd4c572adf1a96c99d34d81",
+        "app": {
+          "host": "127.0.0.1",
+          "port": 53976,
+          "observedAt": "2026-09-19T22:10:22.743Z",
+          "closed": true,
+          "connected": false,
+          "errorCode": "ECONNREFUSED"
+        },
+        "db": {
+          "host": "127.0.0.1",
+          "port": 45083,
+          "observedAt": "2026-09-19T22:10:23.742Z",
+          "closed": true,
+          "connected": false,
+          "errorCode": "ECONNREFUSED"
+        },
+        "clusterRemoved": true,
+        "receiptSha256": "22ee3a3a87bd465e978ef546b0136f17e8082fe556cf9b5f7ec78cbc8132a689"
+      },
+      {
+        "run": "2026-09-19T22-10-24-324Z",
+        "source": "7cb37c68409f6558dfd4c572adf1a96c99d34d81",
+        "app": {
+          "host": "127.0.0.1",
+          "port": 50578,
+          "observedAt": "2026-09-19T22:12:13.478Z",
+          "closed": true,
+          "connected": false,
+          "errorCode": "ECONNREFUSED"
+        },
+        "db": {
+          "host": "127.0.0.1",
+          "port": 43555,
+          "observedAt": "2026-09-19T22:12:14.857Z",
+          "closed": true,
+          "connected": false,
+          "errorCode": "ECONNREFUSED"
+        },
+        "clusterRemoved": true,
+        "receiptSha256": "86a1c190aaa5aa0b04826dc07ee5cd30df28d230b3641b38da2b52a1a775603c"
+      },
+      {
+        "run": "2026-09-19T22-12-15-465Z",
+        "source": "7cb37c68409f6558dfd4c572adf1a96c99d34d81",
+        "app": {
+          "host": "127.0.0.1",
+          "port": 63084,
+          "observedAt": "2026-09-19T22:15:00.570Z",
+          "closed": true,
+          "connected": false,
+          "errorCode": "ECONNREFUSED"
+        },
+        "db": {
+          "host": "127.0.0.1",
+          "port": 36771,
+          "observedAt": "2026-09-19T22:15:01.253Z",
+          "closed": true,
+          "connected": false,
+          "errorCode": "ECONNREFUSED"
+        },
+        "clusterRemoved": true,
+        "receiptSha256": "8e310655edee683c45f68bf9022ee3fac735e91d42f99c8a2dc1e3e71b663491"
+      },
+      {
+        "run": "2026-09-19T22-15-47-922Z",
+        "source": "9f9b64970785364728d4f887afee2645986a6174",
+        "app": {
+          "host": "127.0.0.1",
+          "port": 49490,
+          "observedAt": "2026-09-19T22:19:28.705Z",
+          "closed": true,
+          "connected": false,
+          "errorCode": "ECONNREFUSED"
+        },
+        "db": {
+          "host": "127.0.0.1",
+          "port": 45323,
+          "observedAt": "2026-09-19T22:19:29.891Z",
+          "closed": true,
+          "connected": false,
+          "errorCode": "ECONNREFUSED"
+        },
+        "clusterRemoved": true,
+        "receiptSha256": "bcdd7fa29cadeb14fc5996b7e1b6e701aa2adf1287299d2b35d430a293c5123f"
+      },
+      {
+        "run": "2026-09-19T22-19-30-627Z",
+        "source": "9f9b64970785364728d4f887afee2645986a6174",
+        "app": {
+          "host": "127.0.0.1",
+          "port": 59090,
+          "observedAt": "2026-09-19T22:20:24.303Z",
+          "closed": true,
+          "connected": false,
+          "errorCode": "ECONNREFUSED"
+        },
+        "db": {
+          "host": "127.0.0.1",
+          "port": 35891,
+          "observedAt": "2026-09-19T22:20:24.996Z",
+          "closed": true,
+          "connected": false,
+          "errorCode": "ECONNREFUSED"
+        },
+        "clusterRemoved": true,
+        "receiptSha256": "1a06395a3b23aab08032b67a9a676eb28bb10f137f53b671dfdf9282a26f256b"
+      },
+      {
+        "run": "2026-09-19T22-20-25-178Z",
+        "source": "9f9b64970785364728d4f887afee2645986a6174",
+        "app": {
+          "host": "127.0.0.1",
+          "port": 58977,
+          "observedAt": "2026-09-19T22:21:16.541Z",
+          "closed": true,
+          "connected": false,
+          "errorCode": "ECONNREFUSED"
+        },
+        "db": {
+          "host": "127.0.0.1",
+          "port": 46549,
+          "observedAt": "2026-09-19T22:21:17.138Z",
+          "closed": true,
+          "connected": false,
+          "errorCode": "ECONNREFUSED"
+        },
+        "clusterRemoved": true,
+        "receiptSha256": "e24537a89ea9a851b32d81e00058acc1749f020a37144e33320db6ac2e2b2332"
+      }
+    ],
+    "artifacts": [
+      {
+        "path": ".qa-evidence/native-orders/attempt-history.json",
+        "bytes": 454,
+        "sha256": "c30f60b2d761c8ee02d4183cf83092d7fcafa07d714c2d5f54dbd10f081ecf42"
+      },
+      {
+        "path": ".qa-evidence/native-orders/authority-preserved.json",
+        "bytes": 296,
+        "sha256": "ff203623e682bfc4565365704c5e02a74c7a012c6f7f115023e993d315f6191a"
+      },
+      {
+        "path": ".qa-evidence/native-orders/build-client-after.log",
+        "bytes": 56900,
+        "sha256": "c144e0e1667c8653725ee8fdf26a48582609469591623b412c2c2310a3459bde"
+      },
+      {
+        "path": ".qa-evidence/native-orders/build-server-after.log",
+        "bytes": 138,
+        "sha256": "02b0a77dd1aa22d22405c54ac8ba35e7df71f009b606a06af57db98cfa38a429"
+      },
+      {
+        "path": ".qa-evidence/native-orders/checkpoint.json",
+        "bytes": 515,
+        "sha256": "de5bc32274824d09afbb2b6165e9fc6da4683f081e89a34b35975a6f87d828f3"
+      },
+      {
+        "path": ".qa-evidence/native-orders/dependency-audit.json",
+        "bytes": 31186,
+        "sha256": "26aa6221a41cd70c6bcb4f51637af2d02e81224d64acddcc26ea96243308a6f6"
+      },
+      {
+        "path": ".qa-evidence/native-orders/dependency-critical-summary.json",
+        "bytes": 1244,
+        "sha256": "4f23a007dc3e79f7d9025ec908a9917d3c5e5d713f2520e9b6db877eb64ae3f1"
+      },
+      {
+        "path": ".qa-evidence/native-orders/frontend-final/kitchen-1440-failed-refresh.png",
+        "bytes": 208480,
+        "sha256": "dc63cab6c66d0155f0db686c9685021772886275073e26f7840d331154911b6c"
+      },
+      {
+        "path": ".qa-evidence/native-orders/frontend-final/kitchen-1440-pending-retry.png",
+        "bytes": 205853,
+        "sha256": "414aac5f00f6c73433baa96ecff47ff134e778e2ac9d90f85fa115ead699c9fe"
+      },
+      {
+        "path": ".qa-evidence/native-orders/frontend-final/kitchen-1440-recovered.png",
+        "bytes": 250595,
+        "sha256": "ed6d6e24e2ca76622b844de87992476a9d2869b93ddf2ebff09319f265d5827f"
+      },
+      {
+        "path": ".qa-evidence/native-orders/frontend-final/orders-1440-failed-refresh.png",
+        "bytes": 207597,
+        "sha256": "17d8e2fa31f887d6a4986a35ad0656d3c281fb0eaf8c801e6e1b76c98f4e9329"
+      },
+      {
+        "path": ".qa-evidence/native-orders/frontend-final/orders-1440-pending-retry.png",
+        "bytes": 204263,
+        "sha256": "335a0259411580d97146a5bea4b70c0f83aa728e26f72697ebf1d5219a2fe3b3"
+      },
+      {
+        "path": ".qa-evidence/native-orders/frontend-final/orders-1440-recovered.png",
+        "bytes": 241755,
+        "sha256": "b487b2aa96d91b5dad250a6caf6e413a5a37a82cb1bfd199590243e9b49e5341"
+      },
+      {
+        "path": ".qa-evidence/native-orders/frontend-final.log",
+        "bytes": 10824,
+        "sha256": "de51f5d893e5766588b08e18b54232b562d11664f51aeed05efcd0de1d54990d"
+      },
+      {
+        "path": ".qa-evidence/native-orders/github-check-annotations.json",
+        "bytes": 773,
+        "sha256": "7e55625a46f6edfa86a3ee65344cf65da39db3ebb26527eaf44924fb5debb8bd"
+      },
+      {
+        "path": ".qa-evidence/native-orders/helpers/helper-manifest.json",
+        "bytes": 1070,
+        "sha256": "362a9235e5e1d5096f001c20653ce27c8a402c9c3a6cec5e16fd9efe3e5b8dcf"
+      },
+      {
+        "path": ".qa-evidence/native-orders/helpers/loopback-status.cjs",
+        "bytes": 888,
+        "sha256": "bf46d21daf978db5edb461c5c0fc431f8b224629f5c49dd428101b26ce4be00b"
+      },
+      {
+        "path": ".qa-evidence/native-orders/helpers/owned-postgres.mjs",
+        "bytes": 3213,
+        "sha256": "50cfa47e6552dabf2a4a7cdd63427560054ca51b8040540f3f8f07980333a190"
+      },
+      {
+        "path": ".qa-evidence/native-orders/helpers/serve-runtime.cjs",
+        "bytes": 11962,
+        "sha256": "ec1c3b4b398bdb5fd5c1ad5c9315d0571ecb1ebb67f2cf0cb0a0acb6ece14337"
+      },
+      {
+        "path": ".qa-evidence/native-orders/hosted/build-observation-1.log",
+        "bytes": 120682,
+        "sha256": "8d5abaff695147628309568db327868d6423e293d6642d88c2b382232be2648d"
+      },
+      {
+        "path": ".qa-evidence/native-orders/hosted/build-observation-2.log",
+        "bytes": 145824,
+        "sha256": "cf833e48dcbde110d18a64144423dcfe94ce8bd5e0d91d23324b9eccd920b53c"
+      },
+      {
+        "path": ".qa-evidence/native-orders/hosted/capture-observation-1.json",
+        "bytes": 2030,
+        "sha256": "594f0fa093484a2bc130032ea629dae52539f2faf9971a0660e98fda3923ce94"
+      },
+      {
+        "path": ".qa-evidence/native-orders/hosted/capture-observation-2.json",
+        "bytes": 6317,
+        "sha256": "d85f666d03bbcf2c2f0330b5d1725e218e99811874ca157fbc5fff8e3f23e44c"
+      },
+      {
+        "path": ".qa-evidence/native-orders/hosted/hosted-verified.json",
+        "bytes": 3776,
+        "sha256": "e2a378129f5b04f9180cde3537cd62e48cca398bce9b207af06a547a6dffa81f"
+      },
+      {
+        "path": ".qa-evidence/native-orders/hosted/verifier-observation-note.json",
+        "bytes": 349,
+        "sha256": "7f355486ff7391fc5adceb2f2d682b07b594f852d852e7420fea19e5e735e34b"
+      },
+      {
+        "path": ".qa-evidence/native-orders/native-1440.log",
+        "bytes": 2376,
+        "sha256": "e00e0d4323a5fefdfd0890e03179514cfdaed5e6a221079ae942d3965252c095"
+      },
+      {
+        "path": ".qa-evidence/native-orders/native-390.log",
+        "bytes": 2360,
+        "sha256": "222c51b0c82516b56767bb60e5b91272de3a23587ca5b551448b63321a984d6e"
+      },
+      {
+        "path": ".qa-evidence/native-orders/native-baseline-second.log",
+        "bytes": 3088,
+        "sha256": "8621c570169f520f20576f14481996d62dc5663a572196b2f766965bfa29a81e"
+      },
+      {
+        "path": ".qa-evidence/native-orders/native-baseline-third.log",
+        "bytes": 11018,
+        "sha256": "aa261009a8fd7d98077a12a6317275f2221faee502fac813b48f0880d249c7dc"
+      },
+      {
+        "path": ".qa-evidence/native-orders/native-baseline.log",
+        "bytes": 1768,
+        "sha256": "a2a570922e0196b5f485cf97b6d35916f86f2504b39d8b23eb9417665408b650"
+      },
+      {
+        "path": ".qa-evidence/native-orders/native-final.log",
+        "bytes": 8212,
+        "sha256": "22a1098e542ffcd62a1f1c5ab05cb98bafa3981f910c908edf4f334e01eb9e37"
+      },
+      {
+        "path": ".qa-evidence/native-orders/native-matrix.json",
+        "bytes": 2488,
+        "sha256": "fe452e7f3b8da51d3a4b8effce178fba5bb83733e15b30ca794a191c476cadc7"
+      },
+      {
+        "path": ".qa-evidence/native-orders/native-matrix.log",
+        "bytes": 1232,
+        "sha256": "e1edec9227db65d2fedc07ad5bed7d70f811a0b1abc49437773adce861d7afa4"
+      },
+      {
+        "path": ".qa-evidence/native-orders/native-runtime-final.log",
+        "bytes": 1996,
+        "sha256": "1dcc7e2107d9ca1772939eb0ebd0b341cc8073c3a75ea9b6efe67ef754f423a5"
+      },
+      {
+        "path": ".qa-evidence/native-orders/native-runtime-launch.log",
+        "bytes": 1996,
+        "sha256": "608bea0a10a978087fd123314ebe748276d86b3efa737ffd2e8ca5c4d6a5f188"
+      },
+      {
+        "path": ".qa-evidence/native-orders/native-runtime-second.log",
+        "bytes": 1996,
+        "sha256": "67e476ad2b006ff5c167df1e79e130e4248b927bcc739ae4756e3836a3d60ea5"
+      },
+      {
+        "path": ".qa-evidence/native-orders/native-runtime-third.log",
+        "bytes": 1996,
+        "sha256": "0a5e29c115657039fae9c6507b582ff7345e52b3bbe66cea2c9c9336c4730df0"
+      },
+      {
+        "path": ".qa-evidence/native-orders/owner-state-after.log",
+        "bytes": 7614,
+        "sha256": "b064cf239137aeb6499cce5b82e513eb6fa10ebd1773e7acd45e9fc0c63d51be"
+      },
+      {
+        "path": ".qa-evidence/native-orders/product-correction.json",
+        "bytes": 528,
+        "sha256": "d8d8a88046504312fffbb2a828ad9b719838179ff895aafbac9cf272f83ff54c"
+      },
+      {
+        "path": ".qa-evidence/native-orders/response-after.log",
+        "bytes": 6682,
+        "sha256": "3dc579b36e54fbc5e9efa63e66d75528f7fb9d8abfc68ab64273b44adc7942d3"
+      },
+      {
+        "path": ".qa-evidence/native-orders/run-matrix.cjs",
+        "bytes": 3378,
+        "sha256": "6b0876cf44c66b2e73bdfa4020be3b077a2ee4aa7b51d1f65c07b04861885526"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-05-49-042Z/database.log",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-05-49-042Z/native-orders-2026-09-19T22-09-50-646Z/receipt.json",
+        "bytes": 2032,
+        "sha256": "48151b287fff5a9fa523c091b44dfe6d15a31aedf09b4f09c548b611d2e67d05"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-05-49-042Z/runtime-receipt.json",
+        "bytes": 1775,
+        "sha256": "22ee3a3a87bd465e978ef546b0136f17e8082fe556cf9b5f7ec78cbc8132a689"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-05-49-042Z/schema.log",
+        "bytes": 289,
+        "sha256": "c99f271fc5f335e160122f8da9ceb0b2871f39e06bd264ee3f8069175261a585"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-05-49-042Z/server-startup.log",
+        "bytes": 1680,
+        "sha256": "56a971210f6a02a80eb9588ea25f85a2c345e61105e17d03dba5665058671219"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-05-49-042Z/server.log",
+        "bytes": 2701,
+        "sha256": "ecc799dfe3865e0c226e4546595ced5b6879648945b22f03beeec48f2424d593"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-10-24-324Z/database.log",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-10-24-324Z/native-orders-2026-09-19T22-11-01-198Z/actual-history-page-1.json",
+        "bytes": 157799,
+        "sha256": "395dee2801214224e076f489bc18bb008f5884e62da0cb5070c831ca7fd101fb"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-10-24-324Z/native-orders-2026-09-19T22-11-01-198Z/actual-history-page-2.json",
+        "bytes": 15828,
+        "sha256": "ed185ee5704ab4f10715d6e05bd881b828aa62e9b809ff9fe3d0fc1389500b67"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-10-24-324Z/native-orders-2026-09-19T22-11-01-198Z/actual-kitchen-response.json",
+        "bytes": 18961,
+        "sha256": "290a99739984272336cbcc548b379af094dacf5e8747f3dd9df3632c7d189456"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-10-24-324Z/native-orders-2026-09-19T22-11-01-198Z/orders 1440-database-failure.png",
+        "bytes": 298294,
+        "sha256": "d868f42d51422ef514d157a9f0ab224a1f92247d63c708caf3bd9ba9943b8a70"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-10-24-324Z/native-orders-2026-09-19T22-11-01-198Z/orders 1440-normal.png",
+        "bytes": 808962,
+        "sha256": "7992baa631a06847175507ee1ab034f8ff9f8f0d37adc94364f0126fee9ac4ee"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-10-24-324Z/runtime-receipt.json",
+        "bytes": 1775,
+        "sha256": "86a1c190aaa5aa0b04826dc07ee5cd30df28d230b3641b38da2b52a1a775603c"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-10-24-324Z/schema.log",
+        "bytes": 289,
+        "sha256": "c99f271fc5f335e160122f8da9ceb0b2871f39e06bd264ee3f8069175261a585"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-10-24-324Z/server-startup.log",
+        "bytes": 1680,
+        "sha256": "4ddbac104744d85b95a38da88fc53c963c7e8f913cf4e42807cecd357f11c38a"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-10-24-324Z/server.log",
+        "bytes": 14907,
+        "sha256": "14429f3b6540968175b9f63c2386842ea36d9789c6090b927e7fad8ab36b70c1"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-12-15-465Z/database.log",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-12-15-465Z/native-orders-2026-09-19T22-12-35-943Z/actual-history-page-1.json",
+        "bytes": 157799,
+        "sha256": "d7ec57047812587b3529a5f403da311f053da714bb17bfe3a921c21d8c4107be"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-12-15-465Z/native-orders-2026-09-19T22-12-35-943Z/actual-history-page-2.json",
+        "bytes": 15828,
+        "sha256": "0baf3b9a22d16a3fb79c460bbf8fcca135c1534c0621815ba69d46f58dd3ffd3"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-12-15-465Z/native-orders-2026-09-19T22-12-35-943Z/actual-kitchen-response.json",
+        "bytes": 18961,
+        "sha256": "91c1ce102ff5597dd11a2c04d8c363fef54e9a1c055c6ad4c6318dd5469b7998"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-12-15-465Z/native-orders-2026-09-19T22-12-35-943Z/failure-13.png",
+        "bytes": 206686,
+        "sha256": "5518cd7ff72405b1e18132487cff7cb22f7380d113cf2c3fa1ae9b746f1c8e55"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-12-15-465Z/native-orders-2026-09-19T22-12-35-943Z/failure-21.png",
+        "bytes": 207538,
+        "sha256": "e567639519786e58fc6dc986ec6c7030f52b8602e9bb002fd8b1d0842990aed2"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-12-15-465Z/native-orders-2026-09-19T22-12-35-943Z/failure-29.png",
+        "bytes": 113928,
+        "sha256": "43176fb47f58cf5f63aa3d0bec00edaf25bb86ab99df71c83c00023cf564a88c"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-12-15-465Z/native-orders-2026-09-19T22-12-35-943Z/failure-37.png",
+        "bytes": 114966,
+        "sha256": "f8dfd28f5bc7ba49134401faa01a297d7234c2be7fd984b4e2c43403be7d2ab2"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-12-15-465Z/native-orders-2026-09-19T22-12-35-943Z/kitchen 1440-database-failure.png",
+        "bytes": 227187,
+        "sha256": "7b95a4e6988d2dd6371a4eed4fb1df0ccfe07cbbe4db710139b14b3673e3a39a"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-12-15-465Z/native-orders-2026-09-19T22-12-35-943Z/kitchen 1440-expired-session.png",
+        "bytes": 207432,
+        "sha256": "28663d88c91d7edc8f79f4de7648a7e99bc992a47afd62c4243df9e7892582c2"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-12-15-465Z/native-orders-2026-09-19T22-12-35-943Z/kitchen 1440-normal.png",
+        "bytes": 353493,
+        "sha256": "81c167e2d12f764261b9ca35104a2a8eb4fa125423feec97c19f9f6fd90c98c1"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-12-15-465Z/native-orders-2026-09-19T22-12-35-943Z/kitchen 1440-trace.zip",
+        "bytes": 8944686,
+        "sha256": "3aba6db027205137b65d4ce361efbd4201ce49c6d2fc147ff2457548d4fa846a"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-12-15-465Z/native-orders-2026-09-19T22-12-35-943Z/kitchen 390-database-failure.png",
+        "bytes": 138791,
+        "sha256": "53a2a7721cb3b327f6fe5627792f6251402ccfac85e480099e64a15d642ccd3e"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-12-15-465Z/native-orders-2026-09-19T22-12-35-943Z/kitchen 390-expired-session.png",
+        "bytes": 114945,
+        "sha256": "d56801c1ae7d628b6f33123dfe6cfe3f9cf11c1df5848a06d8d5a2f8418076c5"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-12-15-465Z/native-orders-2026-09-19T22-12-35-943Z/kitchen 390-normal.png",
+        "bytes": 250616,
+        "sha256": "f28fd5c8625f9e712c30c2d93212b3b85bde615ada6b3f749da59a86c21eabcf"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-12-15-465Z/native-orders-2026-09-19T22-12-35-943Z/kitchen 390-trace.zip",
+        "bytes": 6379704,
+        "sha256": "c6c6f175c5c8e1812f9ee3038655b220c845b821bcdbf94499e55840697c0915"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-12-15-465Z/native-orders-2026-09-19T22-12-35-943Z/orders 1440-database-failure.png",
+        "bytes": 298797,
+        "sha256": "a76521fb9360703f896d193bb4b3056c34bc1fc238f1421e28798a4e0709a2c4"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-12-15-465Z/native-orders-2026-09-19T22-12-35-943Z/orders 1440-expired-session.png",
+        "bytes": 206757,
+        "sha256": "42da1d6eb073614e4f47684d8dc8623cf4d66fe9efd7d227582fc9dfff7491dd"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-12-15-465Z/native-orders-2026-09-19T22-12-35-943Z/orders 1440-normal.png",
+        "bytes": 810224,
+        "sha256": "95b7aba2c880070d1465475021853c87576451547833fb1289841426bad9e139"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-12-15-465Z/native-orders-2026-09-19T22-12-35-943Z/orders 1440-trace.zip",
+        "bytes": 7282647,
+        "sha256": "39375871c823fb9baa9e651aaa33941a0415ed3d3105fd77a4bdc5dc71e3ad62"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-12-15-465Z/native-orders-2026-09-19T22-12-35-943Z/orders 390-database-failure.png",
+        "bytes": 210982,
+        "sha256": "7825fcc73a3c287b2255d7992fd19cfa4812b5023fd2e3d3c86fbfab8f95926b"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-12-15-465Z/native-orders-2026-09-19T22-12-35-943Z/orders 390-expired-session.png",
+        "bytes": 113924,
+        "sha256": "30a6545320db18c35cfbc47289d3a73327c7c11d6c8c1251a4dd65a73f127267"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-12-15-465Z/native-orders-2026-09-19T22-12-35-943Z/orders 390-normal.png",
+        "bytes": 943893,
+        "sha256": "9cf7557a6a03a9295c0be9ee26999c5109c4ee8c09f5dbb19727e7e34491c77e"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-12-15-465Z/native-orders-2026-09-19T22-12-35-943Z/orders 390-trace.zip",
+        "bytes": 5734736,
+        "sha256": "d644cf681b0d96625df4e482e5b754b171d3909994e3481c3e653aace6d70f68"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-12-15-465Z/native-orders-2026-09-19T22-12-35-943Z/receipt.json",
+        "bytes": 31959,
+        "sha256": "61634a05e50cfe104990b3fe06a53947beef88345b33c254b2036b660e1bd91e"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-12-15-465Z/runtime-receipt.json",
+        "bytes": 1775,
+        "sha256": "8e310655edee683c45f68bf9022ee3fac735e91d42f99c8a2dc1e3e71b663491"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-12-15-465Z/schema.log",
+        "bytes": 289,
+        "sha256": "c99f271fc5f335e160122f8da9ceb0b2871f39e06bd264ee3f8069175261a585"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-12-15-465Z/server-startup.log",
+        "bytes": 1680,
+        "sha256": "205dc589e3836e4f27cdc911f8edf4a68fefaa47d4e93a55eeda2b27484eace0"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-12-15-465Z/server.log",
+        "bytes": 42128,
+        "sha256": "41f674b5ba54b7d7024cfe04bb8627e1f9835d7ef3b00830023c5f19de678636"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-15-47-922Z/database.log",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-15-47-922Z/native-orders-2026-09-19T22-16-19-657Z/actual-history-page-1.json",
+        "bytes": 157799,
+        "sha256": "ad57559ed775e6f111f9c567c308088c2367e59e8bfa80f3c9e2ba6c9c7a79af"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-15-47-922Z/native-orders-2026-09-19T22-16-19-657Z/actual-history-page-2.json",
+        "bytes": 15828,
+        "sha256": "58ba3d957b321fca693932dba5ce93f70c202b8a382e50376e0fe0d408169568"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-15-47-922Z/native-orders-2026-09-19T22-16-19-657Z/actual-kitchen-response.json",
+        "bytes": 18961,
+        "sha256": "43e628d2a78b6773d3c6537f4ae61e242106870f7ebc4a676c9375550ba4636d"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-15-47-922Z/native-orders-2026-09-19T22-16-19-657Z/failure-29.png",
+        "bytes": 78461,
+        "sha256": "d641c85c3222f0da07fd81b90bd684232b779eefbac4073c74b808e899c7ff6a"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-15-47-922Z/native-orders-2026-09-19T22-16-19-657Z/failure-31.png",
+        "bytes": 72631,
+        "sha256": "b37ec67c00838712ebb935f3bd6fd2937869be724eed1801231ec7246576e5c5"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-15-47-922Z/native-orders-2026-09-19T22-16-19-657Z/kitchen 1440-database-failure.png",
+        "bytes": 227257,
+        "sha256": "7af08da36a68185f5149c835443b1f9675fd5060ed62f9c4a984323786dd8425"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-15-47-922Z/native-orders-2026-09-19T22-16-19-657Z/kitchen 1440-expired-session.png",
+        "bytes": 210453,
+        "sha256": "98b7fe05fe36d6229a7c7d83cb9920c4f2dd5da2d74cb6b25a81a0e71a6d766e"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-15-47-922Z/native-orders-2026-09-19T22-16-19-657Z/kitchen 1440-normal.png",
+        "bytes": 353578,
+        "sha256": "dee57e1e38a8e4ebb4f6d42e44eb9bb880d62c488321210d9c48eaffe66802d4"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-15-47-922Z/native-orders-2026-09-19T22-16-19-657Z/kitchen 1440-session-recovered.png",
+        "bytes": 353578,
+        "sha256": "dee57e1e38a8e4ebb4f6d42e44eb9bb880d62c488321210d9c48eaffe66802d4"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-15-47-922Z/native-orders-2026-09-19T22-16-19-657Z/kitchen 1440-trace.zip",
+        "bytes": 10760148,
+        "sha256": "162efb449aeb5b692f1a77219f2611bfdbb54f2a849a35bb38be530acbd6fd75"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-15-47-922Z/native-orders-2026-09-19T22-16-19-657Z/kitchen 390-trace.zip",
+        "bytes": 1597647,
+        "sha256": "91a3eac8facd66f7e93098791aafb42e80b98c4d57d4575054462324a00e2299"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-15-47-922Z/native-orders-2026-09-19T22-16-19-657Z/orders 1440-database-failure.png",
+        "bytes": 297953,
+        "sha256": "46b97dfcfc99bfb53e3cef74fe1a38f1b647cb09be12ee2f12f5c39f926e6369"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-15-47-922Z/native-orders-2026-09-19T22-16-19-657Z/orders 1440-expired-session.png",
+        "bytes": 209687,
+        "sha256": "9a694fcc9c95cd94626c69d555466218ece58a498ca8f30817786876f1cac9ed"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-15-47-922Z/native-orders-2026-09-19T22-16-19-657Z/orders 1440-normal.png",
+        "bytes": 808617,
+        "sha256": "40ba0fad3fd82cae911943f34b47178c39c470ba68ccb3fa92a3de4e5364ae0f"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-15-47-922Z/native-orders-2026-09-19T22-16-19-657Z/orders 1440-session-recovered.png",
+        "bytes": 808617,
+        "sha256": "40ba0fad3fd82cae911943f34b47178c39c470ba68ccb3fa92a3de4e5364ae0f"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-15-47-922Z/native-orders-2026-09-19T22-16-19-657Z/orders 1440-trace.zip",
+        "bytes": 8701717,
+        "sha256": "b77c38175c77289c42bd4455400f8f2265b4a77decf96c246580c996e413e171"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-15-47-922Z/native-orders-2026-09-19T22-16-19-657Z/orders 390-database-failure.png",
+        "bytes": 210537,
+        "sha256": "267c4cbe4a15f75edf1ef426d1147b724e23e5ec7d73c5049048ef14fcd79ed0"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-15-47-922Z/native-orders-2026-09-19T22-16-19-657Z/orders 390-expired-session.png",
+        "bytes": 117654,
+        "sha256": "6a09a2b969b9421b11f77e5eeefe88660683a3a35e887db7e41cd7f7bf8ba9fb"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-15-47-922Z/native-orders-2026-09-19T22-16-19-657Z/orders 390-normal.png",
+        "bytes": 943179,
+        "sha256": "11c24ad74929a45c39bb1041b3b91f2d9d4ffde9bc4ed99e7466277f5a5bb0f6"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-15-47-922Z/native-orders-2026-09-19T22-16-19-657Z/orders 390-trace.zip",
+        "bytes": 6025515,
+        "sha256": "2e419950f07f926d179eca2f12887291993bf6580c87a9e67a5b4b46805abc69"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-15-47-922Z/native-orders-2026-09-19T22-16-19-657Z/receipt.json",
+        "bytes": 27559,
+        "sha256": "33a2429480bd2cbbf1ea0ed2c2900901eea3f959677d5d5d1d3dc30cd8eea32a"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-15-47-922Z/runtime-receipt.json",
+        "bytes": 1775,
+        "sha256": "bcdd7fa29cadeb14fc5996b7e1b6e701aa2adf1287299d2b35d430a293c5123f"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-15-47-922Z/schema.log",
+        "bytes": 289,
+        "sha256": "c99f271fc5f335e160122f8da9ceb0b2871f39e06bd264ee3f8069175261a585"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-15-47-922Z/server-startup.log",
+        "bytes": 1680,
+        "sha256": "374c510e847a8077bda5643bbcafe195a582921ddd5df90dcfcb4646201ceea0"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-15-47-922Z/server.log",
+        "bytes": 39220,
+        "sha256": "28e0088ee2d4b7a05f6c0fbf642c065f1a8fbad75eea208f228a928fbbfcf73c"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-19-30-627Z/database.log",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-19-30-627Z/native-orders-2026-09-19T22-19-49-394Z/actual-history-page-1.json",
+        "bytes": 157799,
+        "sha256": "26183a06924532eb59116a90c8dfcc5858041e5e1c50b33e30c7a366fecaccf2"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-19-30-627Z/native-orders-2026-09-19T22-19-49-394Z/actual-history-page-2.json",
+        "bytes": 15828,
+        "sha256": "e9b7d0348f6ea39092fec8190eb2c3902616361a82744d523efd7d6ed5f0409e"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-19-30-627Z/native-orders-2026-09-19T22-19-49-394Z/actual-kitchen-response.json",
+        "bytes": 18961,
+        "sha256": "f8cbe680b53359482b682c28c04757b2f10d5ca048f4fb819b71266456bb0e20"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-19-30-627Z/native-orders-2026-09-19T22-19-49-394Z/kitchen 1440-database-failure.png",
+        "bytes": 226932,
+        "sha256": "f88718ee2a30dbb0bbbe46d383f60b45cdfdcbb2d2c372db1ffbe66fc1c9c76e"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-19-30-627Z/native-orders-2026-09-19T22-19-49-394Z/kitchen 1440-expired-session.png",
+        "bytes": 210565,
+        "sha256": "1651fb129bda6e074b8d2e40318c3bc64d4f0352acea369c559571a9c51c3493"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-19-30-627Z/native-orders-2026-09-19T22-19-49-394Z/kitchen 1440-normal.png",
+        "bytes": 352946,
+        "sha256": "5ae980234fdc0ade3e85fb42c09d600b63dc1363a1e17bf2ce21cd15927cdb66"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-19-30-627Z/native-orders-2026-09-19T22-19-49-394Z/kitchen 1440-session-recovered.png",
+        "bytes": 352946,
+        "sha256": "5ae980234fdc0ade3e85fb42c09d600b63dc1363a1e17bf2ce21cd15927cdb66"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-19-30-627Z/native-orders-2026-09-19T22-19-49-394Z/kitchen 1440-trace.zip",
+        "bytes": 10984233,
+        "sha256": "5e285aa044b65c267aa29fcfb1e3c74c4669ee8f77bbd83266956f24ba803eb1"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-19-30-627Z/native-orders-2026-09-19T22-19-49-394Z/orders 1440-database-failure.png",
+        "bytes": 297955,
+        "sha256": "d285d4158b361bc5dc0527128c65d3ec65e59e97593443efb8f5fcbf64b73a0b"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-19-30-627Z/native-orders-2026-09-19T22-19-49-394Z/orders 1440-expired-session.png",
+        "bytes": 209712,
+        "sha256": "b5f2a4aaf2e9e4ae5460a5a3341850a7b1079567986e1b4cf742b0d71d54acf2"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-19-30-627Z/native-orders-2026-09-19T22-19-49-394Z/orders 1440-normal.png",
+        "bytes": 808730,
+        "sha256": "76672fb71688e3a40a0f0b22bbd868b0b751cc390d0a616241aa3a0bbbab249b"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-19-30-627Z/native-orders-2026-09-19T22-19-49-394Z/orders 1440-session-recovered.png",
+        "bytes": 808730,
+        "sha256": "76672fb71688e3a40a0f0b22bbd868b0b751cc390d0a616241aa3a0bbbab249b"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-19-30-627Z/native-orders-2026-09-19T22-19-49-394Z/orders 1440-trace.zip",
+        "bytes": 8441488,
+        "sha256": "42fad6fa5a4710cfa61d81e0edd4f4a93bd089ed7c6ae1ad6ef2b3d764816da7"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-19-30-627Z/native-orders-2026-09-19T22-19-49-394Z/receipt.json",
+        "bytes": 19217,
+        "sha256": "27725d4645409e7d5086da511882b046563d7c036b7fd81f9fafbb91ea517e6e"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-19-30-627Z/runtime-receipt.json",
+        "bytes": 1774,
+        "sha256": "1a06395a3b23aab08032b67a9a676eb28bb10f137f53b671dfdf9282a26f256b"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-19-30-627Z/schema.log",
+        "bytes": 289,
+        "sha256": "c99f271fc5f335e160122f8da9ceb0b2871f39e06bd264ee3f8069175261a585"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-19-30-627Z/server-startup.log",
+        "bytes": 1680,
+        "sha256": "8bd0a64adeb46a78bf01dc1620f44d3c811daddb72ed3373beb7bcf69f9b6bbd"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-19-30-627Z/server.log",
+        "bytes": 27885,
+        "sha256": "00da7d15a219bcba4fe1e8bf3008cca38e57c871cd169a81872e97357d14c8b8"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-20-25-178Z/database.log",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-20-25-178Z/native-orders-2026-09-19T22-20-42-907Z/actual-history-page-1.json",
+        "bytes": 157799,
+        "sha256": "b7715f44c5fee7b76918e17d982bb1e867fb7d6a74188e73880da79727f994e3"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-20-25-178Z/native-orders-2026-09-19T22-20-42-907Z/actual-history-page-2.json",
+        "bytes": 15828,
+        "sha256": "046670606f8f59dc52e7e9af7ad00325f04b2b6d9e52bd97ca3a43a08d1a4bb9"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-20-25-178Z/native-orders-2026-09-19T22-20-42-907Z/actual-kitchen-response.json",
+        "bytes": 18961,
+        "sha256": "ea8af71306398d1ec898e5e2666bef1357a2ec68768423f13928ee2c63233d1e"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-20-25-178Z/native-orders-2026-09-19T22-20-42-907Z/kitchen 390-database-failure.png",
+        "bytes": 138588,
+        "sha256": "ef3a84daa1eb77f4cded2194dd2668bb1b51395ee238190b03abc3f00e6e6ce1"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-20-25-178Z/native-orders-2026-09-19T22-20-42-907Z/kitchen 390-expired-session.png",
+        "bytes": 118820,
+        "sha256": "b1eaf0a6c927ef8a5caa65c7bab9e88d489719153beadf0169c2b7c7c8455d9d"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-20-25-178Z/native-orders-2026-09-19T22-20-42-907Z/kitchen 390-normal.png",
+        "bytes": 250284,
+        "sha256": "ee4b4b698e308b31b706939adcde6190b9100e7d213cbcf563f836f58728bad2"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-20-25-178Z/native-orders-2026-09-19T22-20-42-907Z/kitchen 390-session-recovered.png",
+        "bytes": 250284,
+        "sha256": "ee4b4b698e308b31b706939adcde6190b9100e7d213cbcf563f836f58728bad2"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-20-25-178Z/native-orders-2026-09-19T22-20-42-907Z/kitchen 390-trace.zip",
+        "bytes": 7631253,
+        "sha256": "c5510ae2784e07ebab4a8fcad6d72a46fdb61b9226c38f025a5feb7294405adf"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-20-25-178Z/native-orders-2026-09-19T22-20-42-907Z/orders 390-database-failure.png",
+        "bytes": 210963,
+        "sha256": "deeb1cd2dccaa8d4f4df7cf71cabe201a0030c8cb17e07accefb3e071c44780f"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-20-25-178Z/native-orders-2026-09-19T22-20-42-907Z/orders 390-expired-session.png",
+        "bytes": 117784,
+        "sha256": "1553bf8d72b26f3aaf1de29e0ac1afccc4b9c2f8bf0aaaf30a2cf0338a08a862"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-20-25-178Z/native-orders-2026-09-19T22-20-42-907Z/orders 390-normal.png",
+        "bytes": 944436,
+        "sha256": "c85e0755a27f5ceccd153451af08672da85f3af83b7bfcf23d6b054d7bdd12d7"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-20-25-178Z/native-orders-2026-09-19T22-20-42-907Z/orders 390-session-recovered.png",
+        "bytes": 944436,
+        "sha256": "c85e0755a27f5ceccd153451af08672da85f3af83b7bfcf23d6b054d7bdd12d7"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-20-25-178Z/native-orders-2026-09-19T22-20-42-907Z/orders 390-trace.zip",
+        "bytes": 6864780,
+        "sha256": "dec6ea29319c9e0de903483acb3380a93af9bcb9bc71e50bc272a96549bee564"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-20-25-178Z/native-orders-2026-09-19T22-20-42-907Z/receipt.json",
+        "bytes": 18510,
+        "sha256": "58476e89b471e4117e626c6fd434e4995c00a5841f90536cdaebcf6163d2510a"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-20-25-178Z/runtime-receipt.json",
+        "bytes": 1775,
+        "sha256": "e24537a89ea9a851b32d81e00058acc1749f020a37144e33320db6ac2e2b2332"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-20-25-178Z/schema.log",
+        "bytes": 289,
+        "sha256": "c99f271fc5f335e160122f8da9ceb0b2871f39e06bd264ee3f8069175261a585"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-20-25-178Z/server-startup.log",
+        "bytes": 1680,
+        "sha256": "18570b0c190b0057a5c074138c2caf4aab4f2ea92bf10400c3867973aa1a71f3"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runs/2026-09-19T22-20-25-178Z/server.log",
+        "bytes": 27144,
+        "sha256": "8ac383d8a3408f9a7365d3c4c9fa1807e34a92da47fcce0ed96dc3e1850a762a"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runtime-1440.log",
+        "bytes": 995,
+        "sha256": "0b05321727a4187c56fb0672292b199865c1d3a7ac16b1b575d2b96f4cb67cd4"
+      },
+      {
+        "path": ".qa-evidence/native-orders/runtime-390.log",
+        "bytes": 995,
+        "sha256": "2536f3d63d094b9a2b70a4f4ca17bf4fbc6990f5753084daf7e21d8d8b82aff1"
+      },
+      {
+        "path": ".qa-evidence/native-orders/typecheck-after.log",
+        "bytes": 74,
+        "sha256": "a2395182b69c62bc0e1384fe677d9190d3832155c95898ea05f212261795f361"
+      },
+      {
+        "path": ".qa-evidence/native-orders/workspace-after.log",
+        "bytes": 88,
+        "sha256": "8872a54f4061548abafba5eec39efa47780122126e13e6085e24a43d73037fc6"
+      }
+    ]
+  },
+  "frontend": {
+    "scope": "Full compiled frontend, real installed UI/router/query libraries; synthetic API/auth/Stripe, not production E2E",
+    "pass": 88,
+    "fail": 0,
+    "receipt": ".qa-evidence/native-orders/frontend-final/full-frontend-journeys.json",
+    "sha256": "eaa9c1c103fcb5769c6fba99e6cfa5bed2fc3b95be8b14fac6feb5c9a3f8c61c"
+  },
+  "hosted": {
+    "applicationSource": "9f9b64970785364728d4f887afee2645986a6174",
+    "deployment": "dpl_GEnEDGtHqBxmpXJDutfbdtAPhVKY",
+    "url": "https://meal-scout2-rh25vzb0q-tradescouts-projects.vercel.app",
+    "observedReadyState": "READY",
+    "providerMetadataVerifiedVia": "Vercel.get_deployment",
+    "observedAt": "2026-09-19T22:26:27.105Z",
+    "requiredStages": 24,
+    "stages": [
+      {
+        "name": "fixture-safety",
+        "status": "pass",
+        "code": 0,
+        "elapsedMs": 105
+      },
+      {
+        "name": "refinement",
+        "status": "pass",
+        "code": 0,
+        "elapsedMs": 454
+      },
+      {
+        "name": "checkout-state",
+        "status": "pass",
+        "code": 0,
+        "elapsedMs": 432
+      },
+      {
+        "name": "order-status-state",
+        "status": "pass",
+        "code": 0,
+        "elapsedMs": 465
+      },
+      {
+        "name": "owner-kitchen-state",
+        "status": "pass",
+        "code": 0,
+        "elapsedMs": 593
+      },
+      {
+        "name": "parking-source-contracts",
+        "status": "pass",
+        "code": 0,
+        "elapsedMs": 5782
+      },
+      {
+        "name": "parking-repair-behavior",
+        "status": "pass",
+        "code": 0,
+        "elapsedMs": 1875
+      },
+      {
+        "name": "parking-request-policy",
+        "status": "pass",
+        "code": 0,
+        "elapsedMs": 356
+      },
+      {
+        "name": "parking-durability",
+        "status": "pass",
+        "code": 0,
+        "elapsedMs": 5672
+      },
+      {
+        "name": "parking-reconciliation",
+        "status": "pass",
+        "code": 0,
+        "elapsedMs": 4346
+      },
+      {
+        "name": "parking-recovered-navigation",
+        "status": "pass",
+        "code": 0,
+        "elapsedMs": 355
+      },
+      {
+        "name": "parking-hold-expiry",
+        "status": "pass",
+        "code": 0,
+        "elapsedMs": 3671
+      },
+      {
+        "name": "scout-profile-state",
+        "status": "pass",
+        "code": 0,
+        "elapsedMs": 1517
+      },
+      {
+        "name": "full-typecheck",
+        "status": "pass",
+        "code": 0,
+        "elapsedMs": 58599
+      },
+      {
+        "name": "database-menu-actors",
+        "status": "pass",
+        "code": 0,
+        "elapsedMs": 9441
+      },
+      {
+        "name": "auth-http-database",
+        "status": "pass",
+        "code": 0,
+        "elapsedMs": 8402
+      },
+      {
+        "name": "install-serverless-chromium",
+        "status": "pass",
+        "code": 0,
+        "elapsedMs": 2684
+      },
+      {
+        "name": "extract-serverless-chromium",
+        "status": "pass",
+        "code": 0,
+        "elapsedMs": 1455
+      },
+      {
+        "name": "full-frontend-journeys",
+        "status": "pass",
+        "code": 0,
+        "elapsedMs": 83909
+      },
+      {
+        "name": "public-profile-browser",
+        "status": "pass",
+        "code": 0,
+        "elapsedMs": 155658
+      },
+      {
+        "name": "scout-persistence-timing",
+        "status": "pass",
+        "code": 0,
+        "elapsedMs": 2833
+      },
+      {
+        "name": "carto-map-browser",
+        "status": "pass",
+        "code": 0,
+        "elapsedMs": 12696
+      },
+      {
+        "name": "checkout-browser",
+        "status": "pass",
+        "code": 0,
+        "elapsedMs": 7216
+      },
+      {
+        "name": "parking-payment-browser",
+        "status": "pass",
+        "code": 0,
+        "elapsedMs": 12712
+      }
+    ],
+    "gateUnchangedFrom": "7cb37c68409f6558dfd4c572adf1a96c99d34d81",
+    "frontendStageExitCode": 0,
+    "frontendCaseCountFromHostedLog": null,
+    "frontendEvidenceLimit": "The provider log truncates the long frontend summary; the stage code is observed but its full per-case count must be proven by a separate full local receipt.",
+    "profileCases": 118,
+    "profileDeadlineMs": 180000,
+    "profileElapsedMs": 155658,
+    "logSha256": "cf833e48dcbde110d18a64144423dcfe94ce8bd5e0d91d23324b9eccd920b53c",
+    "scope": "Exact-source preview synthetic gate; native database acceptance is recorded separately; no production deployment"
+  },
+  "local": {
+    "responseReader": {
+      "pass": 40,
+      "fail": 0,
+      "skipped": 0
+    },
+    "ownerState": {
+      "pass": 31,
+      "fail": 0
+    },
+    "workspaceContractExit": 0,
+    "typecheckExit": 0,
+    "clientBuildExit": 0,
+    "serverBuildExit": 0,
+    "logs": [
+      {
+        "path": ".qa-evidence/native-orders/response-after.log",
+        "sha256": "3dc579b36e54fbc5e9efa63e66d75528f7fb9d8abfc68ab64273b44adc7942d3"
+      },
+      {
+        "path": ".qa-evidence/native-orders/owner-state-after.log",
+        "sha256": "b064cf239137aeb6499cce5b82e513eb6fa10ebd1773e7acd45e9fc0c63d51be"
+      },
+      {
+        "path": ".qa-evidence/native-orders/workspace-after.log",
+        "sha256": "8872a54f4061548abafba5eec39efa47780122126e13e6085e24a43d73037fc6"
+      },
+      {
+        "path": ".qa-evidence/native-orders/typecheck-after.log",
+        "sha256": "a2395182b69c62bc0e1384fe677d9190d3832155c95898ea05f212261795f361"
+      },
+      {
+        "path": ".qa-evidence/native-orders/build-client-after.log",
+        "sha256": "c144e0e1667c8653725ee8fdf26a48582609469591623b412c2c2310a3459bde"
+      },
+      {
+        "path": ".qa-evidence/native-orders/build-server-after.log",
+        "sha256": "02b0a77dd1aa22d22405c54ac8ba35e7df71f009b606a06af57db98cfa38a429"
+      },
+      {
+        "path": ".qa-evidence/native-orders/frontend-final.log",
+        "sha256": "b43fb38ae9ec90fee44dd7edfe45287aca0c3e1e60433986e013d6198f02fd56"
+      }
+    ]
+  },
+  "authority": {
+    "base": "7cb37c68409f6558dfd4c572adf1a96c99d34d81",
+    "unchanged": [
+      "nextOrderStatus",
+      "isBusinessOrderOperator",
+      "describeDisputeFinancialState",
+      "fetchOrders",
+      "mergeOrder",
+      "OwnerOrderCard",
+      "statusMutation",
+      "requestStatusChange",
+      "advanceOrder"
+    ]
+  },
+  "retainedFailures": [
+    {
+      "log": "native-baseline.log",
+      "kind": "fixture",
+      "detail": "Selected-listing name/address mismatch correctly rejected with409; corrected fixture only."
+    },
+    {
+      "log": "native-baseline-second.log",
+      "kind": "harness",
+      "detail": "Ten stages passed; held response unregistered before fulfillment. Corrected cleanup order; incomplete attempt not counted."
+    },
+    {
+      "log": "native-baseline-third.log",
+      "kind": "product",
+      "source": "7cb37c68409f6558dfd4c572adf1a96c99d34d81",
+      "pass": 35,
+      "fail": 4,
+      "detail": "All four missing-sign-in failures reproduced at both views/widths; zero page errors; order rows unchanged."
+    },
+    {
+      "log": "native-final.log",
+      "kind": "real rate-limit boundary",
+      "source": "9f9b64970785364728d4f887afee2645986a6174",
+      "pass": 30,
+      "fail": 2,
+      "detail": "Combined-viewport login burst hit existing429. Final runs use one fresh runtime per viewport, real PostgreSQL session expiry; no limit disabled/changed."
+    },
+    {
+      "log": "hosted/build-observation-1.log",
+      "kind": "partial capture",
+      "detail": "19 stages only; separately retained. Complete second capture proves24."
+    }
+  ],
+  "githubCheck": {
+    "source": "9f9b64970785364728d4f887afee2645986a6174",
+    "jobId": 105976717275,
+    "steps": [],
+    "failureAnnotations": [
+      "The job was not started because your account is locked due to a billing issue."
+    ],
+    "sha256": "7e55625a46f6edfa86a3ee65344cf65da39db3ebb26527eaf44924fb5debb8bd",
+    "bypassed": false
+  },
+  "dependencies": {
+    "scope": "Candidate package-lock-only npm audit, not default-branch alert count",
+    "counts": {
+      "info": 0,
+      "low": 1,
+      "moderate": 4,
+      "high": 4,
+      "critical": 1,
+      "total": 10
+    },
+    "critical": [
+      {
+        "name": "maplibre-gl",
+        "isDirect": true,
+        "range": "<=6.4.0",
+        "fixAvailable": {
+          "name": "maplibre-gl",
+          "version": "6.10.0",
+          "isSemVerMajor": true
+        },
+        "via": [
+          {
+            "source": 1193680,
+            "name": "maplibre-gl",
+            "dependency": "maplibre-gl",
+            "title": "MapLibre GL JS: XSS Sanitizer Bypass in DOM.sanitize() via Live NamedNodeMap Removal Skip",
+            "url": "https://github.com/advisories/GHSA-jrc7-96c5-q579",
+            "severity": "critical",
+            "cwe": [
+              "CWE-79"
+            ],
+            "cvss": {
+              "score": 10,
+              "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:N"
+            },
+            "range": "<=6.4.0"
+          }
+        ],
+        "nodes": [
+          "node_modules/maplibre-gl"
+        ],
+        "effects": []
+      }
+    ],
+    "lockedMapLibre": "5.24.0",
+    "upstreamFirstPatched": "6.4.1",
+    "remediated": false,
+    "reachabilityAssessed": false,
+    "auditSha256": "26aa6221a41cd70c6bcb4f51637af2d02e81224d64acddcc26ea96243308a6f6"
+  },
+  "limits": [
+    "Synthetic actors/55 seeded order snapshots per native runtime, not paid purchases. Actual server/index.ts, native PostgreSQL and persisted sessions used.",
+    "Local email sink; no external providers/payments/email acceptance.",
+    "Chromium1440x900 and390x844 only; no physical-device or other-browser proof.",
+    "Fresh schema synchronization is not migration replay.",
+    "Existing142/worker compatibility, native multi-process capacity, terminal-history/request tombstones and provider rollout remain open.",
+    "No main merge/production deployment, billing/access change, customer mutation or real payment/refund. Six owned runtimes cleaned and12 ports refused."
+  ],
+  "privacy": "Hashes/case metadata only. Private runtime credentials, mailbox and trace contents are not committed.",
+  "evidenceParserNotes": [
+    "Hosted frontend per-case summary is truncated; exact88 count comes from complete local receipt. Hosted24-stage and118-profile summaries are complete.",
+    "Initial local evidence parser expected TAP prefixes; observed Node output was spec format. Actual40/0 counts were parsed without modifying or rerunning those tests."
+  ]
+}

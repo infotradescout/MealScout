@@ -1,6 +1,8 @@
 /** Full server/index.ts, real Passport/PostgreSQL sessions and native PostgreSQL.
  * Run only against the fresh owned MealScout runtime named by
- * MEALSCOUT_NATIVE_ORDERS_RUNTIME. Account/claim handlers are real; email delivery
+ * MEALSCOUT_NATIVE_ORDERS_RUNTIME with MEALSCOUT_NATIVE_ORDERS_WIDTH=1440 or 390.
+ * Use one fresh runtime per viewport to preserve the real login rate limit.
+ * Account/claim handlers are real; email delivery
  * is a local sink. Orders are explicitly seeded fixtures, not paid purchases.
  * Only named response faults are intercepted. Recovery reads hit the real server.
  * Never runs against a deployed app, existing customer database, or payment API.
@@ -150,7 +152,10 @@ async function main() {
       }
     });
     browser=await chromium.launch({headless:true});
-    for(const viewport of [{width:1440,height:900},{width:390,height:844}])for(const view of ['orders','kitchen']){
+    const width=Number(process.env.MEALSCOUT_NATIVE_ORDERS_WIDTH);
+    assert.ok([1440,390].includes(width),'One explicitly selected viewport per fresh native runtime is required');
+    report.viewport={width,height:width===1440?900:844};
+    for(const viewport of [report.viewport])for(const view of ['orders','kitchen']){
       const label=view+' '+viewport.width;
       const context=await browser.newContext({viewport,serviceWorkers:'block'});contexts.push(context);
       await context.route('**/*',route=>{
@@ -207,7 +212,12 @@ async function main() {
           await page.goto(base.origin+routePath);await expect(card).toContainText('Native Fixture Lunch 0');
         },page);
         await stage(label+': a real expired session provides a sign-in route back to this exact business',async()=>{
-          await context.clearCookies();await page.getByRole('button',{name:'Refresh',exact:true}).click();await unverified(page,view,true);await shot(page,label+'-expired-session');
+          const cookie=(await context.cookies(base.origin)).find(x=>x.name==='tradescout.sid');
+          assert.ok(cookie,'An actual signed session cookie is required');
+          const sid=decodeURIComponent(cookie.value).replace(/^s:/,'').split('.')[0];
+          const expired=await pool.query("UPDATE sessions SET expire=NOW()-INTERVAL '1 second' WHERE sid=$1 RETURNING sid",[sid]);
+          assert.equal(expired.rowCount,1,'Expire only this browser session in the actual PostgreSQL store');
+          await page.getByRole('button',{name:'Refresh',exact:true}).click();await unverified(page,view,true);await shot(page,label+'-expired-session');
           const signin=page.getByRole('link',{name:'Sign in again',exact:true});await expect(signin).toBeVisible();
           const href=await signin.getAttribute('href');assert.ok(href.startsWith('/login?'));assert.ok(decodeURIComponent(href).includes(routePath));
           await signin.click();

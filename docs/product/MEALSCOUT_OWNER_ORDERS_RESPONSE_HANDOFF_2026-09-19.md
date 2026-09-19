@@ -1,55 +1,45 @@
-# MealScout Orders/Kitchen recovery - latest continuation 2026-09-19
+# MealScout Orders/Kitchen native recovery - September 19
 
 ## Objective
-Continue MealScout only. Close application/build/browser verification for the saved owner-order response reader and repair any reproduced recovery defects without changing transaction authority.
+Continue MealScout only. Prove Orders/Kitchen read recovery against actual backend/native PostgreSQL and repair contextual session-expiry recovery without changing transaction authority.
 
 ## Base branch/commit
-`codex/ui-ux-front-end-overhaul-20260915` at `070cf0f74807bf95a7c3018a811c681477cd47a9` (draft PR #380). Earlier source handoff remains available at that exact revision.
+Existing draft PR380 branch: codex/ui-ux-front-end-overhaul-20260915, starting at 7cb37c68409f6558dfd4c572adf1a96c99d34d81.
 
 ## Current branch/commit
-Verified implementation: `d2a5938fa93934a9c0e523427dca5282e88f0b74`. The evidence/handoff commit is its documentation-only child. Resolve the remote task branch before resuming; do not use older preview or audit revisions as the resume point.
-Preserved execution worktree: `C:/Users/flavo/MealScout-orders-qa-20260919`. The older QA, main and SEO worktrees were not switched or reset. Its node_modules junction reuses the existing PR380 QA dependency installation.
+Application implementation: 9f9b64970785364728d4f887afee2645986a6174. The commit containing this handoff adds the final native harness and proof only; resolve its remote head before resuming. Application files did not change after build/native/hosted acceptance. Native harness Git blob c111646b004462d46ab5f7cac4e96e0646e270ea; SHA-256 f388959d50fa71cad8434a0475a3e8c707aaaaec8814ece2bb8baa09de4413ef.
 
 ## Verified completed work
-Reproduced the pending-retry defect in the compiled application on desktop and mobile: summary values were unconfirmed but the status filters still announced All 0 and other zero counts. Those filter counts now wait for a successful read. Refresh exposes aria-busy and has a verified 44px minimum touch target.
-The existing owner-state harness now imports the real response reader. A pre-existing obsolete contract was replaced with explicit assertions that owners cannot confirm card payments or rewrite confirmedAt; preparation records merchant acknowledgement. No server behavior changed.
+Orders/Kitchen401 now shows Sign in again, preserves the exact view/business and forces fresh auth state. Real password login returns to the original orders.403 remains distinct. Nine read/financial/mutation/action declarations are unchanged from base; no server, permission, price, refund or settlement edit.
 
 ## Files changed
-- `client/src/components/owner-orders-workspace.tsx`
-- `scripts/mealscout-orders-workspace.contract.test.ts`
-- `scripts/mealscout-owner-orders-state.test.cjs`
-- `scripts/qa/full-frontend-journeys.cjs`
-- `scripts/qa/owner-orders-recovery-journeys.cjs`
-- This handoff and `docs/qa/mealscout-owner-orders-recovery-2026-09-19.json`.
+client/src/components/owner-orders-workspace.tsx; scripts/qa/owner-orders-recovery-journeys.cjs; scripts/qa/owner-orders-native-browser.cjs; this handoff; docs/qa/mealscout-native-orders-2026-09-19.json.
 
 ## Tests/evidence already run
-- Response reader: 40/40 (37 native Response behavior cases, 3 source-wiring contracts), no failures or skips.
-- Existing owner/kitchen state scenarios: 31/31 with real reader linked. These use deterministic hooks, not a real backend.
-- Orders workspace source contract: PASS, including the stronger provider-owned confirmation assertions.
-- Full application TypeScript check, client build, and server build: exit 0.
-- Compiled application browser suite: 88/88, zero failed scenarios. This includes the original 48 cases plus 40 new Orders/Kitchen cases at 1440x900 and 390x844. Scenario time sum: 61405ms. Real installed React/Wouter/Query/Radix; synthetic API/auth/Stripe only.
-- Browser cases cover verified empty responses; malformed, wrong-business, duplicate, incomplete and invalid-page responses; 401/403; raw HTML after a populated read; delayed retry, no false empty/zero/live state, no repeated mutation, preserved item notes and current-business recovery. All passing scenarios assert zero page exceptions and no API escaping interception.
-- Nine named helpers and mutation/action declarations compared unchanged against the base. See authority-preservation evidence. No server/schema/price/permission/payment/refund/settlement edits.
-- Reviewed actual desktop failure and mobile failure/pending screenshots. Additional recovered screenshots remain in the same evidence folder.
+Native PostgreSQL/backend/browser:46/46,23 per fresh runtime at1440x900 and390x844, zero failures/page errors.32 are browser stages;14 are repeated setup/API/database/access/integrity stages. Actual registration, local verification, claims, password sessions and order-read handlers;55 explicitly seeded order snapshots per runtime. Final expiry tests expire the exact session row in native PostgreSQL. Actual SQL outages, pagination50+5, six-status kitchen projection, malformed/wrong-business reads, delayed retry, true emptiness and reauthentication recover without order writes. Final order/item row hashes unchanged.
+Current-code synthetic frontend:88/88. Response reader40/40, existing owner state31/31, workspace contract PASS, full TypeScript/client/server builds exit0.
+Exact application preview dpl_GEnEDGtHqBxmpXJDutfbdtAPhVKY is READY:24/24 unique required stages code0; public-profile browser118/118 in155658ms under the unchanged180000ms limit. Execution summary binds 9f9b64970785364728d4f887afee2645986a6174. Complete log SHA-256 cf833e48dcbde110d18a64144423dcfe94ce8bd5e0d91d23324b9eccd920b53c. Hosted frontend count is truncated in transport; exact88 comes from the separate full local receipt, not an inferred hosted count.
+Reviewed native mobile expired/recovered Kitchen screenshots. Traces and earlier failing attempts remain separately retained. Initial35-pass/4-fail baseline proved the missing sign-in action. A later combined-viewport run hit the real429 limit; final runs use fresh per-viewport fixtures, with rate limits unchanged.
 
 ## Evidence locations
-Machine-readable source/blob identity, result cases and raw-artifact SHA-256 manifest: `docs/qa/mealscout-owner-orders-recovery-2026-09-19.json`.
-Raw reports, logs and screenshots: `.qa-evidence/orders-recovery/` in the worktree above. The first setup failure, 86-pass/2-fail baseline and 88-pass/0-fail final are separately retained.
+Source/harness hashes, all native cases, hosted stages, check failure, dependency audit and raw artifact hashes: docs/qa/mealscout-native-orders-2026-09-19.json. Raw evidence and reused native-helper manifest: .qa-evidence/native-orders/ in the preserved MealScout-orders-qa-20260919 worktree. Earlier .qa-evidence/orders-recovery/ remains untouched. Private runtime configurations/mailboxes/trace contents stay local.
 
 ## Changed but unverified work
-No unverified production-code edits remain within this bounded read-recovery slice. Connected backend/database/provider acceptance, physical-device/cross-browser testing, the full hosted 24-stage release gate and production rollout are still unproved for this revision. Do not turn the local browser result into whole-product acceptance.
+No unverified application edits remain in this bounded slice. This containing test/evidence commit has no separately observed hosted preview yet; earlier preview is explicitly application-source evidence, not a claim that a different SHA ran. Whole-product/provider/payment/migration/production acceptance remains open.
 
 ## Tests/evidence invalidated by later changes
-The prior hosted preview and 118 profile-browser cases stay bound to their original revisions. They were not rerun here. No application source changed after the final build/browser run; this receipt/handoff is documentation only.
+No later application changes. Final test harness uses fresh per-viewport runtime and actual persisted session expiry, without weakening test assertions or real rate limits. Prior incomplete captures/fixture errors/429 attempts remain failures, not relabeled acceptance.
 
 ## Known blockers/risks
-The response reader deliberately rejects malformed or other-business lists. Verify actual backend-produced owner-history and kitchen JSON with the same recovery scenarios before release. Native migration/worker compatibility, terminal-history tombstones, multi-process capacity and provider verification remain separate release requirements from the existing PR.
+GitHub Actions job105976717275 executed zero steps and explicitly says the account is locked due to a billing issue. No billing/access/required-check bypass occurred.
+Candidate package-lock audit:1critical,4high,4moderate,1low. MapLibre GL5.24.0 is flagged by GHSA-jrc7-96c5-q579, patched upstream beginning6.4.1. Upgrade and reachability assessment remain unperformed; do not equate this candidate audit to the default-branch warning count.
+Existing migration142/worker compatibility, multi-process capacity, terminal-history/request tombstones and connected-provider rollout still need their recorded release proof. Schema push is not migration replay.
 
 ## External side effects and retry safety
-Only the MealScout task branch is a publication target. No main merge, production deployment, migrations, real account/order creation, outbound mail, real payment or refund, provider activation, or infrastructure provisioning. Browser servers bound to loopback and closed at test completion. The aborted first browser process tree was stopped by its exact owned PID; later runs completed with cleanup. Source and raw evidence remain for resumption.
+All six owned local runtimes stopped, all six PostgreSQL clusters removed and all12 exact app/database ports observed ECONNREFUSED. Actual order fields unchanged. No customer records, real payments/refunds, external messages, provider activation, production merge/deployment, other-project or original-helper changes. Only the existing task branch is a remote write target; its Git integration automatically creates previews.
 
 ## Next exact action
-Resume from the current remote task branch and the verified implementation above. Prove these same owner-history/kitchen response and retry transitions against an isolated real backend/database, with no live customer/payment writes. Then run the unchanged hosted release gate on the integrated source and reconcile the existing migration/provider rollout requirements before any production decision.
+Resume at the current remote task head and inspect its automatic preview. Then remediate the candidate MapLibre advisory using isolated dependencies and the existing map/type/build/browser gates. Preserve the blocked required GitHub check until the billing lock is resolved. Follow the existing142/worker/provider release plan rather than declaring the platform ready from UI tests alone.
 
 ## Actions that must NOT be repeated
-Do not rediscover the repository, repeat the old audit, rewrite the saved onboarding/menu-readiness work, loosen tests, enable real payment through a test flag, switch other worktrees, or change any other project. Do not report older hosted receipts as verification of this source.
+No new repository audit, redoing saved onboarding/menu flows, replay against a used/customer database, disabling limits, altering gate deadlines, overwriting failed evidence, mutating the shared node_modules junction target, switching other worktrees, other-project work, or premature production release.
