@@ -1,3 +1,5 @@
+> Latest continuation: [Security and map recovery](MEALSCOUT_SECURITY_HANDOFF_2026-09-19.md). The source-specific Orders proof below remains preserved. Resume from the newer security handoff and current remote task head.
+
 # MealScout Orders/Kitchen native recovery - September 19
 
 ## Objective

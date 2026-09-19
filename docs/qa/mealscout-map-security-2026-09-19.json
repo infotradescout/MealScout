@@ -1,0 +1,1974 @@
+{
+  "schemaVersion": 1,
+  "project": "MealScout",
+  "recordedAt": "2026-09-19T23:13:02.909446+00:00",
+  "baseCommit": "a434dc54b80c3e6c6a88985a52acb53a9b607181",
+  "applicationCommit": "d41be907efde457a3b98bec354c3e0f8ef606761",
+  "branch": "codex/ui-ux-front-end-overhaul-20260915",
+  "pullRequest": 380,
+  "sourceFiles": [
+    {
+      "path": "package.json",
+      "gitBlob": "97e48d251c52d51a14a0e631818392b5dfc917e3",
+      "sha256": "c39b081856588cb91b808d5cd4cdea37536006979b8dd84c9ae3bcb9dc4c695b"
+    },
+    {
+      "path": "package-lock.json",
+      "gitBlob": "fe9eaa52b75419467522cf2ee47da4fefce04e59",
+      "sha256": "cdb8cf3e123ce49a645bab292cb487d8769370df7dd9e7b4831bb5468465a18e"
+    },
+    {
+      "path": "client/src/lib/maplibre-runtime.ts",
+      "gitBlob": "f8ac5aba9b37f8f28220c42babf340fc9afe7d15",
+      "sha256": "b499552bd368383ac55db506d0300cfcbe89137bc66daf5f7c2f473beef5f473"
+    },
+    {
+      "path": "client/src/components/maps/themed-scout-map.tsx",
+      "gitBlob": "09da51b72f15413b58acfb3cf889b7a52fa4f476",
+      "sha256": "a36d697c2012250c32810785922832d78962b416261aa9f48b6441e5ab231a64"
+    },
+    {
+      "path": "client/src/components/maps/themed-scout-map-v2.tsx",
+      "gitBlob": "b8da7cedf4d1b4c13d483833f737c485a83e2f7d",
+      "sha256": "c0dbda6d9f25023690842d0435b7b9cc852acb2463f95eedb20cfa3194fe4465"
+    },
+    {
+      "path": "scripts/qa/carto-map-browser.cjs",
+      "gitBlob": "583d421fe654fdb16baf43513e2635b020a64df1",
+      "sha256": "ce72ef8bc311883b2ef2f2a39a68298475f3319a80cc1250e194070972c7910c"
+    },
+    {
+      "path": "scripts/qa/maplibre-security.browser.cjs",
+      "gitBlob": "41a57e09297eec69fded423af757783f210dc31a",
+      "sha256": "da65b68f21cd752a97780b37d0465f43988b2f8f235791237af4ec209c1a9ecb"
+    }
+  ],
+  "dependencyVersions": {
+    "maplibre-gl": "6.10.0",
+    "express": "4.22.3",
+    "multer": "2.4.0",
+    "body-parser": "1.20.8",
+    "qs": "6.16.0",
+    "@xmldom/xmldom": "0.8.15",
+    "js-yaml": "4.3.2",
+    "browserslist": "4.29.0"
+  },
+  "audit": {
+    "counts": {
+      "info": 0,
+      "low": 0,
+      "moderate": 0,
+      "high": 0,
+      "critical": 0,
+      "total": 0
+    },
+    "report": ".qa-evidence/map-security/audit-final-installed.json",
+    "sha256": "af4bdcce41686a0c46f1ba4eeb75282e2703d9b810bd42bdc3b7512f30927b8a",
+    "interpretation": "Zero findings in this candidate npm dependency audit, not a guarantee of application security or a statement about production/main."
+  },
+  "mapBrowser": {
+    "results": [
+      {
+        "name": "active 390 missing",
+        "passed": true,
+        "tileRequests": 0
+      },
+      {
+        "name": "active 390 configured",
+        "passed": true,
+        "tileRequests": 6
+      },
+      {
+        "name": "active 390 denied",
+        "passed": true,
+        "tileRequests": 12
+      },
+      {
+        "name": "active 390 webgl-unavailable",
+        "passed": true,
+        "tileRequests": 0
+      },
+      {
+        "name": "active 390 webgl2-unavailable",
+        "passed": true,
+        "tileRequests": 0
+      },
+      {
+        "name": "active 1440 missing",
+        "passed": true,
+        "tileRequests": 0
+      },
+      {
+        "name": "active 1440 configured",
+        "passed": true,
+        "tileRequests": 18
+      },
+      {
+        "name": "active 1440 denied",
+        "passed": true,
+        "tileRequests": 27
+      },
+      {
+        "name": "active 1440 webgl-unavailable",
+        "passed": true,
+        "tileRequests": 0
+      },
+      {
+        "name": "active 1440 webgl2-unavailable",
+        "passed": true,
+        "tileRequests": 0
+      },
+      {
+        "name": "legacy 390 missing",
+        "passed": true,
+        "tileRequests": 0
+      },
+      {
+        "name": "legacy 390 configured",
+        "passed": true,
+        "tileRequests": 7
+      },
+      {
+        "name": "legacy 390 denied",
+        "passed": true,
+        "tileRequests": 14
+      },
+      {
+        "name": "legacy 390 webgl-unavailable",
+        "passed": true,
+        "tileRequests": 0
+      },
+      {
+        "name": "legacy 390 webgl2-unavailable",
+        "passed": true,
+        "tileRequests": 0
+      },
+      {
+        "name": "legacy 1440 missing",
+        "passed": true,
+        "tileRequests": 0
+      },
+      {
+        "name": "legacy 1440 configured",
+        "passed": true,
+        "tileRequests": 22
+      },
+      {
+        "name": "legacy 1440 denied",
+        "passed": true,
+        "tileRequests": 31
+      },
+      {
+        "name": "legacy 1440 webgl-unavailable",
+        "passed": true,
+        "tileRequests": 0
+      },
+      {
+        "name": "legacy 1440 webgl2-unavailable",
+        "passed": true,
+        "tileRequests": 0
+      }
+    ],
+    "scope": "Real React/MapLibre; locally intercepted tile fixtures; no provider credentials"
+  },
+  "securityBrowser": {
+    "scope": "Real installed MapLibre, native browser DOM/WebGL2 and actual emitted worker; no provider traffic or real data",
+    "version": "6.10.0",
+    "packageSha256": "5f4b66595a9e0e570d1fd141873440a5ed75ba7a1da2a95d511793568581870a",
+    "worker": {
+      "file": "maplibre-gl-worker-Bn3N37MR.js",
+      "sha256": "4e94c2fa92116552aaeef7469d09ff0e53f47a939df3b0b1bdae94603c16e6c0"
+    },
+    "baseline": false,
+    "results": [
+      {
+        "name": "390 consecutive event attributes cannot survive attribution sanitization",
+        "passed": true
+      },
+      {
+        "name": "390 adjacent unsafe link and event attributes are both removed",
+        "passed": true
+      },
+      {
+        "name": "390 legitimate attribution text and HTTPS credit links remain visible",
+        "passed": true
+      },
+      {
+        "name": "390 real worker parses clustered GeoJSON and returns rendered feature data",
+        "passed": true
+      },
+      {
+        "name": "1440 consecutive event attributes cannot survive attribution sanitization",
+        "passed": true
+      },
+      {
+        "name": "1440 adjacent unsafe link and event attributes are both removed",
+        "passed": true
+      },
+      {
+        "name": "1440 legitimate attribution text and HTTPS credit links remain visible",
+        "passed": true
+      },
+      {
+        "name": "1440 real worker parses clustered GeoJSON and returns rendered feature data",
+        "passed": true
+      }
+    ],
+    "pass": 8,
+    "fail": 0,
+    "observedWorkers": [
+      "http://127.0.0.1:56638/assets/maplibre-gl-worker-Bn3N37MR.js",
+      "http://127.0.0.1:56638/assets/maplibre-gl-worker-Bn3N37MR.js",
+      "http://127.0.0.1:56638/assets/maplibre-gl-worker-Bn3N37MR.js",
+      "http://127.0.0.1:56638/assets/maplibre-gl-worker-Bn3N37MR.js",
+      "http://127.0.0.1:56638/assets/maplibre-gl-worker-Bn3N37MR.js",
+      "http://127.0.0.1:56638/assets/maplibre-gl-worker-Bn3N37MR.js",
+      "http://127.0.0.1:56638/assets/maplibre-gl-worker-Bn3N37MR.js",
+      "http://127.0.0.1:56638/assets/maplibre-gl-worker-Bn3N37MR.js"
+    ]
+  },
+  "vulnerableBaseline": {
+    "scope": "Real installed MapLibre, native browser DOM/WebGL2 and actual emitted worker; no provider traffic or real data",
+    "version": "5.24.0",
+    "packageSha256": "196798d4536aa083aace0e2135279da067fc6582de9a0e86b8144397190d7e95",
+    "worker": null,
+    "baseline": true,
+    "results": [
+      {
+        "name": "390 consecutive event attributes cannot survive attribution sanitization",
+        "passed": false,
+        "error": "All dangerous attributes must be removed, not only every other attribute",
+        "pageErrors": []
+      },
+      {
+        "name": "390 adjacent unsafe link and event attributes are both removed",
+        "passed": false,
+        "error": "Adjacent unsafe attributes must not survive",
+        "pageErrors": []
+      },
+      {
+        "name": "390 legitimate attribution text and HTTPS credit links remain visible",
+        "passed": true
+      },
+      {
+        "name": "390 real worker parses clustered GeoJSON and returns rendered feature data",
+        "passed": true
+      },
+      {
+        "name": "1440 consecutive event attributes cannot survive attribution sanitization",
+        "passed": false,
+        "error": "All dangerous attributes must be removed, not only every other attribute",
+        "pageErrors": []
+      },
+      {
+        "name": "1440 adjacent unsafe link and event attributes are both removed",
+        "passed": false,
+        "error": "Adjacent unsafe attributes must not survive",
+        "pageErrors": []
+      },
+      {
+        "name": "1440 legitimate attribution text and HTTPS credit links remain visible",
+        "passed": true
+      },
+      {
+        "name": "1440 real worker parses clustered GeoJSON and returns rendered feature data",
+        "passed": true
+      }
+    ],
+    "pass": 4,
+    "fail": 4,
+    "observedWorkers": [
+      "blob:http://127.0.0.1:61081/49da44ec-cc3b-45ab-b99b-86d1ffbc9fb9",
+      "blob:http://127.0.0.1:61081/1219b605-d801-4e2c-9ee0-bb4c86a16fe0",
+      "blob:http://127.0.0.1:61081/c182b2ea-88c1-411b-a91c-c3e01af3e446",
+      "blob:http://127.0.0.1:61081/5f3fc91e-587b-47df-8d03-9076e098d888",
+      "blob:http://127.0.0.1:61081/ed3ed68b-4a11-4e94-adf2-9bd0aae51b37",
+      "blob:http://127.0.0.1:61081/e36fcafb-bfc0-4359-b7e0-01ccf4e18447",
+      "blob:http://127.0.0.1:61081/96e441ba-24ae-434f-bab4-fa2eaad77ac6",
+      "blob:http://127.0.0.1:61081/02aa6420-19a6-48ad-a87d-d013ab87b506"
+    ]
+  },
+  "retryPinBaseline": {
+    "source": "f120a17363120f65108611e3ae4dbfbffb5200b1",
+    "results": [
+      {
+        "name": "active 390 missing",
+        "passed": true,
+        "tileRequests": 0
+      },
+      {
+        "name": "active 390 configured",
+        "passed": true,
+        "tileRequests": 6
+      },
+      {
+        "name": "active 390 denied",
+        "passed": false,
+        "error": "expect(locator).toBeVisible() failed\n\nLocator: getByRole('button', { name: 'QA fixture pin', exact: true })\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n  - Expect \"to.be.visible\" with timeout 5000ms\n  - waiting for getByRole('button', { name: 'QA fixture pin', exact: true })\n",
+        "errors": []
+      },
+      {
+        "name": "active 390 webgl-unavailable",
+        "passed": true,
+        "tileRequests": 0
+      },
+      {
+        "name": "active 1440 missing",
+        "passed": true,
+        "tileRequests": 0
+      },
+      {
+        "name": "active 1440 configured",
+        "passed": true,
+        "tileRequests": 18
+      },
+      {
+        "name": "active 1440 denied",
+        "passed": false,
+        "error": "expect(locator).toBeVisible() failed\n\nLocator: getByRole('button', { name: 'QA fixture pin', exact: true })\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n  - Expect \"to.be.visible\" with timeout 5000ms\n  - waiting for getByRole('button', { name: 'QA fixture pin', exact: true })\n",
+        "errors": []
+      },
+      {
+        "name": "active 1440 webgl-unavailable",
+        "passed": true,
+        "tileRequests": 0
+      },
+      {
+        "name": "legacy 390 missing",
+        "passed": true,
+        "tileRequests": 0
+      },
+      {
+        "name": "legacy 390 configured",
+        "passed": true,
+        "tileRequests": 7
+      },
+      {
+        "name": "legacy 390 denied",
+        "passed": false,
+        "error": "expect(locator).toBeVisible() failed\n\nLocator: getByRole('button', { name: 'QA fixture pin', exact: true })\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n  - Expect \"to.be.visible\" with timeout 5000ms\n  - waiting for getByRole('button', { name: 'QA fixture pin', exact: true })\n",
+        "errors": []
+      },
+      {
+        "name": "legacy 390 webgl-unavailable",
+        "passed": true,
+        "tileRequests": 0
+      },
+      {
+        "name": "legacy 1440 missing",
+        "passed": true,
+        "tileRequests": 0
+      },
+      {
+        "name": "legacy 1440 configured",
+        "passed": true,
+        "tileRequests": 22
+      },
+      {
+        "name": "legacy 1440 denied",
+        "passed": false,
+        "error": "expect(locator).toBeVisible() failed\n\nLocator: getByRole('button', { name: 'QA fixture pin', exact: true })\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n  - Expect \"to.be.visible\" with timeout 5000ms\n  - waiting for getByRole('button', { name: 'QA fixture pin', exact: true })\n",
+        "errors": []
+      },
+      {
+        "name": "legacy 1440 webgl-unavailable",
+        "passed": true,
+        "tileRequests": 0
+      }
+    ],
+    "defect": "Map recreation on tile retry did not recreate unchanged place-marker props."
+  },
+  "frontend": {
+    "pass": 88,
+    "fail": 0,
+    "scope": "Full compiled frontend, real installed UI/router/query libraries; synthetic API/auth/Stripe, not production E2E",
+    "report": ".qa-evidence/map-security/frontend-recovery/full-frontend-journeys.json",
+    "sha256": "5b5fec0fc00f4dcbb3eb119c7f4dbf2191852346780e85c854926a2a1b437d12"
+  },
+  "nativeDependencyRegression": {
+    "verifiedSource": "f120a17363120f65108611e3ae4dbfbffb5200b1",
+    "currentSource": "d41be907efde457a3b98bec354c3e0f8ef606761",
+    "unchangedSinceNativeProof": [
+      "server",
+      "shared",
+      "package.json",
+      "package-lock.json",
+      "scripts/qa/owner-orders-native-browser.cjs"
+    ],
+    "scope": "Native46 cases verify patched dependencies and unchanged backend/Orders. Later map-only repair is verified by separate browser tests, not relabeled as this native source.",
+    "runs": [
+      {
+        "width": 1440,
+        "source": "f120a17363120f65108611e3ae4dbfbffb5200b1",
+        "pass": 23,
+        "fail": 0,
+        "cases": [
+          {
+            "name": "real owner registration, local verification, password session and exact claim",
+            "status": "pass",
+            "elapsedMs": 1392
+          },
+          {
+            "name": "second real owner has an isolated business/session",
+            "status": "pass",
+            "elapsedMs": 993
+          },
+          {
+            "name": "seed 55 explicit order fixtures without activating ordering or Stripe",
+            "status": "pass",
+            "elapsedMs": 5087
+          },
+          {
+            "name": "actual PostgreSQL history: 50 + 5 records, preserved notes, distinct page identities",
+            "status": "pass",
+            "elapsedMs": 379
+          },
+          {
+            "name": "actual kitchen response is accepted without invented unpaid/completed entries",
+            "status": "pass",
+            "elapsedMs": 187
+          },
+          {
+            "name": "real guest and wrong-owner reads return 401/403 without exposing order rows",
+            "status": "pass",
+            "elapsedMs": 253
+          },
+          {
+            "name": "orders 1440: real browser password login and server-owned order details",
+            "status": "pass",
+            "elapsedMs": 4163
+          },
+          {
+            "name": "orders 1440: real native SQL read failure hides stale actions and retries successfully",
+            "status": "pass",
+            "elapsedMs": 1052
+          },
+          {
+            "name": "orders 1440: html read fault is rejected and the next real server read recovers",
+            "status": "pass",
+            "elapsedMs": 958
+          },
+          {
+            "name": "orders 1440: mixed-business read fault is rejected and the next real server read recovers",
+            "status": "pass",
+            "elapsedMs": 729
+          },
+          {
+            "name": "orders 1440: a held real response cannot announce zero counts or accept duplicate retry",
+            "status": "pass",
+            "elapsedMs": 485
+          },
+          {
+            "name": "orders 1440: a different owned business has a truly empty database response",
+            "status": "pass",
+            "elapsedMs": 2246
+          },
+          {
+            "name": "orders 1440: a real expired session provides a sign-in route back to this exact business",
+            "status": "pass",
+            "elapsedMs": 3878
+          },
+          {
+            "name": "orders 1440: recovery made no order writes and raised no page exceptions",
+            "status": "pass",
+            "elapsedMs": 1
+          },
+          {
+            "name": "kitchen 1440: real browser password login and server-owned order details",
+            "status": "pass",
+            "elapsedMs": 2472
+          },
+          {
+            "name": "kitchen 1440: real native SQL read failure hides stale actions and retries successfully",
+            "status": "pass",
+            "elapsedMs": 1077
+          },
+          {
+            "name": "kitchen 1440: html read fault is rejected and the next real server read recovers",
+            "status": "pass",
+            "elapsedMs": 909
+          },
+          {
+            "name": "kitchen 1440: mixed-business read fault is rejected and the next real server read recovers",
+            "status": "pass",
+            "elapsedMs": 904
+          },
+          {
+            "name": "kitchen 1440: a held real response cannot announce zero counts or accept duplicate retry",
+            "status": "pass",
+            "elapsedMs": 424
+          },
+          {
+            "name": "kitchen 1440: a different owned business has a truly empty database response",
+            "status": "pass",
+            "elapsedMs": 3443
+          },
+          {
+            "name": "kitchen 1440: a real expired session provides a sign-in route back to this exact business",
+            "status": "pass",
+            "elapsedMs": 3203
+          },
+          {
+            "name": "kitchen 1440: recovery made no order writes and raised no page exceptions",
+            "status": "pass",
+            "elapsedMs": 0
+          },
+          {
+            "name": "all order/item/financial fields remain byte-identical after recovery",
+            "status": "pass",
+            "elapsedMs": 8
+          }
+        ],
+        "receipt": ".qa-evidence/native-orders/runs/2026-09-19T22-54-26-830Z/native-orders-2026-09-19T22-54-53-857Z/receipt.json",
+        "sha256": "a4f5935ccb6a0b08b5bb94e0e15f7c5d962bd2fb931d28e59b87d5b0cff0054a",
+        "unchangedOrderSnapshot": "50cf6286c872a345c779de56c2e079d0949a0eea2ca7748d6b79eb49adf7740d",
+        "cleanup": {
+          "serverStopped": true,
+          "serverPortObservation": {
+            "host": "127.0.0.1",
+            "port": 53478,
+            "observedAt": "2026-09-19T22:55:30.746Z",
+            "closed": true,
+            "connected": false,
+            "errorCode": "ECONNREFUSED"
+          },
+          "serverPortClosed": true,
+          "database": {
+            "type": "database-cleanup",
+            "stopped": true,
+            "removed": true,
+            "directory": "/tmp/mealscout-owner-journey-mmQzKp",
+            "errors": []
+          },
+          "databasePortObservation": {
+            "host": "127.0.0.1",
+            "port": 43369,
+            "observedAt": "2026-09-19T22:55:31.675Z",
+            "closed": true,
+            "connected": false,
+            "errorCode": "ECONNREFUSED"
+          },
+          "databasePortClosed": true
+        }
+      },
+      {
+        "width": 390,
+        "source": "f120a17363120f65108611e3ae4dbfbffb5200b1",
+        "pass": 23,
+        "fail": 0,
+        "cases": [
+          {
+            "name": "real owner registration, local verification, password session and exact claim",
+            "status": "pass",
+            "elapsedMs": 1368
+          },
+          {
+            "name": "second real owner has an isolated business/session",
+            "status": "pass",
+            "elapsedMs": 1009
+          },
+          {
+            "name": "seed 55 explicit order fixtures without activating ordering or Stripe",
+            "status": "pass",
+            "elapsedMs": 4946
+          },
+          {
+            "name": "actual PostgreSQL history: 50 + 5 records, preserved notes, distinct page identities",
+            "status": "pass",
+            "elapsedMs": 327
+          },
+          {
+            "name": "actual kitchen response is accepted without invented unpaid/completed entries",
+            "status": "pass",
+            "elapsedMs": 153
+          },
+          {
+            "name": "real guest and wrong-owner reads return 401/403 without exposing order rows",
+            "status": "pass",
+            "elapsedMs": 245
+          },
+          {
+            "name": "orders 390: real browser password login and server-owned order details",
+            "status": "pass",
+            "elapsedMs": 3332
+          },
+          {
+            "name": "orders 390: real native SQL read failure hides stale actions and retries successfully",
+            "status": "pass",
+            "elapsedMs": 914
+          },
+          {
+            "name": "orders 390: html read fault is rejected and the next real server read recovers",
+            "status": "pass",
+            "elapsedMs": 715
+          },
+          {
+            "name": "orders 390: mixed-business read fault is rejected and the next real server read recovers",
+            "status": "pass",
+            "elapsedMs": 964
+          },
+          {
+            "name": "orders 390: a held real response cannot announce zero counts or accept duplicate retry",
+            "status": "pass",
+            "elapsedMs": 447
+          },
+          {
+            "name": "orders 390: a different owned business has a truly empty database response",
+            "status": "pass",
+            "elapsedMs": 4442
+          },
+          {
+            "name": "orders 390: a real expired session provides a sign-in route back to this exact business",
+            "status": "pass",
+            "elapsedMs": 3560
+          },
+          {
+            "name": "orders 390: recovery made no order writes and raised no page exceptions",
+            "status": "pass",
+            "elapsedMs": 1
+          },
+          {
+            "name": "kitchen 390: real browser password login and server-owned order details",
+            "status": "pass",
+            "elapsedMs": 2361
+          },
+          {
+            "name": "kitchen 390: real native SQL read failure hides stale actions and retries successfully",
+            "status": "pass",
+            "elapsedMs": 1036
+          },
+          {
+            "name": "kitchen 390: html read fault is rejected and the next real server read recovers",
+            "status": "pass",
+            "elapsedMs": 1009
+          },
+          {
+            "name": "kitchen 390: mixed-business read fault is rejected and the next real server read recovers",
+            "status": "pass",
+            "elapsedMs": 932
+          },
+          {
+            "name": "kitchen 390: a held real response cannot announce zero counts or accept duplicate retry",
+            "status": "pass",
+            "elapsedMs": 419
+          },
+          {
+            "name": "kitchen 390: a different owned business has a truly empty database response",
+            "status": "pass",
+            "elapsedMs": 2697
+          },
+          {
+            "name": "kitchen 390: a real expired session provides a sign-in route back to this exact business",
+            "status": "pass",
+            "elapsedMs": 3028
+          },
+          {
+            "name": "kitchen 390: recovery made no order writes and raised no page exceptions",
+            "status": "pass",
+            "elapsedMs": 1
+          },
+          {
+            "name": "all order/item/financial fields remain byte-identical after recovery",
+            "status": "pass",
+            "elapsedMs": 6
+          }
+        ],
+        "receipt": ".qa-evidence/native-orders/runs/2026-09-19T22-55-31-859Z/native-orders-2026-09-19T22-55-49-602Z/receipt.json",
+        "sha256": "a0e31045b7909e973a32950a804b6bd2a8da5fb03f80da2c0d494513e738798f",
+        "unchangedOrderSnapshot": "ea1576ff790f20f8b7ed0669f24064a58ee168a050bdd74e4e2c658429a2b637",
+        "cleanup": {
+          "serverStopped": true,
+          "serverPortObservation": {
+            "host": "127.0.0.1",
+            "port": 50340,
+            "observedAt": "2026-09-19T22:56:26.049Z",
+            "closed": true,
+            "connected": false,
+            "errorCode": "ECONNREFUSED"
+          },
+          "serverPortClosed": true,
+          "database": {
+            "type": "database-cleanup",
+            "stopped": true,
+            "removed": true,
+            "directory": "/tmp/mealscout-owner-journey-H0RIud",
+            "errors": []
+          },
+          "databasePortObservation": {
+            "host": "127.0.0.1",
+            "port": 35239,
+            "observedAt": "2026-09-19T22:56:26.676Z",
+            "closed": true,
+            "connected": false,
+            "errorCode": "ECONNREFUSED"
+          },
+          "databasePortClosed": true
+        }
+      }
+    ],
+    "cleanup": [
+      {
+        "run": "2026-09-19T22-51-40-934Z",
+        "ready": false,
+        "error": "Error: Actual MealScout entry did not become healthy\n    at main (C:\\Users\\flavo\\MealScout-map-security-20260919\\.qa-evidence\\native-orders\\helpers\\serve-runtime.cjs:96:23)",
+        "source": "f120a17363120f65108611e3ae4dbfbffb5200b1",
+        "cleanup": {
+          "serverStopped": true,
+          "serverPortObservation": {
+            "host": "127.0.0.1",
+            "port": 56784,
+            "observedAt": "2026-09-19T22:52:59.124Z",
+            "closed": true,
+            "connected": false,
+            "errorCode": "ECONNREFUSED"
+          },
+          "serverPortClosed": true,
+          "database": {
+            "type": "database-cleanup",
+            "stopped": true,
+            "removed": true,
+            "directory": "/tmp/mealscout-owner-journey-U4BDOm",
+            "errors": []
+          },
+          "databasePortObservation": {
+            "host": "127.0.0.1",
+            "port": 46357,
+            "observedAt": "2026-09-19T22:53:00.329Z",
+            "closed": true,
+            "connected": false,
+            "errorCode": "ECONNREFUSED"
+          },
+          "databasePortClosed": true
+        },
+        "sha256": "bfc3f465a8fc50088a7db70c4152dfdb1e279e564d7bc9902a941b9b376ebe2e"
+      },
+      {
+        "run": "2026-09-19T22-54-26-830Z",
+        "ready": true,
+        "error": null,
+        "source": "f120a17363120f65108611e3ae4dbfbffb5200b1",
+        "cleanup": {
+          "serverStopped": true,
+          "serverPortObservation": {
+            "host": "127.0.0.1",
+            "port": 53478,
+            "observedAt": "2026-09-19T22:55:30.746Z",
+            "closed": true,
+            "connected": false,
+            "errorCode": "ECONNREFUSED"
+          },
+          "serverPortClosed": true,
+          "database": {
+            "type": "database-cleanup",
+            "stopped": true,
+            "removed": true,
+            "directory": "/tmp/mealscout-owner-journey-mmQzKp",
+            "errors": []
+          },
+          "databasePortObservation": {
+            "host": "127.0.0.1",
+            "port": 43369,
+            "observedAt": "2026-09-19T22:55:31.675Z",
+            "closed": true,
+            "connected": false,
+            "errorCode": "ECONNREFUSED"
+          },
+          "databasePortClosed": true
+        },
+        "sha256": "cf62b13533390f895ed7b3d18347416b2e43f3b39ba61feafff8ef35e2685fd9"
+      },
+      {
+        "run": "2026-09-19T22-55-31-859Z",
+        "ready": true,
+        "error": null,
+        "source": "f120a17363120f65108611e3ae4dbfbffb5200b1",
+        "cleanup": {
+          "serverStopped": true,
+          "serverPortObservation": {
+            "host": "127.0.0.1",
+            "port": 50340,
+            "observedAt": "2026-09-19T22:56:26.049Z",
+            "closed": true,
+            "connected": false,
+            "errorCode": "ECONNREFUSED"
+          },
+          "serverPortClosed": true,
+          "database": {
+            "type": "database-cleanup",
+            "stopped": true,
+            "removed": true,
+            "directory": "/tmp/mealscout-owner-journey-H0RIud",
+            "errors": []
+          },
+          "databasePortObservation": {
+            "host": "127.0.0.1",
+            "port": 35239,
+            "observedAt": "2026-09-19T22:56:26.676Z",
+            "closed": true,
+            "connected": false,
+            "errorCode": "ECONNREFUSED"
+          },
+          "databasePortClosed": true
+        },
+        "sha256": "4f31a3caa85de453b423aed335121e7a4be8080e37dd87ccbee47d71ed8f6157"
+      }
+    ]
+  },
+  "hosted": {
+    "source": "d41be907efde457a3b98bec354c3e0f8ef606761",
+    "deployment": "dpl_A1z4fioTwQvDFuoED6D2Avdp6XEF",
+    "observedAt": "2026-09-19T23:11:22.067Z",
+    "code": 0,
+    "logSha256": "8ef032b39890123e371167f7a42bb08b7b85476a826477c48469e929d1000341",
+    "log": ".qa-evidence\\map-security\\hosted\\capture-3.log",
+    "stages": [
+      {
+        "name": "fixture-safety",
+        "status": "pass",
+        "code": 0,
+        "elapsedMs": 353
+      },
+      {
+        "name": "refinement",
+        "status": "pass",
+        "code": 0,
+        "elapsedMs": 331
+      },
+      {
+        "name": "checkout-state",
+        "status": "pass",
+        "code": 0,
+        "elapsedMs": 472
+      },
+      {
+        "name": "order-status-state",
+        "status": "pass",
+        "code": 0,
+        "elapsedMs": 488
+      },
+      {
+        "name": "owner-kitchen-state",
+        "status": "pass",
+        "code": 0,
+        "elapsedMs": 629
+      },
+      {
+        "name": "parking-source-contracts",
+        "status": "pass",
+        "code": 0,
+        "elapsedMs": 4650
+      },
+      {
+        "name": "parking-repair-behavior",
+        "status": "pass",
+        "code": 0,
+        "elapsedMs": 1689
+      },
+      {
+        "name": "parking-request-policy",
+        "status": "pass",
+        "code": 0,
+        "elapsedMs": 308
+      },
+      {
+        "name": "parking-durability",
+        "status": "pass",
+        "code": 0,
+        "elapsedMs": 5001
+      },
+      {
+        "name": "parking-reconciliation",
+        "status": "pass",
+        "code": 0,
+        "elapsedMs": 3803
+      },
+      {
+        "name": "parking-recovered-navigation",
+        "status": "pass",
+        "code": 0,
+        "elapsedMs": 282
+      },
+      {
+        "name": "parking-hold-expiry",
+        "status": "pass",
+        "code": 0,
+        "elapsedMs": 3540
+      },
+      {
+        "name": "scout-profile-state",
+        "status": "pass",
+        "code": 0,
+        "elapsedMs": 1312
+      },
+      {
+        "name": "full-typecheck",
+        "status": "pass",
+        "code": 0,
+        "elapsedMs": 54899
+      },
+      {
+        "name": "database-menu-actors",
+        "status": "pass",
+        "code": 0,
+        "elapsedMs": 9316
+      },
+      {
+        "name": "auth-http-database",
+        "status": "pass",
+        "code": 0,
+        "elapsedMs": 7887
+      },
+      {
+        "name": "install-serverless-chromium",
+        "status": "pass",
+        "code": 0,
+        "elapsedMs": 2452
+      },
+      {
+        "name": "extract-serverless-chromium",
+        "status": "pass",
+        "code": 0,
+        "elapsedMs": 1416
+      },
+      {
+        "name": "full-frontend-journeys",
+        "status": "pass",
+        "code": 0,
+        "elapsedMs": 74679
+      },
+      {
+        "name": "public-profile-browser",
+        "status": "pass",
+        "code": 0,
+        "elapsedMs": 145921
+      },
+      {
+        "name": "scout-persistence-timing",
+        "status": "pass",
+        "code": 0,
+        "elapsedMs": 2339
+      },
+      {
+        "name": "carto-map-browser",
+        "status": "pass",
+        "code": 0,
+        "elapsedMs": 26450
+      },
+      {
+        "name": "checkout-browser",
+        "status": "pass",
+        "code": 0,
+        "elapsedMs": 5687
+      },
+      {
+        "name": "parking-payment-browser",
+        "status": "pass",
+        "code": 0,
+        "elapsedMs": 10626
+      }
+    ],
+    "summary": {
+      "sha": "d41be907efde457a3b98bec354c3e0f8ef606761",
+      "stages": [
+        {
+          "name": "fixture-safety",
+          "status": "pass",
+          "code": 0,
+          "elapsedMs": 353
+        },
+        {
+          "name": "refinement",
+          "status": "pass",
+          "code": 0,
+          "elapsedMs": 331
+        },
+        {
+          "name": "checkout-state",
+          "status": "pass",
+          "code": 0,
+          "elapsedMs": 472
+        },
+        {
+          "name": "order-status-state",
+          "status": "pass",
+          "code": 0,
+          "elapsedMs": 488
+        },
+        {
+          "name": "owner-kitchen-state",
+          "status": "pass",
+          "code": 0,
+          "elapsedMs": 629
+        },
+        {
+          "name": "parking-source-contracts",
+          "status": "pass",
+          "code": 0,
+          "elapsedMs": 4650
+        },
+        {
+          "name": "parking-repair-behavior",
+          "status": "pass",
+          "code": 0,
+          "elapsedMs": 1689
+        },
+        {
+          "name": "parking-request-policy",
+          "status": "pass",
+          "code": 0,
+          "elapsedMs": 308
+        },
+        {
+          "name": "parking-durability",
+          "status": "pass",
+          "code": 0,
+          "elapsedMs": 5001
+        },
+        {
+          "name": "parking-reconciliation",
+          "status": "pass",
+          "code": 0,
+          "elapsedMs": 3803
+        },
+        {
+          "name": "parking-recovered-navigation",
+          "status": "pass",
+          "code": 0,
+          "elapsedMs": 282
+        },
+        {
+          "name": "parking-hold-expiry",
+          "status": "pass",
+          "code": 0,
+          "elapsedMs": 3540
+        },
+        {
+          "name": "scout-profile-state",
+          "status": "pass",
+          "code": 0,
+          "elapsedMs": 1312
+        },
+        {
+          "name": "full-typecheck",
+          "status": "pass",
+          "code": 0,
+          "elapsedMs": 54899
+        },
+        {
+          "name": "database-menu-actors",
+          "status": "pass",
+          "code": 0,
+          "elapsedMs": 9316
+        },
+        {
+          "name": "auth-http-database",
+          "status": "pass",
+          "code": 0,
+          "elapsedMs": 7887
+        },
+        {
+          "name": "install-serverless-chromium",
+          "status": "pass",
+          "code": 0,
+          "elapsedMs": 2452
+        },
+        {
+          "name": "extract-serverless-chromium",
+          "status": "pass",
+          "code": 0,
+          "elapsedMs": 1416
+        },
+        {
+          "name": "full-frontend-journeys",
+          "status": "pass",
+          "code": 0,
+          "elapsedMs": 74679
+        },
+        {
+          "name": "public-profile-browser",
+          "status": "pass",
+          "code": 0,
+          "elapsedMs": 145921
+        },
+        {
+          "name": "scout-persistence-timing",
+          "status": "pass",
+          "code": 0,
+          "elapsedMs": 2339
+        },
+        {
+          "name": "carto-map-browser",
+          "status": "pass",
+          "code": 0,
+          "elapsedMs": 26450
+        },
+        {
+          "name": "checkout-browser",
+          "status": "pass",
+          "code": 0,
+          "elapsedMs": 5687
+        },
+        {
+          "name": "parking-payment-browser",
+          "status": "pass",
+          "code": 0,
+          "elapsedMs": 10626
+        }
+      ],
+      "isolation": "fresh synthetic records; no DB/provider credentials forwarded; all browser APIs intercepted; external requests blocked"
+    },
+    "verified": true,
+    "profileCases": 118,
+    "mapCases": 20,
+    "securityCases": 8
+  },
+  "checks": {
+    "typecheck": "exit 0",
+    "clientBuild": "exit 0",
+    "serverBuild": "exit 0",
+    "ownerReader": {
+      "pass": 40,
+      "fail": 0
+    },
+    "ownerState": {
+      "pass": 31,
+      "fail": 0
+    },
+    "workspaceContract": "PASS"
+  },
+  "isolation": {
+    "privateDependencyInstall": true,
+    "previousManifestUnchanged": true,
+    "previousLockUnchanged": true,
+    "previousInstalledMaplibreUnchanged": true,
+    "previewGateAndDeadlinesUnchanged": true
+  },
+  "dependencyDeltas": {
+    "maplibre": [
+      {
+        "name": "",
+        "from": "1.0.0",
+        "to": "1.0.0",
+        "kind": "changed"
+      },
+      {
+        "name": "node_modules/@mapbox/jsonlint-lines-primitives",
+        "from": "2.0.2",
+        "to": "2.0.3",
+        "kind": "changed"
+      },
+      {
+        "name": "node_modules/@mapbox/unitbezier",
+        "from": "0.0.1",
+        "to": "1.0.0",
+        "kind": "changed"
+      },
+      {
+        "name": "node_modules/@mapbox/vector-tile",
+        "from": "2.0.4",
+        "to": "3.0.0",
+        "kind": "changed"
+      },
+      {
+        "name": "node_modules/@mapbox/whoots-js",
+        "from": "3.1.0",
+        "kind": "removed"
+      },
+      {
+        "name": "node_modules/@maplibre/geojson-vt",
+        "from": "6.1.0",
+        "to": "6.1.1",
+        "kind": "changed"
+      },
+      {
+        "name": "node_modules/@maplibre/maplibre-gl-style-spec",
+        "from": "24.8.5",
+        "to": "26.4.4",
+        "kind": "changed"
+      },
+      {
+        "name": "node_modules/@maplibre/mlt",
+        "from": "1.1.9",
+        "to": "1.3.0",
+        "kind": "changed"
+      },
+      {
+        "name": "node_modules/@maplibre/vt-pbf",
+        "from": "4.3.0",
+        "to": "4.3.2",
+        "kind": "changed"
+      },
+      {
+        "name": "node_modules/@maplibre/vt-pbf/node_modules/@maplibre/geojson-vt",
+        "from": "5.0.4",
+        "kind": "removed"
+      },
+      {
+        "name": "node_modules/@types/supercluster",
+        "from": "7.1.3",
+        "kind": "removed"
+      },
+      {
+        "name": "node_modules/earcut",
+        "from": "3.0.2",
+        "to": "3.2.3",
+        "kind": "changed"
+      },
+      {
+        "name": "node_modules/kdbush",
+        "from": "4.0.2",
+        "to": "4.1.0",
+        "kind": "changed"
+      },
+      {
+        "name": "node_modules/maplibre-gl",
+        "from": "5.24.0",
+        "to": "6.10.0",
+        "kind": "changed"
+      },
+      {
+        "name": "node_modules/pbf",
+        "from": "4.0.1",
+        "to": "5.1.2",
+        "kind": "changed"
+      },
+      {
+        "name": "node_modules/supercluster",
+        "from": "8.0.1",
+        "kind": "removed"
+      },
+      {
+        "name": "node_modules/bidi-js",
+        "to": "1.1.0",
+        "kind": "added"
+      },
+      {
+        "name": "node_modules/require-from-string",
+        "to": "2.0.2",
+        "kind": "added"
+      }
+    ],
+    "compatibleUpdates": [
+      {
+        "name": "node_modules/@xmldom/xmldom",
+        "from": "0.8.13",
+        "to": "0.8.15",
+        "kind": "changed"
+      },
+      {
+        "name": "node_modules/baseline-browser-mapping",
+        "from": "2.9.14",
+        "to": "2.11.25",
+        "kind": "changed"
+      },
+      {
+        "name": "node_modules/body-parser",
+        "from": "1.20.6",
+        "to": "1.20.8",
+        "kind": "changed"
+      },
+      {
+        "name": "node_modules/browserslist",
+        "from": "4.28.1",
+        "to": "4.29.0",
+        "kind": "changed"
+      },
+      {
+        "name": "node_modules/buffer-from",
+        "from": "1.1.2",
+        "to": "1.1.2",
+        "kind": "changed"
+      },
+      {
+        "name": "node_modules/caniuse-lite",
+        "from": "1.0.30001764",
+        "to": "1.0.30001810",
+        "kind": "changed"
+      },
+      {
+        "name": "node_modules/concat-stream",
+        "from": "2.0.0",
+        "kind": "removed"
+      },
+      {
+        "name": "node_modules/electron-to-chromium",
+        "from": "1.5.267",
+        "to": "1.5.433",
+        "kind": "changed"
+      },
+      {
+        "name": "node_modules/express",
+        "from": "4.22.2",
+        "to": "4.22.3",
+        "kind": "changed"
+      },
+      {
+        "name": "node_modules/js-yaml",
+        "from": "4.3.1",
+        "to": "4.3.2",
+        "kind": "changed"
+      },
+      {
+        "name": "node_modules/multer",
+        "from": "2.2.0",
+        "to": "2.4.0",
+        "kind": "changed"
+      },
+      {
+        "name": "node_modules/node-releases",
+        "from": "2.0.27",
+        "to": "2.0.56",
+        "kind": "changed"
+      },
+      {
+        "name": "node_modules/postcss-selector-parser",
+        "from": "6.1.2",
+        "to": "6.1.4",
+        "kind": "changed"
+      },
+      {
+        "name": "node_modules/qs",
+        "from": "6.15.3",
+        "to": "6.16.0",
+        "kind": "changed"
+      },
+      {
+        "name": "node_modules/typedarray",
+        "from": "0.0.6",
+        "kind": "removed"
+      },
+      {
+        "name": "node_modules/update-browserslist-db",
+        "from": "1.2.3",
+        "to": "1.3.3",
+        "kind": "changed"
+      }
+    ]
+  },
+  "githubCheck": {
+    "source": "d41be907efde457a3b98bec354c3e0f8ef606761",
+    "jobId": 105982782682,
+    "steps": [],
+    "failureAnnotations": [
+      "The job was not started because your account is locked due to a billing issue."
+    ],
+    "sha256": "bf6d2f69085c6740eb328abd56d9426dc74e9fa41d9f08d23f1f3744246461f7",
+    "bypassed": false
+  },
+  "sources": [
+    "https://github.com/advisories/GHSA-jrc7-96c5-q579",
+    "https://maplibre.org/maplibre-gl-js/docs/guides/v5-to-v6-migration-guide/",
+    "https://maplibre.org/maplibre-gl-js/docs/#esm"
+  ],
+  "retainedLimits": [
+    "Real map/DOM/worker rendering with locally intercepted tile fixtures is not live CARTO account acceptance.",
+    "The native proof uses synthetic accounts, locally delivered email and seeded orders, not real payments or refunds.",
+    "The dependency audit reports known advisories; zero findings does not establish that MealScout is free of security defects.",
+    "The final map-only repair does not change the backend or lockfile tested by the source-bound native regression.",
+    "The first fresh native startup missed the unchanged health deadline; the attempt was cleaned and preserved. A fresh retry passed with unchanged startup bounds; the cause was not established.",
+    "The separate GitHub required check remains blocked by account billing; no bypass or billing changes were made.",
+    "No production/main merge, live financial/customer write, provider activation or external message occurred.",
+    "Existing migration142/worker compatibility, multi-process capacity, request tombstones and connected-provider release proof remain open."
+  ],
+  "artifacts": [
+    {
+      "path": ".qa-evidence/map-security/audit-after-stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": ".qa-evidence/map-security/audit-after.json",
+      "bytes": 14154,
+      "sha256": "fcd8094e2a4a62fb88dd10c775f840083d225725951134c72d59c6ab8e434b01"
+    },
+    {
+      "path": ".qa-evidence/map-security/audit-final-installed.json",
+      "bytes": 778,
+      "sha256": "af4bdcce41686a0c46f1ba4eeb75282e2703d9b810bd42bdc3b7512f30927b8a"
+    },
+    {
+      "path": ".qa-evidence/map-security/build-client-final.log",
+      "bytes": 56668,
+      "sha256": "869b290d07edb5e4e72f52979a47e33c584c491d8616d2087b7f14de305f299b"
+    },
+    {
+      "path": ".qa-evidence/map-security/build-client-initial.log",
+      "bytes": 57112,
+      "sha256": "3c4d80fab4a9b69dc04529c50adbd288045b35d659176bdb1b7dfdabab510036"
+    },
+    {
+      "path": ".qa-evidence/map-security/build-client-recovery.log",
+      "bytes": 56670,
+      "sha256": "b4bfb5beada3e79d59d5eb62bf241a0b8eff9c7fe525c85b4cee7f5cb7c22592"
+    },
+    {
+      "path": ".qa-evidence/map-security/build-server-final.log",
+      "bytes": 138,
+      "sha256": "02b0a77dd1aa22d22405c54ac8ba35e7df71f009b606a06af57db98cfa38a429"
+    },
+    {
+      "path": ".qa-evidence/map-security/build-server-recovery.log",
+      "bytes": 138,
+      "sha256": "02b0a77dd1aa22d22405c54ac8ba35e7df71f009b606a06af57db98cfa38a429"
+    },
+    {
+      "path": ".qa-evidence/map-security/build-server.log",
+      "bytes": 138,
+      "sha256": "02b0a77dd1aa22d22405c54ac8ba35e7df71f009b606a06af57db98cfa38a429"
+    },
+    {
+      "path": ".qa-evidence/map-security/checkpoint.json",
+      "bytes": 1489,
+      "sha256": "c46460b7b84e10a8973a62a3ffd92838f81275dd5830e86bdc8170f2455c3008"
+    },
+    {
+      "path": ".qa-evidence/map-security/compatible-dependency-install.log",
+      "bytes": 4902,
+      "sha256": "537cdfb2752440212117aef1cc2084666215b5d621b28fe48fdd2c02578e82d8"
+    },
+    {
+      "path": ".qa-evidence/map-security/compatible-lock-delta.json",
+      "bytes": 1804,
+      "sha256": "b0a1569a6144c889d33800e98caa49015e99defae71fdb1954b42597af8e5c3d"
+    },
+    {
+      "path": ".qa-evidence/map-security/compatible-security-updates.log",
+      "bytes": 140,
+      "sha256": "4a8c578e1f5e082970119d57a1016e90a182a21e23d4129315bbca0a3dd96b32"
+    },
+    {
+      "path": ".qa-evidence/map-security/dependency-install.log",
+      "bytes": 4902,
+      "sha256": "a065609f274bd743a1d9a754e5d2f948697c2458e16d132b2abf5a5a0b14a6a7"
+    },
+    {
+      "path": ".qa-evidence/map-security/frontend-recovery.log",
+      "bytes": 43276,
+      "sha256": "b43fb38ae9ec90fee44dd7edfe45287aca0c3e1e60433986e013d6198f02fd56"
+    },
+    {
+      "path": ".qa-evidence/map-security/frontend.log",
+      "bytes": 43276,
+      "sha256": "b43fb38ae9ec90fee44dd7edfe45287aca0c3e1e60433986e013d6198f02fd56"
+    },
+    {
+      "path": ".qa-evidence/map-security/github-check-annotations.json",
+      "bytes": 773,
+      "sha256": "bf6d2f69085c6740eb328abd56d9426dc74e9fa41d9f08d23f1f3744246461f7"
+    },
+    {
+      "path": ".qa-evidence/map-security/lock-update.log",
+      "bytes": 42,
+      "sha256": "5e192e2093b11e22577cc5fee36c8672f217a62a854a903b8cb545a396d26acb"
+    },
+    {
+      "path": ".qa-evidence/map-security/lockfile-delta.json",
+      "bytes": 1972,
+      "sha256": "4e11035ab5242c0bde224e4e109695e61f35b2822fae2765790ce93b2b2b1818"
+    },
+    {
+      "path": ".qa-evidence/map-security/map-browser-final.log",
+      "bytes": 5188,
+      "sha256": "2ac6f89bf956a7d11d4f42c3ec5fbec54d69a83d12ba32990cdcc8694f2d32a6"
+    },
+    {
+      "path": ".qa-evidence/map-security/map-browser-first.log",
+      "bytes": 2652,
+      "sha256": "ded0d1d400d0b4f1f51ab4ac20b18a6f0a70c14ac724b41368e34f48cdca8a25"
+    },
+    {
+      "path": ".qa-evidence/map-security/map-recovery.log",
+      "bytes": 2976,
+      "sha256": "564f0d5b8a0bf346226bba46c881436680b9c64415213c9a4157a5d33eec49fb"
+    },
+    {
+      "path": ".qa-evidence/map-security/map-truth.log",
+      "bytes": 74,
+      "sha256": "56fb7db356ec43461bc6e44d2381222584327d160ea43a4c2b9e09863c8937fc"
+    },
+    {
+      "path": ".qa-evidence/map-security/multipart-compatibility.json",
+      "bytes": 1033,
+      "sha256": "73d590f92c634242107fbe80ad50dc4078c57a778d4c233858a8f58d2097f17a"
+    },
+    {
+      "path": ".qa-evidence/map-security/multipart-compatibility.log",
+      "bytes": 1666,
+      "sha256": "1ffdda3b96c4e66fc850779eb79d820e903bd7ee11bf23ce5d7ab2fe469cdfa7"
+    },
+    {
+      "path": ".qa-evidence/map-security/native-dependency-regression.json",
+      "bytes": 14621,
+      "sha256": "58169fd7a056300862a9a3c8c807897767c2b409b7c23bc95e2a0f90dd7b9f0d"
+    },
+    {
+      "path": ".qa-evidence/map-security/native-matrix-final.log",
+      "bytes": 986,
+      "sha256": "298116375f05d515c8b7bb1b03787634ae2f5038cc62a0d18c4ae32c67e69139"
+    },
+    {
+      "path": ".qa-evidence/map-security/native-matrix-retry.log",
+      "bytes": 1244,
+      "sha256": "b0b6dd6b221b72acc320b01eb440ea428e6136c9ba99223a8ac89a9b945ceb03"
+    },
+    {
+      "path": ".qa-evidence/map-security/order-contract-final.log",
+      "bytes": 88,
+      "sha256": "8872a54f4061548abafba5eec39efa47780122126e13e6085e24a43d73037fc6"
+    },
+    {
+      "path": ".qa-evidence/map-security/order-reader-final.log",
+      "bytes": 6676,
+      "sha256": "2a252b9d54daf07eba6d5afd8b89e6996e177d99ad5e62a14ae66232415dca0e"
+    },
+    {
+      "path": ".qa-evidence/map-security/order-state-final.log",
+      "bytes": 7614,
+      "sha256": "b064cf239137aeb6499cce5b82e513eb6fa10ebd1773e7acd45e9fc0c63d51be"
+    },
+    {
+      "path": ".qa-evidence/map-security/pin-retry-baseline.json",
+      "bytes": 3163,
+      "sha256": "7df2445bae8a6e8f75ec7d850fed5f39813e277664191462ebc54a2b5c939731"
+    },
+    {
+      "path": ".qa-evidence/map-security/security-baseline.log",
+      "bytes": 2036,
+      "sha256": "378f66fc97e9b77f59a46d1fabf224095845944887fbffeac13736935a5f5f76"
+    },
+    {
+      "path": ".qa-evidence/map-security/security-checkpoint.json",
+      "bytes": 1047,
+      "sha256": "7990d9dbfc251bd9728ff2bd7e6e3a9d4f12a9d7cc3e7caa6a54a735e0576ec3"
+    },
+    {
+      "path": ".qa-evidence/map-security/typecheck-final.log",
+      "bytes": 74,
+      "sha256": "a2395182b69c62bc0e1384fe677d9190d3832155c95898ea05f212261795f361"
+    },
+    {
+      "path": ".qa-evidence/map-security/typecheck-initial.log",
+      "bytes": 74,
+      "sha256": "a2395182b69c62bc0e1384fe677d9190d3832155c95898ea05f212261795f361"
+    },
+    {
+      "path": ".qa-evidence/map-security/typecheck-recovery.log",
+      "bytes": 74,
+      "sha256": "a2395182b69c62bc0e1384fe677d9190d3832155c95898ea05f212261795f361"
+    },
+    {
+      "path": ".qa-evidence/map-security/frontend/1440-parking-schedule.png",
+      "bytes": 161060,
+      "sha256": "935d079bcdcd4d7e1dd40c7ad6dd20dbabeaeb8cef67f58d119c9a358b7bf854"
+    },
+    {
+      "path": ".qa-evidence/map-security/frontend/390-parking-schedule.png",
+      "bytes": 87126,
+      "sha256": "df8b60f92cf6e6d6e1e9264570054086695c3c26526414cca630b28c7757c972"
+    },
+    {
+      "path": ".qa-evidence/map-security/frontend/full-frontend-journeys.json",
+      "bytes": 30133,
+      "sha256": "77a06d26ea2f464b7e3505cf13bd22cd377524d29039af9921c9bd50a746d488"
+    },
+    {
+      "path": ".qa-evidence/map-security/frontend/kitchen-1440-failed-refresh.png",
+      "bytes": 208473,
+      "sha256": "858db5f750f75ae215033b1335f385d196fd9fa93f4af296d913c73fc131c963"
+    },
+    {
+      "path": ".qa-evidence/map-security/frontend/kitchen-1440-pending-retry.png",
+      "bytes": 204519,
+      "sha256": "6f85e99607e990401fc3a4001fc926cf72ef462649272b05df481ebd640d6f78"
+    },
+    {
+      "path": ".qa-evidence/map-security/frontend/kitchen-1440-recovered.png",
+      "bytes": 250595,
+      "sha256": "ed6d6e24e2ca76622b844de87992476a9d2869b93ddf2ebff09319f265d5827f"
+    },
+    {
+      "path": ".qa-evidence/map-security/frontend/kitchen-390-failed-refresh.png",
+      "bytes": 117244,
+      "sha256": "1d15c52859c629e30d81be48e6b41f8501aa35713f39337702a3543ac2bcccc9"
+    },
+    {
+      "path": ".qa-evidence/map-security/frontend/kitchen-390-pending-retry.png",
+      "bytes": 119602,
+      "sha256": "e0be7889d1b5b0a3246fd2468b5cca19d1e33409a44a82c74601a9cae75a7379"
+    },
+    {
+      "path": ".qa-evidence/map-security/frontend/kitchen-390-recovered.png",
+      "bytes": 151803,
+      "sha256": "cdcecb93cdbcfb2ae85b210af6a8f8835a7dc0df43ac2a76ecf4b13d40f2210a"
+    },
+    {
+      "path": ".qa-evidence/map-security/frontend/orders-1440-failed-refresh.png",
+      "bytes": 207597,
+      "sha256": "17d8e2fa31f887d6a4986a35ad0656d3c281fb0eaf8c801e6e1b76c98f4e9329"
+    },
+    {
+      "path": ".qa-evidence/map-security/frontend/orders-1440-pending-retry.png",
+      "bytes": 204263,
+      "sha256": "335a0259411580d97146a5bea4b70c0f83aa728e26f72697ebf1d5219a2fe3b3"
+    },
+    {
+      "path": ".qa-evidence/map-security/frontend/orders-1440-recovered.png",
+      "bytes": 241755,
+      "sha256": "b487b2aa96d91b5dad250a6caf6e413a5a37a82cb1bfd199590243e9b49e5341"
+    },
+    {
+      "path": ".qa-evidence/map-security/frontend/orders-390-failed-refresh.png",
+      "bytes": 116218,
+      "sha256": "f4c008acc8c1f594323ff8462aa96f7903e020a0a629652b954453f3edebf0b7"
+    },
+    {
+      "path": ".qa-evidence/map-security/frontend/orders-390-pending-retry.png",
+      "bytes": 118366,
+      "sha256": "41718412a9f3771b5baa42bfb4efcc70bec9ea51ed7b4a1156d6143bedc314a6"
+    },
+    {
+      "path": ".qa-evidence/map-security/frontend/orders-390-recovered.png",
+      "bytes": 142800,
+      "sha256": "1715abead26d2d9d6eb138eed9f7313790bcfadaf34ae19cb83141cf7b515b84"
+    },
+    {
+      "path": ".qa-evidence/map-security/frontend-recovery/1440-parking-schedule.png",
+      "bytes": 160682,
+      "sha256": "4ee6e6a22a854c8442d47d948885a727eec4e736ac62a7911eab68f5d8e07c4b"
+    },
+    {
+      "path": ".qa-evidence/map-security/frontend-recovery/390-parking-schedule.png",
+      "bytes": 87200,
+      "sha256": "53b0e93b92ac3693355193230314fb83167462fdd678960a82b738aacd315f93"
+    },
+    {
+      "path": ".qa-evidence/map-security/frontend-recovery/full-frontend-journeys.json",
+      "bytes": 30133,
+      "sha256": "5b5fec0fc00f4dcbb3eb119c7f4dbf2191852346780e85c854926a2a1b437d12"
+    },
+    {
+      "path": ".qa-evidence/map-security/frontend-recovery/kitchen-1440-failed-refresh.png",
+      "bytes": 208480,
+      "sha256": "dc63cab6c66d0155f0db686c9685021772886275073e26f7840d331154911b6c"
+    },
+    {
+      "path": ".qa-evidence/map-security/frontend-recovery/kitchen-1440-pending-retry.png",
+      "bytes": 204833,
+      "sha256": "15a6957f75fe662b5df8b74fbcf8e77682279fca1f3532b52ca4ccbc221b9687"
+    },
+    {
+      "path": ".qa-evidence/map-security/frontend-recovery/kitchen-1440-recovered.png",
+      "bytes": 250595,
+      "sha256": "ed6d6e24e2ca76622b844de87992476a9d2869b93ddf2ebff09319f265d5827f"
+    },
+    {
+      "path": ".qa-evidence/map-security/frontend-recovery/kitchen-390-failed-refresh.png",
+      "bytes": 117244,
+      "sha256": "1d15c52859c629e30d81be48e6b41f8501aa35713f39337702a3543ac2bcccc9"
+    },
+    {
+      "path": ".qa-evidence/map-security/frontend-recovery/kitchen-390-pending-retry.png",
+      "bytes": 119602,
+      "sha256": "e0be7889d1b5b0a3246fd2468b5cca19d1e33409a44a82c74601a9cae75a7379"
+    },
+    {
+      "path": ".qa-evidence/map-security/frontend-recovery/kitchen-390-recovered.png",
+      "bytes": 151803,
+      "sha256": "cdcecb93cdbcfb2ae85b210af6a8f8835a7dc0df43ac2a76ecf4b13d40f2210a"
+    },
+    {
+      "path": ".qa-evidence/map-security/frontend-recovery/orders-1440-failed-refresh.png",
+      "bytes": 207598,
+      "sha256": "cf17c6fbb1627bc0703d25db9c9b56b06edd8eb8e8ea4c18ba04970107c86a4c"
+    },
+    {
+      "path": ".qa-evidence/map-security/frontend-recovery/orders-1440-pending-retry.png",
+      "bytes": 204263,
+      "sha256": "335a0259411580d97146a5bea4b70c0f83aa728e26f72697ebf1d5219a2fe3b3"
+    },
+    {
+      "path": ".qa-evidence/map-security/frontend-recovery/orders-1440-recovered.png",
+      "bytes": 241755,
+      "sha256": "b487b2aa96d91b5dad250a6caf6e413a5a37a82cb1bfd199590243e9b49e5341"
+    },
+    {
+      "path": ".qa-evidence/map-security/frontend-recovery/orders-390-failed-refresh.png",
+      "bytes": 116218,
+      "sha256": "f4c008acc8c1f594323ff8462aa96f7903e020a0a629652b954453f3edebf0b7"
+    },
+    {
+      "path": ".qa-evidence/map-security/frontend-recovery/orders-390-pending-retry.png",
+      "bytes": 117333,
+      "sha256": "31c80e5f75545336e63674e501a83d887a751a4bf04cce4332b8b43468458455"
+    },
+    {
+      "path": ".qa-evidence/map-security/frontend-recovery/orders-390-recovered.png",
+      "bytes": 142800,
+      "sha256": "1715abead26d2d9d6eb138eed9f7313790bcfadaf34ae19cb83141cf7b515b84"
+    },
+    {
+      "path": ".qa-evidence/map-security/hosted/capture-1.json",
+      "bytes": 2181,
+      "sha256": "8e6f07238c98899fbbf6f068dfa4a27177e8d4d7edfdd1bc6ae872ef5ea4f035"
+    },
+    {
+      "path": ".qa-evidence/map-security/hosted/capture-1.log",
+      "bytes": 107588,
+      "sha256": "4a587cff97cdeeda259ffe1c5c008df69605cd43b58367085e0a7dddad5006f3"
+    },
+    {
+      "path": ".qa-evidence/map-security/hosted/capture-2.json",
+      "bytes": 2546,
+      "sha256": "a1c3abd0fd12b4b7d2644d99a89a90aa29858145ddbb6370d94a61fddd61ff7d"
+    },
+    {
+      "path": ".qa-evidence/map-security/hosted/capture-2.log",
+      "bytes": 120087,
+      "sha256": "8eb6a96f7489a99babb641220a93b947ebd041e08a2328889bce83d5ccb7b891"
+    },
+    {
+      "path": ".qa-evidence/map-security/hosted/capture-3.json",
+      "bytes": 6419,
+      "sha256": "3c23faa2bbaef47f281db050fabcd673e5e82a6cf56680092c05587dc9908439"
+    },
+    {
+      "path": ".qa-evidence/map-security/hosted/capture-3.log",
+      "bytes": 146750,
+      "sha256": "8ef032b39890123e371167f7a42bb08b7b85476a826477c48469e929d1000341"
+    },
+    {
+      "path": ".qa-evidence/map-security/hosted/deployment-observed.json",
+      "bytes": 373,
+      "sha256": "2666d3b4308e1cf4349424565bfdebf193946bb212348ad6c0ebfaaeb925216f"
+    },
+    {
+      "path": ".qa-evidence/map-security/hosted/verified.json",
+      "bytes": 6502,
+      "sha256": "625c52c3e191a27a513ae5811de264a32724c64b5eb754d493f3550a2fe28607"
+    },
+    {
+      "path": ".qa-evidence/map-security/map-final/active-1440-configured.png",
+      "bytes": 97497,
+      "sha256": "4c08e092d281fc68ee48966594310d9a88e02089d441fb9b237c730c0370bb68"
+    },
+    {
+      "path": ".qa-evidence/map-security/map-final/active-1440-webgl-unavailable.png",
+      "bytes": 108082,
+      "sha256": "9776a6e4341e276679a575fe5ec63417d794ee559497b6834eab194d14c4de55"
+    },
+    {
+      "path": ".qa-evidence/map-security/map-final/active-390-configured.png",
+      "bytes": 45048,
+      "sha256": "20bd37a61037cb2f9eaf75bca8b969cf7b8a3b94fcbf931e728114a40a888711"
+    },
+    {
+      "path": ".qa-evidence/map-security/map-final/active-390-webgl-unavailable.png",
+      "bytes": 51628,
+      "sha256": "61a89664bd9800a613c963a47d356aa013084bb5e02052eafdd83e874f5abc1e"
+    },
+    {
+      "path": ".qa-evidence/map-security/map-final/carto-map-browser.json",
+      "bytes": 3021,
+      "sha256": "b70adcc72db52fcad14690f022c69074199c54a5f8fba995b8a796acd0f723d7"
+    },
+    {
+      "path": ".qa-evidence/map-security/map-final/legacy-1440-configured.png",
+      "bytes": 127267,
+      "sha256": "6283d24ee5698e0e2713790c3419af6b116a7c3ef2b3735bdd78df876825a49a"
+    },
+    {
+      "path": ".qa-evidence/map-security/map-final/legacy-1440-webgl-unavailable.png",
+      "bytes": 157632,
+      "sha256": "1517a6f35c6343580e98e32f15a263126715a30899f8b9dfb3a8825a0c1d4ab5"
+    },
+    {
+      "path": ".qa-evidence/map-security/map-final/legacy-390-configured.png",
+      "bytes": 69223,
+      "sha256": "7c40b88de1bbce1f072dfdedc4fcd26eff3793046d826ef348cea4b24b81f9a4"
+    },
+    {
+      "path": ".qa-evidence/map-security/map-final/legacy-390-webgl-unavailable.png",
+      "bytes": 75784,
+      "sha256": "e9e63feb69d6027f178c91650c0c588806c0effc5d3e95e745dbe22746212961"
+    },
+    {
+      "path": ".qa-evidence/map-security/map-final/maplibre-security-browser.json",
+      "bytes": 1994,
+      "sha256": "ab0f8d10140a8ec21e9094440484f0572f45d8fd688a41a24466c8e5b2a56318"
+    },
+    {
+      "path": ".qa-evidence/map-security/map-recovery/active-1440-configured.png",
+      "bytes": 97497,
+      "sha256": "4c08e092d281fc68ee48966594310d9a88e02089d441fb9b237c730c0370bb68"
+    },
+    {
+      "path": ".qa-evidence/map-security/map-recovery/active-1440-denied.png",
+      "bytes": 97511,
+      "sha256": "62995f782835f501978b867196d0b704adf3b507eda108af33db700541973f50"
+    },
+    {
+      "path": ".qa-evidence/map-security/map-recovery/active-1440-webgl-unavailable.png",
+      "bytes": 108082,
+      "sha256": "9776a6e4341e276679a575fe5ec63417d794ee559497b6834eab194d14c4de55"
+    },
+    {
+      "path": ".qa-evidence/map-security/map-recovery/active-1440-webgl2-unavailable.png",
+      "bytes": 108082,
+      "sha256": "9776a6e4341e276679a575fe5ec63417d794ee559497b6834eab194d14c4de55"
+    },
+    {
+      "path": ".qa-evidence/map-security/map-recovery/active-390-configured.png",
+      "bytes": 45058,
+      "sha256": "7f46d5853eeafcaf370ca8451f7567ba66eaf7bfeb80547c90f08946cf9f8f39"
+    },
+    {
+      "path": ".qa-evidence/map-security/map-recovery/active-390-denied.png",
+      "bytes": 45061,
+      "sha256": "b2728cc40bc878c671d1d451a54281e93c11bc708320653f0eb48c805a36ef79"
+    },
+    {
+      "path": ".qa-evidence/map-security/map-recovery/active-390-webgl-unavailable.png",
+      "bytes": 51628,
+      "sha256": "61a89664bd9800a613c963a47d356aa013084bb5e02052eafdd83e874f5abc1e"
+    },
+    {
+      "path": ".qa-evidence/map-security/map-recovery/active-390-webgl2-unavailable.png",
+      "bytes": 51628,
+      "sha256": "61a89664bd9800a613c963a47d356aa013084bb5e02052eafdd83e874f5abc1e"
+    },
+    {
+      "path": ".qa-evidence/map-security/map-recovery/carto-map-browser.json",
+      "bytes": 2123,
+      "sha256": "7295dfcef1960f6a378a8d2d41885c436e2486b629a02d590888ecfad1541b24"
+    },
+    {
+      "path": ".qa-evidence/map-security/map-recovery/legacy-1440-configured.png",
+      "bytes": 126754,
+      "sha256": "798925476a4e0e6ae1792e07012fa9b2afba2bc39c47239427444ac2de34b4ad"
+    },
+    {
+      "path": ".qa-evidence/map-security/map-recovery/legacy-1440-denied.png",
+      "bytes": 127540,
+      "sha256": "75e930fdbcfeb00572222206e444d0dd49aa2475fdcbee7e379806f5e4921bf4"
+    },
+    {
+      "path": ".qa-evidence/map-security/map-recovery/legacy-1440-webgl-unavailable.png",
+      "bytes": 157632,
+      "sha256": "1517a6f35c6343580e98e32f15a263126715a30899f8b9dfb3a8825a0c1d4ab5"
+    },
+    {
+      "path": ".qa-evidence/map-security/map-recovery/legacy-1440-webgl2-unavailable.png",
+      "bytes": 157610,
+      "sha256": "b8b3bd7c0d7e4c22e93bcfb2a19bc3ed84f14b3569afd4a0069007dfa60bf58b"
+    },
+    {
+      "path": ".qa-evidence/map-security/map-recovery/legacy-390-configured.png",
+      "bytes": 69229,
+      "sha256": "6bb0ab82d08d47d04c129a785b0d7cf55de006dfebf0d979acb50445b27d4ed6"
+    },
+    {
+      "path": ".qa-evidence/map-security/map-recovery/legacy-390-denied.png",
+      "bytes": 72718,
+      "sha256": "16989b7a5351d8acb6f6ec0745aa6216a71cd0b58eed2b031eeba7714c9bcdc2"
+    },
+    {
+      "path": ".qa-evidence/map-security/map-recovery/legacy-390-webgl-unavailable.png",
+      "bytes": 75727,
+      "sha256": "99394806e744faa650423e68c305a47fdd25259b083043060f2586d823fb0062"
+    },
+    {
+      "path": ".qa-evidence/map-security/map-recovery/legacy-390-webgl2-unavailable.png",
+      "bytes": 75784,
+      "sha256": "e9e63feb69d6027f178c91650c0c588806c0effc5d3e95e745dbe22746212961"
+    },
+    {
+      "path": ".qa-evidence/map-security/map-recovery/maplibre-security-browser.json",
+      "bytes": 1994,
+      "sha256": "0f568414d5441ae34a261f37559076372a992b88ae60e057b181a271b1390755"
+    },
+    {
+      "path": ".qa-evidence/map-security/patched/carto-map-browser.json",
+      "bytes": 1697,
+      "sha256": "10824700d6d12d19abb45a4795ebfbd83549bd8ef059be2ac25f6d6033da5ec9"
+    },
+    {
+      "path": ".qa-evidence/map-security/patched/maplibre-security-browser.json",
+      "bytes": 1994,
+      "sha256": "dea03b893ee70de62a0a50215291109b559d433dfb31c043b15b6e59405010a7"
+    },
+    {
+      "path": ".qa-evidence/map-security/vulnerable-baseline/maplibre-security-browser.json",
+      "bytes": 2303,
+      "sha256": "3d1b7ec75bfb6b42dfb2df69d6a02f10a53d0616c995bb67de9c8ea84153eb06"
+    },
+    {
+      "path": ".qa-evidence/map-security/vulnerable-baseline/security-1440-5.png",
+      "bytes": 6472,
+      "sha256": "2ecf4e59c6c5310104883d14dc745fba2061f7f327384ceca506d45d90c3787f"
+    },
+    {
+      "path": ".qa-evidence/map-security/vulnerable-baseline/security-1440-6.png",
+      "bytes": 5636,
+      "sha256": "f37569cabe8dee4681971ba4f62a14262c6c7b1d57a9fa2732caaccbeb2ba585"
+    },
+    {
+      "path": ".qa-evidence/map-security/vulnerable-baseline/security-390-1.png",
+      "bytes": 3920,
+      "sha256": "41231d31da1987463c9262bc2ba95962adab351d77917f4c8410a0864ac6818c"
+    },
+    {
+      "path": ".qa-evidence/map-security/vulnerable-baseline/security-390-2.png",
+      "bytes": 3334,
+      "sha256": "e4bb82f3d8f31d7c8fb3ca29abf90f6e17aa0d72e9bd4f2f1139ca5ee1caae89"
+    }
+  ],
+  "deployment": {
+    "observationSource": "Vercel.get_deployment",
+    "id": "dpl_A1z4fioTwQvDFuoED6D2Avdp6XEF",
+    "url": "meal-scout2-xw9x7ahol-tradescouts-projects.vercel.app",
+    "state": "READY",
+    "source": "git",
+    "target": null,
+    "githubCommitSha": "d41be907efde457a3b98bec354c3e0f8ef606761",
+    "githubCommitRef": "codex/ui-ux-front-end-overhaul-20260915",
+    "ready": 1789859446301
+  },
+  "multipartCompatibility": {
+    "scope": "Actual menu Multer configuration, real patched Express/Multer and loopback HTTP; no database, auth bypass, provider, live file or user data",
+    "versions": {
+      "express": "4.22.3",
+      "multer": "2.4.0"
+    },
+    "configSha256": "f8c2485aed20eadc2ba96824ad4cd779c4b56b765f7b5780efc56730fbe2cf21",
+    "results": [
+      {
+        "name": "supported CSV retains its bytes, original filename and form fields",
+        "passed": true
+      },
+      {
+        "name": "unsupported extension is rejected by unchanged application filter",
+        "passed": true
+      },
+      {
+        "name": "application ten-MB limit remains enforced",
+        "passed": true
+      },
+      {
+        "name": "unexpected second file remains rejected",
+        "passed": true
+      },
+      {
+        "name": "malformed multipart request is rejected without terminating the process",
+        "passed": true
+      },
+      {
+        "name": "subsequent valid JSON upload still succeeds after invalid requests",
+        "passed": true
+      }
+    ],
+    "pass": 6,
+    "fail": 0,
+    "closed": true
+  },
+  "multipartHarnessSha256": "d281cd5891fe1605d6e930d51b2532d1006983c97c0df978f648ed1702d13cf9"
+}
