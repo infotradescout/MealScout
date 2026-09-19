@@ -1,57 +1,55 @@
-# MealScout owner orders response recovery — 2026-09-19
+# MealScout Orders/Kitchen recovery - latest continuation 2026-09-19
 
 ## Objective
-Continue MealScout only, from the saved UI/UX implementation. Prevent an unreadable, malformed, or wrong-business owner order response from looking like an empty kitchen or a verified zero count. Keep the existing retry path and all financial authority unchanged.
+Continue MealScout only. Close application/build/browser verification for the saved owner-order response reader and repair any reproduced recovery defects without changing transaction authority.
 
 ## Base branch/commit
-`codex/ui-ux-front-end-overhaul-20260915` at `6f3a84d1f4bbcd87f37abeb969eb22643de09466` (draft PR #380). Base tree: `562a3f8970f7d6064ff0a23d5d15bd5f10474a52`.
+`codex/ui-ux-front-end-overhaul-20260915` at `070cf0f74807bf95a7c3018a811c681477cd47a9` (draft PR #380). Earlier source handoff remains available at that exact revision.
 
 ## Current branch/commit
-Same branch; the commit containing this handoff is the continuation candidate. Resolve its exact SHA from the branch before resuming. Source identity is additionally bound to the file hashes below, not to a chat claim or an older preview.
+Verified implementation: `d2a5938fa93934a9c0e523427dca5282e88f0b74`. The evidence/handoff commit is its documentation-only child. Resolve the remote task branch before resuming; do not use older preview or audit revisions as the resume point.
+Preserved execution worktree: `C:/Users/flavo/MealScout-orders-qa-20260919`. The older QA, main and SEO worktrees were not switched or reset. Its node_modules junction reuses the existing PR380 QA dependency installation.
 
 ## Verified completed work
-Both owner history and kitchen reads use the checked response reader with the selected business ID. Invalid envelopes, invalid rows, duplicate identities, other-business data, and invalid pagination throw an actionable read error instead of silently dropping data. Valid records, financial fields, item notes, and delivery fields are preserved. HTTP 401/403 remain identifiable even when the body is not JSON. Unverified reads show neither zero counts nor a live-update success label. Error cards announce errors; retry is disabled and marked busy while a read is pending.
+Reproduced the pending-retry defect in the compiled application on desktop and mobile: summary values were unconfirmed but the status filters still announced All 0 and other zero counts. Those filter counts now wait for a successful read. Refresh exposes aria-busy and has a verified 44px minimum touch target.
+The existing owner-state harness now imports the real response reader. A pre-existing obsolete contract was replaced with explicit assertions that owners cannot confirm card payments or rewrite confirmedAt; preparation records merchant acknowledgement. No server behavior changed.
 
 ## Files changed
 - `client/src/components/owner-orders-workspace.tsx`
-- `client/src/lib/owner-orders-response.ts`
-- `scripts/mealscout-owner-orders-response.behavior.test.ts`
-- This handoff.
+- `scripts/mealscout-orders-workspace.contract.test.ts`
+- `scripts/mealscout-owner-orders-state.test.cjs`
+- `scripts/qa/full-frontend-journeys.cjs`
+- `scripts/qa/owner-orders-recovery-journeys.cjs`
+- This handoff and `docs/qa/mealscout-owner-orders-recovery-2026-09-19.json`.
 
 ## Tests/evidence already run
-Sandbox Node 22.16.0 and TypeScript 5.8.3. The original workspace file was reconstructed from the connected repository and its Git blob hash exactly matched `d0590e4c40bb649477665286f981d5ff9906c1ea` before editing.
+- Response reader: 40/40 (37 native Response behavior cases, 3 source-wiring contracts), no failures or skips.
+- Existing owner/kitchen state scenarios: 31/31 with real reader linked. These use deterministic hooks, not a real backend.
+- Orders workspace source contract: PASS, including the stronger provider-owned confirmation assertions.
+- Full application TypeScript check, client build, and server build: exit 0.
+- Compiled application browser suite: 88/88, zero failed scenarios. This includes the original 48 cases plus 40 new Orders/Kitchen cases at 1440x900 and 390x844. Scenario time sum: 61405ms. Real installed React/Wouter/Query/Radix; synthetic API/auth/Stripe only.
+- Browser cases cover verified empty responses; malformed, wrong-business, duplicate, incomplete and invalid-page responses; 401/403; raw HTML after a populated read; delayed retry, no false empty/zero/live state, no repeated mutation, preserved item notes and current-business recovery. All passing scenarios assert zero page exceptions and no API escaping interception.
+- Nine named helpers and mutation/action declarations compared unchanged against the base. See authority-preservation evidence. No server/schema/price/permission/payment/refund/settlement edits.
+- Reviewed actual desktop failure and mobile failure/pending screenshots. Additional recovered screenshots remain in the same evidence folder.
 
-The new test file passed **40/40**, with no failures or skips: **37 response-behavior tests and 3 source-wiring contracts**. These are not browser tests. Tests exercised the real response reader with native `Response` objects. The reader and test file passed strict TypeScript compilation. The exact reader integration was separately strict-typechecked. The workspace TSX parsed and transpiled without errors; this is not a full application typecheck.
-
-Five named functions (`describeDisputeFinancialState`, `OwnerOrderCard`, `mergeOrder`, `nextOrderStatus`, `isBusinessOrderOperator`) and both the status mutation and status-action guard were compared byte-for-byte with the base and remained unchanged. No server, schema, payment, settlement, refund, or permission code changed.
-
-Repository test command:
-
-```sh
-node --import tsx --test scripts/mealscout-owner-orders-response.behavior.test.ts
-```
-
-Sandbox execution used strict TypeScript compilation to CommonJS followed by `node --test` because the full application dependency environment was unavailable.
-
-### Candidate source hashes (SHA-256)
-- Workspace: `d2110d0fd0b214d8380810517055da388642dd09d2f6a65bd587563cd68230ef`
-- Reader: `68c0a4461ba4e5dc404e4f5bde0a57243d6dcf9617dc67b9379c46cbabf50395`
-- Test: `328bc9c100fa4bf39687a3c9d3cd2198e08da468d2013fdd3546645d86e2631d`
+## Evidence locations
+Machine-readable source/blob identity, result cases and raw-artifact SHA-256 manifest: `docs/qa/mealscout-owner-orders-recovery-2026-09-19.json`.
+Raw reports, logs and screenshots: `.qa-evidence/orders-recovery/` in the worktree above. The first setup failure, 86-pass/2-fail baseline and 88-pass/0-fail final are separately retained.
 
 ## Changed but unverified work
-Full application typecheck/build, existing browser suite, rendered mobile/desktop recovery, and live backend/provider acceptance were not run for this candidate. The authorized desktop connection returned no available device; the sandbox could not clone the repository over the network. Do not translate these bounded tests into production readiness.
+No unverified production-code edits remain within this bounded read-recovery slice. Connected backend/database/provider acceptance, physical-device/cross-browser testing, the full hosted 24-stage release gate and production rollout are still unproved for this revision. Do not turn the local browser result into whole-product acceptance.
 
 ## Tests/evidence invalidated by later changes
-The prior head's 118 browser cases and hosted preview still describe that prior revision. They do not establish this changed workspace's browser acceptance. Run the focused integration checks below before carrying those release claims forward.
+The prior hosted preview and 118 profile-browser cases stay bound to their original revisions. They were not rerun here. No application source changed after the final build/browser run; this receipt/handoff is documentation only.
 
 ## Known blockers/risks
-The reader intentionally refuses incomplete order/item rows rather than rendering a partial queue as authoritative. Confirm current server fixtures satisfy the existing owner-order field contract in real-app testing. Lost mutation responses, persisted refresh/reload mutation recovery, and other operator transitions are outside this read-only patch and remain separate acceptance work.
+The response reader deliberately rejects malformed or other-business lists. Verify actual backend-produced owner-history and kitchen JSON with the same recovery scenarios before release. Native migration/worker compatibility, terminal-history tombstones, multi-process capacity and provider verification remain separate release requirements from the existing PR.
 
 ## External side effects and retry safety
-Only source work in MealScout's draft UI/UX branch is intended. No production merge/deployment, real account creation, order mutation, payment/refund, provider activation, or infrastructure provisioning was performed. Retry remains a GET/read. Check the current branch SHA before writing; use only fast-forward updates and preserve concurrent work.
+Only the MealScout task branch is a publication target. No main merge, production deployment, migrations, real account/order creation, outbound mail, real payment or refund, provider activation, or infrastructure provisioning. Browser servers bound to loopback and closed at test completion. The aborted first browser process tree was stopped by its exact owned PID; later runs completed with cleanup. Source and raw evidence remain for resumption.
 
 ## Next exact action
-At this source candidate, run the normal application typecheck/build and existing order workspace checks. Exercise owner history and kitchen in the actual app at mobile and desktop widths: valid empty queue, valid populated queue, HTTP 200 HTML/missing-orders payload, HTTP 401/403, mixed-business response, bad pagination, then valid retry. Verify error announcement, no false empty/zero/live state, no order mutation while unverified, and restored current-business orders after recovery.
+Resume from the current remote task branch and the verified implementation above. Prove these same owner-history/kitchen response and retry transitions against an isolated real backend/database, with no live customer/payment writes. Then run the unchanged hosted release gate on the integrated source and reconcile the existing migration/provider rollout requirements before any production decision.
 
 ## Actions that must NOT be repeated
-Do not restart project discovery or reimplement the already-saved onboarding/menu-readiness slice. Do not use the old audit note as a resume point. Do not change other projects, production, financial rules, or unrelated branches to complete these checks.
+Do not rediscover the repository, repeat the old audit, rewrite the saved onboarding/menu-readiness work, loosen tests, enable real payment through a test flag, switch other worktrees, or change any other project. Do not report older hosted receipts as verification of this source.
