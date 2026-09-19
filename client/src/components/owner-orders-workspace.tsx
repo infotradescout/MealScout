@@ -43,6 +43,10 @@ import { useToast } from "@/hooks/use-toast";
 import { API_BASE_URL } from "@/lib/api";
 import { buildPublicProfilePath } from "@/lib/public-profile-path";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import {
+  isOwnerOrdersAccessError,
+  readOwnerOrdersResponse,
+} from "@/lib/owner-orders-response";
 
 type OwnerOrdersView = "orders" | "kitchen";
 type OrderFilter = "all" | "active" | "completed" | "cancelled";
@@ -317,19 +321,9 @@ function describeDisputeFinancialState(order: OwnerOrder) {
   };
 }
 
-async function fetchOrders(url: string): Promise<OrdersResponse> {
+async function fetchOrders(url: string, restaurantId: string): Promise<OrdersResponse> {
   const response = await fetch(url, { credentials: "include" });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(
-      payload?.message || payload?.error || "Orders could not be loaded",
-    );
-  }
-  return {
-    orders: Array.isArray(payload?.orders) ? payload.orders : [],
-    page: Number(payload?.page || 1),
-    hasMore: payload?.hasMore === true,
-  };
+  return await readOwnerOrdersResponse(response, restaurantId) as OrdersResponse;
 }
 
 function mergeOrder(current: OwnerOrder[], incoming: OwnerOrder) {
@@ -726,6 +720,7 @@ function OwnerOrdersSession({ view }: OwnerOrdersWorkspaceProps) {
     queryFn: ({ pageParam }) =>
       fetchOrders(
         `/api/owner/orders/${encodeURIComponent(restaurantId)}?page=${Number(pageParam || 1)}`,
+        restaurantId,
       ),
     initialPageParam: 1,
     getNextPageParam: (lastPage) =>
@@ -739,6 +734,7 @@ function OwnerOrdersSession({ view }: OwnerOrdersWorkspaceProps) {
     queryFn: () =>
       fetchOrders(
         `/api/owner/kitchen-queue/${encodeURIComponent(restaurantId)}`,
+        restaurantId,
       ),
     enabled: Boolean(user && !businessesError && restaurantId && view === "kitchen"),
     refetchInterval: 30_000,
@@ -973,7 +969,7 @@ function OwnerOrdersSession({ view }: OwnerOrdersWorkspaceProps) {
   const error = view === "kitchen" ? queueQuery.error : historyQuery.error;
   const isLoading =
     view === "kitchen" ? queueQuery.isLoading : historyQuery.isLoading;
-  const isUnauthorized = /not authorized|access required|forbidden/i.test(
+  const isUnauthorized = isOwnerOrdersAccessError(error) || /not authorized|access required|forbidden/i.test(
     String((error as Error | null)?.message || ""),
   );
 
@@ -1046,17 +1042,17 @@ function OwnerOrdersSession({ view }: OwnerOrdersWorkspaceProps) {
                 <Badge
                   variant="outline"
                   className={
-                    isConnected
+                    isConnected && !error && !isLoading
                       ? "border-emerald-200 bg-emerald-50 text-emerald-800"
                       : "border-stone-200 bg-white text-stone-600"
                   }
                 >
-                  {isConnected ? (
+                  {isConnected && !error && !isLoading ? (
                     <Wifi className="mr-1 h-3.5 w-3.5" />
                   ) : (
                     <WifiOff className="mr-1 h-3.5 w-3.5" />
                   )}
-                  {isConnected ? "Live updates" : "30-second refresh"}
+                  {error ? "Updates unverified" : isLoading ? "Loading orders" : isConnected ? "Live updates" : "30-second refresh"}
                 </Badge>
               ) : null}
               <Button
@@ -1097,7 +1093,7 @@ function OwnerOrdersSession({ view }: OwnerOrdersWorkspaceProps) {
                   {label}
                 </p>
                 <p className="mt-1 text-2xl font-black text-[color:var(--text-primary)]">
-                  {value}
+                  {error || isLoading ? "—" : value}
                 </p>
               </div>
             ))}
@@ -1105,7 +1101,7 @@ function OwnerOrdersSession({ view }: OwnerOrdersWorkspaceProps) {
         </section>
 
         {isUnauthorized ? (
-          <Card className="mt-5 border-red-200 bg-red-50">
+          <Card className="mt-5 border-red-200 bg-red-50" role="alert">
             <CardContent className="flex items-start gap-3 p-5">
               <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-700" />
               <div>
@@ -1113,13 +1109,13 @@ function OwnerOrdersSession({ view }: OwnerOrdersWorkspaceProps) {
                   Order access is unavailable
                 </h3>
                 <p className="mt-1 text-sm text-red-800">
-                  Your account does not have access to orders for this business.
+                  {(error as Error).message || "Your account does not have access to orders for this business."}
                 </p>
               </div>
             </CardContent>
           </Card>
         ) : error ? (
-          <Card className="mt-5 border-red-200 bg-red-50">
+          <Card className="mt-5 border-red-200 bg-red-50" role="alert">
             <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-start gap-3">
                 <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-700" />
@@ -1134,14 +1130,18 @@ function OwnerOrdersSession({ view }: OwnerOrdersWorkspaceProps) {
                 </div>
               </div>
               <Button
+                type="button"
                 variant="outline"
+                className="min-h-11"
+                disabled={queueQuery.isFetching || historyQuery.isFetching}
+                aria-busy={queueQuery.isFetching || historyQuery.isFetching}
                 onClick={() =>
                   view === "kitchen"
                     ? queueQuery.refetch()
                     : historyQuery.refetch()
                 }
               >
-                Try again
+                {queueQuery.isFetching || historyQuery.isFetching ? "Loading orders…" : "Try again"}
               </Button>
             </CardContent>
           </Card>
