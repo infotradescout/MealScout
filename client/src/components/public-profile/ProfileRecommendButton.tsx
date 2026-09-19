@@ -7,14 +7,15 @@
  * recommend on but should still be recommendable.
  *
  * One-way action (no un-recommend) - the API already treats a duplicate
- * recommend as a graceful no-op, so this just optimistically flips to a
- * "Recommended" state on click.
+ * recommend as a graceful no-op. The button confirms only acknowledged success.
  *
  * For guests, tapping the button routes to /login with a continuation path.
  */
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { ThumbsUp } from "lucide-react";
 import { apiUrl } from "@/lib/api";
+import { publicProfileLoginHref } from "@/lib/public-profile-recovery";
+import { useToast } from "@/hooks/use-toast";
 import {
   Dialog,
   DialogContent,
@@ -38,6 +39,8 @@ export function ProfileRecommendButton({
   isAuthenticated,
   profilePath,
 }: ProfileRecommendButtonProps) {
+  const { toast } = useToast();
+  const actionBusy = useRef(false);
   const [isRecommended, setIsRecommended] = useState(false);
   const [isPending, setIsPending] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -80,7 +83,6 @@ export function ProfileRecommendButton({
       return { ok: true, contextAlreadySaved: contextSaved };
     }
     setIsPending(true);
-    setIsRecommended(true);
     try {
       const res = await fetch(
         apiUrl(
@@ -90,6 +92,7 @@ export function ProfileRecommendButton({
       );
       const responseBody = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error("Failed to recommend");
+      setIsRecommended(true);
       const contextAlreadySaved =
         responseBody?.contextAlreadySaved === true ||
         Boolean(responseBody?.contextSubmittedAt);
@@ -105,14 +108,17 @@ export function ProfileRecommendButton({
 
   const handleRecommend = useCallback(async () => {
     if (!isAuthenticated) {
-      const continuationPath = profilePath || window.location.pathname;
-      window.location.href = `/login?continuation=${encodeURIComponent(continuationPath)}`;
+      window.location.href = publicProfileLoginHref(profilePath);
       return;
     }
-    if (isPending) return;
-    const result = await submitShallowRecommend();
-    if (result.ok && !result.contextAlreadySaved) setIsDialogOpen(true);
-  }, [isAuthenticated, isPending, profilePath, submitShallowRecommend]);
+    if (isPending || actionBusy.current) return;
+    actionBusy.current = true;
+    try {
+      const result = await submitShallowRecommend();
+      if (result.ok && !result.contextAlreadySaved) setIsDialogOpen(true);
+      if (!result.ok) toast({ title: "Recommendation not confirmed", description: "Please refresh to check before trying again.", variant: "destructive" });
+    } finally { actionBusy.current = false; }
+  }, [isAuthenticated, isPending, profilePath, submitShallowRecommend, toast]);
 
   const handleSubmitContext = useCallback(async () => {
     const text = recommendationText.trim();
@@ -181,7 +187,8 @@ export function ProfileRecommendButton({
         aria-pressed={isRecommended}
         disabled={isPending}
         onClick={handleRecommend}
-        className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-2 text-sm font-bold transition-colors ${
+        aria-busy={isPending}
+        className={`inline-flex min-h-11 items-center gap-1.5 rounded-full border px-3.5 py-2 text-sm font-bold transition-colors ${
           isRecommended
             ? "border-orange-200 bg-orange-50 text-orange-800"
             : "border-[color:var(--profile-border-strong)] bg-white text-[color:var(--profile-ink-soft)] hover:border-orange-300 hover:bg-orange-50 hover:text-orange-800"

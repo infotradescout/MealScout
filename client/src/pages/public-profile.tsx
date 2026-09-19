@@ -1,5 +1,7 @@
+import { readScoutJourney } from "@/lib/scout-journey-state";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiUrl } from "@/lib/api";
+import { readPublicProfileJson, isMissingPublicProfile, isPrivatePublicProfile, publicProfileLoginHref } from "@/lib/public-profile-recovery";
 import { getDishCategoryPhoto } from "@/lib/dishCategoryPhoto";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "wouter";
@@ -2645,6 +2647,10 @@ function PublicProfileRelatedDiscoveryLinks({
 }
 
 export default function PublicProfilePage() {
+  const { user, isAuthenticated, authState } = useAuth();
+  const scoutJourney = readScoutJourney(authState === "loading" ? null : String(user?.id || "guest"));
+  const scoutHref = scoutJourney?.route || "/scout";
+  const scoutLabel = "Scout";
   const params = useParams<Record<string, string | undefined>>();
   const pathname =
     typeof window !== "undefined" ? window.location.pathname : "";
@@ -2674,7 +2680,7 @@ export default function PublicProfilePage() {
   const isCleanBusinessRoute =
     (!inferredProfileType || typedSlugNeedsResolution) &&
     Boolean(cleanBusinessSlug);
-  const { data: cleanBusinessResolution, isLoading: cleanBusinessLoading } =
+  const { data: cleanBusinessResolution, isLoading: cleanBusinessLoading, error: cleanBusinessError, isFetching: cleanBusinessFetching, refetch: retryCleanBusiness } =
     useQuery<{
       entityType:
         | "restaurant"
@@ -2687,19 +2693,11 @@ export default function PublicProfilePage() {
       id: string;
       businessSlug: string;
     }>({
-      queryKey: ["/api/public/resolve-business", cleanBusinessSlug],
+      queryKey: ["/api/public/resolve-business", cleanBusinessSlug, user?.id ?? "guest"],
       enabled: Boolean(isCleanBusinessRoute && cleanBusinessSlug),
-      queryFn: async () => {
-        const res = await fetch(
-          apiUrl(
-            `/api/public/resolve-business/${encodeURIComponent(
-              String(cleanBusinessSlug || ""),
-            )}`,
-          ),
-        );
-        if (!res.ok) throw new Error("Profile not found");
-        return res.json();
-      },
+      queryFn: ({ signal }) => readPublicProfileJson(
+        apiUrl(`/api/public/resolve-business/${encodeURIComponent(String(cleanBusinessSlug || ""))}`), signal,
+      ),
       retry: false,
     });
   const rawProfileId = String(
@@ -2725,28 +2723,22 @@ export default function PublicProfilePage() {
 
   const locationSearch =
     typeof window !== "undefined" ? window.location.search : "";
-  const { data, isLoading } = useQuery<PublicProfilePayload>({
+  const { data, isLoading, error: profileReadError, isFetching: profileFetching, refetch: retryProfile } = useQuery<PublicProfilePayload>({
     queryKey: [
       "/api/public/profiles",
       normalizedProfileType,
       resolvedProfileId,
       locationSearch,
+      user?.id ?? "guest",
     ],
     enabled:
       !!normalizedProfileType &&
       !!resolvedProfileId &&
       !invalidRestaurantRoute &&
       !typedSlugResolvedToWrongType,
-    queryFn: async () => {
-      const res = await fetch(
-        apiUrl(
-          `/api/public/profiles/${encodeURIComponent(String(normalizedProfileType || ""))}/${encodeURIComponent(String(resolvedProfileId || ""))}${locationSearch || ""}`,
-        ),
-        { credentials: "include" },
-      );
-      if (!res.ok) throw new Error("Profile not found");
-      return res.json();
-    },
+    queryFn: ({ signal }) => readPublicProfileJson<PublicProfilePayload>(
+      apiUrl(`/api/public/profiles/${encodeURIComponent(String(normalizedProfileType || ""))}/${encodeURIComponent(String(resolvedProfileId || ""))}${locationSearch || ""}`), signal,
+    ),
     retry: false,
   });
 
@@ -2785,20 +2777,19 @@ export default function PublicProfilePage() {
 
   const safeCtas = useMemo(() => asSafeCtas(data?.cta), [data?.cta]);
 
-  // Auth + personalization context
-  const { user, isAuthenticated } = useAuth();
+  // Personalization remains scoped to the signed-in account.
 
   // Load user's favorited restaurant IDs when authenticated
   const { data: userFavorites } = useQuery<
     Array<{ restaurantId: string; restaurant?: { id: string } }>
   >({
-    queryKey: ["/api/favorites/restaurants", "profile-personalization"],
+    queryKey: ["/api/favorites/restaurants", "profile-personalization", user?.id],
     enabled: isAuthenticated && Boolean(data?.id),
     queryFn: async () => {
       const res = await fetch(apiUrl("/api/favorites/restaurants"), {
         credentials: "include",
       });
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error("Saved places could not be loaded");
       return res.json();
     },
     staleTime: 5 * 60_000,
@@ -2934,6 +2925,8 @@ export default function PublicProfilePage() {
   useEffect(() => {
     if (isLoading || cleanBusinessLoading || data) return;
     if (!normalizedProfileType && !resolvedProfileId) return;
+    const failure = cleanBusinessError || profileReadError;
+    if (failure && !isMissingPublicProfile(failure)) return;
     trackQualitySignal(
       "public_profile_not_found_viewed",
       undefined,
@@ -2941,6 +2934,8 @@ export default function PublicProfilePage() {
     );
   }, [
     cleanBusinessLoading,
+    cleanBusinessError,
+    profileReadError,
     data,
     isLoading,
     normalizedProfileType,
@@ -3006,6 +3001,11 @@ export default function PublicProfilePage() {
     setAffiliateRef(routeRef);
   }, [cleanBusinessRoute?.affiliateTag, resolvedCleanBusinessPath]);
 
+  const readFailure = cleanBusinessError || profileReadError;
+  const unavailable = Boolean(readFailure && !isMissingPublicProfile(readFailure));
+  const accessDenied = isPrivatePublicProfile(readFailure);
+  const retrying = cleanBusinessFetching || profileFetching;
+
   if ((isLoading || cleanBusinessLoading) && !invalidRestaurantRoute) {
     return (
       <div className="mealscout-public-profile flex min-h-screen items-center justify-center px-4">
@@ -3013,7 +3013,7 @@ export default function PublicProfilePage() {
           <div className="h-40 animate-pulse rounded-2xl bg-orange-100" />
           <div className="mt-5 h-7 w-2/3 animate-pulse rounded-lg bg-orange-100" />
           <div className="mt-3 h-4 w-full animate-pulse rounded bg-orange-50" />
-          <p className="mt-5 text-sm font-semibold text-[color:var(--profile-muted)]">
+          <p role="status" aria-live="polite" className="mt-5 text-sm font-semibold text-[color:var(--profile-muted)]">
             Loading profile…
           </p>
         </div>
@@ -3021,23 +3021,31 @@ export default function PublicProfilePage() {
     );
   }
 
-  if (!data) {
+  if (!data || readFailure) {
     return (
       <div
         className="mealscout-public-profile flex min-h-screen items-center justify-center px-4"
-        data-testid="public-profile-not-found"
+        data-testid={unavailable ? "public-profile-unavailable" : "public-profile-not-found"}
       >
         <div className="profile-surface w-full max-w-lg rounded-[1.75rem] p-6 text-center sm:p-8">
           <p className="profile-section-label">MealScout</p>
           <h1 className="mt-2 text-3xl font-black tracking-tight text-[color:var(--profile-ink)]">
-            Profile not found
+            {unavailable ? (accessDenied ? "Profile unavailable" : "Profile temporarily unavailable") : "Profile not found"}
           </h1>
           <p className="mt-2 text-sm text-[color:var(--profile-muted)]">
-            This listing may have moved or is no longer public.
+            {unavailable ? (accessDenied ? "This profile is not available with your current access." : "We could not load this profile. Try again here, or return to Scout.") : "This listing may have moved or is no longer public."}
           </p>
-          <div className="mt-5">
-            <Link href="/scout">
-              <Button className="profile-action-primary">Scout</Button>
+          <div className="mt-5 flex flex-wrap justify-center gap-3">
+            {unavailable && (
+              <Button className="profile-action-primary min-h-11" disabled={retrying} onClick={() => { void (cleanBusinessError ? retryCleanBusiness() : retryProfile()); }}>
+                {retrying ? "Retrying…" : "Retry profile"}
+              </Button>
+            )}
+            {accessDenied && !isAuthenticated && (
+              <Link href={publicProfileLoginHref()} className="inline-flex min-h-11 items-center px-4 font-bold">Sign in</Link>
+            )}
+            <Link href={scoutHref}>
+              <Button className="profile-action-primary min-h-11">Scout</Button>
             </Link>
           </div>
         </div>
@@ -3116,10 +3124,10 @@ export default function PublicProfilePage() {
           </Link>
           <div className="flex items-center gap-2 text-xs sm:text-sm">
             <Link
-              href="/scout"
-              className="profile-action-primary inline-flex min-h-9 items-center rounded-full px-4 font-black"
+              href={scoutHref}
+              className="profile-action-primary inline-flex min-h-11 items-center rounded-full px-4 font-black"
             >
-              Scout
+              {scoutLabel}
             </Link>
             {showPageClaimPrompts ? (
               <Link
@@ -3134,6 +3142,7 @@ export default function PublicProfilePage() {
       </header>
 
       <ProfileErrorBoundary
+        key={`${user?.id ?? "guest"}:${data.profileType}:${data.id}`}
         onPageError={() =>
           trackQualitySignal(
             "public_profile_page_error",
@@ -3349,8 +3358,8 @@ export default function PublicProfilePage() {
         <div className="mx-auto flex w-full max-w-5xl flex-col gap-2 px-4 py-5 text-sm text-[color:var(--profile-muted)] sm:flex-row sm:items-center sm:justify-between">
           <p className="font-black text-[color:var(--profile-ink)]">MealScout</p>
           <div className="flex items-center gap-4">
-            <Link href="/scout" className="font-bold hover:text-[color:var(--profile-accent)]">
-              Scout
+            <Link href={scoutHref} className="font-bold hover:text-[color:var(--profile-accent)]">
+              {scoutLabel}
             </Link>
             {showPageClaimPrompts ? (
               <Link href="/claim-business" className="hover:text-[color:var(--profile-accent)]">

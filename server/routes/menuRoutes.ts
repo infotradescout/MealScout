@@ -60,6 +60,7 @@ import {
   sql,
 } from "drizzle-orm";
 import { isAuthenticated, isStaffOrAdmin } from "../unifiedAuth";
+import { isStaffOrAdminUserType } from "@shared/profileAccessPolicy";
 import { distributedRateLimit } from "../middleware/distributedRateLimit";
 import { storage } from "../storage";
 import {
@@ -127,7 +128,7 @@ const canManageMenu = (req: any, res: any, next: any) => {
 };
 
 async function assertOwnsRestaurant(reqUser: any, restaurantId: string) {
-  if (reqUser?.userType && reqUser.userType !== "restaurant_owner") {
+  if (isStaffOrAdminUserType(reqUser?.userType)) {
     return;
   }
   const ok = await storage.verifyRestaurantOwnership(restaurantId, reqUser.id);
@@ -451,10 +452,10 @@ export async function buildOrderingReadiness(
     },
     {
       id: "pickup_location",
-      label: "A customer pickup location is published",
+      label: "Pickup location label is available",
       ok: Boolean(pickupAddressLabel),
       blocking: true,
-      action: "Publish the address customers should use for pickup.",
+      action: "Set the address or location label customers should use for pickup.",
     },
     {
       id: "hours",
@@ -481,11 +482,11 @@ export async function buildOrderingReadiness(
       ? [
           {
             id: "current_truck_stop",
-            label: "A confirmed current service stop is published",
+            label: "Current service stop is confirmed for pickup",
             ok: truckOrderableNow,
             blocking: true,
             action:
-              "Publish and confirm the truck's current service window and pickup location before taking orders.",
+              "Confirm the truck's current service window and pickup location before taking orders.",
           },
         ]
       : []),
@@ -584,10 +585,10 @@ export async function buildOrderingReadiness(
       id: "active_menu",
       label: requestedMenuId
         ? "Requested menu is active"
-        : "At least one active menu is published",
+        : "At least one menu is enabled",
       ok: restaurantMenus.length > 0,
       blocking: true,
-      action: "Publish an active menu.",
+      action: "Enable a menu.",
     },
     {
       id: "menu_items",
@@ -1756,7 +1757,13 @@ export function registerMenuRoutes(app: Express) {
     wrap(async (req, res) => {
       const { restaurantId } = req.params;
       await assertOwnsRestaurant(req.user, restaurantId);
-      res.json(await buildOrderingReadiness(restaurantId));
+      const [readiness, publicParent] = await Promise.all([
+        buildOrderingReadiness(restaurantId),
+        loadPublicMenuParent(restaurantId),
+      ]);
+      // Report the same business visibility decision used by the public menu
+      // route. An enabled menu alone does not publish an unapproved business.
+      res.json({ ...readiness, publicMenuBusinessVisible: Boolean(publicParent) });
     }),
   );
 

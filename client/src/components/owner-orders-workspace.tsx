@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query";
 import { format, formatDistanceToNow } from "date-fns";
 import { Link, useLocation, useSearch } from "wouter";
@@ -43,6 +43,10 @@ import { useToast } from "@/hooks/use-toast";
 import { API_BASE_URL } from "@/lib/api";
 import { buildPublicProfilePath } from "@/lib/public-profile-path";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import {
+  isOwnerOrdersAccessError,
+  readOwnerOrdersResponse,
+} from "@/lib/owner-orders-response";
 
 type OwnerOrdersView = "orders" | "kitchen";
 type OrderFilter = "all" | "active" | "completed" | "cancelled";
@@ -317,19 +321,9 @@ function describeDisputeFinancialState(order: OwnerOrder) {
   };
 }
 
-async function fetchOrders(url: string): Promise<OrdersResponse> {
+async function fetchOrders(url: string, restaurantId: string): Promise<OrdersResponse> {
   const response = await fetch(url, { credentials: "include" });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(
-      payload?.message || payload?.error || "Orders could not be loaded",
-    );
-  }
-  return {
-    orders: Array.isArray(payload?.orders) ? payload.orders : [],
-    page: Number(payload?.page || 1),
-    hasMore: payload?.hasMore === true,
-  };
+  return await readOwnerOrdersResponse(response, restaurantId) as OrdersResponse;
 }
 
 function mergeOrder(current: OwnerOrder[], incoming: OwnerOrder) {
@@ -636,6 +630,7 @@ function OwnerOrderCard({
                   (next.status === "preparing" &&
                     typeof selectedPrepMinutes !== "number")
                 }
+                aria-busy={isUpdating}
                 data-testid={`button-advance-order-${order.id}`}
               >
                 {isUpdating ? (
@@ -664,9 +659,14 @@ function OwnerOrderCard({
   );
 }
 
-export default function OwnerOrdersWorkspace({
-  view,
-}: OwnerOrdersWorkspaceProps) {
+export default function OwnerOrdersWorkspace({ view }: OwnerOrdersWorkspaceProps) {
+  const { user } = useAuth();
+  const search = useSearch();
+  const requestedId = new URLSearchParams(search).get("restaurantId") || "";
+  return <OwnerOrdersSession key={JSON.stringify([user?.id, requestedId, view])} view={view} />;
+}
+
+function OwnerOrdersSession({ view }: OwnerOrdersWorkspaceProps) {
   const { user } = useAuth();
   const search = useSearch();
   const [, setLocation] = useLocation();
@@ -676,7 +676,20 @@ export default function OwnerOrdersWorkspace({
   const [isConnected, setIsConnected] = useState(false);
   const [orderToCancel, setOrderToCancel] = useState<OwnerOrder | null>(null);
 
-  const { data: businesses = [], isLoading: businessesLoading } = useQuery<
+  const mountedRef = useRef(false);
+  const statusUpdatePendingRef = useRef(false);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  const {
+    data: businesses = [],
+    isLoading: businessesLoading,
+    error: businessesError,
+    isFetching: businessesFetching,
+    refetch: refetchBusinesses,
+  } = useQuery<
     Restaurant[]
   >({
     queryKey: ["/api/restaurants/my-restaurants"],
@@ -691,6 +704,8 @@ export default function OwnerOrdersWorkspace({
     businesses[0] ||
     null;
   const restaurantId = selectedBusiness?.id || "";
+  const currentBusinessRef = useRef(restaurantId);
+  useEffect(() => { currentBusinessRef.current = restaurantId; }, [restaurantId]);
   const historyQueryKey = useMemo(
     () => ["/api/owner/orders", restaurantId] as const,
     [restaurantId],
@@ -705,11 +720,12 @@ export default function OwnerOrdersWorkspace({
     queryFn: ({ pageParam }) =>
       fetchOrders(
         `/api/owner/orders/${encodeURIComponent(restaurantId)}?page=${Number(pageParam || 1)}`,
+        restaurantId,
       ),
     initialPageParam: 1,
     getNextPageParam: (lastPage) =>
       lastPage.hasMore ? Number(lastPage.page || 1) + 1 : undefined,
-    enabled: Boolean(restaurantId && view === "orders"),
+    enabled: Boolean(user && !businessesError && restaurantId && view === "orders"),
     retry: false,
   });
 
@@ -718,8 +734,9 @@ export default function OwnerOrdersWorkspace({
     queryFn: () =>
       fetchOrders(
         `/api/owner/kitchen-queue/${encodeURIComponent(restaurantId)}`,
+        restaurantId,
       ),
-    enabled: Boolean(restaurantId && view === "kitchen"),
+    enabled: Boolean(user && !businessesError && restaurantId && view === "kitchen"),
     refetchInterval: 30_000,
     retry: false,
   });
@@ -731,7 +748,8 @@ export default function OwnerOrdersWorkspace({
   }, [queueQuery.data, restaurantId, view]);
 
   useEffect(() => {
-    if (!restaurantId || view !== "kitchen") return;
+    if (!user || businessesError || !restaurantId || view !== "kitchen") return;
+    let active = true;
     const socketUrl = import.meta.env.DEV
       ? undefined
       : API_BASE_URL || undefined;
@@ -743,23 +761,27 @@ export default function OwnerOrdersWorkspace({
     });
 
     socket.on("connect", () => {
+      if (!active) return;
       setIsConnected(true);
       socket.emit("subscribe_kitchen", { restaurantId });
+      // Refresh canonical data after reconnecting so missed events are recovered.
+      void queryClient.invalidateQueries({ queryKey: queueQueryKey });
     });
-    socket.on("disconnect", () => setIsConnected(false));
+    socket.on("disconnect", () => { if (active) setIsConnected(false); });
     socket.on("kitchen:order_update", (payload: { order?: OwnerOrder }) => {
-      if (!payload?.order) return;
+      if (!active || payload?.order?.restaurantId !== restaurantId) return;
       setQueueOrders((current) => mergeOrder(current, payload.order!));
       void queryClient.invalidateQueries({ queryKey: queueQueryKey });
       void queryClient.invalidateQueries({ queryKey: historyQueryKey });
     });
 
     return () => {
+      active = false;
       socket.emit("unsubscribe_kitchen", { restaurantId });
       socket.disconnect();
       setIsConnected(false);
     };
-  }, [historyQueryKey, queueQueryKey, restaurantId, view]);
+  }, [historyQueryKey, queueQueryKey, restaurantId, view, user?.id, businessesError]);
 
   const statusMutation = useMutation({
     mutationFn: async ({
@@ -782,31 +804,44 @@ export default function OwnerOrdersWorkspace({
       const payload = await response.json();
       return (payload?.order || payload) as OwnerOrder;
     },
-    onSuccess: async (updatedOrder) => {
-      setQueueOrders((current) => mergeOrder(current, updatedOrder));
+    onSuccess: async (updatedOrder, variables) => {
+      const sourceRestaurantId = variables.order.restaurantId;
+      const stillViewingSource = () => mountedRef.current &&
+        currentBusinessRef.current === sourceRestaurantId;
+      if (stillViewingSource() && updatedOrder.restaurantId === sourceRestaurantId &&
+        updatedOrder.id === variables.order.id) {
+        setQueueOrders((current) => mergeOrder(current, updatedOrder));
+      }
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: historyQueryKey }),
-        queryClient.invalidateQueries({ queryKey: queueQueryKey }),
+        queryClient.invalidateQueries({ queryKey: ["/api/owner/orders", sourceRestaurantId] }),
+        queryClient.invalidateQueries({ queryKey: ["/api/owner/kitchen-queue", sourceRestaurantId] }),
       ]);
+      if (!stillViewingSource() || updatedOrder.restaurantId !== sourceRestaurantId ||
+        updatedOrder.id !== variables.order.id) return;
       toast({
         title: STATUS_DETAILS[updatedOrder.status]?.label || "Order updated",
         description: `Order #${orderNumber(updatedOrder)} is up to date.`,
       });
     },
-    onError: (error: Error) => {
+    onError: (error: Error, variables) => {
+      if (!mountedRef.current || currentBusinessRef.current !== variables.order.restaurantId) return;
       toast({
         title: "Order could not be updated",
-        description: error.message || "Please try again.",
+        description: `${error.message || "The update could not be verified."} Refresh orders before retrying.`,
         variant: "destructive",
       });
     },
+    onSettled: () => { statusUpdatePendingRef.current = false; },
   });
 
   const historyOrders = useMemo(
     () => historyQuery.data?.pages.flatMap((page) => page.orders) || [],
     [historyQuery.data],
   );
-  const orders = view === "kitchen" ? queueOrders : historyOrders;
+  // Filter synchronously: a previous business's local queue can outlive the
+  // query-key switch until effects run. It must never render or be actionable.
+  const orders = (view === "kitchen" ? queueOrders : historyOrders)
+    .filter((order) => order?.restaurantId === restaurantId);
   const counts = useMemo(
     () => ({
       active: orders.filter((order) => ACTIVE_STATUSES.includes(order.status))
@@ -847,7 +882,39 @@ export default function OwnerOrdersWorkspace({
         ["ready", "out_for_delivery", "delivered"].includes(order.status),
       ),
     },
+    ...(orders.some((order) => ["pending", "payment_disputed"].includes(order.status))
+      ? [{
+          id: "payment-review",
+          title: "Payment / review",
+          icon: AlertCircle,
+          orders: orders.filter((order) => ["pending", "payment_disputed"].includes(order.status)),
+        }]
+      : []),
   ];
+
+  if (!user || businessesError) {
+    return (
+      <main className="min-h-screen bg-[var(--bg-layered)] px-4 py-16">
+        <Card className="mx-auto max-w-xl border-[color:var(--border-subtle)] bg-[var(--bg-surface)]">
+          <CardContent className="p-8 text-center">
+            <h1 className="text-2xl font-black">{!user ? "Sign in to manage orders" : "Business access could not be loaded"}</h1>
+            <p className="mt-3 text-sm text-[color:var(--text-muted)]" role="alert">
+              {!user ? "Sign in with the account that manages this business."
+                : "Retry the business lookup before creating or claiming another profile. Your orders have not been changed."}
+            </p>
+            {!user ? (
+              <Button asChild className="mt-5 min-h-11"><Link href="/login">Sign in</Link></Button>
+            ) : (
+              <Button type="button" variant="outline" className="mt-5 min-h-11"
+                onClick={() => void refetchBusinesses()} disabled={businessesFetching} aria-busy={businessesFetching}>
+                {businessesFetching ? "Checking business access…" : "Retry business access"}
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+      </main>
+    );
+  }
 
   if (businessesLoading) {
     return (
@@ -902,14 +969,33 @@ export default function OwnerOrdersWorkspace({
   const error = view === "kitchen" ? queueQuery.error : historyQuery.error;
   const isLoading =
     view === "kitchen" ? queueQuery.isLoading : historyQuery.isLoading;
-  const isUnauthorized = /not authorized|access required|forbidden/i.test(
+  const isUnauthorized = isOwnerOrdersAccessError(error) || /not authorized|access required|forbidden/i.test(
     String((error as Error | null)?.message || ""),
   );
 
+  const activeOrderToCancel = !error
+    ? orders.find((order) => order.id === orderToCancel?.id && CANCELLABLE_STATUSES.includes(order.status)) || null
+    : null;
+  const requestStatusChange = (order: OwnerOrder, status: string, prepTimeMinutes?: number) => {
+    const current = orders.find((candidate) => candidate.id === order.id);
+    if (!mountedRef.current || currentBusinessRef.current !== restaurantId ||
+      !user || error || statusUpdatePendingRef.current || statusMutation.isPending ||
+      !current || current.restaurantId !== restaurantId || order.restaurantId !== restaurantId ||
+      current.status !== order.status) return;
+    if (status === "cancelled") {
+      if (!CANCELLABLE_STATUSES.includes(current.status)) return;
+    } else {
+      if (nextOrderStatus(current)?.status !== status ||
+        (current.paymentMethod === "card" && current.payoutStatus !== "transferred") ||
+        (status === "preparing" && (typeof prepTimeMinutes !== "number" || !Number.isFinite(prepTimeMinutes)))) return;
+    }
+    statusUpdatePendingRef.current = true;
+    statusMutation.mutate({ order: current, status, prepTimeMinutes });
+  };
   const advanceOrder = (order: OwnerOrder, prepTimeMinutes?: number) => {
     const next = nextOrderStatus(order);
     if (!next) return;
-    statusMutation.mutate({ order, status: next.status, prepTimeMinutes });
+    requestStatusChange(order, next.status, prepTimeMinutes);
   };
 
   return (
@@ -956,17 +1042,17 @@ export default function OwnerOrdersWorkspace({
                 <Badge
                   variant="outline"
                   className={
-                    isConnected
+                    isConnected && !error && !isLoading
                       ? "border-emerald-200 bg-emerald-50 text-emerald-800"
                       : "border-stone-200 bg-white text-stone-600"
                   }
                 >
-                  {isConnected ? (
+                  {isConnected && !error && !isLoading ? (
                     <Wifi className="mr-1 h-3.5 w-3.5" />
                   ) : (
                     <WifiOff className="mr-1 h-3.5 w-3.5" />
                   )}
-                  {isConnected ? "Live updates" : "30-second refresh"}
+                  {error ? "Updates unverified" : isLoading ? "Loading orders" : isConnected ? "Live updates" : "30-second refresh"}
                 </Badge>
               ) : null}
               <Button
@@ -978,7 +1064,9 @@ export default function OwnerOrdersWorkspace({
                     ? queueQuery.refetch()
                     : historyQuery.refetch()
                 }
+                className="min-h-11"
                 disabled={queueQuery.isFetching || historyQuery.isFetching}
+                aria-busy={queueQuery.isFetching || historyQuery.isFetching}
               >
                 <RefreshCw
                   className={`mr-2 h-4 w-4 ${
@@ -1007,7 +1095,7 @@ export default function OwnerOrdersWorkspace({
                   {label}
                 </p>
                 <p className="mt-1 text-2xl font-black text-[color:var(--text-primary)]">
-                  {value}
+                  {error || isLoading ? "—" : value}
                 </p>
               </div>
             ))}
@@ -1015,7 +1103,7 @@ export default function OwnerOrdersWorkspace({
         </section>
 
         {isUnauthorized ? (
-          <Card className="mt-5 border-red-200 bg-red-50">
+          <Card className="mt-5 border-red-200 bg-red-50" role="alert">
             <CardContent className="flex items-start gap-3 p-5">
               <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-700" />
               <div>
@@ -1023,13 +1111,13 @@ export default function OwnerOrdersWorkspace({
                   Order access is unavailable
                 </h3>
                 <p className="mt-1 text-sm text-red-800">
-                  Your account does not have access to orders for this business.
+                  {(error as Error).message || "Your account does not have access to orders for this business."}
                 </p>
               </div>
             </CardContent>
           </Card>
         ) : error ? (
-          <Card className="mt-5 border-red-200 bg-red-50">
+          <Card className="mt-5 border-red-200 bg-red-50" role="alert">
             <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-start gap-3">
                 <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-700" />
@@ -1044,20 +1132,24 @@ export default function OwnerOrdersWorkspace({
                 </div>
               </div>
               <Button
+                type="button"
                 variant="outline"
+                className="min-h-11"
+                disabled={queueQuery.isFetching || historyQuery.isFetching}
+                aria-busy={queueQuery.isFetching || historyQuery.isFetching}
                 onClick={() =>
                   view === "kitchen"
                     ? queueQuery.refetch()
                     : historyQuery.refetch()
                 }
               >
-                Try again
+                {queueQuery.isFetching || historyQuery.isFetching ? "Loading orders…" : "Try again"}
               </Button>
             </CardContent>
           </Card>
         ) : null}
 
-        {!error && view === "orders" ? (
+        {!error && !isLoading && view === "orders" ? (
           <div className="mt-5 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {(
               [
@@ -1073,6 +1165,7 @@ export default function OwnerOrdersWorkspace({
                 variant={filter === value ? "default" : "outline"}
                 size="sm"
                 className="shrink-0 rounded-full"
+                aria-pressed={filter === value}
                 onClick={() => setFilter(value)}
               >
                 {label} {count}
@@ -1198,7 +1291,7 @@ export default function OwnerOrdersWorkspace({
       </div>
 
       <AlertDialog
-        open={Boolean(orderToCancel)}
+        open={Boolean(activeOrderToCancel)}
         onOpenChange={(open) => {
           if (!open) setOrderToCancel(null);
         }}
@@ -1206,31 +1299,29 @@ export default function OwnerOrdersWorkspace({
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {orderToCancel?.status === "cancellation_pending"
+              {activeOrderToCancel?.status === "cancellation_pending"
                 ? "Retry this refund?"
                 : "Cancel this order?"}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              {orderToCancel?.status === "cancellation_pending"
-                ? `MealScout will resume Stripe reconciliation for order #${orderNumber(orderToCancel)}. The order remains blocked from preparation and merchant transfer until this finishes.`
-                : `MealScout will block fulfillment and merchant transfer for order #${orderToCancel ? orderNumber(orderToCancel) : ""}, then finalize any required refund before showing it as cancelled.`}
+              {activeOrderToCancel?.status === "cancellation_pending"
+                ? `MealScout will resume Stripe reconciliation for order #${orderNumber(activeOrderToCancel)}. The order remains blocked from preparation and merchant transfer until this finishes.`
+                : `MealScout will block fulfillment and merchant transfer for order #${activeOrderToCancel ? orderNumber(activeOrderToCancel) : ""}, then finalize any required refund before showing it as cancelled.`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Keep order</AlertDialogCancel>
             <AlertDialogAction
               className="bg-red-600 text-white hover:bg-red-700"
+              disabled={statusMutation.isPending || !activeOrderToCancel}
               onClick={() => {
-                if (orderToCancel) {
-                  statusMutation.mutate({
-                    order: orderToCancel,
-                    status: "cancelled",
-                  });
+                if (activeOrderToCancel) {
+                  requestStatusChange(activeOrderToCancel, "cancelled");
                 }
                 setOrderToCancel(null);
               }}
             >
-              {orderToCancel?.status === "cancellation_pending"
+              {activeOrderToCancel?.status === "cancellation_pending"
                 ? "Retry refund"
                 : "Cancel order"}
             </AlertDialogAction>

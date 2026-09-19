@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest } from "@/lib/queryClient";
@@ -32,6 +32,25 @@ type ClaimRow = {
   requestCooldownMinutes?: number;
 };
 
+function isClaimRow(value: unknown): value is ClaimRow {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const row = value as Record<string, unknown>;
+  return (
+    typeof row.id === "string" &&
+    row.id.trim().length > 0 &&
+    ["name", "address", "city", "state"].every(
+      (key) => row[key] == null || typeof row[key] === "string",
+    ) &&
+    ["invited", "canClaim", "canRequest"].every(
+      (key) => row[key] === undefined || typeof row[key] === "boolean",
+    ) &&
+    (row.requestCooldownMinutes === undefined ||
+      (typeof row.requestCooldownMinutes === "number" &&
+        Number.isFinite(row.requestCooldownMinutes) &&
+        row.requestCooldownMinutes >= 0))
+  );
+}
+
 type PlaceSuggestion = {
   placeId: string;
   text: string;
@@ -50,7 +69,7 @@ type PlaceDetailsResult = {
 };
 
 export default function ClaimTruckPage() {
-  const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
+  const { user, isAuthenticated, isLoading: isAuthLoading } = useAuth();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
@@ -61,6 +80,7 @@ export default function ClaimTruckPage() {
   const initialQuery = inboundIntent.passthrough.q || "";
   const [query, setQuery] = useState(initialQuery);
   const didAutoSearch = useRef(false);
+  const searchVersion = useRef(0);
   const [loading, setLoading] = useState(false);
   const [requestingId, setRequestingId] = useState<string | null>(null);
   const [missingBusinessQuery, setMissingBusinessQuery] = useState("");
@@ -70,11 +90,25 @@ export default function ClaimTruckPage() {
 
   const normalizedQuery = useMemo(() => query.trim(), [query]);
 
+  const invalidateSearch = useCallback(() => {
+    searchVersion.current += 1;
+    setRows([]);
+    setError("");
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    invalidateSearch();
+    return () => { searchVersion.current += 1; };
+  }, [invalidateSearch, user?.id]);
+
   const handleSearch = async () => {
+    const version = ++searchVersion.current;
     const q = normalizedQuery;
+    setRows([]);
+    setError("");
     if (!q) {
-      setRows([]);
-      setError("");
+      setLoading(false);
       return;
     }
 
@@ -89,18 +123,23 @@ export default function ClaimTruckPage() {
             : "/api/truck-claims/public-search"
         }?q=${encodeURIComponent(q)}`,
       );
-      const data = await res.json().catch(() => []);
-      const next = Array.isArray(data) ? data : [];
-      setRows(next);
-      if (next.length === 0) {
+      const data: unknown = await res.json();
+      if (version !== searchVersion.current) return;
+      if (!Array.isArray(data) || !data.every(isClaimRow)) {
+        throw new Error("Invalid claim search response");
+      }
+      setRows(data);
+      if (data.length === 0) {
         setError(
           "No matching trucks found. Try a shorter name or the license/external ID.",
         );
       }
     } catch {
-      setError("Search is temporarily unavailable. Please try again.");
+      if (version === searchVersion.current) {
+        setError("Search is temporarily unavailable. Please try again.");
+      }
     } finally {
-      setLoading(false);
+      if (version === searchVersion.current) setLoading(false);
     }
   };
 
@@ -113,6 +152,7 @@ export default function ClaimTruckPage() {
   }, [initialQuery, isAuthLoading]);
 
   const handleRequest = async (listingId: string) => {
+    const version = searchVersion.current;
     setRequestingId(listingId);
     setError("");
     try {
@@ -141,10 +181,10 @@ export default function ClaimTruckPage() {
           "If setup can be sent for this listing, the owner will receive it.",
       });
 
-      // Refresh cooldown/status display.
-      await handleSearch();
+      // Refresh only if the owner is still viewing the same search.
+      if (version === searchVersion.current) await handleSearch();
     } catch (err: any) {
-      setError(err?.message || "Request failed.");
+      if (version === searchVersion.current) setError(err?.message || "Request failed.");
     } finally {
       setRequestingId(null);
     }
@@ -265,7 +305,10 @@ export default function ClaimTruckPage() {
               <Input
                 id="claim-truck-search"
                 value={query}
-                onChange={(e) => setQuery(e.target.value)}
+                onChange={(e) => {
+                  invalidateSearch();
+                  setQuery(e.target.value);
+                }}
                 placeholder="e.g. Tacos, DBPR-12345, Austin"
                 onKeyDown={(e) => {
                   if (e.key === "Enter") void handleSearch();
