@@ -86,6 +86,12 @@ module.exports = async function runOwnerOrdersRecovery(scenario) {
         world.faults.set(endpoint(view, world), { status, body: 'Non-object upstream access response' });
         const page = await openActor(world.actors.owner, destination(view, world));
         await unverified(page, view, true);
+        const signin = page.getByRole('link', { name: 'Sign in again', exact: true });
+        if (status === 401) {
+          await expect(signin).toHaveAttribute('href', '/login?redirect=' + encodeURIComponent(destination(view, world)));
+        } else {
+          await expect(signin).toHaveCount(0);
+        }
         await page.getByRole('button', { name: 'Refresh', exact: true }).click();
         await expect(card(page, order)).toContainText('QA Recovery Lunch');
         noWrites(world);

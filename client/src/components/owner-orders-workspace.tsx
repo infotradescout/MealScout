@@ -45,6 +45,7 @@ import { buildPublicProfilePath } from "@/lib/public-profile-path";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import {
   isOwnerOrdersAccessError,
+  OwnerOrdersReadError,
   readOwnerOrdersResponse,
 } from "@/lib/owner-orders-response";
 
@@ -969,6 +970,7 @@ function OwnerOrdersSession({ view }: OwnerOrdersWorkspaceProps) {
   const error = view === "kitchen" ? queueQuery.error : historyQuery.error;
   const isLoading =
     view === "kitchen" ? queueQuery.isLoading : historyQuery.isLoading;
+  const isSessionExpired = error instanceof OwnerOrdersReadError && error.status === 401;
   const isUnauthorized = isOwnerOrdersAccessError(error) || /not authorized|access required|forbidden/i.test(
     String((error as Error | null)?.message || ""),
   );
@@ -1111,8 +1113,18 @@ function OwnerOrdersSession({ view }: OwnerOrdersWorkspaceProps) {
                   Order access is unavailable
                 </h3>
                 <p className="mt-1 text-sm text-red-800">
-                  {(error as Error).message || "Your account does not have access to orders for this business."}
+                  {isSessionExpired
+                    ? "Your session expired. Sign in again to reload orders for this business. Your orders have not been changed."
+                    : (error as Error).message || "Your account does not have access to orders for this business."}
                 </p>
+                {isSessionExpired ? (
+                  <Button asChild className="mt-4 min-h-11">
+                    {/* A full navigation discards the expired in-memory auth cache. */}
+                    <a href={`/login?redirect=${encodeURIComponent(`${routePath}?restaurantId=${encodeURIComponent(restaurantId)}`)}`}>
+                      Sign in again
+                    </a>
+                  </Button>
+                ) : null}
               </div>
             </CardContent>
           </Card>
