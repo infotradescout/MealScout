@@ -9,10 +9,8 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import maplibregl, {
-  type Map as MaplibreMap,
-  type StyleSpecification,
-} from "maplibre-gl";
+import * as maplibregl from "@/lib/maplibre-runtime";
+import type { Map as MaplibreMap, StyleSpecification } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 
 import type { MapAdapterMarker } from "./map-adapter.types";
