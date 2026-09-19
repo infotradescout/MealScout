@@ -13,6 +13,8 @@ assert.equal(ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true).par
 const compile = code => ts.transpileModule(code, {compilerOptions: {module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020, jsx: ts.JsxEmit.ReactJSX}}).outputText;
 const finance = {exports: {}};
 vm.runInNewContext(compile(fs.readFileSync(path.join(root, 'shared/pickupOrderFinancialTruth.ts'), 'utf8')), {module: finance, exports: finance.exports});
+const responseReader = {exports: {}};
+vm.runInNewContext(compile(fs.readFileSync(path.join(root, 'client/src/lib/owner-orders-response.ts'), 'utf8')), {module: responseReader, exports: responseReader.exports, Response});
 const compiled = compile(source.replaceAll('import.meta.env.DEV', 'false'));
 const order = (id = 'order-a', restaurantId = 'a', status = 'confirmed', extras = {}) => ({
   id, restaurantId, status, customerName: `Customer ${id}`, orderType: 'pickup', paymentMethod: 'card',
@@ -60,6 +62,7 @@ function harness({view = 'kitchen', authenticated = true, businessError = null, 
     wouter: {Link: 'Link', useSearch: () => search, useLocation: () => [`/${view}?${search}`, next => {search = next.split('?')[1] || ''; dirty = true;}]},
     'socket.io-client': {io: () => {const socket = {handlers: {}, emissions: [], on(name, fn) {this.handlers[name] = fn;}, emit(name, payload) {this.emissions.push({name, payload});}, disconnect() {this.disconnected = true; this.handlers.disconnect?.();}}; sockets.push(socket); return socket;}},
     '@shared/pickupOrderFinancialTruth': finance.exports,
+    '@/lib/owner-orders-response': responseReader.exports,
     '@/components/business-workspace-shell': {__esModule: true, default: 'WorkspaceShell'},
     '@/components/ui/badge': {Badge: 'Badge'}, '@/components/ui/button': {Button: 'Button'}, '@/components/ui/card': {Card: 'Card', CardContent: 'CardContent'},
     '@/components/ui/alert-dialog': Object.fromEntries(['AlertDialog', 'AlertDialogAction', 'AlertDialogCancel', 'AlertDialogContent', 'AlertDialogDescription', 'AlertDialogFooter', 'AlertDialogHeader', 'AlertDialogTitle'].map(n => [n, n])),

@@ -1064,7 +1064,9 @@ function OwnerOrdersSession({ view }: OwnerOrdersWorkspaceProps) {
                     ? queueQuery.refetch()
                     : historyQuery.refetch()
                 }
+                className="min-h-11"
                 disabled={queueQuery.isFetching || historyQuery.isFetching}
+                aria-busy={queueQuery.isFetching || historyQuery.isFetching}
               >
                 <RefreshCw
                   className={`mr-2 h-4 w-4 ${
@@ -1147,7 +1149,7 @@ function OwnerOrdersSession({ view }: OwnerOrdersWorkspaceProps) {
           </Card>
         ) : null}
 
-        {!error && view === "orders" ? (
+        {!error && !isLoading && view === "orders" ? (
           <div className="mt-5 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {(
               [
