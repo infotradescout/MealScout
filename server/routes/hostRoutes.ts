@@ -240,6 +240,7 @@ export function registerHostRoutes(app: Express) {
       if (!host) {
         return res.status(404).json({ message: "Host profile not found" });
       }
+
       const amenitiesSchema = z.record(z.boolean()).optional().nullable();
       const parsedAmenities = amenitiesSchema.parse(req.body?.amenities);
 
@@ -511,8 +512,7 @@ export function registerHostRoutes(app: Express) {
         }
 
         if (!isCloudinaryConfigured()) {
-          return res.status(400).json({
-            message: "Image uploads are not configured on this server.",
+          return res.status(400).json({ message: "Image uploads are not configured on this server.",
           });
         }
 
@@ -970,7 +970,7 @@ export function registerHostRoutes(app: Express) {
         });
       } catch (error: any) {
         console.error("Error loading host earnings summary:", error);
-        res.status(500).json({ message: "Failed to load earnings summary" });
+        res.status(500).json({ message: "Failed to fetch host earnings summary" });
       }
     },
   );
@@ -1739,7 +1739,7 @@ export function registerHostRoutes(app: Express) {
         const bookingDays = expectedDateKeys.length;
         // Calculate pricing: Host price + $10 platform fee
         const slotPriceMap: Record<string, number | null | undefined> = {
-          breakfast: event.breakfastfastPriceCents,
+          breakfast: event.breakfastPriceCents,
           lunch: event.lunchPriceCents,
           dinner: event.dinnerPriceCents,
           daily: event.dailyPriceCents,
