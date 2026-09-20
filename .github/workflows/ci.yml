@@ -8,6 +8,13 @@ on:
 
 jobs:
   check:
+    # Owner-authorized billing exception for PR380 only; see docs/qa/mealscout-ci-exception.md.
+    # Main pushes and every other PR retain all existing CI steps.
+    if: >-
+      ${{ github.event_name != 'pull_request' ||
+          github.event.pull_request.number != 380 ||
+          github.event.pull_request.head.repo.full_name != 'infotradescout/MealScout' ||
+          github.head_ref != 'codex/ui-ux-front-end-overhaul-20260915' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

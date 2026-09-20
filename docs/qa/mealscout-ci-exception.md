@@ -12,3 +12,7 @@ PR discussion receipt: comment `5746995133`.
 Latest source handoff at entry: `docs/product/MEALSCOUT_SECURITY_HANDOFF_2026-09-19.md`.
 
 Next implementation boundary: native PostgreSQL migration 142 and separate-process Parking Pass durability/expiry verification using disposable data only. Existing accepted product scope and completed work remain unchanged.
+
+## Executable scope
+
+The `check` job now has a job-level condition limited to PR380 from the exact MealScout repository and existing task branch. Main pushes, every other PR and forks keep the unchanged job steps. This uses an explicit skipped job rather than deleting the workflow, changing branch protection, or manufacturing a passing test result. A fresh GitHub check-run observation is required before claiming the platform itself marked it skipped.
