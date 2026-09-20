@@ -1,3 +1,5 @@
+> Latest continuation: `MEALSCOUT_PARKING_NATIVE_HANDOFF.md`. The owner waived the billing-blocked GitHub check in `docs/qa/mealscout-ci-exception.md`; the historical billing-wait requirement below is superseded for this PR continuation.
+
 # MealScout security and map recovery — September 19, 2026
 
 ## Objective
