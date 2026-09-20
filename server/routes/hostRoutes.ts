@@ -9,6 +9,8 @@ import {
   events,
   eventSeries,
   hosts,
+  restaurants,
+  users,
   eventBookings,
   hostPayoutRequests,
   parkingPassBlackoutDates,
@@ -76,6 +78,7 @@ import { getHostEarningsSummary } from "../hostEarningsService";
 import { resolveCityTimeZoneSync } from "../services/cityTimeZone";
 import { requireDurableIdempotencyKey, parkingBookingProviderKey } from "../middleware/durableIdempotency";
 import { recordParkingBookingHolds, reconcileParkingBooking } from "../services/parkingBookingRecovery";
+import { expireParkingPassHolds } from "../services/parkingHoldExpiry";
 import { distributedRateLimit } from "../middleware/distributedRateLimit";
 import { registerHostProfileRoutes } from "./hosts/profileRoutes";
 import { registerHostParkingPassRoutes } from "./hosts/eventsRoutes";
@@ -237,7 +240,6 @@ export function registerHostRoutes(app: Express) {
       if (!host) {
         return res.status(404).json({ message: "Host profile not found" });
       }
-
       const amenitiesSchema = z.record(z.boolean()).optional().nullable();
       const parsedAmenities = amenitiesSchema.parse(req.body?.amenities);
 
@@ -1404,6 +1406,21 @@ export function registerHostRoutes(app: Express) {
           state: host.state,
         });
 
+        // A clock deadline alone cannot establish that a hold is unpaid.
+        // Scope the payment-aware sweep to this authorized truck and run it
+        // before the existing-booking check so positively cancelled holds can
+        // be rebooked without deleting their history.
+        const holdTtlMinutesRaw = Number(
+          process.env.PARKING_PASS_HOLD_TTL_MINUTES ?? 7,
+        );
+        const holdTtlMinutes = Number.isFinite(holdTtlMinutesRaw)
+          ? Math.max(1, Math.min(holdTtlMinutesRaw, 60))
+          : 7;
+        await expireParkingPassHolds(stripe?.paymentIntents || null, {
+          ttlMs: holdTtlMinutes * 60 * 1000,
+          truckId: String(truck.id),
+        });
+
         // Check for existing booking
         const existingBooking = await db
           .select()
@@ -1629,32 +1646,6 @@ export function registerHostRoutes(app: Express) {
           }
         }
 
-        // Expire stale pending holds for this truck so users aren't blocked forever if they abandon checkout.
-        // We rely on webhook events for fast cleanup, this is a safety net.
-        const holdTtlMinutesRaw = Number(
-          process.env.PARKING_PASS_HOLD_TTL_MINUTES ?? 7,
-        );
-        const holdTtlMinutes = Number.isFinite(holdTtlMinutesRaw)
-          ? Math.max(1, Math.min(holdTtlMinutesRaw, 60))
-          : 7;
-        const holdCutoff = new Date(Date.now() - holdTtlMinutes * 60 * 1000);
-        await db
-          .update(eventBookings)
-          .set({
-            status: "cancelled",
-            stripePaymentStatus: "cancelled",
-            cancelledAt: new Date(),
-            cancellationReason: "Payment not completed (hold expired)",
-            updatedAt: new Date(),
-          })
-          .where(
-            and(
-              eq(eventBookings.truckId, truckId),
-              eq(eventBookings.status, "pending"),
-              lt(eventBookings.createdAt, holdCutoff),
-            ),
-          );
-
         const existingBookings: Array<{
           slotType: string | null;
           eventDate: Date | string;
@@ -1748,7 +1739,7 @@ export function registerHostRoutes(app: Express) {
         const bookingDays = expectedDateKeys.length;
         // Calculate pricing: Host price + $10 platform fee
         const slotPriceMap: Record<string, number | null | undefined> = {
-          breakfast: event.breakfastPriceCents,
+          breakfast: event.breakfastfastPriceCents,
           lunch: event.lunchPriceCents,
           dinner: event.dinnerPriceCents,
           daily: event.dailyPriceCents,
@@ -1845,8 +1836,9 @@ export function registerHostRoutes(app: Express) {
             const now = new Date();
             const inserted: any[] = [];
 
-            for (let index = 0; index < expectedDateKeys.length; index += 1) {
-              const dateKey = expectedDateKeys[index];
+            // Every multi-day request acquires event locks in the same order.
+            for (let index = 0; index < sortedDateKeys.length; index += 1) {
+              const dateKey = sortedDateKeys[index];
               const row = eventsByDate.get(dateKey);
               if (!row) {
                 throw new Error("Missing parking pass date in booking range.");
@@ -1856,6 +1848,43 @@ export function registerHostRoutes(app: Express) {
               await tx.execute(
                 sql`select ${events.id} from ${events} where ${events.id} = ${row.id} for update`,
               );
+              // The preflight snapshot can be stale after waiting for this lock.
+              const [lockedRow] = await tx.select().from(events)
+                .where(eq(events.id, row.id)).limit(1);
+              if (!lockedRow || lockedRow.hostId !== row.hostId ||
+                  lockedRow.status !== "open" || !lockedRow.requiresPayment ||
+                  new Date(lockedRow.date).getTime() !== new Date(row.date).getTime() ||
+                  selectedSlotTypes.some((slot) =>
+                    !isSlotWithinHours(slot, lockedRow.startTime, lockedRow.endTime))) {
+                throw Object.assign(new Error("This parking pass changed while booking. Please refresh."), {
+                  code: "BOOKING_AVAILABILITY_CHANGED",
+                });
+              }
+
+              // Verify current eligibility inside admission, not just before a
+              // possibly long lock wait. Share locks prevent verification edits
+              // from committing between this read and the hold transaction.
+              const [currentTruck] = await tx.select({
+                businessType: restaurants.businessType,
+                isFoodTruck: restaurants.isFoodTruck,
+                insuranceVerified: restaurants.insuranceVerified,
+                insuranceExpiresAt: restaurants.insuranceExpiresAt,
+              }).from(restaurants).where(eq(restaurants.id, truckId)).for("share");
+              const [currentUser] = await tx.select({
+                userType: users.userType,
+                emailVerified: users.emailVerified,
+              }).from(users).where(eq(users.id, userId)).for("share");
+              const currentEligibility = currentTruck && currentUser
+                ? assessParkingPassTruckEligibility({ user: currentUser, truck: currentTruck })
+                : null;
+              if (!currentEligibility || !currentEligibility.isTruckProfile ||
+                  !currentEligibility.roleAllowed ||
+                  (!currentEligibility.shouldBypassVerificationGate &&
+                    (!currentEligibility.emailVerified || !currentEligibility.storedInsuranceValid))) {
+                throw Object.assign(new Error("Truck verification changed while booking. Please verify your account and insurance."), {
+                  code: "TRUCK_ELIGIBILITY_CHANGED",
+                });
+              }
 
               const counts = await tx
                 .select({ count: sql<number>`count(*)` })
@@ -1868,8 +1897,8 @@ export function registerHostRoutes(app: Express) {
                 );
 
               const reservedCount = Number(counts[0]?.count || 0);
-              const hardCapEnabled = Boolean(row.hardCapEnabled);
-              const maxSpots = Math.max(1, Number(row.maxTrucks ?? 1) || 1);
+              const hardCapEnabled = Boolean(lockedRow.hardCapEnabled);
+              const maxSpots = Math.max(1, Number(lockedRow.maxTrucks ?? 1) || 1);
               if (hardCapEnabled && reservedCount >= maxSpots) {
                 const err: any = new Error(
                   "This parking pass is fully booked.",
@@ -1923,6 +1952,16 @@ export function registerHostRoutes(app: Express) {
             return inserted;
           });
         } catch (error: any) {
+          if (error?.code === "BOOKING_AVAILABILITY_CHANGED") {
+            return res.status(400).json({ message: error.message });
+          }
+          if (error?.code === "TRUCK_ELIGIBILITY_CHANGED") {
+            return res.status(409).json({
+              code: "truck_verification_required",
+              message: error.message,
+              onboardingPath: "/restaurant-signup?businessType=food_truck&source=parking-pass&step=verification",
+            });
+          }
           if (error?.code === "FULLY_BOOKED") {
             return res
               .status(400)
