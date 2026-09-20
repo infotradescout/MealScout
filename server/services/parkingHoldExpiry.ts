@@ -32,10 +32,15 @@ const cancelableUnpaid = new Set(["requires_payment_method", "requires_confirmat
  */
 export async function expireParkingPassHolds(provider: IntentReader | null, options: {
   now?: Date; ttlMs: number; limit?: number; afterIntentId?: string | null;
+  truckId?: string;
 }): Promise<HoldExpiryResult> {
   const now = options.now || new Date();
   if (!Number.isFinite(now.getTime()) || !Number.isFinite(options.ttlMs) || options.ttlMs <= 0) {
     throw new Error("A valid hold expiry deadline is required");
+  }
+  const truckId = options.truckId?.trim();
+  if (options.truckId !== undefined && !truckId) {
+    throw new Error("A scoped hold expiry requires a valid truck identity");
   }
   const result: HoldExpiryResult = { scanned: 0, expired: 0, deferred: 0, errors: 0, nextCursor: null };
   if (!provider) return result;
@@ -45,7 +50,8 @@ export async function expireParkingPassHolds(provider: IntentReader | null, opti
     .select({ intentId: eventBookings.stripePaymentIntentId }).from(eventBookings)
     .where(and(eq(eventBookings.status, "pending"), lt(eventBookings.createdAt, cutoff),
       isNotNull(eventBookings.stripePaymentIntentId),
-      gt(eventBookings.stripePaymentIntentId, options.afterIntentId || "")))
+      gt(eventBookings.stripePaymentIntentId, options.afterIntentId || ""),
+      ...(truckId ? [eq(eventBookings.truckId, truckId)] : [])))
     .groupBy(eventBookings.stripePaymentIntentId)
     .orderBy(asc(eventBookings.stripePaymentIntentId)).limit(limit);
   for (const candidate of candidates) {
