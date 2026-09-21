@@ -18,6 +18,9 @@ export async function runParkingWebhookNativeProof() {
   assert.equal(source,process.env.RENDER_GIT_COMMIT);
   const canonical=fs.readFileSync(path.join(root,'scripts/qa/parking-host-route-core.mjs'),'utf8');
   assert.equal(hash(canonical),'edcba7d94ea34a64ad5878546d9b41e667031ae4e53ea510faf9eb03612459e9');
+  const registry=fs.readFileSync(path.join(root,'server/routes.ts'),'utf8');
+  const webhookModule=registry.match(/import \{ registerStripeWebhookRoutes \} from "(\.\/routes\/[A-Za-z]+)";/)?.[1];
+  assert.ok(webhookModule,'Use the actual production webhook registry import');
   const edits=[];let text=canonical;
   function replace(name,before,after) {
     assert.equal(text.split(before).length-1,1,'Unique harness anchor: '+name);
@@ -33,10 +36,11 @@ export async function runParkingWebhookNativeProof() {
   assert.ok(tableStart>0&&tableEnd>tableStart);
   replace('full-canonical-schema-not-model-ddl',text.slice(tableStart,tableEnd),'  report.tables=[];\n');
   replace('native-migration-transport','  const stubSources={','  const stubSources={\n   nativeNeon:\'export { Pool } from "pg";export const neonConfig={};\',');
+  replace('deny-unrelated-staff-access','message:"Synthetic authentication required"});\',','message:"Synthetic authentication required"});export const isStaffOrAdmin=(_req,res)=>res.status(403).json({message:"Staff access not part of fixture"});\',');
   replace('actual-host-earnings-code',"   hostEarningsService:'export const getHostEarningsSummary=()=>{throw Error(\"Unexpected earnings side effect\");};'\n",'');
   replace('native-wire-resolver',"const key=a.path==='stripe'?'stripe':","const key=a.path==='@neondatabase/serverless'?'nativeNeon':a.path==='stripe'?'stripe':");
   replace('fixture-package-resolution',"contents:stubSources[a.path],loader:'js'","contents:stubSources[a.path],loader:'js',resolveDir:root");
-  replace('actual-application-exports','export {registerHostRoutes} from "./server/routes/hostRoutes";export {runMigrationFile} from "./scripts/runSqlMigration";','export {registerHostRoutes} from "./server/routes/hostRoutes";export {registerStripeWebhookRoutes} from "./server/routes/stripeWebhookRoutes";export {runDeployMigrations} from "./scripts/runDeployMigrations";export {runMigrationFile} from "./scripts/runSqlMigration";');
+  replace('actual-application-exports','export {registerHostRoutes} from "./server/routes/hostRoutes";export {runMigrationFile} from "./scripts/runSqlMigration";','export {registerHostRoutes} from "./server/routes/hostRoutes";export {registerStripeWebhookRoutes} from "./server/'+webhookModule.slice(2)+'";export {runDeployMigrations} from "./scripts/runDeployMigrations";export {runMigrationFile} from "./scripts/runSqlMigration";');
   replace('actual-migration-chain',"  await api.runMigrationFile(path.join(root,'migrations/058_idempotency_keys.sql'),{quiet:true});await api.runMigrationFile(path.join(root,'migrations/142_parking_pass_active_booking_uniqueness.sql'),{quiet:true});",String.raw`  process.env.MIGRATION_DATABASE_URL=url;
   try { await api.runDeployMigrations(); } finally { delete process.env.MIGRATION_DATABASE_URL; }
   report.fullSchema={bootstrap:(await pool.query('SELECT count(*)::int n FROM mealscout_schema_bootstrap_migrations')).rows[0].n,release:(await pool.query('SELECT count(*)::int n FROM mealscout_release_migrations')).rows[0].n,foreignKeys:(await pool.query("SELECT count(*)::int n FROM pg_constraint WHERE contype='f' AND connamespace='public'::regnamespace")).rows[0].n};
@@ -59,11 +63,12 @@ export async function runParkingWebhookNativeProof() {
   report.adapter={canonicalCoreSha256:hash(canonical),derivedCoreSha256:hash(text),edits};
   report.nativeTooling=tooling;report.exitCode=result.status;
   report.files ||= {};
-  for(const file of ['scripts/qa/parking-webhook-native.mjs','scripts/qa/parking-webhook-cases.mjs','scripts/qa/parking-host-route-native.mjs'])report.files[file]=hash(fs.readFileSync(path.join(root,file)));
+  for(const file of ['server/routes.ts','scripts/qa/parking-webhook-native.mjs','scripts/qa/parking-webhook-cases.mjs','scripts/qa/parking-host-route-native.mjs'])report.files[file]=hash(fs.readFileSync(path.join(root,file)));
   report.productionMutations=0;report.liveProviderAcceptance=false;
   if(result.status!==0)report.result='fail';
   fs.writeFileSync(receiptPath,JSON.stringify(report,null,2)+'\n');
-  const summary=structuredClone(report);delete summary.tables;summary.rawReceiptSha256=hash(fs.readFileSync(receiptPath));
+  const summary={...report,filesManifest:{count:Object.keys(report.files).length,sha256:hash(JSON.stringify(report.files))},adapter:{canonicalCoreSha256:hash(canonical),derivedCoreSha256:hash(text)},rawReceiptSha256:hash(fs.readFileSync(receiptPath))};
+  delete summary.tables;delete summary.files;delete summary.nativeTooling;
   console.log('PARKING_SIGNED_WEBHOOK_RECEIPT '+JSON.stringify(summary));
   if(report.harnessFailure)console.error(String(result.stderr||'').slice(-3000));
   process.exitCode=report.result==='pass'?0:1;
