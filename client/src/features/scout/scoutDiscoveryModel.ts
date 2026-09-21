@@ -246,6 +246,24 @@ function normalizeToken(value: string): string {
   return value.trim().toLowerCase().replace(/[\s-]+/g, "_");
 }
 
+/** Join only missing dish-owner routing fields from the same public response, by exact ID. */
+export function withScoutDishOwners<T extends { restaurantId: string; businessType?: string | null; isFoodTruck?: boolean | null }>(
+  dishes: T[], places: readonly unknown[],
+): T[] {
+  const owners = new Map<string, unknown>();
+  for (const place of places) {
+    const id = readString(place, ["id"]);
+    if (id) owners.set(id, place);
+  }
+  return dishes.map((dish) => {
+    const owner = owners.get(dish.restaurantId);
+    if (!owner) return dish;
+    const businessType = dish.businessType ?? readString(owner, ["businessType", "profileType", "entityType"]);
+    const isFoodTruck = dish.isFoodTruck ?? readBoolean(owner, ["isFoodTruck", "foodTruck", "isTruck"]);
+    return { ...dish, businessType, isFoodTruck };
+  });
+}
+
 export function normalizeScoutBusinessKind(
   source: unknown,
   sourceHint?: ScoutBusinessSourceHint,

@@ -1,0 +1,21 @@
+{
+  "schemaVersion":1,
+  "source":"807e3f6dde4b2b1c55c62099741d7182838b1f47",
+  "tree":"4616c4e6b5ad73d0cfe9a4857325559887f57441",
+  "renderService":"srv-dao026n40ujc73ddeua0",
+  "renderDeploy":"dep-daolo8942hec738pd000",
+  "routeResult":"pass",
+  "routeCases":{"passed":20,"failed":0},
+  "routeStartedAt":"2026-09-21T16:33:04.711Z",
+  "routeFinishedAt":"2026-09-21T16:33:09.497Z",
+  "releaseFinishedAt":"2026-09-21T16:34:29.611Z",
+  "releaseResult":"fail",
+  "passedReleaseSteps":["typecheck","parking-expiry-compatibility","parking-durable-compatibility","parking-recovery-compatibility","parking-client-request-policy","stripe-webhook-safety","migration-deploy-contract","frozen-cleanup-safety","preserved-acquisition-routing","production-build"],
+  "failedReleaseSteps":[{"name":"native-deploy-migrations","error":"extension pg_trgm is not available","classification":"Owned PostgreSQL test-tooling prerequisite is missing; no canonical SQL was skipped or changed","logSha256":"6f2cdd7e340ab324737942b873ad4fa06399189c122896997e1f4b000030545f"}],
+  "sourceBeforeAndAfter":{"files":2788,"sha256":"0c39ce703b95a0ff33c0bb8b102ce32140aefed4a31d5c437a6a5a2bd4eba50d"},
+  "finalSourceClean":true,
+  "nativeMigrationCleanup":{"postgresStopped":true,"ownedDirectoryRemoved":true,"port":45977,"portClosed":true},
+  "productionChanged":false,
+  "liveProviderAcceptance":false,
+  "billingCheck":"Owner-waived; not a wait gate. This failed test-tooling prerequisite is retained and repaired rather than waived."
+}

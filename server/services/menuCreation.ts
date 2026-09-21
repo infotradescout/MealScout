@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import type { PgDatabase } from "drizzle-orm/pg-core";
 import { z } from "zod";
 import * as schema from "@shared/schema";
+import { isStaffOrAdminUserType } from "@shared/profileAccessPolicy";
 import {
   insertMenuSchema,
   lisaClaims,
@@ -27,10 +28,8 @@ export class MenuCreationError extends Error {
 // Shared by the existing menu route gates and the transaction's authority check.
 export const isMenuManagerUserType = (userType?: string | null) =>
   userType === "restaurant_owner" ||
-  userType === "staff" ||
-  userType === "admin" ||
-  userType === "duper_admin" ||
-  userType === "super_admin";
+  userType === "food_truck" ||
+  isStaffOrAdminUserType(userType);
 
 export async function createMenuWithLisaRecord(
   database: PgDatabase<any, typeof schema>,
@@ -58,7 +57,7 @@ export async function createMenuWithLisaRecord(
         .from(restaurants)
         .where(eq(restaurants.id, body.restaurantId))
         .for("update");
-      if (!restaurant || (actor.userType === "restaurant_owner" && restaurant.ownerId !== actor.id)) {
+      if (!restaurant || (!isStaffOrAdminUserType(actor.userType) && restaurant.ownerId !== actor.id)) {
         throw new MenuCreationError(403, "menu_access_denied", "Not authorized");
       }
 

@@ -4,7 +4,7 @@ const scoutSurfaceService = readFileSync(
   "server/services/scoutSurfaceService.ts",
   "utf8",
 );
-const parkingPassPage = readFileSync("client/src/pages/parking-pass.tsx", "utf8");
+const parkingPassPage = readFileSync("client/src/pages/parking-pass-content.tsx", "utf8");
 const bookingModal = readFileSync(
   "client/src/components/booking-payment-modal.tsx",
   "utf8",

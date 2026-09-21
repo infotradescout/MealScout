@@ -1,3 +1,4 @@
+import { readPublicMenuJson, menuRecoveryMessage, menuProfileReturnPath } from "@/lib/public-menu-recovery";
 /**
  * Public Menu Page — Customer view of a restaurant/bar/truck's online menu.
  * Supports add-to-cart with variants + modifiers.
@@ -5,7 +6,7 @@
  */
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link, useParams, useLocation } from "wouter";
+import { Link, useParams, useLocation, useSearch } from "wouter";
 import { SEOHead } from "@/components/seo-head";
 import { PublicOrderingTopBar } from "@/components/public-ordering/PublicOrderingTopBar";
 import { buildPublicProfilePath } from "@/lib/public-profile-path";
@@ -150,11 +151,22 @@ function saveCart(cart: CartItem[]) {
 
 export default function MenuPage() {
   const { restaurantId } = useParams<{ restaurantId: string }>();
+  return <MenuView key={restaurantId ?? ""} restaurantId={restaurantId ?? ""} />;
+}
+
+function MenuView({ restaurantId }: { restaurantId: string }) {
   const [, navigate] = useLocation();
+  const search = useSearch();
   const [cart, setCart] = useState<CartItem[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
   const [addingItem, setAddingItem] = useState<MenuItem | null>(null);
-  const [selectedMenuId, setSelectedMenuId] = useState<string | null>(null);
+  const requestedMenuId = new URLSearchParams(search).get("menuId");
+  const selectMenu = (menuId: string) => {
+    setAddingItem(null);
+    const url = new URL(window.location.href);
+    url.searchParams.set("menuId", menuId);
+    navigate(url.pathname + url.search + url.hash, { replace: true });
+  };
 
   // Load cart from localStorage on mount
   useEffect(() => {
@@ -163,13 +175,10 @@ export default function MenuPage() {
 
   const menusQuery = useQuery<{ menus: Menu[]; orderingEnabled: boolean; readiness?: OrderingReadiness; restaurantName?: string | null; restaurantCity?: string | null; isFoodTruck?: boolean; cuisineType?: string | null }>({
     queryKey: ["/api/menus", restaurantId],
-    queryFn: async () => {
-      const res = await fetch(
-        `/api/menus/${encodeURIComponent(restaurantId ?? "")}`,
-      );
-      if (!res.ok) throw new Error("Menu not found");
-      return res.json();
-    },
+    queryFn: ({ signal }) => readPublicMenuJson(
+      `/api/menus/${encodeURIComponent(restaurantId)}`, signal,
+    ),
+    retry: false,
     enabled: !!restaurantId,
   });
 
@@ -180,7 +189,7 @@ export default function MenuPage() {
   const isFoodTruck = menusQuery.data?.isFoodTruck ?? false;
   const cuisineType = menusQuery.data?.cuisineType ?? null;
   const entityType = isFoodTruck ? "Food Truck" : "Restaurant";
-  const publicProfileHref =
+  const publicProfileHref = menuProfileReturnPath(new URLSearchParams(search).get("returnTo"), restaurantId) ??
     buildPublicProfilePath({
       entityType: isFoodTruck ? "truck" : "restaurant",
       id: restaurantId,
@@ -193,13 +202,9 @@ export default function MenuPage() {
     ? `Browse the menu from ${restaurantName}${restaurantCity ? ` in ${restaurantCity}` : ""}${cuisineType ? ` — ${cuisineType}` : ""}. Order for pickup when available on MealScout.`
     : `Browse the full menu and order for pickup when available on MealScout.`;
 
-  useEffect(() => {
-    if (activeMenus.length > 0 && !selectedMenuId) {
-      setSelectedMenuId(activeMenus[0].id);
-    }
-  }, [activeMenus.length, selectedMenuId]);
-
-  const selectedMenu = activeMenus.find((m) => m.id === selectedMenuId) ?? null;
+  const selectedMenu = activeMenus.find((menu) => menu.id === requestedMenuId) ?? activeMenus[0] ?? null;
+  const selectedMenuId = selectedMenu?.id ?? null;
+  const menuReadMessage = menuRecoveryMessage(menusQuery.error);
   const orderingEnabled = Boolean(selectedMenu?.orderingEnabled);
   const cardPaymentsEnabled = Boolean(selectedMenu?.paymentMethods?.card);
   const restaurantCart = cart.filter((i) => i.restaurantId === restaurantId);
@@ -291,14 +296,19 @@ export default function MenuPage() {
               <AlertCircle className="h-6 w-6" />
             </span>
             <h1 className="mt-4 text-2xl font-black tracking-tight text-[color:var(--profile-ink)]">
-              {menusQuery.isError ? "This menu is taking a break" : "Menu coming soon"}
+              {menusQuery.isError ? menuReadMessage.title : "Menu coming soon"}
             </h1>
             <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[color:var(--profile-muted)]">
               {menusQuery.isError
-                ? "We could not load the menu right now. The business profile may still have hours, location, and contact details."
+                ? menuReadMessage.description
                 : "This business has not published an active menu yet. Check the profile for current details."}
             </p>
             <div className="mt-6 flex flex-wrap justify-center gap-3">
+              {menusQuery.isError ? (
+                <Button className="profile-action-primary min-h-11" disabled={menusQuery.isFetching} onClick={() => void menusQuery.refetch()}>
+                  {menusQuery.isFetching ? "Retrying menu…" : "Retry menu"}
+                </Button>
+              ) : null}
               <Link
                 href={publicProfileHref}
                 className="profile-action-secondary inline-flex min-h-11 items-center rounded-full px-5 text-sm font-black"
@@ -335,7 +345,7 @@ export default function MenuPage() {
           <div className="p-5 sm:p-6">
             <Link
               href={publicProfileHref}
-              className="mb-5 inline-flex min-h-10 items-center gap-2 rounded-full bg-[color:var(--profile-surface-soft)] px-3 text-sm font-black text-[color:var(--profile-ink-soft)] transition-colors hover:text-[color:var(--profile-accent)]"
+              className="mb-5 inline-flex min-h-11 items-center gap-2 rounded-full bg-[color:var(--profile-surface-soft)] px-3 text-sm font-black text-[color:var(--profile-ink-soft)] transition-colors hover:text-[color:var(--profile-accent)]"
             >
               <ArrowLeft className="h-4 w-4" aria-hidden="true" />
               Back to profile
@@ -362,14 +372,19 @@ export default function MenuPage() {
           </div>
         </header>
 
+        {requestedMenuId && requestedMenuId !== selectedMenuId ? (
+          <p role="status" className="mb-4 text-sm text-[color:var(--profile-ink-soft)]">The selected menu is no longer available. Showing {selectedMenu?.name} instead. Your cart has not been changed.</p>
+        ) : null}
+
         {/* Menu selector tabs if multiple menus */}
         {activeMenus.length > 1 && (
           <div className="mb-5 flex gap-2 overflow-x-auto pb-1" aria-label="Choose a menu">
             {activeMenus.map((menu) => (
               <button
                 key={menu.id}
-                onClick={() => setSelectedMenuId(menu.id)}
-                className={`min-h-10 whitespace-nowrap rounded-full border px-4 text-sm font-black transition-colors ${
+                onClick={() => selectMenu(menu.id)}
+                aria-pressed={selectedMenuId === menu.id}
+                className={`min-h-11 whitespace-nowrap rounded-full border px-4 text-sm font-black transition-colors ${
                   selectedMenuId === menu.id
                     ? "border-[color:var(--profile-accent)] bg-[color:var(--profile-accent)] text-white"
                     : "border-[color:var(--profile-border)] bg-white text-[color:var(--profile-ink-soft)] hover:border-[color:var(--profile-accent)]"

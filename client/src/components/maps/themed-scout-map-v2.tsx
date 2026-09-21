@@ -8,13 +8,12 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import maplibregl, {
-  type Map as MaplibreMap,
-  type StyleSpecification,
-} from "maplibre-gl";
+import * as maplibregl from "@/lib/maplibre-runtime";
+import type { Map as MaplibreMap, StyleSpecification } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 
 import type { MapAdapterMarker } from "./map-adapter.types";
+import { withCartoBasemapKey } from "@/lib/carto-basemap";
 
 interface ThemedScoutMapV2Props {
   userLocation: { lat: number; lng: number };
@@ -237,11 +236,12 @@ export function ThemedScoutMapV2({
   const markerRefs = useRef<maplibregl.Marker[]>([]);
   const frameStateRef = useRef({ userLocation, markers, zoom });
   frameStateRef.current = { userLocation, markers, zoom };
+  const mapStyle = useMemo(() => withCartoBasemapKey(MINI_MAP_STYLE, import.meta.env.VITE_CARTO_BASEMAPS_API_KEY), []);
   // Tracks either "no WebGL" (checked up front) or "tiles never loaded"
   // (network/ad-blocker interference with the CDN) so we can show a plain
   // warm placeholder instead of a mysteriously blank card.
   const [tilesUnavailable, setTilesUnavailable] = useState(
-    () => !isWebglAvailable(),
+    () => !mapStyle || !isWebglAvailable(),
   );
 
   const frameMap = (duration = 0) => {
@@ -292,11 +292,12 @@ export function ThemedScoutMapV2({
   };
 
   useEffect(() => {
-    if (!containerRef.current || mapRef.current || tilesUnavailable) return;
+    if (!containerRef.current || mapRef.current || tilesUnavailable || !mapStyle) return;
 
-    const map = new maplibregl.Map({
+    let map: MaplibreMap;
+    try { map = new maplibregl.Map({
       container: containerRef.current,
-      style: MINI_MAP_STYLE,
+      style: mapStyle,
       center: [frameStateRef.current.userLocation.lng, frameStateRef.current.userLocation.lat],
       zoom: frameStateRef.current.zoom,
       pitch: 0,
@@ -313,7 +314,7 @@ export function ThemedScoutMapV2({
       dragPan: interactive,
       touchZoomRotate: interactive,
       fadeDuration: 240,
-    });
+    }); } catch { setTilesUnavailable(true); return; }
 
     mapRef.current = map;
 
@@ -353,6 +354,10 @@ export function ThemedScoutMapV2({
       }
     };
     map.on("sourcedata", handleSourceData);
+    const handleTileError = (event: any) => {
+      if (event?.sourceId === "carto-light") setTilesUnavailable(true);
+    };
+    map.on("error", handleTileError);
     const tileWatchdog = window.setTimeout(() => {
       if (!sawTileLoad) setTilesUnavailable(true);
     }, 6000);
@@ -364,6 +369,7 @@ export function ThemedScoutMapV2({
       window.clearTimeout(tileWatchdog);
       map.off("load", handleLoad);
       map.off("sourcedata", handleSourceData);
+      map.off("error", handleTileError);
       markerRefs.current.forEach((marker) => marker.remove());
       markerRefs.current = [];
       userMarkerRef.current?.remove();
@@ -373,7 +379,7 @@ export function ThemedScoutMapV2({
       mapRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [interactive, tilesUnavailable]);
+  }, [interactive, tilesUnavailable, mapStyle]);
 
   const markerKey = useMemo(
     () =>
@@ -539,7 +545,8 @@ export function ThemedScoutMapV2({
         frameTimeoutIds.forEach((id) => window.clearTimeout(id));
       };
     }
-  }, [interactive, markerKey, markers, onMarkerTap, selectedMarkerId, zoom]);
+    // Tile recovery replaces the Map even when marker props are unchanged.
+  }, [interactive, markerKey, markers, onMarkerTap, selectedMarkerId, tilesUnavailable, zoom]);
 
   const fallbackPositions = useMemo(
     () =>
@@ -553,6 +560,13 @@ export function ThemedScoutMapV2({
     <div
       className={`absolute inset-0 h-full w-full min-h-full ${interactive ? "msm-mode-interactive" : "msm-mode-preview"}`}
     >
+      {tilesUnavailable && (
+        <div role="status" data-testid="scout-street-map-unavailable" className="pointer-events-none absolute left-3 right-14 top-14 z-30 max-w-xs rounded-xl border border-orange-200 bg-white/95 p-3 text-xs text-stone-800 shadow-sm">
+          <p className="font-bold">Street map unavailable</p>
+          <p>Pins show approximate positions. Choose a place for details.</p>
+          {mapStyle && <button type="button" className="pointer-events-auto mt-1 min-h-11 rounded-lg px-3 font-bold text-orange-800" onClick={() => setTilesUnavailable(!isWebglAvailable())}>Retry street map</button>}
+        </div>
+      )}
       <div className="absolute inset-0">
         {tilesUnavailable ? (
           // No WebGL, or tiles never loaded (ad-blocker/CDN interference) -

@@ -13,7 +13,7 @@ if (!existsSync(cleanupMapPath)) {
 
 const map = readFileSync(mapPath, "utf8");
 const cleanupMap = readFileSync(cleanupMapPath, "utf8");
-const parkingPassPage = readFileSync("client/src/pages/parking-pass.tsx", "utf8");
+const parkingPassPage = readFileSync("client/src/pages/parking-pass-content.tsx", "utf8");
 const combined = `${map}\n${cleanupMap}`;
 
 function requireIncludes(source: string, snippet: string, label = snippet) {
@@ -126,8 +126,10 @@ function requireMatch(source: string, pattern: RegExp, label: string) {
 
 [
   "BookingPaymentModal",
-  'useState<"book" | "schedule" | "host">("book")',
-  '"listings" | "location" | "payments"',
+  "useState<ParkingPassTopTab>",
+  "parseParkingPassOwnerNavigation(window.location.search)",
+  "ParkingPassHostToolsTab",
+  "reconcileParkingPassTopTab",
   "handleBookSelected",
   "handleCreatePass",
   "handleCreateSchedule",

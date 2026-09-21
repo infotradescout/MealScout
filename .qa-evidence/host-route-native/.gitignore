@@ -1,0 +1,3 @@
+# Generated native database/HTTP proof artifacts must not alter source identity.
+*
+!.gitignore

@@ -15,7 +15,7 @@ const map = readFileSync(mapPath, "utf8");
 const cleanupMap = readFileSync(cleanupMapPath, "utf8");
 const ownerDashboard = readFileSync("client/src/pages/restaurant-owner-dashboard.tsx", "utf8");
 const menuBuilder = readFileSync("client/src/pages/menu-builder.tsx", "utf8");
-const parkingPass = readFileSync("client/src/pages/parking-pass.tsx", "utf8");
+const parkingPass = readFileSync("client/src/pages/parking-pass-content.tsx", "utf8");
 // The role -> dashboard routing decision moved out of dashboard-router.tsx
 // (now just a thin redirect shell) into a shared helper so /dashboard and
 // account-continuation flows can both use it.
@@ -273,7 +273,11 @@ requireIncludes(
 
 [
   'queryKey: ["/api/owner/menus", restaurantId]',
-  'apiRequest("POST", "/api/owner/menus"',
+  'apiRequest("POST", "/api/owner/menus/create"',
+  '"Idempotency-Key": attempt.requestId',
+  "prepareMenuCreationAttempt",
+  "assertMenuCreationReceipt",
+  "confirmMenuCreationAttempt",
   'apiRequest("POST", "/api/owner/menu-categories"',
   'apiRequest("POST", "/api/owner/menu-items"',
   "/api/owner/restaurants/${encodeURIComponent(restaurantId)}/ordering-readiness",

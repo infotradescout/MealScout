@@ -61,7 +61,13 @@ const generateCustomerAccessToken = () =>
 function getCart(): CartItem[] {
   try {
     const raw = localStorage.getItem(CART_KEY);
-    return raw ? JSON.parse(raw) : [];
+    const parsed: unknown = raw ? JSON.parse(raw) : [];
+    // Storage can contain valid JSON with the wrong shape after a stale tab
+    // or extension write. Fail closed instead of crashing before recovery.
+    return Array.isArray(parsed) && parsed.every((item) =>
+      item && typeof item === "object" && typeof item.restaurantId === "string" &&
+      typeof item.menuId === "string" && typeof item.menuItemId === "string"
+    ) ? parsed : [];
   } catch {
     return [];
   }
@@ -102,10 +108,32 @@ interface OrderingReadiness {
 
 export default function CheckoutPage() {
   const { restaurantId } = useParams<{ restaurantId: string }>();
+  // Wouter can reuse this route component for another merchant. A new key
+  // isolates cart, access token, replay identity and in-flight payment state.
+  return <CheckoutSession key={restaurantId ?? ""} />;
+}
+
+function CheckoutSession() {
+  const { restaurantId } = useParams<{ restaurantId: string }>();
   const [, navigate] = useLocation();
-  const [cart, setCart] = useState<CartItem[]>([]);
+  const [cart, setCart] = useState<CartItem[]>(() =>
+    getCart().filter((item) => item.restaurantId === restaurantId),
+  );
   const [menuInfo, setMenuInfo] = useState<MenuInfo | null>(null);
   const [menuInfoError, setMenuInfoError] = useState(false);
+  const [menuInfoLoading, setMenuInfoLoading] = useState(true);
+  const [menuInfoAttempt, setMenuInfoAttempt] = useState(0);
+  const createOrderPendingRef = useRef(false);
+  const checkoutActiveRef = useRef(true);
+  useEffect(() => {
+    checkoutActiveRef.current = true;
+    return () => { checkoutActiveRef.current = false; };
+  }, []);
+  const [contactTouched, setContactTouched] = useState({
+    name: false,
+    email: false,
+    phone: false,
+  });
   const [readiness, setReadiness] = useState<OrderingReadiness | null>(null);
   const [orderingEnabled, setOrderingEnabled] = useState(false);
   const paymentMethod = "card" as const;
@@ -119,7 +147,12 @@ export default function CheckoutPage() {
   const [restoredCheckout] = useState(() =>
     readPickupCheckoutRecovery(restaurantId ?? ""),
   );
-  const restoredCheckoutAttempted = useRef(false);
+  // Reattach to the same request after an effect cleanup/setup cycle, rather
+  // than leaving recovery stuck or submitting a second checkout request.
+  const restoredCheckoutRequestRef = useRef<Promise<{
+    response: Response;
+    data: any;
+  }> | null>(null);
   const [isCreating, setIsCreating] = useState(
     Boolean(restoredCheckout?.checkoutPayload),
   );
@@ -162,6 +195,14 @@ export default function CheckoutPage() {
   };
 
   useEffect(() => {
+    // Ignore responses from a previous restaurant or retry. They must not
+    // restore an outdated payment-enabled state after navigation.
+    let cancelled = false;
+    setMenuInfoLoading(true);
+    setMenuInfoError(false);
+    setOrderingEnabled(false);
+    setMenuInfo(null);
+    setReadiness(null);
     const restaurantCart = getCart().filter(
       (i) => i.restaurantId === restaurantId,
     );
@@ -176,6 +217,7 @@ export default function CheckoutPage() {
           return r.json();
         })
         .then((payload: any) => {
+          if (cancelled) return;
           setReadiness(payload?.readiness || null);
           const menus = Array.isArray(payload?.menus) ? payload.menus : [];
           const cartMenuIds = new Set(
@@ -212,31 +254,42 @@ export default function CheckoutPage() {
           }
         })
         // A failed lookup must remain a visible, fail-closed checkout state.
-        .catch(() => setMenuInfoError(true));
+        .catch(() => {
+          if (!cancelled) {
+            setMenuInfoError(true);
+            setOrderingEnabled(false);
+            setMenuInfo(null);
+          }
+        })
+        .finally(() => {
+          if (!cancelled) setMenuInfoLoading(false);
+        });
+    } else {
+      setMenuInfoError(true);
+      setMenuInfoLoading(false);
     }
-  }, [restaurantId]);
+    return () => {
+      cancelled = true;
+    };
+  }, [restaurantId, menuInfoAttempt]);
 
   useEffect(() => {
-    if (
-      restoredCheckoutAttempted.current ||
-      !restoredCheckout?.checkoutPayload
-    ) {
-      return;
-    }
-    restoredCheckoutAttempted.current = true;
+    if (!restoredCheckout?.checkoutPayload) return;
     let cancelled = false;
 
     const reconcileRestoredCheckout = async () => {
       setIsCreating(true);
       setOrderError(null);
       try {
-        const response = await fetch("/api/pickup-orders", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify(restoredCheckout.checkoutPayload),
-        });
-        const data = await response.json();
+        if (!restoredCheckoutRequestRef.current) {
+          restoredCheckoutRequestRef.current = fetch("/api/pickup-orders", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify(restoredCheckout.checkoutPayload),
+          }).then(async (response) => ({ response, data: await response.json() }));
+        }
+        const { response, data } = await restoredCheckoutRequestRef.current;
         if (cancelled) return;
         if (!response.ok) {
           const code = String(data.code || "");
@@ -337,7 +390,59 @@ export default function CheckoutPage() {
   const cartMenuIds = new Set(cart.map((item) => item.menuId));
   const cartHasMixedMenus = cartMenuIds.size > 1;
 
-  if (cart.length === 0) {
+  // Saved checkout reconciliation takes priority over the current cart.
+  // Another tab may have cleared/changed the cart after the order was created.
+  // Never replace the durable replay payload with those current cart contents.
+  const hasVerifiedPayment = Boolean(clientSecret && orderId && stripePromise);
+  if (restoredCheckout?.checkoutPayload && checkoutPayload && !hasVerifiedPayment) {
+    return (
+      <div
+        className="mealscout-public-profile min-h-screen bg-[color:var(--profile-page)]"
+        data-public-checkout-shell="warm-food-led"
+      >
+        <PublicOrderingTopBar secondaryHref={`/menu/${restaurantId}`} secondaryLabel="Menu" />
+        <main className="mx-auto w-full max-w-2xl px-4 py-6 sm:py-8">
+          <section className="profile-surface rounded-3xl p-6" aria-busy={isCreating}>
+            <h1 className="text-2xl font-black text-[color:var(--profile-ink)]">
+              {isCreating ? "Checking your saved checkout" : "Your checkout needs attention"}
+            </h1>
+            <p className="mt-3 text-sm text-[color:var(--profile-ink-soft)]" role="status">
+              {isCreating
+                ? "We are verifying the existing order and payment before you continue."
+                : "Check the existing order before starting another payment. Your saved checkout has not been replaced."}
+            </p>
+            {orderError ? <p className="mt-3 text-sm text-destructive" role="alert">{orderError}</p> : null}
+            {!isCreating && !stripePromise ? (
+              <p className="mt-3 text-sm" role="alert">Secure card payment is unavailable in this browser session.</p>
+            ) : null}
+            {isCreating ? (
+              <Loader2 className="mt-4 h-6 w-6 animate-spin" aria-hidden="true" />
+            ) : (
+              <div className="mt-5 flex flex-wrap gap-3">
+                <Button type="button" variant="outline" onClick={() => window.location.reload()}>
+                  Retry saved checkout
+                </Button>
+                {orderId ? (
+                  <Button type="button" onClick={() => {
+                    try {
+                      window.sessionStorage.setItem(`mealscout:order-access:${orderId}`, customerAccessToken);
+                      navigate(`/order-confirmation/${orderId}`);
+                    } catch {
+                      setOrderError("Order access could not be saved. Allow browser storage and retry this saved checkout.");
+                    }
+                  }}>
+                    Check order status
+                  </Button>
+                ) : null}
+              </div>
+            )}
+          </section>
+        </main>
+      </div>
+    );
+  }
+
+  if (cart.length === 0 && !hasVerifiedPayment) {
     return (
       <div
         className="mealscout-public-profile min-h-screen bg-[color:var(--profile-page)]"
@@ -378,7 +483,7 @@ export default function CheckoutPage() {
     );
   }
 
-  if (cartHasMixedMenus) {
+  if (cartHasMixedMenus && !hasVerifiedPayment) {
     return (
       <div className="mealscout-public-profile min-h-screen bg-[color:var(--profile-page)]">
         <PublicOrderingTopBar
@@ -431,12 +536,22 @@ export default function CheckoutPage() {
     ? 0
     : (serverTotals?.processingFeeCents ?? 0);
   const displayedTotal = serverTotals?.totalCents ?? knownTotalBeforeCardFees;
-  const menuId = cart[0].menuId;
+  const menuId = cart[0]?.menuId ?? checkoutPayload?.menuId ?? "";
   const normalizedContactPhone = contact.phone.trim()
     ? normalizeOrderContactPhone(contact.phone)
     : null;
 
+  const nameInvalid = contactTouched.name && !contact.name.trim();
+  const phoneInvalid = contactTouched.phone && Boolean(contact.phone.trim()) && !normalizedContactPhone;
+  const contactMissing = (contactTouched.email || contactTouched.phone) &&
+    !contact.email.trim() && !contact.phone.trim();
+
   const createOrder = async () => {
+    if (createOrderPendingRef.current || isCreating) return;
+    if (menuInfoLoading || menuInfoError || !orderingEnabled || !menuInfo?.cardPaymentsEnabled) {
+      setOrderError("Wait for payment availability to be verified before continuing.");
+      return;
+    }
     if (new Set(cart.map((item) => item.menuId)).size !== 1) {
       setOrderError("Choose items from one menu before checkout.");
       return;
@@ -474,6 +589,7 @@ export default function CheckoutPage() {
       return;
     }
     setOrderError(null);
+    createOrderPendingRef.current = true;
     setIsCreating(true);
     try {
       const payload: PickupCheckoutReplayPayload = {
@@ -520,6 +636,9 @@ export default function CheckoutPage() {
         body: JSON.stringify(payload),
       });
       const data = await res.json();
+      // The request may still finish after leaving this merchant. Its saved
+      // identity remains recoverable, but it must not redirect another page.
+      if (!checkoutActiveRef.current) return;
       if (!res.ok) {
         const code = String(data.code || "");
         if (TERMINAL_CHECKOUT_RECOVERY_CODES.has(code)) {
@@ -566,9 +685,10 @@ export default function CheckoutPage() {
       setClientSecret(data.clientSecret);
     } catch (err: any) {
       const message = String(err?.message || "Failed to create order");
-      setOrderError(message);
+      if (checkoutActiveRef.current) setOrderError(message);
     } finally {
-      setIsCreating(false);
+      createOrderPendingRef.current = false;
+      if (checkoutActiveRef.current) setIsCreating(false);
     }
   };
 
@@ -647,7 +767,11 @@ export default function CheckoutPage() {
             <StripePaymentForm
               orderId={orderId}
               restaurantId={restaurantId ?? ""}
+              onCheckStatus={() => {
+                if (checkoutActiveRef.current) navigate(`/order-confirmation/${orderId}`);
+              }}
               onSuccess={() => {
+                if (!checkoutActiveRef.current) return;
                 clearPickupCheckoutRecovery(restaurantId ?? "");
                 clearCartForRestaurant(restaurantId ?? "");
                 navigate(`/order-confirmation/${orderId}`);
@@ -681,7 +805,25 @@ export default function CheckoutPage() {
           Checkout
         </h1>
 
-        {!orderingEnabled && (
+        {menuInfoLoading ? (
+          <div className="profile-surface mb-4 flex items-center gap-3 rounded-2xl px-4 py-3 text-sm" role="status">
+            <Loader2 className="h-4 w-4 shrink-0 animate-spin" aria-hidden="true" />
+            Checking menu and payment availability…
+          </div>
+        ) : menuInfoError ? (
+          <div className="profile-surface mb-4 rounded-2xl px-4 py-3 text-sm">
+            <p className="font-black" role="alert">Payment availability could not be verified</p>
+            <p className="mt-1">Retry the availability check. Your cart and contact details will stay here.</p>
+            <Button type="button" variant="outline" className="mt-3" onClick={() => {
+              setMenuInfoLoading(true);
+              setMenuInfoAttempt((attempt) => attempt + 1);
+            }}>
+              Retry availability
+            </Button>
+          </div>
+        ) : null}
+
+        {!menuInfoLoading && !menuInfoError && !orderingEnabled && (
           <div className="mb-4 flex items-start gap-3 rounded-2xl border border-[#efc37b] bg-[#fff4d9] px-4 py-3 text-sm text-[#70470f]">
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
             <div>
@@ -777,6 +919,11 @@ export default function CheckoutPage() {
               </Label>
               <Input
                 id="customer-name"
+                autoComplete="name"
+                aria-required="true"
+                aria-invalid={nameInvalid || undefined}
+                aria-describedby={nameInvalid ? "customer-name-error" : undefined}
+                onBlur={() => setContactTouched((touched) => ({ ...touched, name: true }))}
                 value={contact.name}
                 onChange={(e) =>
                   setContact((c) => ({ ...c, name: e.target.value }))
@@ -784,6 +931,7 @@ export default function CheckoutPage() {
                 placeholder="Your name"
                 className="mt-1 border-[#d8bda8] bg-white"
               />
+              {nameInvalid ? <p id="customer-name-error" className="mt-1 text-sm text-destructive">Enter your name.</p> : null}
             </div>
             <div>
               <Label
@@ -798,6 +946,10 @@ export default function CheckoutPage() {
               <Input
                 id="customer-email"
                 type="email"
+                autoComplete="email"
+                inputMode="email"
+                aria-describedby={contactMissing ? "customer-contact-error" : undefined}
+                onBlur={() => setContactTouched((touched) => ({ ...touched, email: true }))}
                 value={contact.email}
                 onChange={(e) =>
                   setContact((c) => ({ ...c, email: e.target.value }))
@@ -820,6 +972,10 @@ export default function CheckoutPage() {
                 id="customer-phone"
                 type="tel"
                 autoComplete="tel"
+                inputMode="tel"
+                aria-invalid={phoneInvalid || undefined}
+                aria-describedby={phoneInvalid ? "customer-phone-error" : contactMissing ? "customer-contact-error" : undefined}
+                onBlur={() => setContactTouched((touched) => ({ ...touched, phone: true }))}
                 maxLength={40}
                 value={contact.phone}
                 onChange={(e) =>
@@ -828,6 +984,8 @@ export default function CheckoutPage() {
                 placeholder="(555) 000-0000"
                 className="mt-1 border-[#d8bda8] bg-white"
               />
+              {phoneInvalid ? <p id="customer-phone-error" className="mt-1 text-sm text-destructive">Enter a valid phone number for order updates.</p> : null}
+              {contactMissing ? <p id="customer-contact-error" className="mt-1 text-sm text-destructive">Add an email address or phone number for order updates.</p> : null}
             </div>
           </CardContent>
         </Card>
@@ -882,8 +1040,7 @@ export default function CheckoutPage() {
             {menuInfoError && (
               <p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
                 <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                Payment availability could not be verified. Refresh before
-                placing an order.
+                Use Retry availability above before placing an order.
               </p>
             )}
             {menuInfo?.cardPaymentsEnabled ? (
@@ -911,17 +1068,40 @@ export default function CheckoutPage() {
         </Card>
 
         {orderError && (
-          <div className="flex items-center gap-2 text-destructive text-sm bg-destructive/10 px-4 py-3 rounded-lg mb-4">
+          <div role="alert" className="flex items-center gap-2 text-destructive text-sm bg-destructive/10 px-4 py-3 rounded-lg mb-4">
             <AlertCircle className="w-4 h-4 shrink-0" />
             {orderError}
           </div>
         )}
 
+        {hostileBrowser ? (
+          <div className="mb-4">
+            <PaymentBrowserGate currentUrl={window.location.href} reason="Open this checkout in your browser before continuing to payment." compact />
+          </div>
+        ) : null}
+        {!stripePromise && !hostileBrowser ? (
+          <p className="mb-4 text-sm text-destructive" role="alert">Secure card payment is unavailable. Return to the menu or try again later; no new payment can be submitted here.</p>
+        ) : null}
+        <p id="checkout-next-step" className="mb-3 text-sm text-[color:var(--profile-muted)]" role="status">
+          {isCreating ? "Preparing your secure payment…"
+            : menuInfoLoading ? "Checking availability before payment."
+            : menuInfoError ? "Retry the availability check to continue."
+            : !orderingEnabled ? "Online ordering is currently unavailable."
+            : !contact.name.trim() ? "Add your name to continue."
+            : !contact.email.trim() && !contact.phone.trim() ? "Add an email address or phone number to continue."
+            : Boolean(contact.phone.trim()) && !normalizedContactPhone ? "Check your phone number to continue."
+            : !orderType ? "Choose pickup to continue."
+            : "Review your total on the next step before confirming payment."}
+        </p>
         <Button
+          aria-describedby="checkout-next-step"
+          aria-busy={isCreating}
           className="h-12 w-full rounded-full bg-[#d84a12] text-base font-black text-white shadow-[0_16px_35px_rgba(149,58,18,0.2)] hover:bg-[#b83a0a]"
           onClick={createOrder}
           disabled={
             isCreating ||
+            menuInfoLoading ||
+            menuInfoError ||
             !contact.name.trim() ||
             (!contact.email.trim() && !contact.phone.trim()) ||
             (Boolean(contact.phone.trim()) && !normalizedContactPhone) ||
@@ -945,25 +1125,35 @@ function StripePaymentForm({
   orderId,
   restaurantId,
   onSuccess,
+  onCheckStatus,
 }: {
   orderId: string;
   restaurantId: string;
   onSuccess: () => void;
+  onCheckStatus: () => void;
 }) {
   const stripe = useStripe();
   const elements = useElements();
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [needsStatusCheck, setNeedsStatusCheck] = useState(false);
+  const processingRef = useRef(false);
+  const activeRef = useRef(true);
+  useEffect(() => {
+    activeRef.current = true;
+    return () => { activeRef.current = false; };
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!stripe || !elements) return;
+    if (!stripe || !elements || processingRef.current || needsStatusCheck) return;
 
+    processingRef.current = true;
     setIsProcessing(true);
     setError(null);
 
     try {
-      const { error: stripeError } = await stripe.confirmPayment({
+      const { error: stripeError, paymentIntent } = await stripe.confirmPayment({
         elements,
         confirmParams: {
           return_url: `${window.location.origin}/order-confirmation/${orderId}`,
@@ -971,33 +1161,59 @@ function StripePaymentForm({
         redirect: "if_required",
       });
 
+      if (!activeRef.current) return;
       if (stripeError) {
-        setError(stripeError.message ?? "Payment failed");
+        setError(stripeError.message ?? "Payment could not be confirmed.");
+        setNeedsStatusCheck(
+          stripeError.type !== "card_error" && stripeError.type !== "validation_error",
+        );
         return;
       }
 
-      // Payment succeeded without redirect
-      onSuccess();
+      if (paymentIntent?.status === "succeeded") {
+        onSuccess();
+      } else if (paymentIntent?.status === "processing" || paymentIntent?.status === "requires_capture") {
+        // Confirmation is not final settlement. Keep cart/replay access until
+        // the existing order status is reconciled by the server.
+        onCheckStatus();
+      } else {
+        setError("Payment status could not be confirmed. Check this order before trying again.");
+        setNeedsStatusCheck(true);
+      }
     } catch (err: any) {
-      setError(err.message || "Payment failed");
+      if (activeRef.current) {
+        setError(err.message || "The connection was interrupted. Payment status is unknown.");
+        setNeedsStatusCheck(true);
+      }
     } finally {
-      setIsProcessing(false);
+      processingRef.current = false;
+      if (activeRef.current) setIsProcessing(false);
     }
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-4" aria-busy={isProcessing}>
       <PaymentElement />
       {error && (
-        <div className="flex items-center gap-2 text-destructive text-sm bg-destructive/10 px-4 py-3 rounded-lg">
+        <div role="alert" className="flex items-center gap-2 text-destructive text-sm bg-destructive/10 px-4 py-3 rounded-lg">
           <AlertCircle className="w-4 h-4 shrink-0" />
           {error}
         </div>
       )}
+      {needsStatusCheck ? (
+        <div className="space-y-2">
+          <p className="text-sm" role="status">
+            Check the existing order before submitting another payment. Your checkout is preserved.
+          </p>
+          <Button type="button" variant="outline" className="w-full" onClick={onCheckStatus}>
+            Check order status
+          </Button>
+        </div>
+      ) : null}
       <Button
         type="submit"
         className="h-12 w-full rounded-full bg-[#d84a12] text-base font-black text-white hover:bg-[#b83a0a]"
-        disabled={!stripe || isProcessing}
+        disabled={!stripe || !elements || isProcessing || needsStatusCheck}
       >
         {isProcessing && <Loader2 className="w-5 h-5 mr-2 animate-spin" />}
         Confirm Payment

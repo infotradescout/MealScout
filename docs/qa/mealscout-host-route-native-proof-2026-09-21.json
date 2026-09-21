@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "receiptKind": "normalized-from-observed-hosted-run",
+  "source": "603ff6a28478b9fafc1a0998f139eeac295082e3",
+  "tree": "5de0ebca0240fc0a95bdc2134c7816ecc36f1d32",
+  "startedAt": "2026-09-21T15:40:50.570Z",
+  "finishedAt": "2026-09-21T15:40:55.674Z",
+  "result": "pass",
+  "passed": 14,
+  "failed": 0,
+  "finalSourceClean": true,
+  "route": "POST /api/parking-pass/:passId/book",
+  "renderService": "srv-dao026n40ujc73ddeua0",
+  "renderDeploy": "dep-daokvmbm8hqs73f3rdeg",
+  "rawReceiptPath": "https://mealscout-host-route-native-proof.onrender.com/receipt.json",
+  "evidenceRead": "Render build logs: HOST_ROUTE_PROOF case records and complete final receipt at 2026-09-21T15:40:55.675117299Z. Public URL retrieval was unavailable to the reviewing tool; the passing result was read from build logs, not inferred from deployment status.",
+  "runtime": "PostgreSQL 16.14, native x86_64 Linux; four independent OS booking-route workers, with an additional restarted worker",
+  "workers": [
+    {"pid":401,"port":45731},
+    {"pid":412,"port":39823},
+    {"pid":423,"port":43273},
+    {"pid":434,"port":44803},
+    {"pid":468,"port":46739,"role":"restarted-worker"}
+  ],
+  "database": {"port":45601,"listen":"127.0.0.1","version":"16.14"},
+  "providerPort": 46337,
+  "cases": [
+    {"name":"four distinct OS processes register the actual booking route","result":"pass"},
+    {"name":"sixteen distinct trucks contend for one actual-route slot","result":"pass","requests":16,"statuses":[400,400,400,400,400,400,400,400,200,400,400,400,400,400,400,400],"activeBookings":1,"providerOperations":1},
+    {"name":"capacity three admits exactly three different trucks","result":"pass","requests":12,"activeBookings":3,"providerOperations":3},
+    {"name":"concurrent same-reference retries and process restart do not repeat operations","result":"pass","requests":9,"activeBookings":1,"providerOperations":1,"restartedPid":468},
+    {"name":"unverified email creates neither hold nor provider operation","result":"pass","statuses":[409,409,409,409],"activeBookings":0,"providerOperations":0},
+    {"name":"unverified insurance creates neither hold nor provider operation","result":"pass","statuses":[409,409,409,409],"activeBookings":0,"providerOperations":0},
+    {"name":"expired insurance creates neither hold nor provider operation","result":"pass","statuses":[409,409,409,409],"activeBookings":0,"providerOperations":0},
+    {"name":"non-truck business creates neither hold nor provider operation","result":"pass","statuses":[403,403,403,403],"activeBookings":0,"providerOperations":0},
+    {"name":"missing manageParkingPass capability creates neither hold nor provider operation","result":"pass","statuses":[403,403,403,403],"activeBookings":0,"providerOperations":0},
+    {"name":"revoked authority blocks cached response across another process","result":"pass","status":403,"additionalOperations":0},
+    {"name":"cancelled booking history survives a successful rebooking","result":"pass","terminalRowPreserved":true,"activeBookings":1},
+    {"name":"actual route does not cancel an old paid pending hold on another date","result":"pass","paidHoldUnchanged":true},
+    {"name":"a full second date rolls back all multi-day holds and makes no provider call","result":"pass","status":400,"firstDateHolds":0,"existingSecondDateHolds":1,"providerOperations":0},
+    {"name":"death after provider operation recovers through another process without another create","result":"pass","status":200,"providerOperations":1,"additionalCreateCalls":0,"activeBookings":1}
+  ],
+  "fileSha256": {
+    "server/routes/hostRoutes.ts":"79951efde8e200dcd2a4069b7623e0f74562a674fe8e7cd108313c26c7809f2d",
+    "server/services/parkingHoldExpiry.ts":"dde15fbed316eb4f6f410de1245cf765b6e54c3f4ab3606cc0cb0aca27632491",
+    "server/services/parkingPassTruckEligibility.ts":"87adc3a02d599b64290e54619077630b1e6b0cc85cdaccf6adeebfbfa365489c",
+    "server/middleware/durableIdempotency.ts":"af013cb4fd088100f3b1f29acf912493857a1fe302baf5abab5db1efd60f2545",
+    "server/services/parkingBookingRecovery.ts":"a06069b50f496084534228101642eb4e13a908c20aa4e92573f0fcd41385ad87",
+    "scripts/qa/parking-host-route-native.mjs":"40ab344652859b491e4de5321b8a1f82cd1e4481cff5b3a718513da58d3b41f3",
+    "migrations/058_idempotency_keys.sql":"8f53cf4e04ab8be5d47707e1f64438d98ab447c88b1db98567a9d8534535ac8e",
+    "migrations/142_parking_pass_active_booking_uniqueness.sql":"ff624c99eaf6aeca4f2b994185103820c9c742ea9a7f5e756dab0c8de037310e"
+  },
+  "fixtureBoundaries": [
+    "Synthetic session authentication and database-backed fixture manageParkingPass grants/storage reads",
+    "Loopback payment-provider transport, not Stripe network acceptance",
+    "Relevant model-derived tables, not complete production migration-chain or foreign-key acceptance"
+  ],
+  "cleanup": {"postgresStopped":true,"ownedDirectoryRemoved":true},
+  "priorFailureRetained": "docs/qa/mealscout-host-route-native-baseline.json: 13 passed, one paid-hold preservation assertion failed; initial artifact/source-clean failure is retained separately. This new execution passed that assertion and finished source-clean.",
+  "productionChanged": false,
+  "billingCheck": "Owner-waived. Not a waiting gate and not relabeled as passed.",
+  "remainingReleaseScope": [
+    "Controlled old-worker drain before migration 142 and candidate deployment",
+    "Complete production migration-chain and connected-provider/webhook acceptance",
+    "Exact integrated release source, affected regressions/typecheck/build, and deployed identity"
+  ]
+}

@@ -1,6 +1,7 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
+import { execFileSync } from "node:child_process";
 
 export default defineConfig({
   // When this config is loaded from the repo root (`vite build --config client/vite.config.ts`),
@@ -9,7 +10,19 @@ export default defineConfig({
   define: {
     __BUILD_ID__: JSON.stringify(Date.now().toString(36)),
   },
-  plugins: [react()],
+  plugins: [react(), {
+    name: "mealscout-authorized-preview-qa",
+    apply: "build",
+    closeBundle() {
+      // Only this authorized PR preview: production and ordinary builds are unchanged.
+      // The child executor strips DB/provider credentials and uses disposable fixtures.
+      if (process.env.VERCEL_ENV === "preview" &&
+          process.env.VERCEL_GIT_COMMIT_REF === "codex/ui-ux-front-end-overhaul-20260915") {
+        execFileSync(process.execPath, [path.resolve(__dirname, "../scripts/qa/run-preview-journeys.cjs")],
+          { cwd: path.resolve(__dirname, ".."), stdio: "inherit", timeout: 900_000 });
+      }
+    },
+  }],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "src"),

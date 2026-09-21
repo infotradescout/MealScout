@@ -1,3 +1,4 @@
+import { menuProfileReturnPath } from "@/lib/public-menu-recovery";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
 import { Heart, MenuSquare } from "lucide-react";
@@ -248,9 +249,10 @@ export function PublicProfileMenu({
     () => partitionPublicMenuSections(organizedSections),
     [organizedSections],
   );
+  const menuReturn = typeof window === "undefined" ? null : menuProfileReturnPath(window.location.pathname + window.location.search + window.location.hash, profile.id);
   const internalMenuHref =
     profile.id && (profile.activeMenuId || activeVariant?.id)
-      ? `/menu/${encodeURIComponent(profile.id)}`
+      ? `/menu/${encodeURIComponent(profile.id)}?menuId=${encodeURIComponent(String(activeVariant?.id || profile.activeMenuId))}${menuReturn ? `&returnTo=${encodeURIComponent(menuReturn)}` : ""}`
       : null;
   const preview = useMemo(
     () =>

@@ -41,7 +41,7 @@ const autocomplete = readFileSync(
   "client/src/components/maps/place-autocomplete-input.tsx",
   "utf8",
 );
-const parkingPass = readFileSync("client/src/pages/parking-pass.tsx", "utf8");
+const parkingPass = readFileSync("client/src/pages/parking-pass-content.tsx", "utf8");
 
 assert.doesNotMatch(
   routes,
