@@ -2070,43 +2070,26 @@ export function registerHostRoutes(app: Express) {
           paymentIntent = await stripe.paymentIntents.create(intentParams, {
             idempotencyKey: parkingBookingProviderKey(userId, req.path, String(req.get("Idempotency-Key") || "").trim()),
           });
-        } catch (error: any) {
-          // Preserve booking intent for manual follow-up if Stripe fails.
-          try {
-            const holdIds = insertedHolds.map((row) => row.id);
-            if (holdIds.length > 0) {
-              await db
-                .update(eventBookings)
-                .set({
-                  status: "cancelled",
-                  cancelledAt: new Date(),
-                  cancellationReason:
-                    "payment_pending_manual_review: Payment setup failed",
-                  stripePaymentStatus: "payment_pending",
-                  updatedAt: new Date(),
-                })
-                .where(inArray(eventBookings.id, holdIds));
-            }
-          } catch (cleanupError) {
-            console.error(
-              "Failed to cancel holds after Stripe failure:",
-              cleanupError,
-            );
-          }
-          console.error("[parking-pass-booking] Stripe PaymentIntent creation failed", {
+        } catch {
+          // A returned error does not prove that the provider did nothing.
+          // Retain capacity and any concurrently confirmed/paid state unchanged.
+          // An error response preserves the transactional recovery checkpoint in
+          // durableIdempotency and permits evidence-only same-reference recovery.
+          // Do not turn uncertainty into a completed 202 or cancel these holds.
+          const requestId = String(req.get("Idempotency-Key") || "").trim();
+          console.error("[parking-pass-booking] Payment setup outcome is unresolved; reservations retained", {
             passId: event.id,
             hostId: host.id,
             truckId,
             userId,
             holdCount: insertedHolds.length,
-            failureReason: error?.message || "stripe_create_failed",
           });
-          const holdIds = insertedHolds.map((row) => row.id);
-          return res.status(202).json({
-            paymentPending: true,
-            bookingIds: holdIds,
+          res.setHeader("Retry-After", "5");
+          return res.status(503).json({
+            code: "booking_request_unresolved",
+            requestId,
             message:
-              "Your spot request was received. We'll send payment instructions.",
+              "Payment setup could not be verified. Your reservation is retained. Retry this same request reference; do not start a new payment.",
           });
         }
 
