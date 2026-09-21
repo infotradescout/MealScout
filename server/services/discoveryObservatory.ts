@@ -15,6 +15,13 @@ import {
 } from "@shared/discoveryObservatory";
 
 import { db } from "../db";
+import {
+  classifyDiscoveryRequest,
+  deriveDiscoverySource,
+  deriveDiscoverySourceEvidence,
+  deriveDiscoverySearchSurface,
+} from "./discoveryRequestSignals";
+export { deriveDiscoverySource, deriveDiscoverySearchSurface } from "./discoveryRequestSignals";
 
 export const DISCOVERY_OBSERVATORY_SURFACE = "discovery_observatory";
 export const DISCOVERY_CONTRACT_VERSION = 1;
@@ -29,46 +36,10 @@ type DbLike = {
   listExperimentDecisionRows?: (experimentId: string) => Promise<any[]>;
 };
 
-const knownSources: Array<[RegExp, string]> = [
-  [/chatgpt\.com|openai\.com|oai-searchbot/i, "chatgpt"],
-  [/google\./i, "google"],
-  [/bing\.com/i, "bing"],
-  [/maps\.google\./i, "google_maps"],
-  [/facebook\.com|fb\.com/i, "facebook"],
-  [/instagram\.com/i, "instagram"],
-];
-
 const safeText = (value: unknown, max = 300) => {
   const text = String(value ?? "").replace(/\s+/g, " ").trim();
   return text ? text.slice(0, max) : null;
 };
-
-function sourceFromValue(value: unknown): string | null {
-  const text = safeText(value, 300);
-  if (!text) return null;
-  for (const [pattern, source] of knownSources) {
-    if (pattern.test(text)) return source;
-  }
-  return null;
-}
-
-export function deriveDiscoverySource(req: any): string {
-  const explicit = sourceFromValue(req?.query?.utm_source);
-  if (explicit) return explicit;
-  return sourceFromValue(req?.get?.("referer")) || "unknown";
-}
-
-export function deriveDiscoverySearchSurface(req: any): string | null {
-  const medium = safeText(req?.query?.utm_medium, 80);
-  if (medium) return medium;
-  const referrer = safeText(req?.get?.("referer"), 500);
-  if (!referrer) return null;
-  try {
-    return new URL(referrer).hostname.toLowerCase();
-  } catch {
-    return null;
-  }
-}
 
 export function deriveEntryPage(req: any): string | null {
   const referrer = safeText(req?.get?.("referer"), 500);
@@ -96,14 +67,16 @@ export function deriveAnonymousJourneyId(req: any): string {
 }
 
 export function buildRequestSourceFreshness(req: any): SourceFreshness {
-  const hasDirectSource = deriveDiscoverySource(req) !== "unknown";
+  const evidence = deriveDiscoverySourceEvidence(req);
   return {
-    state: hasDirectSource ? "current" : "unknown",
+    state: evidence.basis !== "unavailable" ? "current" : "unknown",
     checkedAt: new Date().toISOString(),
     checkedAtPrecision: "instant",
-    basis: hasDirectSource
-      ? "Source was present in the request referral or explicit campaign source."
-      : "No trustworthy external source was present on the request.",
+    basis: evidence.basis === "campaign_label"
+      ? "A supported campaign source label was supplied. This does not verify an external referral or a person."
+      : evidence.basis === "referrer_host_label"
+        ? "The parsed referrer hostname matches a supported source. The header is not proof of external causation or a person."
+        : "No supported request source label was available; external causation remains unknown.",
   };
 }
 
@@ -137,6 +110,7 @@ export function buildProfileAnalyticsDiscoveryMetadata(input: {
     platform: DISCOVERY_PLATFORM,
     discoveryStage: isEntry ? "entry" : "action",
     discoverySource: context.discoverySource,
+    trafficQuality: classifyDiscoveryRequest(input.req),
     searchSurface: context.searchSurface,
     query: null,
     queryEvidenceState: "unknown",
