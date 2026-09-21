@@ -7,7 +7,7 @@ const base='https://www.mealscout.us';
 const output=path.resolve('test-results/recovery-isolated-report');
 fs.mkdirSync(output,{recursive:true});
 const report={expected,diagnostic,startedAt:new Date().toISOString(),result:'fail',diagnosticWritesAttempted:0,customerMutations:0,verifiedPeople:null};
-const headers={'accept':'application/json','user-agent':'mealscout-acquisition-proof/1.0','x-mealscout-qa':'1'};
+const headers={'accept':'application/json','user-agent':'mealscout-acquisition-proof/1.0','x-mealscout-qa':'1','origin':base,'referer':base+'/'};
 async function version(){
  const response=await fetch(base+'/api/version',{headers,signal:AbortSignal.timeout(15000),redirect:'error'});
  const body=await response.json();assert.equal(response.status,200);assert.equal(body.version?.commit,expected);
@@ -15,9 +15,8 @@ async function version(){
 }
 try{
  report.before=await version();
- // /health/ready is not forwarded by the public edge and returned the SPA.
- // That earlier observation attempted zero writes. Actual analytics persistence
- // is verified through the supported API and a separate read-only database check.
+ // Previous missing-origin attempt returned403; an independent database read
+ // confirmed zero diagnostic rows before this corrected same-origin attempt.
  if(process.env.MEALSCOUT_ACQUISITION_QA_WRITE==='1'){
   report.diagnosticWritesAttempted=1;console.log('MEAL_ACQUISITION_QA_ATTEMPT '+JSON.stringify({diagnostic,expected}));
   const response=await fetch(base+'/api/analytics/shell',{method:'POST',headers:{...headers,'content-type':'application/json'},body:JSON.stringify({type:'public_profile_not_found_viewed',profile_id:diagnostic,profile_type:'truck',path:'/__qa/acquisition-387'}),signal:AbortSignal.timeout(15000),redirect:'error'});
