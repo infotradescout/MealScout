@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "kind": "observed-native-signed-webhook-baseline",
+  "source": "e80db9250c771cc039dba2554376bc4b27278cb1",
+  "tree": "3218434d0f64b186fea39b0e577ce829d14bef38",
+  "applicationBase": "8a852919fed69fc9ab743d19d2f1de3a3b1ee36d",
+  "applicationChangedFromDeployedRuntime": false,
+  "renderService": "srv-dao026n40ujc73ddeua0",
+  "renderDeploy": "dep-daonp7942hec7390agtg",
+  "startedAt": "2026-09-21T18:52:12.855Z",
+  "finishedAt": "2026-09-21T18:52:18.183Z",
+  "result": "fail",
+  "passed": 1,
+  "failed": 6,
+  "rawReceiptSha256": "e50056ccbc5b49c7c7d98a708cd7975b3f6bc410fe340c7c33c1b3d9bc62c136",
+  "filesManifest": {"count":96,"sha256":"a0b30ed8891fca243bfb5a921a41b29a32da7f2fcb3743b4eab302ce31342158"},
+  "workers": [{"pid":431,"port":34523},{"pid":442,"port":40231},{"pid":453,"port":39147},{"pid":464,"port":46743}],
+  "database": {"version":"16.14","port":37891,"providerPort":38759},
+  "fullSchema": {"bootstrap":124,"release":24,"foreignKeys":278},
+  "cases": [
+    {"name":"invalid signature","result":"pass","httpStatus":400,"bookingHistoryUnchanged":true,"ledgerUnchanged":true},
+    {"name":"normal signed payment on selected UTC date","result":"fail","httpStatus":200,"bookingStatus":"cancelled","refundStatus":"credit","creditRows":1,"creditAmount":"25.00","hostEarningsRows":0},
+    {"name":"sparse selected dates","result":"fail","httpStatus":200,"bothOriginalHolds":"cancelled/credit","creditRows":1,"creditAmount":"120.00","hostEarningsRows":0},
+    {"name":"success before create acknowledgement","result":"fail","originalBookingRows":1,"afterWebhookBookingRows":2},
+    {"name":"concurrent signed successes","result":"fail","httpStatus":200,"bookingStatus":"cancelled","refundStatus":"credit","creditRows":1,"hostEarningsRows":0},
+    {"name":"mismatched amount","result":"fail","httpStatus":200,"expected":"Reject without booking or ledger changes"},
+    {"name":"unrecognized durable request identity","result":"fail","httpStatus":200,"expected":"Reject without booking or ledger changes"}
+  ],
+  "testCoreSha256": "edcba7d94ea34a64ad5878546d9b41e667031ae4e53ea510faf9eb03612459e9",
+  "derivedHarnessSha256": "183ee15f0c7d823277925a5399bbcd99c5c3858048eedfaa734d2549179ccbd5",
+  "scope": "Actual registered booking route and actual production-registered Stripe webhook module, raw HTTP and real Stripe SDK signature verification, four independent OS workers, complete canonical native schema, actual host earnings/credit code. Authentication, grants, provider transport and signing secret are explicit isolated fixtures. Application code was not transformed.",
+  "earlierHarnessOnlyFailures": [
+    {"source":"d07102acdc5780d7cd9807269f9a48993e0c6198","reason":"Fixture namespace lacked package resolution for native pg","applicationCasesRun":0},
+    {"source":"1c47aadcecaf37fbeea1b583e542d443c67ff922","reason":"Unrelated menu import required a deny-only staff-auth fixture export","applicationCasesRun":0}
+  ],
+  "cleanup":{"postgresStopped":true,"ownedDirectoryRemoved":true},
+  "finalSourceClean":true,
+  "productionMutations":0,
+  "liveProviderAcceptance":false,
+  "billingCheck":"Owner-waived and not consulted. Failed application assertions are not waived."
+}
