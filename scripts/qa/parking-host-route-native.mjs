@@ -1,5 +1,4 @@
-/** Existing hosted entry point. The native route suite is retained byte-for-byte
- * in parking-host-route-core.mjs; release checks add evidence, never waive it. */
+/** Existing hosted entry point. Each mode emits a separately scoped receipt. */
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -16,6 +15,14 @@ const source = git('rev-parse', 'HEAD');
 assert.equal(source, process.env.RENDER_GIT_COMMIT);
 assert.equal(process.env.MEALSCOUT_HOST_ROUTE_PROOF, '1');
 assert.equal(git('status', '--porcelain'), '');
+if (process.env.MEALSCOUT_PARKING_READONLY_PROBE === '1') {
+  execFileSync(process.execPath, ['--test', 'scripts/qa/parking-provider-readiness.test.mjs'], { cwd: root, stdio: 'inherit' });
+  const { runParkingLiveReadonlyProbe } = await import('./parking-live-readonly-probe.mjs');
+  await runParkingLiveReadonlyProbe();
+} else if (process.env.MEALSCOUT_PARKING_COMPATIBILITY_PROOF === '1') {
+  const { runCompatibilityCutoverProof } = await import('./parking-compatibility-cutover.mjs');
+  await runCompatibilityCutoverProof();
+} else {
 await import('./parking-host-route-core.mjs');
 const receipt = JSON.parse(fs.readFileSync(receiptPath, 'utf8'));
 receipt.routeResult = receipt.result;
@@ -33,21 +40,15 @@ try {
     const { runReleaseChecks } = await import('./parking-host-release-checks.mjs');
     receipt.releaseChecks = await runReleaseChecks({ root, out, source });
     if (!receipt.releaseChecks.passed) receipt.result = 'fail';
-  } else {
-    receipt.releaseChecks = { result: 'not_run', passed: false, reason: 'Explicit release-check mode was not requested' };
-  }
+  } else receipt.releaseChecks = { result: 'not_run', passed: false, reason: 'Explicit release-check mode was not requested' };
 } catch (error) {
-  receipt.result = 'fail';
-  receipt.releaseCheckFailure = String(error.stack || error);
+  receipt.result = 'fail'; receipt.releaseCheckFailure = String(error.stack || error);
 } finally {
   receipt.finalSourceClean = git('rev-parse', 'HEAD') === source && git('status', '--porcelain') === '';
   if (!receipt.finalSourceClean) receipt.result = 'fail';
-  receipt.productionChanged = false;
-  receipt.liveProviderAcceptance = false;
+  receipt.productionChanged = false; receipt.liveProviderAcceptance = false;
   receipt.releaseFinishedAt = new Date().toISOString();
   fs.writeFileSync(receiptPath, JSON.stringify(receipt, null, 2) + '\n');
-  // The complete receipt remains in the artifact. Avoid repeating the entire
-  // migration manifest and nested failure logs in one enormous log message.
   const summary = JSON.parse(JSON.stringify(receipt)); delete summary.tables;
   if (summary.releaseChecks?.migrations?.files) {
     const files = summary.releaseChecks.migrations.files;
@@ -58,4 +59,5 @@ try {
   summary.rawReceiptSha256 = hash(fs.readFileSync(receiptPath));
   console.log('HOST_ROUTE_RELEASE_PROOF ' + JSON.stringify(summary));
   process.exitCode = receipt.result === 'pass' ? 0 : 1;
+}
 }
