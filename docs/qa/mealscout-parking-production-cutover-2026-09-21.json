@@ -1,0 +1,97 @@
+{
+  "schemaVersion": 1,
+  "receiptKind": "normalized-from-observed-GitHub-Render-and-public-route-results",
+  "project": "MealScout",
+  "status": "production_cutover_verified_provider_acceptance_partial",
+  "productionSource": "7d51a8a49195616152583f99c5fac2d2bfe2532d",
+  "productionTree": "e56996af1317bd4b1fd58a4a0e874431e76d2881",
+  "productionService": "srv-d5escdh5pdvs73foo41g",
+  "productionDeploy": "dep-daomu68jo6nc73cqtojg",
+  "liveAt": "2026-09-21T17:57:59.439296Z",
+  "productionInstance": "srv-d5escdh5pdvs73foo41g-v92h9",
+  "mergedPullRequests": [383, 380],
+  "billingCheck": "Owner-waived, not rerun or relabeled as passing. No billing/access/protection setting was changed.",
+  "verifiedApplication": {
+    "source": "215b6868bab791017fdbf8682e681c82a9d045e3",
+    "receipt": "docs/qa/mealscout-parking-integrated-release-proof-2026-09-21.json",
+    "rawReceiptSha256": "4d2601d5e801bf89182749a740cf89eb8884bdb31269e59e2e7435075e8317a2",
+    "actualRoute": "POST /api/parking-pass/:passId/book",
+    "nativeRoutePassed": 20, "nativeRouteFailed": 0, "osWorkers": 4,
+    "legacyGuardPassed": 11, "releaseStagesPassed": 11,
+    "fullSchemaRehearsal": {"bootstrapFiles":124,"releaseFiles":24,"foreignKeys":278},
+    "scope": "Actual route, SQL, eligibility, idempotency and recovery with synthetic authentication/grants/provider; separate complete native migration-chain rehearsal. Not customer-payment acceptance. Client/server/shared runtime files remain unchanged in the final deployment."
+  },
+  "phaseA": {
+    "candidate": "102f054bd7a8be68ea63758f527fe0c078a7fce4",
+    "tree": "df6f657959ad328edb9de4582de1e1756c71466c",
+    "merge": "ef096d39ead2f0be85e895b0505f7bab019ca196",
+    "deploy": "dep-daomoklg1s2s73arf4n0",
+    "liveAt": "2026-09-21T17:44:16.959277Z",
+    "applicationMatches": "9e53e0d9c36abdc659e0a5ca11b70ab36e1c7da6",
+    "migrationsMatch": "c10700e38d158f9b7378925a7cf3951b20fae9e1",
+    "migration142Included": false,
+    "compatibilityProof": {
+      "executorSource":"56f5633cb54158b5756233c2858a6d3ee0bf4553",
+      "executorDeploy":"dep-daomnkp42hec738snss0",
+      "startedAt":"2026-09-21T17:40:03.434Z","finishedAt":"2026-09-21T17:40:27.681Z",
+      "passed":20,"failed":0,"sourceClean":true,
+      "canonicalTestCoreSha256":"edcba7d94ea34a64ad5878546d9b41e667031ae4e53ea510faf9eb03612459e9",
+      "derivedTestCoreSha256":"6258f2601101e3dea7ac8fd7c4e131b7708aedc390b5e58fc89d8ee4e6a2810d",
+      "routeLogSha256":"84ea4002605ef8a49b6c2797f7fac33b298c76ac22d611b0a43a4aa1daef2b8b",
+      "temporaryRebookingLimitation":{"status":409,"terminalHistoryUnchanged":true,"activeHolds":0,"providerCreateCalls":0},
+      "testAdapter":"Generated test harness retains pre142 all-history guard and explicitly checks safe rebooking denial. All other nineteen assertions retained. Application source was not transformed.",
+      "cleanup":{"postgresStopped":true,"ownedDirectoryRemoved":true,"ownedCloneRemoved":true}
+    },
+    "publicObservation":{"executorDeploy":"dep-daomrsad0e5s73fjkug0","finishedAt":"2026-09-21T17:49:08.406Z","bothOriginsMatchMerge":true,"databaseReady":true,"parkingRoutes200":true,"unauthenticatedHosts401":true}
+  },
+  "legacyRetirement": {
+    "oldDeploy":"dep-daojucgjo6nc73afbang","oldSource":"c10700e38d158f9b7378925a7cf3951b20fae9e1",
+    "oldInstance":"srv-d5escdh5pdvs73foo41g-zhltr","replacementInstance":"srv-d5escdh5pdvs73foo41g-lg29d",
+    "oldDeployStatus":"deactivated","deactivatedAt":"2026-09-21T17:44:16.957963Z",
+    "lastOldMemorySample":"2026-09-21T17:45:00Z","replacementOnlyMemorySamplesThrough":"2026-09-21T17:51:00Z","serviceInstanceCount":1,
+    "ordinaryDocumentedShutdownBoundSeconds":360,"conservativeShutdownDeadline":"2026-09-21T17:50:16.959277Z",
+    "phaseBMergeAfterDeadline":"2026-09-21T17:53:25Z",
+    "documentation":"https://render.com/docs/deploys#zero-downtime-deploys",
+    "scope":"Platform lifecycle and instance telemetry after the ordinary documented shutdown bound, not a direct OS process-list or captured SIGKILL receipt. No support-configured extended delay is known."
+  },
+  "productionMigration": {
+    "command":"npm run migrate:deploy","runner":"scripts/runDeployMigrations.ts",
+    "filename":"142_parking_pass_active_booking_uniqueness.sql",
+    "sha256":"6fb140adf20d8621a2f99039675834d2200c535267090327626e81ce9cb1e701",
+    "applyingLoggedAt":"2026-09-21T17:56:57.164553308Z","passLoggedAt":"2026-09-21T17:56:57.252276017Z",
+    "result":"pass","applied":1,"alreadyRecorded":23,
+    "rawResult":"Deploy migration PASS (1 applied, 23 already recorded)",
+    "bootstrapReplayed":false,"predeployCompleteAt":"2026-09-21T17:57:04.375554787Z"
+  },
+  "connectedProvider": {
+    "source":"7d51a8a49195616152583f99c5fac2d2bfe2532d",
+    "startedAt":"2026-09-21T17:54:17.335Z","finishedAt":"2026-09-21T17:54:17.791Z",
+    "result":"partial","credentialMode":"live","authenticated":true,"chargesEnabled":true,"payoutsEnabled":true,
+    "webhookSecretPresent":true,"matchingEnabledEndpoints":1,"paymentSuccessConfigured":true,
+    "sandboxCredentialPresent":false,"sandboxResult":"not_run","liveMutationCalls":0,
+    "customerPaymentAcceptance":false,"remoteWebhookDeliveryProven":false,
+    "safetyTestsPassed":8,"safetyTestsFailed":0,
+    "scope":"Actual Stripe account and webhook configuration reads from deployed service credentials, GET only. No test or live PaymentIntent was created, charged, captured or refunded. Missing sandbox credentials were not replaced with live credentials."
+  },
+  "finalPublicObservation": {
+    "executorSource":"de2e774d3d0c49cf73f7c2fb8e85f88861d533e3","executorDeploy":"dep-daon0ig473hc73d1tigg",
+    "probeSha256":"555f5cb22f170856258075c7c36de9d32acaed5097c66a53c9580a4aeedfb0c8",
+    "startedAt":"2026-09-21T17:59:37.398Z","finishedAt":"2026-09-21T17:59:40.525Z",
+    "result":"pass","bothOriginsReportProductionSource":true,"databaseReady":true,"unauthenticatedHostsStatus":401,
+    "versions":[
+      {"origin":"https://mealscout.onrender.com","status":200,"responseSha256":"24c7362aa1ed5c3b99a73b896de4a78f95312cfd5d3882735fdac24feb41616e"},
+      {"origin":"https://www.mealscout.us","status":200,"responseSha256":"52074afda3bd2a3a12b94d008c8029e64a9bfd174b3e4978f2d8d0b501d36c9e"}
+    ],
+    "commitSource":"RENDER_GIT_COMMIT","frontendAssetManifestPresent":true,
+    "parkingList":{"status":200,"count":376,"responseSha256":"16d7c8b259e3a70e9bc94f084b11886a19bbdb25e68bc5f63243a16ee5f66b1d"},
+    "hostIdsStatus":200,"paymentsConfigStatus":200,"publishableKeyMode":"live",
+    "paymentHealth":{"status":200,"generatedAt":"2026-09-21T17:59:39.211Z","counts":{"pendingTotal":0,"pendingExpired":0,"pendingWithoutIntent":0,"confirmedLast24h":0,"cancelledLast24h":0,"failedLast24h":0,"confirmedMissingPaidAt":0,"confirmedWithoutIntent":0}},
+    "productionMutations":0,"livePaymentAcceptance":false,
+    "scope":"Version probes verify the backend reached through both domains, not an independent identity check of every Vercel-served frontend asset. Zero aggregate counts are not a customer transaction test."
+  },
+  "retainedHarnessFailure":{"source":"db09596543b2c75f88f8ec0edb08f4d71c81910d","deploy":"dep-daomm38473hc73d0on8g","applicationTestsExecuted":false,"cause":"Exact ref was fetched into a different repository and not retained by its clone; fixed by fetching inside the owned checkout."},
+  "portableExpandedReceipt":{"filename":"mealscout-parking-production-cutover-2026-09-21.json","sha256":"93c0a1d1250c52e21573941a058695aaec96015c2baee6cd1ea5eec828c933b0","bytes":13227},
+  "sideEffects":{"productionDeployments":2,"productionMigrationsApplied":1,"newProofServices":0,"desktopCommanderUsed":false,"manualCustomerBookingWrites":0,"realPaymentsCreated":0,"refundsCreated":0,"externalMessagesSent":0,"billingOrProtectionChanges":false},
+  "remainingAcceptance":["Completed customer checkout and remote webhook reconciliation","Payment settlement evidence","Sandbox provider execution when authorized test credentials are available"],
+  "limits":["No full before/after production booking-row snapshot comparison was performed.","A restorable production backup was not independently verified; no backup/restore receipt is claimed.","Deployment and provider configuration are not commercial validation."]
+}
