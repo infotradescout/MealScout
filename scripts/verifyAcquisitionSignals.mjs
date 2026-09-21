@@ -15,8 +15,9 @@ async function version(){
 }
 try{
  report.before=await version();
- const ready=await fetch(base+'/health/ready',{headers,signal:AbortSignal.timeout(15000),redirect:'error'});
- const readyBody=await ready.json();assert.equal(ready.status,200);assert.equal(readyBody.db,'ok');report.databaseReady=true;
+ // /health/ready is not forwarded by the public edge and returned the SPA.
+ // That earlier observation attempted zero writes. Actual analytics persistence
+ // is verified through the supported API and a separate read-only database check.
  if(process.env.MEALSCOUT_ACQUISITION_QA_WRITE==='1'){
   report.diagnosticWritesAttempted=1;console.log('MEAL_ACQUISITION_QA_ATTEMPT '+JSON.stringify({diagnostic,expected}));
   const response=await fetch(base+'/api/analytics/shell',{method:'POST',headers:{...headers,'content-type':'application/json'},body:JSON.stringify({type:'public_profile_not_found_viewed',profile_id:diagnostic,profile_type:'truck',path:'/__qa/acquisition-387'}),signal:AbortSignal.timeout(15000),redirect:'error'});
@@ -25,7 +26,7 @@ try{
  report.after=await version();report.result='pass';
 }catch(error){report.error=String(error.stack||error);}
 finally{
- report.finishedAt=new Date().toISOString();report.boundary='Only release identity, database readiness and an explicitly marked QA quality-report write. Independent database read must confirm classification. Not a real profile failure, visitor, conversion or organic reach.';
+ report.finishedAt=new Date().toISOString();report.boundary='Only release identity and an explicitly marked QA quality-report write. Independent database read must confirm persistence/classification. Not a real profile failure, visitor, conversion or organic reach; not a public readiness-route acceptance.';
  fs.writeFileSync(path.join(output,'acquisition-production.json'),JSON.stringify(report,null,2));fs.writeFileSync(path.join(output,'robots.txt'),'User-agent: *\nDisallow: /\n');fs.writeFileSync(path.join(output,'index.html'),'<meta name="robots" content="noindex,nofollow"><a href="acquisition-production.json">Release observation</a>');
  console.log('MEAL_ACQUISITION_PRODUCTION '+JSON.stringify(report));if(report.result!=='pass')process.exitCode=1;
 }
