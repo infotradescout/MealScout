@@ -1,45 +1,42 @@
-# MealScout Parking Pass native migration and process proof
+# MealScout Parking Pass native route and controlled rollout handoff
 
-## Objective
-Continue MealScout only. The owner waived the billing-blocked GitHub check. Proceed with actual release engineering, not another wait for that job; preserve all application and financial safeguards.
+## Objective and scope
+Continue MealScout only on PR380, branch `codex/ui-ux-front-end-overhaul-20260915`. The owner waived the billing-blocked GitHub check; it is not a waiting gate and was not relabeled as a pass. Do not use Desktop Commander as a dependency. Preserve the complete product scope in `docs/product/MEALSCOUT_END_TO_END_FLOW_UX_MATRIX.md` and newer unrelated MealScout work.
 
-## Base branch/commit
-Existing PR380 branch `codex/ui-ux-front-end-overhaul-20260915`, starting at `e7dc7b668e1ea2aa76341f428b3847e750f86856`. Source-bound security/map and Orders work remains intact.
+## Latest actual source and action
+Actual host-route implementation and test source verified: `603ff6a28478b9fafc1a0998f139eeac295082e3`, tree `5de0ebca0240fc0a95bdc2134c7816ecc36f1d32`.
+The normalized passing receipt was committed in `eb205c4480e42c0af3e13992eb3b5e1baff218c1`. This handoff update is documentation only; resolve the current branch head before a write. Do not describe a later documentation SHA as the executed application SHA.
 
-## Current branch/commit
-Verified source: `c5be87ae5f97b589583dd5cc960c2e0b830eeaf1`. Migration repair: `fa3dd17ab3822a63b9d7a670d52c64cc7f2af800`. The containing proof commit adds documentation only. Resolve its exact remote SHA before writing. Continue in the existing MealScout-map-security-20260919 worktree; no other worktree or shared dependency installation changed.
+Reused the existing Render service `srv-dao026n40ujc73ddeua0` (`mealscout-host-route-native-proof`). Executed deploy `dep-daokvmbm8hqs73f3rdeg`. The actual run began `2026-09-21T15:40:50.570Z` and finished `2026-09-21T15:40:55.674Z`. Read all case results and the complete receipt from the Render build logs; a deployment marked live is not itself test success. Public receipt retrieval was unavailable to the reviewing web tool, so no claim of that retrieval is made.
 
-## Verified completed work
-Recorded the owner's CI exception in `docs/qa/mealscout-ci-exception.md` and PR comment5746995133. Do not call the historical unexecuted job a pass or make it a wait gate again. Global GitHub protections and billing/access settings were not modified.
-Native testing reproduced a migration defect: a same-named non-unique index was accepted, then the previous unique constraint was removed. Migration142 now validates the actual active unique index before removing the old guard. Mismatched keys, predicates, invalid readiness and non-unique definitions cannot count as replacement protection. The expected predicate is parsed by PostgreSQL using matching column types; no backend payment/status rule changed.
+## Newly verified work
+**14/14 actual host-route native cases passed, zero failed, final source clean.** Four independent OS workers registered and executed `POST /api/parking-pass/:passId/book` against disposable native PostgreSQL16.14.
 
-## Files changed
-`migrations/142_parking_pass_active_booking_uniqueness.sql`; `scripts/qa/parking-native-process.mjs`; `scripts/qa/parking-native-worker.mjs`; CI exception, this handoff and `docs/qa/mealscout-parking-native-process-proof.json`. Client, server, shared schemas, package manifest/lockfile and preview executor are byte-unchanged from the base.
+- Sixteen distinct trucks contending for one spot produced one active booking and one synthetic provider operation.
+- Twelve trucks contending for three spots produced exactly three active bookings and three operations.
+- Concurrent same-reference retries plus worker restart retained one booking/operation.
+- Unverified email, unverified insurance, expired insurance, non-truck profiles and missing manageParkingPass grants produced no holds or provider operations.
+- Revoking authority blocked a cached response from another process.
+- A cancelled row survived rebooking unchanged, and an old paid pending hold survived another-date booking unchanged.
+- A full second date rolled back the entire new multi-day hold group without a provider operation.
+- Killing a worker after the provider operation recovered through another process without another create call.
 
-## Tests/evidence already run
-Native PostgreSQL:25/25 cases, zero failures, including actual migration058/142 through the existing statement runner, interrupted installation, wrong-index rejection, rebooking with history preserved and duplicate active booking exclusion.
-Sixteen concurrent insert attempts across separate OS processes produced exactly one active event/truck row. Twenty-four concurrent HTTP retries across processes produced exactly one recorded synthetic operation. Process restart, lost receipt write, expired reference, database outage and process death after an operation did not cause reexecution.
-Concurrent expiry invoked the simulated provider cancellation once, preserved booking history and retained paid/processing/capturable/fresh-group holds. Death after provider cancellation rolled back the real SQL transaction; a later process safely recovered the cancelled intent without another cancellation.
-Existing integration suites also pass:hold expiry40/40 and durability26/26. These older suites use PGlite; they are not conflated with native separate-process proof. Full UI/build gates were not rerun because no client/server/package code changed; prior source-specific receipts retain their original scope.
+The registered handler, eligibility policy, capacity SQL, durable middleware, recovery and migrations058/142 are actual application source. Session authentication, database-backed authorization/storage reads and provider transport are explicit fixtures. Tables are model-derived relevant tables, not a complete production schema/foreign-key/migration-chain proof. This is not live Stripe/webhook or production acceptance.
 
-## Evidence locations
-`docs/qa/mealscout-parking-native-process-proof.json` binds exact source hashes, all native cases, compatibility outcomes and cleanup. Raw artifacts are in `.qa-evidence/parking-native/`. Credentials in private-config files remain local and are excluded from the committed receipt.
-The UTC-corrected baseline is19 passes/one real migration failure. Initial import/timezone fixtures and a pooled temporary-session cleanup assumption were corrected separately and their failed logs were retained, not relabeled as successful product tests.
+## Receipt and retained failures
+`docs/qa/mealscout-host-route-native-proof-2026-09-21.json` contains exact source/tree, worker identities, case evidence, relevant file SHA256 values, execution identity, scope and cleanup.
+`docs/qa/mealscout-host-route-native-baseline.json` remains unchanged: source `1e6e94c3` had13 passes and a genuine paid-hold preservation failure, plus a non-clean artifact boundary. The new run passes that assertion and ends source-clean; do not erase or relabel the baseline failure.
 
-## Changed but unverified work
-No unverified change remains within this migration/guard/expiry slice. Full host-route capacity across different trucks, actual insurance decisions, external Stripe/webhook behavior, deployment migration replay and old-worker rollout remain unproved. This is not full Parking Pass or production acceptance.
+Prior proof remains at its original source:25 native migration/guard/expiry cases,40 PGlite expiry cases and26 durability cases, documented in `docs/qa/mealscout-parking-native-process-proof.json`. Earlier UI, map/security, onboarding and Orders receipts retain their original scope and source. Do not replay unchanged broad gates merely because this handoff changed.
 
-## Tests/evidence invalidated by later changes
-No migration code changed after the passing20-case repair. Five added definition/cleanup cases were validated in the final25-case run. The final fixture correction pins session-local temp-table checks to one explicit native client; it does not relax migration assertions.
+## Current production and next dependency
+A read-only Render deployment lookup observed production service `srv-d5escdh5pdvs73foo41g` serving commit `c10700e38d158f9b7378925a7cf3951b20fae9e1` from deploy `dep-daojucgjo6nc73afbang`, not the verified PR380 candidate. The newer main changes relative to the previously recorded base `e101c911` affect only `vercel.json` and `scripts/acquisition-edge-routing.contract.test.mjs`; preserve them when integrating the eventual release. No production merge, rollout, worker drain or migration was performed in this continuation.
 
-## Known blockers/risks
-The billing-blocked GitHub check is owner-waived for this continuation, not an unresolved decision or reason to stop. Other application/provider requirements are not waived. Native fixture proof omits unrelated foreign-key tables and actual booking handlers; do not call it full production capacity or migration-chain proof.
+Follow `docs/qa/parking-hold-expiry-and-schedule.md`: legacy workers must be drained before migration142 and candidate deployment. The legacy scheduler contains unconditional pending-hold deletion; changing a provider key or relying on normal overlapping deployment is not a verified drain. Do not invent an environment toggle that the old source does not implement. The discovered Render connector exposes deployment and environment operations but no service-suspension/drain action; provider/drain access was not changed.
 
-## External side effects and retry safety
-Five owned native clusters were stopped and removed; a read-only supplement confirms all30 recorded worker/provider/database ports refuse connections. Original immediate observations are retained. No real account/booking/payment/refund, provider activation, production merge/deployment/migration, external message or billing/access change occurred. Only the MealScout task branch is a push target.
+Before connected-provider acceptance, cover one distinct unresolved failure branch: `hostRoutes.ts` still marks inserted holds cancelled/payment_pending when PaymentIntent creation throws. An accepted provider operation followed by a returned error/lost response must be tested explicitly for capacity retention and safe reconciliation. The passing process-kill test does not execute that catch branch and cannot be claimed as its proof. This is source-review risk, not a newly executed failing assertion.
 
-## Next exact action
-Continue the full host booking route's native multi-process capacity and eligibility tests using actual handlers and disposable infrastructure. Then follow the existing controlled worker-drain/migration/provider rollout requirements. Apply the owner's single CI-job exception rather than reintroducing a billing wait or disabling unrelated safeguards.
+Next work is that returned-error/provider acceptance and controlled migration/cutover, including exact integrated candidate identity and affected type/build/regression verification. Existing native runner remains reusable; do not create another proof service or reopen the waived billing check.
 
-## Actions that must NOT be repeated
-Do not re-audit the project, redo completed UI/security/onboarding work, mutate other worktrees, replay a fixture against customer data, loosen financial controls or test assertions, treat simulated provider responses as real payments, or silently mark unexecuted CI as passing. Preserve the approved full MealScout scope.
+## Side effects and cleanup
+Reused one existing isolated Render executor and added documentation to the existing MealScout PR branch. PostgreSQL was stopped and its owned temporary directory removed according to the passing receipt. Workers/provider were closed by the test harness; no additional port-closure probe was performed in this run. No customer accounts/bookings, production data, live payments/refunds, external messages, billing/access settings, other projects or the owner's computer were changed.
