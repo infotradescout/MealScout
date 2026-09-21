@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 
-const parkingPassPage = readFileSync("client/src/pages/parking-pass.tsx", "utf8");
+const parkingPassPage = readFileSync("client/src/pages/parking-pass-content.tsx", "utf8");
 
 const requiredSnippets = [
   "selectedSpotGasPriceSummary",

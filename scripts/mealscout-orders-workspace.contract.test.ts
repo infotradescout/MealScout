@@ -61,10 +61,18 @@ assert.match(ownerRoutes, /assertOrderingWorkspaceAccess/);
 assert.match(ownerRoutes, /isAuthenticated/);
 assert.match(ownerRoutes, /pickupOrderItems/);
 assert.match(ownerRoutes, /hasMore: orders\.length === limit/);
-assert.match(
-  routes,
-  /if \(status === ORDER_STATUS\.CONFIRMED\) \{[\s\S]*?updates\.confirmedAt = now/,
+// Owner actions must never confirm a card payment. Confirmation is provider-owned;
+// preparation records the merchant acknowledgement instead of rewriting confirmedAt.
+const ownerMutation = routes.slice(ownerMutationStart, routes.indexOf('"/api/my/orders"'));
+const allowedStatusSchema = ownerMutation.match(/status: z\.enum\(\[([\s\S]*?)\]\)/);
+assert.ok(allowedStatusSchema, "Owner status input must remain explicitly bounded");
+assert.deepEqual(
+  [...allowedStatusSchema[1].matchAll(/ORDER_STATUS\.(\w+)/g)].map((match) => match[1]),
+  ["PREPARING", "READY", "OUT_FOR_DELIVERY", "DELIVERED", "COMPLETED", "CANCELLED"],
 );
+assert.match(ownerMutation, /\[ORDER_STATUS\.PENDING\]: \[ORDER_STATUS\.CANCELLED\]/);
+assert.doesNotMatch(ownerMutation, /updates\.confirmedAt\s*=/);
+assert.match(ownerMutation, /if \(status === ORDER_STATUS\.PREPARING\) \{[\s\S]*?updates\.merchantAcknowledgedAt = now/);
 assert.match(routes, /isAdminUserType\(user\?\.userType\)/);
 assert.match(routes, /\["restaurant_owner", "food_truck"\]/);
 assert.match(

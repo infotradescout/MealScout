@@ -1,0 +1,67 @@
+{
+  "schemaVersion": "si.progress-checkpoint.v1",
+  "checkpointId": "progress-20260918T040852Z-ea8ada37",
+  "createdAt": "2026-09-18T04:08:52.593960+00:00",
+  "outcome": "Fix authenticated signup stale listing search without changing claim authority",
+  "scope": [
+    "Only authenticated listing search state and its browser proof"
+  ],
+  "prohibitions": [
+    "No COTW interaction; no real claims, messages, payments, provider activation, production deploy or merge"
+  ],
+  "progress": {
+    "completedVerified": [
+      "Baseline reproduced four stale-success failures; source guard reviewed by root; TypeScript and client build pass; six focused desktop/mobile cases pass"
+    ],
+    "changedUnverified": [
+      "Final 110-scenario full gate and exact hosted acceptance remain pending"
+    ],
+    "proof": [
+      "C:/Users/flavo/Documents/Codex/2026-09-17/you/outputs/meal-onboarding/targeted/profile-browser-suite.json",
+      "C:/Users/flavo/Documents/Codex/2026-09-17/you/outputs/meal-onboarding/baseline/profile-browser-suite.json"
+    ],
+    "externalEffects": [
+      "No new external effects; synthetic browser traffic only"
+    ],
+    "doNotRepeat": [
+      "Preserve baseline and first candidate failures; do not relabel them as final proof"
+    ],
+    "nextSafeAction": "Run unchanged full browser and hosted 24-stage integration gate at exact committed source after root final review"
+  },
+  "repository": {
+    "root": ".",
+    "rootKind": "repository_relative",
+    "branch": "codex/claim-search-continuity-20260917",
+    "headBefore": "5c5bce54639a456db22591174b5597df56c94b92",
+    "checkpointCommit": "containing_commit",
+    "pushRequested": false,
+    "pushRemote": null,
+    "protectedBranchAuthorized": false,
+    "selectedStatusBefore": [
+      " M client/src/pages/restaurant-signup.tsx",
+      " M scripts/qa/public-profile-browser.cjs",
+      "?? docs/qa/signup-claim-continuity.md",
+      "?? scripts/qa/signup-claim-continuity-journeys.cjs"
+    ],
+    "unrelatedChangeCountExcluded": 1
+  },
+  "savedFiles": [
+    {
+      "path": "client/src/pages/restaurant-signup.tsx",
+      "sha256": "12d18ceaaaa3d42d2743ddec84ea495ef3703b440ba6edb1ba27ab60db07ac2a"
+    },
+    {
+      "path": "scripts/qa/public-profile-browser.cjs",
+      "sha256": "89f149ac0b5dcc5135eb6f48466f8108fe8ba01bfec4ae25dacefab1fd01cef7"
+    },
+    {
+      "path": "scripts/qa/signup-claim-continuity-journeys.cjs",
+      "sha256": "85bdc6ab1db401974673e8e67aef2d4dfe4c3b921e7810b7c24ec2b5f2c875cd"
+    },
+    {
+      "path": "docs/qa/signup-claim-continuity.md",
+      "sha256": "16813ef4b595c3f9a304e0533312d3353ee4779ece63263153f3d6a7c3a564c1"
+    }
+  ],
+  "privacyBoundary": "bounded summaries and selected file identities only; absolute paths, unrelated file names, raw prompts, and secrets are excluded"
+}

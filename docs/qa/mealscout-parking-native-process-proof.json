@@ -1,0 +1,821 @@
+{
+  "schemaVersion": 1,
+  "project": "MealScout",
+  "recordedAt": "2026-09-20T02:36:48.914371+00:00",
+  "baseCommit": "e7dc7b668e1ea2aa76341f428b3847e750f86856",
+  "verifiedCommit": "c5be87ae5f97b589583dd5cc960c2e0b830eeaf1",
+  "migrationCommit": "fa3dd17ab3822a63b9d7a670d52c64cc7f2af800",
+  "branch": "codex/ui-ux-front-end-overhaul-20260915",
+  "pullRequest": 380,
+  "ciException": {
+    "ownerDirection": "skip the check then",
+    "scope": "Unavailable billing-blocked GitHub Actions check for this MealScout PR/release continuation only",
+    "decision": "owner-waived; do not wait; not a passing result",
+    "record": "docs/qa/mealscout-ci-exception.md",
+    "prCommentId": 5746995133,
+    "repositoryProtectionsChanged": false,
+    "financialAndApplicationSafeguardsWaived": false
+  },
+  "defect": "Migration142 previously accepted a same-named non-unique index then removed the old unique constraint. The native baseline observed rejected=false and oldGuardRemaining=0. The migration now validates table, uniqueness, validity/readiness, keys, access method and parsed active predicate before removing the prior guard.",
+  "native": {
+    "source": "c5be87ae5f97b589583dd5cc960c2e0b830eeaf1",
+    "scope": "Native PostgreSQL, actual migration runner and guard/expiry in separate OS processes. Model-derived booking columns; synthetic auth/downstream/provider, not full production booking/payment/capacity acceptance.",
+    "startedAt": "2026-09-20T02:32:34.764Z",
+    "cases": [
+      {
+        "name": "actual migration 058 creates a valid unique durable-request index",
+        "status": "pass",
+        "elapsedMs": 14
+      },
+      {
+        "name": "old all-history constraint blocks a new booking after cancellation",
+        "status": "pass",
+        "elapsedMs": 95
+      },
+      {
+        "name": "actual migration 142 preserves history and enables later rebooking",
+        "status": "pass",
+        "elapsedMs": 129
+      },
+      {
+        "name": "migration 142 reruns without changing rows or dropping active protection",
+        "status": "pass",
+        "elapsedMs": 35
+      },
+      {
+        "name": "interrupted install retains the old guard and resumes without lost history",
+        "status": "pass",
+        "elapsedMs": 57
+      },
+      {
+        "name": "an existing wrong same-named index must fail before removing the old guard",
+        "status": "pass",
+        "elapsedMs": 42
+      },
+      {
+        "name": "incomplete status predicate cannot replace the required active-booking guard",
+        "status": "pass",
+        "elapsedMs": 76
+      },
+      {
+        "name": "wrong key columns cannot replace the required active-booking guard",
+        "status": "pass",
+        "elapsedMs": 41
+      },
+      {
+        "name": "all-history index cannot replace the required active-booking guard",
+        "status": "pass",
+        "elapsedMs": 38
+      },
+      {
+        "name": "verification workspace collision fails without a generic already-exists skip",
+        "status": "pass",
+        "elapsedMs": 43
+      },
+      {
+        "name": "successful verification leaves no temporary table behind on the connection",
+        "status": "pass",
+        "elapsedMs": 57
+      },
+      {
+        "name": "preexisting active duplicates abort migration without deleting evidence",
+        "status": "pass",
+        "elapsedMs": 37
+      },
+      {
+        "name": "separate OS processes cannot insert duplicate active reservations",
+        "status": "pass",
+        "elapsedMs": 190
+      },
+      {
+        "name": "24 concurrent HTTP retries across processes execute one durable operation",
+        "status": "pass",
+        "elapsedMs": 494
+      },
+      {
+        "name": "a fresh process replays a saved result without invoking the operation",
+        "status": "pass",
+        "elapsedMs": 1718
+      },
+      {
+        "name": "changed payload and revoked replay access cannot repeat an operation",
+        "status": "pass",
+        "elapsedMs": 275
+      },
+      {
+        "name": "actual request-store outage returns unavailable without a memory fallback",
+        "status": "pass",
+        "elapsedMs": 236
+      },
+      {
+        "name": "failed receipt write never acknowledges success or reexecutes on retry",
+        "status": "pass",
+        "elapsedMs": 346
+      },
+      {
+        "name": "worker death after side effect leaves no lease-takeover reexecution",
+        "status": "pass",
+        "elapsedMs": 1862
+      },
+      {
+        "name": "expired saved request remains blocked rather than becoming new work",
+        "status": "pass",
+        "elapsedMs": 236
+      },
+      {
+        "name": "concurrent expiry processes cancel one intent and retain booking history",
+        "status": "pass",
+        "elapsedMs": 264
+      },
+      {
+        "name": "paid, processing and capturable provider truth retains holds across processes",
+        "status": "pass",
+        "elapsedMs": 769
+      },
+      {
+        "name": "a fresh sibling prevents cancellation of the complete multi-day group",
+        "status": "pass",
+        "elapsedMs": 182
+      },
+      {
+        "name": "lost cancellation acknowledgement recovers only a positive cancelled read",
+        "status": "pass",
+        "elapsedMs": 191
+      },
+      {
+        "name": "process death after provider cancellation rolls back SQL and recovers once",
+        "status": "pass",
+        "elapsedMs": 329
+      }
+    ],
+    "workers": [
+      {
+        "pid": 136860,
+        "port": 63222
+      },
+      {
+        "pid": 136032,
+        "port": 63224
+      },
+      {
+        "pid": 140236,
+        "port": 63281
+      },
+      {
+        "pid": 137516,
+        "port": 63290
+      }
+    ],
+    "cleanup": {
+      "workerPorts": [
+        {
+          "port": 63222,
+          "closed": true,
+          "error": "ECONNREFUSED"
+        },
+        {
+          "port": 63224,
+          "closed": true,
+          "error": "ECONNREFUSED"
+        },
+        {
+          "port": 63281,
+          "closed": true,
+          "error": "ECONNREFUSED"
+        },
+        {
+          "port": 63290,
+          "closed": true,
+          "error": "ECONNREFUSED"
+        }
+      ],
+      "provider": {
+        "port": 63218,
+        "closed": true,
+        "error": "ECONNREFUSED"
+      },
+      "database": {
+        "type": "database-cleanup",
+        "stopped": true,
+        "removed": true,
+        "directory": "/tmp/mealscout-owner-journey-ouEpeT",
+        "errors": []
+      },
+      "databasePortObservations": [
+        {
+          "port": 38051,
+          "closed": false,
+          "error": "STILL_OPEN"
+        },
+        {
+          "port": 38051,
+          "closed": true,
+          "error": "ECONNREFUSED"
+        }
+      ],
+      "databasePort": {
+        "port": 38051,
+        "closed": true,
+        "error": "ECONNREFUSED"
+      }
+    },
+    "files": {
+      "migrations/058_idempotency_keys.sql": "5a5410a28001aa54a0a1d9c50664afb48502f3793ee865844e83bad610da8975",
+      "migrations/142_parking_pass_active_booking_uniqueness.sql": "ff624c99eaf6aeca4f2b994185103820c9c742ea9a7f5e756dab0c8de037310e",
+      "scripts/runSqlMigration.ts": "4add7a7ef1e998bf55ebd0e214ffdd228921e63d6daa13a196348d795263af6d",
+      "scripts/sqlMigrationStatements.ts": "50a8fc0b3de671f64729a2ed3ef60c3cf3433d7b151ed6b93422e5e2958c5a3e",
+      "server/middleware/durableIdempotency.ts": "a34b59616df92702499a68217bd569ea22543ba9c8ba9a6456a0677f32062e98",
+      "server/services/parkingHoldExpiry.ts": "e93fbb76740e2e0dd4eaee5f526bca8ecb2678140ab58c480a5523ca4c15ff1e",
+      "scripts/qa/parking-native-worker.mjs": "8c2ca498838b7024c03197bac5535bc9f850cd97f15b9fdfd0f1b32871c57391",
+      "scripts/qa/parking-native-process.mjs": "a5ad52a3d624020d53ab25dc5ad31111abf1e25220803f8305d4be0fd1e179fd"
+    },
+    "database": {
+      "version": "PostgreSQL 18.4 on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 7.5.0-3ubuntu1~18.04) 7.5.0, 64-bit",
+      "port": 38051,
+      "listen": "127.0.0.1",
+      "timezone": "UTC"
+    },
+    "activeIndex": {
+      "indisunique": true,
+      "indisvalid": true,
+      "indisready": true,
+      "predicate": "((status)::text = ANY ((ARRAY['pending'::character varying, 'confirmed'::character varying])::text[]))"
+    },
+    "wrongIndexObservation": {
+      "rejected": true,
+      "oldGuardRemaining": 1
+    },
+    "pass": 25,
+    "fail": 0,
+    "finishedAt": "2026-09-20T02:32:53.827Z"
+  },
+  "nativeReceipt": ".qa-evidence/parking-native/2026-09-20T02-32-34-764Z/receipt.json",
+  "nativeReceiptSha256": "76035270ad858133e293b88b55deee9e969c28a40612a61dd3a4e9f3deb2e025",
+  "compatibility": {
+    "parking-hold-expiry.json": {
+      "pass": 40,
+      "fail": 0,
+      "scope": "Actual expiry service, Drizzle/PGlite and migration142; synthetic Stripe, not native PostgreSQL or real provider proof",
+      "sha256": "460e3e568818e390113d5832c621c04317665411a2b75bbfc2efd45842b2b30a"
+    },
+    "parking-durability.json": {
+      "pass": 26,
+      "fail": 0,
+      "scope": "Real middleware/Express + PGlite SQL; synthetic auth, downstream action and booking-query table; no Stripe/full booking/native PostgreSQL proof",
+      "sha256": "22d8f77619479fb63b1710b49d7798de8c8489d0c812f892d0ac59cc92f09477"
+    }
+  },
+  "cleanupSupplement": {
+    "observedAt": "2026-09-20T02:34:44.029Z",
+    "purpose": "Read-only supplement; preserve original immediate port observations",
+    "results": [
+      {
+        "run": "2026-09-20T02-25-59-206Z",
+        "source": "fb36d231648ee452fd5781ed3dbf83c4968c856c",
+        "pass": 18,
+        "fail": 2,
+        "receiptSha256": "c09598fdae1841daa323356c168481db06f43cac0c8a17be05f7a316385b7034",
+        "clusterRemoved": true,
+        "observations": [
+          {
+            "host": "127.0.0.1",
+            "port": 53366,
+            "observedAt": "2026-09-20T02:34:43.998Z",
+            "closed": true,
+            "connected": false,
+            "errorCode": "ECONNREFUSED"
+          },
+          {
+            "host": "127.0.0.1",
+            "port": 53367,
+            "observedAt": "2026-09-20T02:34:44.001Z",
+            "closed": true,
+            "connected": false,
+            "errorCode": "ECONNREFUSED"
+          },
+          {
+            "host": "127.0.0.1",
+            "port": 53427,
+            "observedAt": "2026-09-20T02:34:44.002Z",
+            "closed": true,
+            "connected": false,
+            "errorCode": "ECONNREFUSED"
+          },
+          {
+            "host": "127.0.0.1",
+            "port": 53434,
+            "observedAt": "2026-09-20T02:34:44.003Z",
+            "closed": true,
+            "connected": false,
+            "errorCode": "ECONNREFUSED"
+          },
+          {
+            "host": "127.0.0.1",
+            "port": 53364,
+            "observedAt": "2026-09-20T02:34:44.003Z",
+            "closed": true,
+            "connected": false,
+            "errorCode": "ECONNREFUSED"
+          },
+          {
+            "host": "127.0.0.1",
+            "port": 40267,
+            "observedAt": "2026-09-20T02:34:44.004Z",
+            "closed": true,
+            "connected": false,
+            "errorCode": "ECONNREFUSED"
+          }
+        ]
+      },
+      {
+        "run": "2026-09-20T02-28-22-538Z",
+        "source": "fb36d231648ee452fd5781ed3dbf83c4968c856c",
+        "pass": 19,
+        "fail": 1,
+        "receiptSha256": "cef006c6f58e452653a136d9596b95f2f87e748bbe50ab77c492640cc2eb1c0f",
+        "clusterRemoved": true,
+        "observations": [
+          {
+            "host": "127.0.0.1",
+            "port": 56821,
+            "observedAt": "2026-09-20T02:34:44.008Z",
+            "closed": true,
+            "connected": false,
+            "errorCode": "ECONNREFUSED"
+          },
+          {
+            "host": "127.0.0.1",
+            "port": 56823,
+            "observedAt": "2026-09-20T02:34:44.009Z",
+            "closed": true,
+            "connected": false,
+            "errorCode": "ECONNREFUSED"
+          },
+          {
+            "host": "127.0.0.1",
+            "port": 56884,
+            "observedAt": "2026-09-20T02:34:44.010Z",
+            "closed": true,
+            "connected": false,
+            "errorCode": "ECONNREFUSED"
+          },
+          {
+            "host": "127.0.0.1",
+            "port": 56892,
+            "observedAt": "2026-09-20T02:34:44.010Z",
+            "closed": true,
+            "connected": false,
+            "errorCode": "ECONNREFUSED"
+          },
+          {
+            "host": "127.0.0.1",
+            "port": 56820,
+            "observedAt": "2026-09-20T02:34:44.011Z",
+            "closed": true,
+            "connected": false,
+            "errorCode": "ECONNREFUSED"
+          },
+          {
+            "host": "127.0.0.1",
+            "port": 42873,
+            "observedAt": "2026-09-20T02:34:44.011Z",
+            "closed": true,
+            "connected": false,
+            "errorCode": "ECONNREFUSED"
+          }
+        ]
+      },
+      {
+        "run": "2026-09-20T02-29-33-411Z",
+        "source": "fb36d231648ee452fd5781ed3dbf83c4968c856c",
+        "pass": 20,
+        "fail": 0,
+        "receiptSha256": "d8a0bd677fc9f144759d1b7b2006c2afcd573a4730facfa7e378c2b69e2238eb",
+        "clusterRemoved": true,
+        "observations": [
+          {
+            "host": "127.0.0.1",
+            "port": 64193,
+            "observedAt": "2026-09-20T02:34:44.014Z",
+            "closed": true,
+            "connected": false,
+            "errorCode": "ECONNREFUSED"
+          },
+          {
+            "host": "127.0.0.1",
+            "port": 64195,
+            "observedAt": "2026-09-20T02:34:44.015Z",
+            "closed": true,
+            "connected": false,
+            "errorCode": "ECONNREFUSED"
+          },
+          {
+            "host": "127.0.0.1",
+            "port": 64253,
+            "observedAt": "2026-09-20T02:34:44.016Z",
+            "closed": true,
+            "connected": false,
+            "errorCode": "ECONNREFUSED"
+          },
+          {
+            "host": "127.0.0.1",
+            "port": 60723,
+            "observedAt": "2026-09-20T02:34:44.016Z",
+            "closed": true,
+            "connected": false,
+            "errorCode": "ECONNREFUSED"
+          },
+          {
+            "host": "127.0.0.1",
+            "port": 64192,
+            "observedAt": "2026-09-20T02:34:44.016Z",
+            "closed": true,
+            "connected": false,
+            "errorCode": "ECONNREFUSED"
+          },
+          {
+            "host": "127.0.0.1",
+            "port": 37081,
+            "observedAt": "2026-09-20T02:34:44.017Z",
+            "closed": true,
+            "connected": false,
+            "errorCode": "ECONNREFUSED"
+          }
+        ]
+      },
+      {
+        "run": "2026-09-20T02-30-46-627Z",
+        "source": "fa3dd17ab3822a63b9d7a670d52c64cc7f2af800",
+        "pass": 24,
+        "fail": 1,
+        "receiptSha256": "f00ba6fbb8caa874b874251a18e0c593616b550ac24abaa0bb133dd33d6dc912",
+        "clusterRemoved": true,
+        "observations": [
+          {
+            "host": "127.0.0.1",
+            "port": 53243,
+            "observedAt": "2026-09-20T02:34:44.021Z",
+            "closed": true,
+            "connected": false,
+            "errorCode": "ECONNREFUSED"
+          },
+          {
+            "host": "127.0.0.1",
+            "port": 53244,
+            "observedAt": "2026-09-20T02:34:44.022Z",
+            "closed": true,
+            "connected": false,
+            "errorCode": "ECONNREFUSED"
+          },
+          {
+            "host": "127.0.0.1",
+            "port": 53301,
+            "observedAt": "2026-09-20T02:34:44.022Z",
+            "closed": true,
+            "connected": false,
+            "errorCode": "ECONNREFUSED"
+          },
+          {
+            "host": "127.0.0.1",
+            "port": 53308,
+            "observedAt": "2026-09-20T02:34:44.023Z",
+            "closed": true,
+            "connected": false,
+            "errorCode": "ECONNREFUSED"
+          },
+          {
+            "host": "127.0.0.1",
+            "port": 51680,
+            "observedAt": "2026-09-20T02:34:44.024Z",
+            "closed": true,
+            "connected": false,
+            "errorCode": "ECONNREFUSED"
+          },
+          {
+            "host": "127.0.0.1",
+            "port": 42099,
+            "observedAt": "2026-09-20T02:34:44.024Z",
+            "closed": true,
+            "connected": false,
+            "errorCode": "ECONNREFUSED"
+          }
+        ]
+      },
+      {
+        "run": "2026-09-20T02-32-34-764Z",
+        "source": "c5be87ae5f97b589583dd5cc960c2e0b830eeaf1",
+        "pass": 25,
+        "fail": 0,
+        "receiptSha256": "76035270ad858133e293b88b55deee9e969c28a40612a61dd3a4e9f3deb2e025",
+        "clusterRemoved": true,
+        "observations": [
+          {
+            "host": "127.0.0.1",
+            "port": 63222,
+            "observedAt": "2026-09-20T02:34:44.027Z",
+            "closed": true,
+            "connected": false,
+            "errorCode": "ECONNREFUSED"
+          },
+          {
+            "host": "127.0.0.1",
+            "port": 63224,
+            "observedAt": "2026-09-20T02:34:44.028Z",
+            "closed": true,
+            "connected": false,
+            "errorCode": "ECONNREFUSED"
+          },
+          {
+            "host": "127.0.0.1",
+            "port": 63281,
+            "observedAt": "2026-09-20T02:34:44.028Z",
+            "closed": true,
+            "connected": false,
+            "errorCode": "ECONNREFUSED"
+          },
+          {
+            "host": "127.0.0.1",
+            "port": 63290,
+            "observedAt": "2026-09-20T02:34:44.028Z",
+            "closed": true,
+            "connected": false,
+            "errorCode": "ECONNREFUSED"
+          },
+          {
+            "host": "127.0.0.1",
+            "port": 63218,
+            "observedAt": "2026-09-20T02:34:44.028Z",
+            "closed": true,
+            "connected": false,
+            "errorCode": "ECONNREFUSED"
+          },
+          {
+            "host": "127.0.0.1",
+            "port": 38051,
+            "observedAt": "2026-09-20T02:34:44.029Z",
+            "closed": true,
+            "connected": false,
+            "errorCode": "ECONNREFUSED"
+          }
+        ]
+      }
+    ]
+  },
+  "preservedByteUnchanged": [
+    "server",
+    "shared",
+    "client",
+    "package.json",
+    "package-lock.json",
+    "scripts/qa/run-preview-journeys.cjs"
+  ],
+  "retainedFailures": [
+    {
+      "file": "baseline.log",
+      "kind": "fixture import",
+      "detail": "Installed pg is CommonJS; corrected fixture import. No runtime started."
+    },
+    {
+      "file": "baseline-executed.log",
+      "kind": "mixed baseline",
+      "detail": "Two failures: real same-name index defect, plus native fixture timestamps lacked explicit UTC. Initial WSL forwarded port was still open immediately after database stop; later read-only supplement confirms it refused connections."
+    },
+    {
+      "file": "baseline-utc.log",
+      "kind": "product baseline",
+      "pass": 19,
+      "fail": 1,
+      "detail": "Only same-name index protection failed; original receipt preserved."
+    },
+    {
+      "file": "final-native.log",
+      "kind": "fixture pooled-session assumption",
+      "pass": 24,
+      "fail": 1,
+      "detail": "Temp-table cleanup assumed a pooled connection persisted after a query error; final fixture uses an explicit client. Migration code and assertions unchanged."
+    }
+  ],
+  "limitations": [
+    "Native model-derived booking table omits unrelated foreign-key tables; this is not full migration-chain or production-schema replay.",
+    "Separate OS processes run real durable middleware and expiry through a native node-postgres adapter; auth, downstream operation and payment provider are explicit fixtures.",
+    "Same event/truck uniqueness and repeated-request/crash safety are proved; full host-route capacity across distinct trucks, insurance eligibility and live Stripe/webhook execution remain separate acceptance.",
+    "Old workers with historical lease takeover or destructive cleanup still require the existing controlled drain/replacement rollout.",
+    "No production merge, production migration/deployment, customer records, real payments/refunds, external messages or billing/access changes."
+  ],
+  "referenceSources": [
+    "https://www.postgresql.org/docs/15/sql-createindex.html",
+    "https://www.postgresql.org/docs/16/catalog-pg-index.html"
+  ],
+  "artifacts": [
+    {
+      "path": ".qa-evidence/parking-native/2026-09-20T02-25-59-206Z/database.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": ".qa-evidence/parking-native/2026-09-20T02-25-59-206Z/receipt.json",
+      "bytes": 7392,
+      "sha256": "c09598fdae1841daa323356c168481db06f43cac0c8a17be05f7a316385b7034"
+    },
+    {
+      "path": ".qa-evidence/parking-native/2026-09-20T02-25-59-206Z/worker-132012.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": ".qa-evidence/parking-native/2026-09-20T02-25-59-206Z/worker-135840.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": ".qa-evidence/parking-native/2026-09-20T02-25-59-206Z/worker-136292.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": ".qa-evidence/parking-native/2026-09-20T02-25-59-206Z/worker-136624.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": ".qa-evidence/parking-native/2026-09-20T02-28-22-538Z/database.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": ".qa-evidence/parking-native/2026-09-20T02-28-22-538Z/receipt.json",
+      "bytes": 6886,
+      "sha256": "cef006c6f58e452653a136d9596b95f2f87e748bbe50ab77c492640cc2eb1c0f"
+    },
+    {
+      "path": ".qa-evidence/parking-native/2026-09-20T02-28-22-538Z/worker-131104.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": ".qa-evidence/parking-native/2026-09-20T02-28-22-538Z/worker-135096.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": ".qa-evidence/parking-native/2026-09-20T02-28-22-538Z/worker-135828.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": ".qa-evidence/parking-native/2026-09-20T02-28-22-538Z/worker-136208.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": ".qa-evidence/parking-native/2026-09-20T02-29-33-411Z/database.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": ".qa-evidence/parking-native/2026-09-20T02-29-33-411Z/receipt.json",
+      "bytes": 6181,
+      "sha256": "d8a0bd677fc9f144759d1b7b2006c2afcd573a4730facfa7e378c2b69e2238eb"
+    },
+    {
+      "path": ".qa-evidence/parking-native/2026-09-20T02-29-33-411Z/worker-129196.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": ".qa-evidence/parking-native/2026-09-20T02-29-33-411Z/worker-137232.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": ".qa-evidence/parking-native/2026-09-20T02-29-33-411Z/worker-137864.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": ".qa-evidence/parking-native/2026-09-20T02-29-33-411Z/worker-138416.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": ".qa-evidence/parking-native/2026-09-20T02-30-46-627Z/database.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": ".qa-evidence/parking-native/2026-09-20T02-30-46-627Z/receipt.json",
+      "bytes": 7772,
+      "sha256": "f00ba6fbb8caa874b874251a18e0c593616b550ac24abaa0bb133dd33d6dc912"
+    },
+    {
+      "path": ".qa-evidence/parking-native/2026-09-20T02-30-46-627Z/worker-134080.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": ".qa-evidence/parking-native/2026-09-20T02-30-46-627Z/worker-139344.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": ".qa-evidence/parking-native/2026-09-20T02-30-46-627Z/worker-139920.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": ".qa-evidence/parking-native/2026-09-20T02-30-46-627Z/worker-140136.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": ".qa-evidence/parking-native/2026-09-20T02-32-34-764Z/database.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": ".qa-evidence/parking-native/2026-09-20T02-32-34-764Z/receipt.json",
+      "bytes": 6828,
+      "sha256": "76035270ad858133e293b88b55deee9e969c28a40612a61dd3a4e9f3deb2e025"
+    },
+    {
+      "path": ".qa-evidence/parking-native/2026-09-20T02-32-34-764Z/worker-136032.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": ".qa-evidence/parking-native/2026-09-20T02-32-34-764Z/worker-136860.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": ".qa-evidence/parking-native/2026-09-20T02-32-34-764Z/worker-137516.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": ".qa-evidence/parking-native/2026-09-20T02-32-34-764Z/worker-140236.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": ".qa-evidence/parking-native/baseline-executed.log",
+      "bytes": 9694,
+      "sha256": "d6b530c0d59c4e60f400f2f11d41a3c8d6f60ab48c5a719298be7a66732bb003"
+    },
+    {
+      "path": ".qa-evidence/parking-native/baseline-utc.log",
+      "bytes": 8588,
+      "sha256": "87938687c8db7e55678b025e9f118d333a4b01e616a00f5b807bf9e801928bb0"
+    },
+    {
+      "path": ".qa-evidence/parking-native/baseline.log",
+      "bytes": 2230,
+      "sha256": "fdd17634e987e3e5c284fedec0d334c298f216104b3a6ba6916f25b3adf1bdf7"
+    },
+    {
+      "path": ".qa-evidence/parking-native/cleanup-supplement.json",
+      "bytes": 8344,
+      "sha256": "0722e74b3efd1db15ac55158340b12f2bbe2370a307a6284f9b6f5605f42d894"
+    },
+    {
+      "path": ".qa-evidence/parking-native/compatibility/durable.log",
+      "bytes": 12038,
+      "sha256": "6800254cc794a5fcb6f2b0987843e6d32d846fe61c65516114dc50f430bb92b5"
+    },
+    {
+      "path": ".qa-evidence/parking-native/compatibility/hold-expiry.log",
+      "bytes": 15168,
+      "sha256": "14a3f1c1c7b2a9b3db52d8c560c8c35a845a93ac1bac1736a56e6619647a41c5"
+    },
+    {
+      "path": ".qa-evidence/parking-native/compatibility/parking-durability.json",
+      "bytes": 3416,
+      "sha256": "22d8f77619479fb63b1710b49d7798de8c8489d0c812f892d0ac59cc92f09477"
+    },
+    {
+      "path": ".qa-evidence/parking-native/compatibility/parking-hold-expiry.json",
+      "bytes": 4702,
+      "sha256": "460e3e568818e390113d5832c621c04317665411a2b75bbfc2efd45842b2b30a"
+    },
+    {
+      "path": ".qa-evidence/parking-native/final-native.log",
+      "bytes": 10094,
+      "sha256": "b5adfc538b0e26dcf9747273389a04d509d792915dc5f5b328c579dec3e41345"
+    },
+    {
+      "path": ".qa-evidence/parking-native/final-session-bound.log",
+      "bytes": 8222,
+      "sha256": "77576e12879c75640efb641e6a1515cb24c977c8cd0854ff6872104062d93a32"
+    },
+    {
+      "path": ".qa-evidence/parking-native/normalize_fixture.py",
+      "bytes": 1267,
+      "sha256": "8e885b89ca52e5c1e873e8e12026b1ab92b920b30a006bb176d84f3c579942b2"
+    },
+    {
+      "path": ".qa-evidence/parking-native/repaired-native.log",
+      "bytes": 7020,
+      "sha256": "5e55a8fd1be28a0f516369d49d2391549d75db7025271f0d483ab7e2c5e119ce"
+    }
+  ]
+}

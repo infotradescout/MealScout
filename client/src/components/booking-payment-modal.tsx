@@ -19,6 +19,8 @@ import PaymentBrowserGate from "@/components/payment-browser-gate";
 import { isPaymentHostileBrowser } from "@/lib/inAppBrowser";
 import { apiUrl } from "@/lib/api";
 import { getStripePromise } from "@/lib/stripeClient";
+import { useAuth } from "@/hooks/useAuth";
+import { loadParkingBookingRequest, prepareParkingBookingRequest, clearParkingBookingRequest, assertParkingBookingReplayAge, type ParkingBookingRequest } from "@/lib/parking-booking-request";
 
 const buildTimeStripePublicKey = import.meta.env.VITE_STRIPE_PUBLIC_KEY || "";
 
@@ -28,7 +30,7 @@ function recordRouteBookingConfirmed(passId: string) {
     if (!raw) return;
     const context = JSON.parse(raw);
     sessionStorage.removeItem("mealscout_route_booking_context");
-    void fetch("/api/parking-pass/routes/events", {
+    void fetch(apiUrl("/api/parking-pass/routes/events"), {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
@@ -36,6 +38,8 @@ function recordRouteBookingConfirmed(passId: string) {
         eventName: "route_booking_confirmed",
         properties: { ...context, passId },
       }),
+    }).catch(() => {
+      // Telemetry failure must not interrupt a confirmed booking.
     });
   } catch {}
 }
@@ -75,6 +79,8 @@ interface BookingPaymentModalProps {
   onSuccess: (result: { outcome: "confirmed" | "pending" | "credited" }) => void;
 }
 
+type PaymentActivity = "idle" | "processing" | "uncertain";
+
 interface PaymentFormProps {
   clientSecret: string;
   paymentIntentId: string;
@@ -90,6 +96,7 @@ interface PaymentFormProps {
   };
   onSuccess: (outcome: "confirmed" | "pending" | "credited") => void;
   onCancel: () => void;
+  onActivityChange: (activity: PaymentActivity) => void;
 }
 
 function PaymentForm({
@@ -101,17 +108,26 @@ function PaymentForm({
   breakdown,
   onSuccess,
   onCancel,
+  onActivityChange,
 }: PaymentFormProps) {
   const stripe = useStripe();
   const elements = useElements();
   const { toast } = useToast();
   const [isProcessing, setIsProcessing] = useState(false);
+  const [needsStatusCheck, setNeedsStatusCheck] = useState(false);
+  const [paymentMessage, setPaymentMessage] = useState<string | null>(null);
+  const processingRef = useRef(false);
+  const activeRef = useRef(true);
+  useEffect(() => {
+    activeRef.current = true;
+    return () => { activeRef.current = false; };
+  }, []);
 
   const waitForBookingConfirmation = async () => {
     const startedAt = Date.now();
     const timeoutMs = 25_000;
 
-    while (Date.now() - startedAt < timeoutMs) {
+    while (activeRef.current && Date.now() - startedAt < timeoutMs) {
       try {
         const res = await fetch(
           apiUrl(
@@ -138,66 +154,101 @@ function PaymentForm({
     return "pending" as const;
   };
 
+  const completeBooking = (status: "confirmed" | "pending" | "credited") => {
+    if (!activeRef.current) return;
+    if (status === "credited") {
+      toast({
+        title: "Booking Unavailable",
+        description:
+          "Payment succeeded but the spot was no longer available. Credits were issued to your account.",
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: status === "confirmed" ? "Parking Pass Confirmed!" : "Booking confirmation pending",
+        description: status === "confirmed"
+          ? "Your parking spot has been reserved."
+          : "Your booking is not confirmed yet. Check My Schedule before paying again.",
+      });
+      // Only a server-confirmed booking is a confirmed conversion.
+      if (status === "confirmed") recordRouteBookingConfirmed(passId);
+    }
+    onSuccess(status);
+  };
+
+  const checkBookingStatus = async () => {
+    if (processingRef.current) return;
+    processingRef.current = true;
+    setIsProcessing(true);
+    onActivityChange("processing");
+    let settled = false;
+    try {
+      const status = await waitForBookingConfirmation();
+      if (!activeRef.current) return;
+      if (status === "confirmed" || status === "credited") {
+        settled = true;
+        completeBooking(status);
+      } else {
+        setPaymentMessage("Booking status is still pending. Check My Schedule before starting another payment.");
+      }
+    } finally {
+      processingRef.current = false;
+      if (activeRef.current) {
+        setIsProcessing(false);
+        onActivityChange(settled ? "idle" : "uncertain");
+      }
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!stripe || !elements || processingRef.current || needsStatusCheck) return;
 
-    if (!stripe || !elements) {
-      return;
-    }
-
+    processingRef.current = true;
     setIsProcessing(true);
-
+    setPaymentMessage(null);
+    onActivityChange("processing");
+    let unresolved = false;
     try {
-      const { error } = await stripe.confirmPayment({
+      const { error, paymentIntent } = await stripe.confirmPayment({
         elements,
         confirmParams: {
           return_url: `${window.location.origin}/parking-pass?booking=success`,
         },
         redirect: "if_required",
       });
-
+      if (!activeRef.current) return;
       if (error) {
-        toast({
-          title: "Payment Failed",
-          description: error.message || "An error occurred during payment.",
-          variant: "destructive",
-        });
-      } else {
-        const status = await waitForBookingConfirmation();
-        if (status === "credited") {
-          toast({
-            title: "Booking Unavailable",
-            description:
-              "Payment succeeded but the spot was no longer available. Credits were issued to your account.",
-            variant: "destructive",
-          });
-          onSuccess("credited");
-          return;
-        }
-
-        toast({
-          title: "Parking Pass Confirmed!",
-          description:
-            status === "pending"
-              ? "Payment received. Your booking will appear shortly."
-              : "Your parking spot has been reserved.",
-        });
-        recordRouteBookingConfirmed(passId);
-        onSuccess(status);
+        unresolved = error.type !== "card_error" && error.type !== "validation_error";
+        setNeedsStatusCheck(unresolved);
+        setPaymentMessage(error.message || "Payment could not be confirmed.");
+        return;
       }
+      if (!paymentIntent || !["succeeded", "processing", "requires_capture"].includes(paymentIntent.status)) {
+        unresolved = true;
+        setNeedsStatusCheck(true);
+        setPaymentMessage("Payment status is unknown. Check this booking before paying again.");
+        return;
+      }
+      const status = await waitForBookingConfirmation();
+      completeBooking(status);
     } catch (err: any) {
-      toast({
-        title: "Payment Error",
-        description: err.message || "An unexpected error occurred.",
-        variant: "destructive",
-      });
+      unresolved = true;
+      if (activeRef.current) {
+        setNeedsStatusCheck(true);
+        setPaymentMessage(err.message || "The connection was interrupted. Payment status is unknown.");
+      }
     } finally {
-      setIsProcessing(false);
+      processingRef.current = false;
+      if (activeRef.current) {
+        setIsProcessing(false);
+        onActivityChange(unresolved ? "uncertain" : "idle");
+      }
     }
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-4" aria-busy={isProcessing}>
       {/* Pricing Breakdown */}
       <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4 space-y-2 text-sm">
         <div className="flex items-center justify-between text-[color:var(--text-secondary)]">
@@ -244,6 +295,16 @@ function PaymentForm({
         <PaymentElement />
       </div>
 
+      {paymentMessage ? <p role="alert" className="text-sm text-destructive">{paymentMessage}</p> : null}
+      {isProcessing ? <p role="status" className="text-sm">Checking payment and booking status. Please keep this checkout open.</p> : null}
+      {needsStatusCheck ? (
+        <div className="space-y-2">
+          <p className="text-sm" role="status">Do not submit another payment until the existing booking has been checked.</p>
+          <Button type="button" variant="outline" className="w-full" disabled={isProcessing} onClick={checkBookingStatus}>
+            Check booking status
+          </Button>
+        </div>
+      ) : null}
       {/* Action Buttons */}
       <div className="flex gap-3 pt-2">
         <Button
@@ -253,12 +314,12 @@ function PaymentForm({
           onClick={onCancel}
           disabled={isProcessing}
         >
-          Cancel
+          {needsStatusCheck ? "Close checkout" : "Cancel"}
         </Button>
         <Button
           type="submit"
           className="flex-1"
-          disabled={!stripe || isProcessing}
+          disabled={!stripe || !elements || isProcessing || needsStatusCheck}
         >
           {isProcessing ? (
             <>
@@ -291,6 +352,18 @@ export function BookingPaymentModal({
   onSuccess,
 }: BookingPaymentModalProps) {
   const { toast } = useToast();
+  const { user } = useAuth();
+  const userId = user?.id || "";
+  const requestScope = { userId, passId, truckId };
+  const [savedRequest, setSavedRequest] = useState<ParkingBookingRequest | null>(null);
+  const [requestMessage, setRequestMessage] = useState("");
+  const [recoveryBlocked, setRecoveryBlocked] = useState(false);
+  const requestScopeRef = useRef("");
+  requestScopeRef.current = JSON.stringify([userId, passId, truckId, open]);
+  useEffect(() => {
+    requestScopeRef.current = JSON.stringify([userId, passId, truckId, open]);
+    return () => { requestScopeRef.current = ""; };
+  }, [userId, passId, truckId, open]);
   const [isLoading, setIsLoading] = useState(false);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null);
@@ -305,6 +378,10 @@ export function BookingPaymentModal({
     };
   } | null>(null);
   const [creditBalance, setCreditBalance] = useState<number | null>(null);
+  const [creditStatus, setCreditStatus] = useState<"loading" | "ready" | "unavailable">("loading");
+  const creditRequestRef = useRef(0);
+  const initiatePendingRef = useRef(false);
+  const paymentActivityRef = useRef<PaymentActivity>("idle");
   const [creditsToApply, setCreditsToApply] = useState("");
   const [promoCode, setPromoCode] = useState("");
   const [stripePublishableKey, setStripePublishableKey] = useState(
@@ -361,8 +438,29 @@ export function BookingPaymentModal({
     }
     return () => {
       cancelled = true;
+      creditRequestRef.current++;
     };
   }, [open, stripePublishableKey, toast, onOpenChange]);
+
+  useEffect(() => {
+    if (!open) return;
+    setSavedRequest(null);
+    setRequestMessage("");
+    setRecoveryBlocked(false);
+    if (!userId) return;
+    try {
+      const saved = loadParkingBookingRequest({ userId, passId, truckId });
+      setSavedRequest(saved);
+      if (saved) {
+        setCreditsToApply(saved.body.applyCreditsCents ? String(saved.body.applyCreditsCents / 100) : "");
+        setPromoCode(saved.body.promoCode || "");
+        assertParkingBookingReplayAge(saved);
+      }
+    } catch (error) {
+      setRecoveryBlocked(true);
+      setRequestMessage(error instanceof Error ? error.message : "Booking recovery is unavailable.");
+    }
+  }, [open, userId, passId, truckId]);
 
   const cancelCheckout = async (intentId: string) => {
     try {
@@ -380,19 +478,30 @@ export function BookingPaymentModal({
   };
 
   const loadCreditBalance = async () => {
+    const request = ++creditRequestRef.current;
+    setCreditBalance(null);
+    setCreditStatus("loading");
     try {
       const res = await fetch(apiUrl("/api/payout/balance"), {
         credentials: "include",
       });
-      if (!res.ok) return;
+      if (!res.ok) throw new Error("Credit balance unavailable");
       const data = await res.json();
-      setCreditBalance(Number(data.balance || 0));
-    } catch (error) {
-      console.error("Failed to load credit balance:", error);
+      if (request !== creditRequestRef.current) return;
+      const balance = Number(data.balance);
+      if (data.balance == null || !Number.isFinite(balance) || balance < 0) {
+        throw new Error("Credit balance unavailable");
+      }
+      setCreditBalance(balance);
+      setCreditStatus("ready");
+    } catch {
+      if (request === creditRequestRef.current) setCreditStatus("unavailable");
     }
   };
 
   const initiateBooking = async () => {
+    if (initiatePendingRef.current || isLoading || clientSecret || recoveryBlocked) return;
+    if (!userId) { setRequestMessage("Sign in before starting this booking."); return; }
     if (hostileBrowser) {
       toast({
         title: "Open in browser to continue",
@@ -401,13 +510,19 @@ export function BookingPaymentModal({
       });
       return;
     }
+    initiatePendingRef.current = true;
     setIsLoading(true);
+    setRequestMessage("");
+    const activeScope = requestScopeRef.current;
+    let requestTimer: ReturnType<typeof setTimeout> | undefined;
+    const clearSaved = () => {
+      if (!idempotencyKeyRef.current) return;
+      try {
+        clearParkingBookingRequest(requestScope, idempotencyKeyRef.current);
+        setSavedRequest(null);
+      } catch { /* Retaining a receipt is safer than silently creating a new request. */ }
+    };
     try {
-      const requestIdempotencyKey =
-        typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-          ? crypto.randomUUID()
-          : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-      idempotencyKeyRef.current = requestIdempotencyKey;
 
       const creditCents = Math.max(
         0,
@@ -423,6 +538,16 @@ export function BookingPaymentModal({
             })
             .filter((value) => value.length > 0)
         : [];
+      const request = prepareParkingBookingRequest(requestScope, {
+        truckId, slotTypes, selectedDates: normalizedSelectedDates,
+        applyCreditsCents: creditCents > 0 ? creditCents : undefined,
+        promoCode: promoCode.trim() ? promoCode.trim() : undefined,
+      });
+      const requestIdempotencyKey = request.requestId;
+      idempotencyKeyRef.current = requestIdempotencyKey;
+      setSavedRequest(request);
+      const controller = new AbortController();
+      requestTimer = setTimeout(() => controller.abort(), 15_000);
       const res = await fetch(apiUrl(`/api/parking-pass/${passId}/book`), {
         method: "POST",
         credentials: "include",
@@ -430,22 +555,24 @@ export function BookingPaymentModal({
           "Content-Type": "application/json",
           "Idempotency-Key": requestIdempotencyKey,
         },
-        body: JSON.stringify({
-          truckId,
-          slotTypes,
-          selectedDates: normalizedSelectedDates,
-          applyCreditsCents: creditCents > 0 ? creditCents : undefined,
-          promoCode: promoCode.trim() ? promoCode.trim() : undefined,
-        }),
+        signal: controller.signal,
+        body: JSON.stringify(request.body),
       });
 
+      if (requestScopeRef.current !== activeScope) return;
       if (!res.ok) {
         const data = await res.json();
+        if (requestScopeRef.current !== activeScope) return;
+        // These responses are emitted before a new hold/payment is created.
+        // Authentication loss, revoked access, conflicts, rate limits and server errors
+        // do not prove that an earlier booking was never created. Keep its identity.
+        if ([400, 404, 422].includes(res.status) && !data?.bookingId && typeof data?.message === "string") clearSaved();
         if (
           res.status === 409 &&
           (data?.code === "truck_profile_required" ||
             data?.code === "truck_verification_required")
         ) {
+          clearSaved();
           toast({
             title:
               data?.code === "truck_verification_required"
@@ -466,7 +593,17 @@ export function BookingPaymentModal({
       }
 
       const data = await res.json();
+      if (requestScopeRef.current !== activeScope) return;
+      if (data?.bookingRecovery === true) {
+        const intent = String(data.paymentIntentId || "").trim();
+        if (!intent.startsWith("pi_")) throw new Error("Recovered booking reference is invalid.");
+        const params = new URLSearchParams({ booking: "success", payment_intent: intent, truckId });
+        if (/^\d{4}-\d{2}-\d{2}$/.test(String(data.bookingStartDate || ""))) params.set("date", data.bookingStartDate);
+        window.location.assign(`/parking-pass?${params.toString()}`);
+        return;
+      }
       if (data?.paymentPending) {
+        // A manual-review request is acknowledged, not completed. Retain its identity.
         toast({
           title: "Request received",
           description:
@@ -476,6 +613,7 @@ export function BookingPaymentModal({
         return;
       }
       if (data?.bypassed) {
+        clearSaved();
         toast({
           title: "Parking Pass Confirmed!",
           description: "Your parking spot has been reserved.",
@@ -501,6 +639,7 @@ export function BookingPaymentModal({
         await cancelCheckout(nextPaymentIntentId);
         throw new Error("Stripe is not configured for this environment.");
       }
+      clearSaved();
       setClientSecret(nextClientSecret);
       setPaymentIntentId(nextPaymentIntentId);
       setHostPaymentsReady(data.hostPaymentsReady !== false);
@@ -509,15 +648,14 @@ export function BookingPaymentModal({
         breakdown: data.breakdown,
       });
     } catch (err: any) {
-      toast({
-        title: "Booking Failed",
-        description:
-          err.message || "Could not initiate booking. Please try again.",
-        variant: "destructive",
-      });
-      onOpenChange(false);
+      if (requestScopeRef.current !== activeScope) return;
+      setRequestMessage(err?.name === "AbortError"
+        ? "The request timed out. Its outcome is unknown; retry the same request or check My Schedule."
+        : err.message || "The booking response was interrupted. Retry the same request before starting another booking.");
     } finally {
-      setIsLoading(false);
+      if (requestTimer !== undefined) clearTimeout(requestTimer);
+      initiatePendingRef.current = false;
+      if (requestScopeRef.current === activeScope) setIsLoading(false);
     }
   };
 
@@ -528,6 +666,7 @@ export function BookingPaymentModal({
     setCreditsToApply("");
     setPromoCode("");
     idempotencyKeyRef.current = null;
+    paymentActivityRef.current = "idle";
   };
 
   const handleClose = () => {
@@ -536,8 +675,16 @@ export function BookingPaymentModal({
   };
 
   const handleCancel = () => {
+    // Radix close, Escape and outside-click all use this same guard. A
+    // connection error is not permission to cancel a potentially paid intent.
+    if (initiatePendingRef.current || paymentActivityRef.current === "processing") return;
+    if (paymentActivityRef.current === "uncertain") {
+      toast({ title: "Check My Schedule", description: "Payment status is unresolved. Check the existing booking before paying again." });
+      handleClose();
+      return;
+    }
     const intentId = paymentIntentId;
-    cancelOnInitiateRef.current = isLoading;
+    cancelOnInitiateRef.current = initiatePendingRef.current;
     resetState();
     onOpenChange(false);
 
@@ -563,7 +710,7 @@ export function BookingPaymentModal({
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle className="font-display">Parking Pass Checkout</DialogTitle>
-          <DialogDescription>
+          <DialogDescription asChild>
             <div className="space-y-3 pt-2">
               <div className="flex items-center gap-2 text-[11px]">
                 <span
@@ -644,6 +791,18 @@ export function BookingPaymentModal({
               />
             ) : null}
           <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4 space-y-3">
+            {savedRequest ? (
+              <section aria-label="Saved booking request" className="rounded-xl border border-[var(--border-subtle)] p-3 space-y-2">
+                <p className="font-semibold">Unfinished booking request</p>
+                <p className="text-sm">Retry uses the original truck, slots, dates, credits and promo code. A missing response does not mean the booking failed.</p>
+                <p className="text-xs">Saved slots: {savedRequest.body.slotTypes.join(", ")}</p>
+                <p className="text-xs">Saved dates: {savedRequest.body.selectedDates.join(", ") || "Original listing date"}</p>
+                <p className="break-all text-xs">Request reference: {savedRequest.requestId}</p>
+              </section>
+            ) : null}
+            {requestMessage ? <p role="alert" className="text-sm text-destructive">{requestMessage}</p> : null}
+            {(savedRequest || recoveryBlocked) && userId ? <Button type="button" variant="outline" disabled={isLoading}
+              onClick={() => window.location.assign(`/parking-pass?setup=schedule&truckId=${encodeURIComponent(truckId)}`)}>Check My Schedule</Button> : null}
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="text-sm font-semibold text-[color:var(--text-primary)]">Credits</p>
@@ -654,19 +813,26 @@ export function BookingPaymentModal({
               <div className="text-right">
                 <p className="text-[11px] text-[color:var(--text-muted)]">Available</p>
                 <p className="text-base font-semibold text-[color:var(--text-primary)]">
-                  ${(creditBalance || 0).toFixed(2)}
+                  {creditStatus === "loading" ? "Checking credits…" : creditStatus === "unavailable" ? "Unavailable" : `$${(creditBalance ?? 0).toFixed(2)}`}
                 </p>
               </div>
             </div>
 
+            {creditStatus === "unavailable" ? (
+              <div role="status" className="text-xs">
+                Credit balance could not be loaded.
+                <Button type="button" variant="outline" className="ml-2" onClick={() => void loadCreditBalance()}>Retry credits</Button>
+              </div>
+            ) : null}
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-3">
-                <label className="text-xs font-semibold text-[color:var(--text-muted)]">
+                <label htmlFor="parking-pass-credits" className="text-xs font-semibold text-[color:var(--text-muted)]">
                   Apply credits
                 </label>
                 <button
                   type="button"
-                  className="text-xs text-[color:var(--text-muted)] underline"
+                  className="min-h-11 px-2 text-xs text-[color:var(--text-muted)] underline disabled:opacity-50"
+                  disabled={creditStatus !== "ready" || isLoading || Boolean(savedRequest) || recoveryBlocked}
                   onClick={() =>
                     setCreditsToApply(String((creditBalance || 0).toFixed(2)))
                   }
@@ -675,6 +841,9 @@ export function BookingPaymentModal({
                 </button>
               </div>
               <input
+                id="parking-pass-credits"
+                disabled={isLoading || Boolean(savedRequest) || recoveryBlocked}
+                inputMode="decimal"
                 type="number"
                 min="0"
                 step="0.01"
@@ -684,15 +853,17 @@ export function BookingPaymentModal({
                 placeholder="0.00"
               />
               <p className="text-[11px] text-[color:var(--text-muted)]">
-                Your spot is held briefly while you check out. Closing this window releases the hold.
+                Continuing checks availability and may create a temporary hold. Before payment, cancelling requests release of that hold.
               </p>
             </div>
 
             <div className="space-y-2">
-              <label className="text-xs font-semibold text-[color:var(--text-muted)]">
+              <label htmlFor="parking-pass-promo" className="text-xs font-semibold text-[color:var(--text-muted)]">
                 Promo code
               </label>
               <input
+                id="parking-pass-promo"
+                disabled={isLoading || Boolean(savedRequest) || recoveryBlocked}
                 type="text"
                 value={promoCode}
                 onChange={(e) => setPromoCode(e.target.value)}
@@ -702,7 +873,7 @@ export function BookingPaymentModal({
               />
             </div>
 
-            <div className="flex gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row">
               <Button
                 type="button"
                 variant="outline"
@@ -710,15 +881,15 @@ export function BookingPaymentModal({
                 onClick={handleCancel}
                 disabled={isLoading}
               >
-                Cancel
+                {savedRequest ? "Close (request saved)" : "Cancel"}
               </Button>
               <Button
                 type="button"
                 className="flex-1"
                 onClick={initiateBooking}
-                disabled={isLoading || isStripeConfigLoading || hostileBrowser}
+                disabled={isLoading || isStripeConfigLoading || hostileBrowser || !userId || recoveryBlocked}
               >
-                Continue
+                {isLoading ? "Checking booking request…" : savedRequest ? "Retry same booking request" : "Continue"}
               </Button>
             </div>
           </div>
@@ -733,8 +904,7 @@ export function BookingPaymentModal({
 
         {clientSecret && hostPaymentsReady === false ? (
           <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs text-blue-900">
-            <strong>Note:</strong> Your booking is guaranteed. If payout routing is still finalizing,
-            MealScout will securely process this payment and complete settlement automatically.
+            <strong>Note:</strong> Host payout setup is still being finalized. Your spot is not reserved until the booking is confirmed.
           </div>
         ) : null}
 
@@ -774,6 +944,7 @@ export function BookingPaymentModal({
               breakdown={bookingData.breakdown}
               onSuccess={handleSuccess}
               onCancel={handleCancel}
+              onActivityChange={(activity) => { paymentActivityRef.current = activity; }}
             />
           </Elements>
         )}

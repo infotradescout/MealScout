@@ -31,12 +31,13 @@ function createModelTable(table: PgTable) {
   return `CREATE TABLE ${quote(config.name)} (${columns.join(", ")})`;
 }
 
+for (const userType of ["restaurant_owner", "food_truck"] as const) {
 for (const claimLayout of ["migration-009-uuid", "current-model-varchar"] as const) {
-  test(`menu creation: ${claimLayout}`, async (suite) => {
+  test(`menu creation: ${userType}, ${claimLayout}`, async (suite) => {
     const pg = new PGlite();
     const database = drizzle(pg, { schema });
-    const actor = { id: randomUUID(), userType: "restaurant_owner" };
-    const outsider = { id: randomUUID(), userType: "restaurant_owner" };
+    const actor = { id: randomUUID(), userType };
+    const outsider = { id: randomUUID(), userType };
     const restaurantId = randomUUID();
     const input = { restaurantId, name: "Owner's Café — Lunch", serviceType: "lunch" };
     const create = (key: string, body: unknown = input, who = actor) => createMenuWithLisaRecord(database, who, body, key);
@@ -185,4 +186,5 @@ for (const claimLayout of ["migration-009-uuid", "current-model-varchar"] as con
       await pg.close();
     }
   });
+}
 }

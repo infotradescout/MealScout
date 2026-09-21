@@ -111,7 +111,7 @@ checks.push({
   detail: "Expect iOS and Android native shells to declare location permissions used by Scout, Map, and Parking Pass",
 });
 
-const parkingPassPage = readText("client/src/pages/parking-pass.tsx") ?? "";
+const parkingPassPage = readText("client/src/pages/parking-pass-content.tsx") ?? "";
 checks.push({
   name: "Parking Pass location permission path",
   ok:

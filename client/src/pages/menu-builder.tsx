@@ -60,6 +60,7 @@ import {
   SlidersHorizontal,
 } from "lucide-react";
 import { Link, useLocation, useSearch } from "wouter";
+import { z } from "zod";
 import type { Restaurant } from "@shared/schema";
 import { isBarBusinessType, isTruckBusinessType } from "@shared/businessTypes";
 import { buildPublicProfilePath } from "@/lib/public-profile-path";
@@ -127,28 +128,28 @@ interface FullMenu extends Menu {
   uncategorizedItems?: MenuItem[];
 }
 
-interface OrderingReadiness {
-  orderingEnabled: boolean;
-  blockingReasons: string[];
-  paymentMethods?: {
-    card: boolean;
-    cash: boolean;
-  };
-  checks: Array<{
-    id: string;
-    label: string;
-    ok: boolean;
-    blocking: boolean;
-    action: string;
-  }>;
-  payout?: {
-    connected: boolean;
-    chargesEnabled: boolean;
-    payoutsEnabled: boolean;
-    status: string;
-    message: string;
-  };
-}
+// Validate the fields this view displays. Readiness authority stays on the server.
+const orderingReadinessSchema = z.object({
+  orderingEnabled: z.boolean(),
+  publicMenuBusinessVisible: z.boolean().optional(),
+  blockingReasons: z.array(z.string()),
+  paymentMethods: z.object({ card: z.boolean(), cash: z.boolean() }).optional(),
+  checks: z.array(z.object({
+    id: z.string(),
+    label: z.string(),
+    ok: z.boolean(),
+    blocking: z.boolean(),
+    action: z.string(),
+  })),
+  payout: z.object({
+    connected: z.boolean(),
+    chargesEnabled: z.boolean(),
+    payoutsEnabled: z.boolean(),
+    status: z.string(),
+    message: z.string(),
+  }).optional(),
+});
+type OrderingReadiness = z.infer<typeof orderingReadinessSchema>;
 
 // ──────────────────────────────── helpers ─────────────────────────────────────
 function useRestaurantId(): string | null {
@@ -782,6 +783,10 @@ export default function MenuBuilderPage() {
               queryClient.invalidateQueries({
                 queryKey: ["/api/owner/menus", restaurantId],
               });
+              queryClient.invalidateQueries({
+                queryKey: ["/api/owner/restaurants", restaurantId, "ordering-readiness"],
+                exact: true,
+              });
             }}
           />
         ) : null}
@@ -1111,20 +1116,45 @@ function MenuEditor({
   const [savingSettings, setSavingSettings] = useState(false);
   const readinessQuery = useQuery<OrderingReadiness>({
     queryKey: ["/api/owner/restaurants", restaurantId, "ordering-readiness"],
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const res = await fetch(
         `/api/owner/restaurants/${encodeURIComponent(restaurantId)}/ordering-readiness`,
-        { credentials: "include" },
+        { credentials: "include", signal },
       );
-      const data = await res.json().catch(() => ({}));
+      const data = await res.json();
       if (!res.ok) {
         throw new Error(data?.message || "Failed to load ordering readiness");
       }
-      return data;
+      return orderingReadinessSchema.parse(data);
     },
     enabled: !!restaurantId,
   });
   const readiness = readinessQuery.data;
+  const checkingPublication = readinessQuery.isLoading || readinessQuery.isFetching;
+  const publicBusinessVisible = !readinessQuery.isError && !checkingPublication
+    ? readiness?.publicMenuBusinessVisible
+    : undefined;
+  // Public status reflects saved menu state and the server's public-business
+  // policy. Changing the settings form does not publish anything before save.
+  const publicMenuVisible = menu.isActive && publicBusinessVisible === true;
+  const publicationLabel = !menu.isActive
+    ? "Menu disabled"
+    : checkingPublication
+      ? "Checking visibility"
+      : publicBusinessVisible === undefined
+        ? "Visibility unconfirmed"
+        : publicMenuVisible
+          ? "Public menu"
+          : "Not public yet";
+  const publicationMessage = !menu.isActive
+    ? "This menu is saved but disabled. Customers cannot view it."
+    : checkingPublication
+      ? "Checking whether your business profile and this menu are public."
+      : publicBusinessVisible === undefined
+        ? "Your menu is saved. Public visibility could not be confirmed."
+        : publicMenuVisible
+          ? "Customers can view this menu. Online ordering has separate setup requirements."
+          : "Your menu is saved. Customers cannot view it until your business profile is public.";
   const startStripeOnboarding = useMutation({
     mutationFn: async () => {
       const res = await fetch(
@@ -1258,7 +1288,7 @@ function MenuEditor({
         );
       }
       onRefresh();
-      toast({ title: nextActive ? "Category visible" : "Category hidden" });
+      toast({ title: nextActive ? "Category enabled" : "Category hidden" });
     } catch (err: any) {
       toast({
         title: "Category visibility could not be updated",
@@ -1273,9 +1303,6 @@ function MenuEditor({
     try {
       await apiRequest("PATCH", `/api/owner/menus/${menu.id}`, menuSettings);
       onRefresh();
-      queryClient.invalidateQueries({
-        queryKey: ["/api/owner/restaurants", restaurantId, "ordering-readiness"],
-      });
       toast({ title: "Settings saved" });
     } catch (err: any) {
       toast({
@@ -1296,8 +1323,8 @@ function MenuEditor({
             <div>
               <div className="flex flex-wrap items-center gap-2">
                 <CardTitle className="text-xl">{menu.name}</CardTitle>
-                <Badge variant={menuSettings.isActive ? "default" : "secondary"}>
-                  {menuSettings.isActive ? "Visible" : "Hidden"}
+                <Badge variant={publicMenuVisible ? "default" : "secondary"} data-testid="menu-publication-badge">
+                  {publicationLabel}
                 </Badge>
               </div>
               <CardDescription className="mt-1 capitalize">
@@ -1305,6 +1332,20 @@ function MenuEditor({
                   ? "All day"
                   : menu.serviceType.replace(/_/g, " ")}
               </CardDescription>
+              <p className="mt-2 max-w-xl text-sm text-muted-foreground" role="status" data-testid="menu-publication-message">
+                {publicationMessage}
+              </p>
+              {menu.isActive && !publicMenuVisible && !readinessQuery.isError ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="mt-3 min-h-11"
+                  disabled={readinessQuery.isFetching}
+                  onClick={() => void readinessQuery.refetch()}
+                >
+                  {readinessQuery.isFetching ? "Checking public visibility…" : "Check public visibility"}
+                </Button>
+              ) : null}
             </div>
             <div className="flex flex-wrap gap-2">
               <Button type="button" variant="outline" size="sm" onClick={onImport}>
@@ -1506,7 +1547,18 @@ function MenuEditor({
         </div>
       ) : readinessQuery.isError ? (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          Online ordering status is unavailable. Menu editing still works.
+          <p role="status">
+            Online ordering status is unavailable. Menu editing still works.
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            className="mt-3 min-h-11"
+            disabled={readinessQuery.isFetching}
+            onClick={() => void readinessQuery.refetch()}
+          >
+            {readinessQuery.isFetching ? "Checking ordering status…" : "Check ordering status again"}
+          </Button>
         </div>
       ) : readiness ? (
         <details
@@ -1525,7 +1577,7 @@ function MenuEditor({
                 <span className="block text-xs font-normal text-muted-foreground">
                   {readiness.orderingEnabled
                     ? "Customers can place pickup orders."
-                    : "Setup is incomplete. Your visible menu can still be viewed."}
+                    : "Online ordering needs setup."}
                 </span>
               </span>
             </span>
@@ -1617,8 +1669,8 @@ function MenuEditor({
             Menu and ordering settings
           </span>
           <span className="flex items-center gap-2">
-            <Badge variant={menuSettings.isActive ? "default" : "secondary"}>
-              {menuSettings.isActive ? "Visible" : "Hidden"}
+            <Badge variant={publicMenuVisible ? "default" : "secondary"}>
+              {publicationLabel}
             </Badge>
             <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
           </span>
@@ -1626,12 +1678,13 @@ function MenuEditor({
         <div className="space-y-4 border-t p-4 sm:p-5">
           <div className="flex items-center justify-between gap-4">
             <div>
-              <Label>Visible to customers</Label>
+              <Label htmlFor={`menu-enabled-${menu.id}`}>Enable this menu</Label>
               <p className="text-xs text-muted-foreground">
-                Customers can see this menu and its available items on MealScout.
+                Save this setting to include the menu and its available items when your business profile is public.
               </p>
             </div>
             <Switch
+              id={`menu-enabled-${menu.id}`}
               checked={menuSettings.isActive}
               onCheckedChange={(value) =>
                 setMenuSettings((settings) => ({

@@ -1,0 +1,1619 @@
+{
+  "schemaVersion": 1,
+  "project": "MealScout",
+  "recordedAt": "2026-09-19T19:04:40.818Z",
+  "baseCommit": "070cf0f74807bf95a7c3018a811c681477cd47a9",
+  "verifiedSourceCommit": "d2a5938fa93934a9c0e523427dca5282e88f0b74",
+  "branch": "codex/ui-ux-front-end-overhaul-20260915",
+  "pullRequest": 380,
+  "sourceFiles": [
+    {
+      "path": "client/src/components/owner-orders-workspace.tsx",
+      "gitBlob": "ba2eb61b826b5b7589af27713c01889123a0abe9",
+      "workingTreeSha256": "378f8524f7a0a6dd15cde9d60122ec5b6c81bc4859263a86f034dda5faa5d6a9"
+    },
+    {
+      "path": "scripts/mealscout-orders-workspace.contract.test.ts",
+      "gitBlob": "d1a1e820782fa98dfec2f258b0f01aa53aa92e84",
+      "workingTreeSha256": "0582cf4536b0648098b1eb4ba099d00b11a44f29fdda897b04451d573d467044"
+    },
+    {
+      "path": "scripts/mealscout-owner-orders-state.test.cjs",
+      "gitBlob": "e5335e3b6e19570d8358061742c0c955724e8c26",
+      "workingTreeSha256": "a4979b428220e01fe62040abe0bf21cb30e9d0399a37c46014e1553168019f05"
+    },
+    {
+      "path": "scripts/qa/full-frontend-journeys.cjs",
+      "gitBlob": "c8d6481074206d24de4ced133f7a12aafb45aca7",
+      "workingTreeSha256": "66d61f8227d2c8b6d284c15fa41325c04117fb3439c57974190188fa46f4c7ec"
+    },
+    {
+      "path": "scripts/qa/owner-orders-recovery-journeys.cjs",
+      "gitBlob": "0f9da4df31933fd4e787db17e99430f37947df6c",
+      "workingTreeSha256": "66fe316eeb62cae86c7b26670f71636cde36335b57c0727f90176b82ffd5e863"
+    }
+  ],
+  "runtime": {
+    "node": "v24.14.1",
+    "react": "18.3.1",
+    "playwright": "1.57.0",
+    "platform": "win32"
+  },
+  "evidenceScope": "Full compiled frontend, real installed UI/router/query libraries; synthetic API/auth/Stripe, not production E2E",
+  "browser": {
+    "passingCases": 88,
+    "failedCases": 0,
+    "existingCases": 48,
+    "addedOrdersRecoveryCases": 40,
+    "viewports": [
+      {
+        "width": 1440,
+        "height": 900
+      },
+      {
+        "width": 390,
+        "height": 844
+      }
+    ],
+    "scenarioElapsedMs": 61405,
+    "results": [
+      {
+        "name": "menu → cart → checkout → status → kitchen → completion",
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "outcome": "pass",
+        "elapsedMs": 3049,
+        "syntheticUsers": 8,
+        "requests": 19,
+        "unspecifiedReads": []
+      },
+      {
+        "name": "processing payment retains recovery and cannot start kitchen preparation",
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "outcome": "pass",
+        "elapsedMs": 2381,
+        "syntheticUsers": 8,
+        "requests": 10,
+        "unspecifiedReads": []
+      },
+      {
+        "name": "second business and second customer cannot see first customer order",
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "outcome": "pass",
+        "elapsedMs": 2674,
+        "syntheticUsers": 8,
+        "requests": 12,
+        "unspecifiedReads": []
+      },
+      {
+        "name": "transient status-read failure shows stale data and retry recovers",
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "outcome": "pass",
+        "elapsedMs": 2285,
+        "syntheticUsers": 8,
+        "requests": 7,
+        "unspecifiedReads": []
+      },
+      {
+        "name": "Parking Pass failed return keeps its reference and recovers with a read-only retry",
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "outcome": "pass",
+        "elapsedMs": 491,
+        "syntheticUsers": 8,
+        "requests": 6,
+        "unspecifiedReads": []
+      },
+      {
+        "name": "Parking Pass pending return survives reload without claiming a reservation",
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "outcome": "pass",
+        "elapsedMs": 581,
+        "syntheticUsers": 8,
+        "requests": 10,
+        "unspecifiedReads": []
+      },
+      {
+        "name": "Parking Pass credited return remains distinct from a confirmed spot",
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "outcome": "pass",
+        "elapsedMs": 698,
+        "syntheticUsers": 8,
+        "requests": 5,
+        "unspecifiedReads": []
+      },
+      {
+        "name": "Parking Pass missing reference does not turn a redirect flag into payment proof",
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "outcome": "pass",
+        "elapsedMs": 348,
+        "syntheticUsers": 8,
+        "requests": 4,
+        "unspecifiedReads": []
+      },
+      {
+        "name": "Parking Pass wrong account cannot query an unavailable truck intent",
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "outcome": "pass",
+        "elapsedMs": 353,
+        "syntheticUsers": 8,
+        "requests": 4,
+        "unspecifiedReads": []
+      },
+      {
+        "name": "Parking Pass multiple trucks require explicit selection before status lookup",
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "outcome": "pass",
+        "elapsedMs": 360,
+        "syntheticUsers": 8,
+        "requests": 5,
+        "unspecifiedReads": []
+      },
+      {
+        "name": "Parking Pass gas controls include host prices when provider results are empty",
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "outcome": "pass",
+        "elapsedMs": 521,
+        "syntheticUsers": 8,
+        "requests": 15,
+        "unspecifiedReads": [
+          "/api/location/context",
+          "/api/parking-pass/intelligence-status",
+          "/api/restaurants/qa-7225fd6b-truck/social-connections/status",
+          "/api/bookings/truck/qa-7225fd6b-truck/schedule",
+          "/api/trucks/qa-7225fd6b-truck/manual-schedule",
+          "/api/trucks/qa-7225fd6b-truck/parking-reports",
+          "/api/map/runtime"
+        ]
+      },
+      {
+        "name": "orders: confirmed empty read is distinct from a failure",
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "outcome": "pass",
+        "elapsedMs": 366,
+        "syntheticUsers": 8,
+        "requests": 5,
+        "unspecifiedReads": []
+      },
+      {
+        "name": "orders: missing list cannot become a successful empty queue",
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "outcome": "pass",
+        "elapsedMs": 494,
+        "syntheticUsers": 8,
+        "requests": 6,
+        "unspecifiedReads": []
+      },
+      {
+        "name": "orders: wrong business cannot become a successful empty queue",
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "outcome": "pass",
+        "elapsedMs": 506,
+        "syntheticUsers": 8,
+        "requests": 6,
+        "unspecifiedReads": []
+      },
+      {
+        "name": "orders: duplicate identity cannot become a successful empty queue",
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "outcome": "pass",
+        "elapsedMs": 463,
+        "syntheticUsers": 8,
+        "requests": 6,
+        "unspecifiedReads": []
+      },
+      {
+        "name": "orders: missing items cannot become a successful empty queue",
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "outcome": "pass",
+        "elapsedMs": 478,
+        "syntheticUsers": 8,
+        "requests": 6,
+        "unspecifiedReads": []
+      },
+      {
+        "name": "orders: bad pagination cannot become a successful empty queue",
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "outcome": "pass",
+        "elapsedMs": 490,
+        "syntheticUsers": 8,
+        "requests": 6,
+        "unspecifiedReads": []
+      },
+      {
+        "name": "orders: HTTP 401 remains access failure until a valid refresh",
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "outcome": "pass",
+        "elapsedMs": 439,
+        "syntheticUsers": 8,
+        "requests": 6,
+        "unspecifiedReads": []
+      },
+      {
+        "name": "orders: HTTP 403 remains access failure until a valid refresh",
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "outcome": "pass",
+        "elapsedMs": 477,
+        "syntheticUsers": 8,
+        "requests": 6,
+        "unspecifiedReads": []
+      },
+      {
+        "name": "orders: raw HTML after a populated read hides stale actionable orders and recovers",
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "outcome": "pass",
+        "elapsedMs": 1006,
+        "syntheticUsers": 8,
+        "requests": 6,
+        "unspecifiedReads": []
+      },
+      {
+        "name": "orders: delayed retry cannot display invented zero counts or accept duplicate retry",
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "outcome": "pass",
+        "elapsedMs": 560,
+        "syntheticUsers": 8,
+        "requests": 6,
+        "unspecifiedReads": []
+      },
+      {
+        "name": "kitchen: confirmed empty read is distinct from a failure",
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "outcome": "pass",
+        "elapsedMs": 300,
+        "syntheticUsers": 8,
+        "requests": 5,
+        "unspecifiedReads": []
+      },
+      {
+        "name": "kitchen: missing list cannot become a successful empty queue",
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "outcome": "pass",
+        "elapsedMs": 453,
+        "syntheticUsers": 8,
+        "requests": 6,
+        "unspecifiedReads": []
+      },
+      {
+        "name": "kitchen: wrong business cannot become a successful empty queue",
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "outcome": "pass",
+        "elapsedMs": 446,
+        "syntheticUsers": 8,
+        "requests": 6,
+        "unspecifiedReads": []
+      },
+      {
+        "name": "kitchen: duplicate identity cannot become a successful empty queue",
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "outcome": "pass",
+        "elapsedMs": 450,
+        "syntheticUsers": 8,
+        "requests": 6,
+        "unspecifiedReads": []
+      },
+      {
+        "name": "kitchen: missing items cannot become a successful empty queue",
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "outcome": "pass",
+        "elapsedMs": 444,
+        "syntheticUsers": 8,
+        "requests": 6,
+        "unspecifiedReads": []
+      },
+      {
+        "name": "kitchen: bad pagination cannot become a successful empty queue",
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "outcome": "pass",
+        "elapsedMs": 431,
+        "syntheticUsers": 8,
+        "requests": 6,
+        "unspecifiedReads": []
+      },
+      {
+        "name": "kitchen: HTTP 401 remains access failure until a valid refresh",
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "outcome": "pass",
+        "elapsedMs": 458,
+        "syntheticUsers": 8,
+        "requests": 6,
+        "unspecifiedReads": []
+      },
+      {
+        "name": "kitchen: HTTP 403 remains access failure until a valid refresh",
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "outcome": "pass",
+        "elapsedMs": 444,
+        "syntheticUsers": 8,
+        "requests": 6,
+        "unspecifiedReads": []
+      },
+      {
+        "name": "kitchen: raw HTML after a populated read hides stale actionable orders and recovers",
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "outcome": "pass",
+        "elapsedMs": 986,
+        "syntheticUsers": 8,
+        "requests": 6,
+        "unspecifiedReads": []
+      },
+      {
+        "name": "kitchen: delayed retry cannot display invented zero counts or accept duplicate retry",
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "outcome": "pass",
+        "elapsedMs": 748,
+        "syntheticUsers": 8,
+        "requests": 6,
+        "unspecifiedReads": []
+      },
+      {
+        "name": "Parking Pass signed-out return survives failed login and resumes the same booking",
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "outcome": "pass",
+        "elapsedMs": 991,
+        "syntheticUsers": 8,
+        "requests": 14,
+        "unspecifiedReads": []
+      },
+      {
+        "name": "Parking Pass signed-out return cannot discard its reference through My Schedule",
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "outcome": "pass",
+        "elapsedMs": 293,
+        "syntheticUsers": 8,
+        "requests": 1,
+        "unspecifiedReads": []
+      },
+      {
+        "name": "Parking Pass confirmed return opens the selected truck schedule and survives reload",
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "outcome": "pass",
+        "elapsedMs": 662,
+        "syntheticUsers": 8,
+        "requests": 30,
+        "unspecifiedReads": [
+          "/api/location/context",
+          "/api/parking-pass/intelligence-status"
+        ]
+      },
+      {
+        "name": "Parking Pass truck access retry retains the booking and does not invent confirmation",
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "outcome": "pass",
+        "elapsedMs": 442,
+        "syntheticUsers": 8,
+        "requests": 6,
+        "unspecifiedReads": []
+      },
+      {
+        "name": "Schedule failed initial load is not reported as an empty day",
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "outcome": "pass",
+        "elapsedMs": 611,
+        "syntheticUsers": 8,
+        "requests": 11,
+        "unspecifiedReads": [
+          "/api/location/context",
+          "/api/parking-pass/intelligence-status",
+          "/api/restaurants/qa-bc624d4a-truck/social-connections/status"
+        ]
+      },
+      {
+        "name": "Schedule retry restores confirmed stops without changing the selected date",
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "outcome": "pass",
+        "elapsedMs": 457,
+        "syntheticUsers": 8,
+        "requests": 12,
+        "unspecifiedReads": [
+          "/api/location/context",
+          "/api/parking-pass/intelligence-status",
+          "/api/restaurants/qa-4a0b5f5c-truck/social-connections/status"
+        ]
+      },
+      {
+        "name": "Schedule stale refresh retains last-known stops and disables cancellation until recovered",
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "outcome": "pass",
+        "elapsedMs": 549,
+        "syntheticUsers": 8,
+        "requests": 13,
+        "unspecifiedReads": [
+          "/api/location/context",
+          "/api/parking-pass/intelligence-status",
+          "/api/restaurants/qa-4839fe46-truck/social-connections/status"
+        ]
+      },
+      {
+        "name": "Schedule permission failure clears previously displayed booking details",
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "outcome": "pass",
+        "elapsedMs": 677,
+        "syntheticUsers": 8,
+        "requests": 12,
+        "unspecifiedReads": [
+          "/api/location/context",
+          "/api/parking-pass/intelligence-status",
+          "/api/restaurants/qa-8f93521f-truck/social-connections/status"
+        ]
+      },
+      {
+        "name": "Schedule malformed response differs from a verified empty schedule",
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "outcome": "pass",
+        "elapsedMs": 439,
+        "syntheticUsers": 8,
+        "requests": 12,
+        "unspecifiedReads": [
+          "/api/location/context",
+          "/api/parking-pass/intelligence-status",
+          "/api/restaurants/qa-32a5a440-truck/social-connections/status"
+        ]
+      },
+      {
+        "name": "Schedule slow refresh keeps context visible and blocks stale booking actions",
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "outcome": "pass",
+        "elapsedMs": 737,
+        "syntheticUsers": 8,
+        "requests": 11,
+        "unspecifiedReads": [
+          "/api/location/context",
+          "/api/parking-pass/intelligence-status",
+          "/api/restaurants/qa-abb2613a-truck/social-connections/status"
+        ]
+      },
+      {
+        "name": "Schedule invalid booked date recovers without crashing the calendar",
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "outcome": "pass",
+        "elapsedMs": 795,
+        "syntheticUsers": 8,
+        "requests": 12,
+        "unspecifiedReads": [
+          "/api/location/context",
+          "/api/parking-pass/intelligence-status",
+          "/api/restaurants/qa-a1f338fe-truck/social-connections/status"
+        ]
+      },
+      {
+        "name": "Schedule Today and next scheduled day preserve navigation through reload",
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "outcome": "pass",
+        "elapsedMs": 1147,
+        "syntheticUsers": 8,
+        "requests": 22,
+        "unspecifiedReads": [
+          "/api/location/context",
+          "/api/parking-pass/intelligence-status",
+          "/api/restaurants/qa-f95390f8-truck/social-connections/status"
+        ]
+      },
+      {
+        "name": "guest can browse an active menu without account or payment mutations",
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "outcome": "pass",
+        "elapsedMs": 319,
+        "syntheticUsers": 8,
+        "requests": 2,
+        "unspecifiedReads": []
+      },
+      {
+        "name": "menu → cart → checkout → status → kitchen → completion",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "outcome": "pass",
+        "elapsedMs": 2752,
+        "syntheticUsers": 8,
+        "requests": 19,
+        "unspecifiedReads": []
+      },
+      {
+        "name": "processing payment retains recovery and cannot start kitchen preparation",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "outcome": "pass",
+        "elapsedMs": 2315,
+        "syntheticUsers": 8,
+        "requests": 10,
+        "unspecifiedReads": []
+      },
+      {
+        "name": "second business and second customer cannot see first customer order",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "outcome": "pass",
+        "elapsedMs": 2337,
+        "syntheticUsers": 8,
+        "requests": 12,
+        "unspecifiedReads": []
+      },
+      {
+        "name": "transient status-read failure shows stale data and retry recovers",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "outcome": "pass",
+        "elapsedMs": 2226,
+        "syntheticUsers": 8,
+        "requests": 7,
+        "unspecifiedReads": []
+      },
+      {
+        "name": "Parking Pass failed return keeps its reference and recovers with a read-only retry",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "outcome": "pass",
+        "elapsedMs": 415,
+        "syntheticUsers": 8,
+        "requests": 6,
+        "unspecifiedReads": []
+      },
+      {
+        "name": "Parking Pass pending return survives reload without claiming a reservation",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "outcome": "pass",
+        "elapsedMs": 481,
+        "syntheticUsers": 8,
+        "requests": 10,
+        "unspecifiedReads": []
+      },
+      {
+        "name": "Parking Pass credited return remains distinct from a confirmed spot",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "outcome": "pass",
+        "elapsedMs": 329,
+        "syntheticUsers": 8,
+        "requests": 5,
+        "unspecifiedReads": []
+      },
+      {
+        "name": "Parking Pass missing reference does not turn a redirect flag into payment proof",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "outcome": "pass",
+        "elapsedMs": 283,
+        "syntheticUsers": 8,
+        "requests": 4,
+        "unspecifiedReads": []
+      },
+      {
+        "name": "Parking Pass wrong account cannot query an unavailable truck intent",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "outcome": "pass",
+        "elapsedMs": 292,
+        "syntheticUsers": 8,
+        "requests": 4,
+        "unspecifiedReads": []
+      },
+      {
+        "name": "Parking Pass multiple trucks require explicit selection before status lookup",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "outcome": "pass",
+        "elapsedMs": 315,
+        "syntheticUsers": 8,
+        "requests": 5,
+        "unspecifiedReads": []
+      },
+      {
+        "name": "Parking Pass gas controls include host prices when provider results are empty",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "outcome": "pass",
+        "elapsedMs": 452,
+        "syntheticUsers": 8,
+        "requests": 15,
+        "unspecifiedReads": [
+          "/api/location/context",
+          "/api/parking-pass/intelligence-status",
+          "/api/restaurants/qa-ee1f6d79-truck/social-connections/status",
+          "/api/bookings/truck/qa-ee1f6d79-truck/schedule",
+          "/api/trucks/qa-ee1f6d79-truck/manual-schedule",
+          "/api/trucks/qa-ee1f6d79-truck/parking-reports",
+          "/api/map/runtime"
+        ]
+      },
+      {
+        "name": "orders: confirmed empty read is distinct from a failure",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "outcome": "pass",
+        "elapsedMs": 286,
+        "syntheticUsers": 8,
+        "requests": 5,
+        "unspecifiedReads": []
+      },
+      {
+        "name": "orders: missing list cannot become a successful empty queue",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "outcome": "pass",
+        "elapsedMs": 446,
+        "syntheticUsers": 8,
+        "requests": 6,
+        "unspecifiedReads": []
+      },
+      {
+        "name": "orders: wrong business cannot become a successful empty queue",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "outcome": "pass",
+        "elapsedMs": 432,
+        "syntheticUsers": 8,
+        "requests": 6,
+        "unspecifiedReads": []
+      },
+      {
+        "name": "orders: duplicate identity cannot become a successful empty queue",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "outcome": "pass",
+        "elapsedMs": 416,
+        "syntheticUsers": 8,
+        "requests": 6,
+        "unspecifiedReads": []
+      },
+      {
+        "name": "orders: missing items cannot become a successful empty queue",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "outcome": "pass",
+        "elapsedMs": 448,
+        "syntheticUsers": 8,
+        "requests": 6,
+        "unspecifiedReads": []
+      },
+      {
+        "name": "orders: bad pagination cannot become a successful empty queue",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "outcome": "pass",
+        "elapsedMs": 445,
+        "syntheticUsers": 8,
+        "requests": 6,
+        "unspecifiedReads": []
+      },
+      {
+        "name": "orders: HTTP 401 remains access failure until a valid refresh",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "outcome": "pass",
+        "elapsedMs": 441,
+        "syntheticUsers": 8,
+        "requests": 6,
+        "unspecifiedReads": []
+      },
+      {
+        "name": "orders: HTTP 403 remains access failure until a valid refresh",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "outcome": "pass",
+        "elapsedMs": 460,
+        "syntheticUsers": 8,
+        "requests": 6,
+        "unspecifiedReads": []
+      },
+      {
+        "name": "orders: raw HTML after a populated read hides stale actionable orders and recovers",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "outcome": "pass",
+        "elapsedMs": 886,
+        "syntheticUsers": 8,
+        "requests": 6,
+        "unspecifiedReads": []
+      },
+      {
+        "name": "orders: delayed retry cannot display invented zero counts or accept duplicate retry",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "outcome": "pass",
+        "elapsedMs": 603,
+        "syntheticUsers": 8,
+        "requests": 6,
+        "unspecifiedReads": []
+      },
+      {
+        "name": "kitchen: confirmed empty read is distinct from a failure",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "outcome": "pass",
+        "elapsedMs": 287,
+        "syntheticUsers": 8,
+        "requests": 5,
+        "unspecifiedReads": []
+      },
+      {
+        "name": "kitchen: missing list cannot become a successful empty queue",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "outcome": "pass",
+        "elapsedMs": 482,
+        "syntheticUsers": 8,
+        "requests": 6,
+        "unspecifiedReads": []
+      },
+      {
+        "name": "kitchen: wrong business cannot become a successful empty queue",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "outcome": "pass",
+        "elapsedMs": 477,
+        "syntheticUsers": 8,
+        "requests": 6,
+        "unspecifiedReads": []
+      },
+      {
+        "name": "kitchen: duplicate identity cannot become a successful empty queue",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "outcome": "pass",
+        "elapsedMs": 459,
+        "syntheticUsers": 8,
+        "requests": 6,
+        "unspecifiedReads": []
+      },
+      {
+        "name": "kitchen: missing items cannot become a successful empty queue",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "outcome": "pass",
+        "elapsedMs": 447,
+        "syntheticUsers": 8,
+        "requests": 6,
+        "unspecifiedReads": []
+      },
+      {
+        "name": "kitchen: bad pagination cannot become a successful empty queue",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "outcome": "pass",
+        "elapsedMs": 464,
+        "syntheticUsers": 8,
+        "requests": 6,
+        "unspecifiedReads": []
+      },
+      {
+        "name": "kitchen: HTTP 401 remains access failure until a valid refresh",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "outcome": "pass",
+        "elapsedMs": 502,
+        "syntheticUsers": 8,
+        "requests": 6,
+        "unspecifiedReads": []
+      },
+      {
+        "name": "kitchen: HTTP 403 remains access failure until a valid refresh",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "outcome": "pass",
+        "elapsedMs": 446,
+        "syntheticUsers": 8,
+        "requests": 6,
+        "unspecifiedReads": []
+      },
+      {
+        "name": "kitchen: raw HTML after a populated read hides stale actionable orders and recovers",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "outcome": "pass",
+        "elapsedMs": 846,
+        "syntheticUsers": 8,
+        "requests": 6,
+        "unspecifiedReads": []
+      },
+      {
+        "name": "kitchen: delayed retry cannot display invented zero counts or accept duplicate retry",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "outcome": "pass",
+        "elapsedMs": 732,
+        "syntheticUsers": 8,
+        "requests": 6,
+        "unspecifiedReads": []
+      },
+      {
+        "name": "Parking Pass signed-out return survives failed login and resumes the same booking",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "outcome": "pass",
+        "elapsedMs": 992,
+        "syntheticUsers": 8,
+        "requests": 14,
+        "unspecifiedReads": []
+      },
+      {
+        "name": "Parking Pass signed-out return cannot discard its reference through My Schedule",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "outcome": "pass",
+        "elapsedMs": 296,
+        "syntheticUsers": 8,
+        "requests": 1,
+        "unspecifiedReads": []
+      },
+      {
+        "name": "Parking Pass confirmed return opens the selected truck schedule and survives reload",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "outcome": "pass",
+        "elapsedMs": 603,
+        "syntheticUsers": 8,
+        "requests": 30,
+        "unspecifiedReads": [
+          "/api/location/context",
+          "/api/parking-pass/intelligence-status"
+        ]
+      },
+      {
+        "name": "Parking Pass truck access retry retains the booking and does not invent confirmation",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "outcome": "pass",
+        "elapsedMs": 422,
+        "syntheticUsers": 8,
+        "requests": 6,
+        "unspecifiedReads": []
+      },
+      {
+        "name": "Schedule failed initial load is not reported as an empty day",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "outcome": "pass",
+        "elapsedMs": 308,
+        "syntheticUsers": 8,
+        "requests": 11,
+        "unspecifiedReads": [
+          "/api/location/context",
+          "/api/parking-pass/intelligence-status",
+          "/api/restaurants/qa-8f6a144e-truck/social-connections/status"
+        ]
+      },
+      {
+        "name": "Schedule retry restores confirmed stops without changing the selected date",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "outcome": "pass",
+        "elapsedMs": 435,
+        "syntheticUsers": 8,
+        "requests": 12,
+        "unspecifiedReads": [
+          "/api/location/context",
+          "/api/parking-pass/intelligence-status",
+          "/api/restaurants/qa-12a5fa2f-truck/social-connections/status"
+        ]
+      },
+      {
+        "name": "Schedule stale refresh retains last-known stops and disables cancellation until recovered",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "outcome": "pass",
+        "elapsedMs": 612,
+        "syntheticUsers": 8,
+        "requests": 13,
+        "unspecifiedReads": [
+          "/api/location/context",
+          "/api/parking-pass/intelligence-status",
+          "/api/restaurants/qa-6c8f81fb-truck/social-connections/status"
+        ]
+      },
+      {
+        "name": "Schedule permission failure clears previously displayed booking details",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "outcome": "pass",
+        "elapsedMs": 616,
+        "syntheticUsers": 8,
+        "requests": 12,
+        "unspecifiedReads": [
+          "/api/location/context",
+          "/api/parking-pass/intelligence-status",
+          "/api/restaurants/qa-858eaf5c-truck/social-connections/status"
+        ]
+      },
+      {
+        "name": "Schedule malformed response differs from a verified empty schedule",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "outcome": "pass",
+        "elapsedMs": 363,
+        "syntheticUsers": 8,
+        "requests": 12,
+        "unspecifiedReads": [
+          "/api/location/context",
+          "/api/parking-pass/intelligence-status",
+          "/api/restaurants/qa-8bdf5b5c-truck/social-connections/status"
+        ]
+      },
+      {
+        "name": "Schedule slow refresh keeps context visible and blocks stale booking actions",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "outcome": "pass",
+        "elapsedMs": 620,
+        "syntheticUsers": 8,
+        "requests": 11,
+        "unspecifiedReads": [
+          "/api/location/context",
+          "/api/parking-pass/intelligence-status",
+          "/api/restaurants/qa-a173462b-truck/social-connections/status"
+        ]
+      },
+      {
+        "name": "Schedule invalid booked date recovers without crashing the calendar",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "outcome": "pass",
+        "elapsedMs": 447,
+        "syntheticUsers": 8,
+        "requests": 12,
+        "unspecifiedReads": [
+          "/api/location/context",
+          "/api/parking-pass/intelligence-status",
+          "/api/restaurants/qa-3889f534-truck/social-connections/status"
+        ]
+      },
+      {
+        "name": "Schedule Today and next scheduled day preserve navigation through reload",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "outcome": "pass",
+        "elapsedMs": 929,
+        "syntheticUsers": 8,
+        "requests": 22,
+        "unspecifiedReads": [
+          "/api/location/context",
+          "/api/parking-pass/intelligence-status",
+          "/api/restaurants/qa-aeb07b93-truck/social-connections/status"
+        ]
+      },
+      {
+        "name": "guest can browse an active menu without account or payment mutations",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "outcome": "pass",
+        "elapsedMs": 261,
+        "syntheticUsers": 8,
+        "requests": 2,
+        "unspecifiedReads": []
+      }
+    ]
+  },
+  "baseline": {
+    "passingCases": 86,
+    "failedCases": 2,
+    "failures": [
+      {
+        "name": "orders: delayed retry cannot display invented zero counts or accept duplicate retry",
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "error": "expect(locator).toHaveCount(expected) failed\n\nLocator:  getByRole('button', { name: /^(All|Needs attention|Completed|Cancelled) [0-9]+$/ })\nExpected: 0\nReceived: 4\nTimeout:  5000ms\n\nCall log:\n  - Expect \"to.have.count\" with timeout 5000ms\n  - waiting for getByRole('button', { name: /^(All|Needs attention|Completed|Cancelled) [0-9]+$/ })\n    9 × locator resolved to 4 elements\n      - unexpected value \"4\"\n"
+      },
+      {
+        "name": "orders: delayed retry cannot display invented zero counts or accept duplicate retry",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "error": "expect(locator).toHaveCount(expected) failed\n\nLocator:  getByRole('button', { name: /^(All|Needs attention|Completed|Cancelled) [0-9]+$/ })\nExpected: 0\nReceived: 4\nTimeout:  5000ms\n\nCall log:\n  - Expect \"to.have.count\" with timeout 5000ms\n  - waiting for getByRole('button', { name: /^(All|Needs attention|Completed|Cancelled) [0-9]+$/ })\n    9 × locator resolved to 4 elements\n      - unexpected value \"4\"\n"
+      }
+    ]
+  },
+  "stages": [
+    {
+      "name": "response-reader",
+      "command": "node --import tsx --test scripts/mealscout-owner-orders-response.behavior.test.ts",
+      "observedExitCode": 0,
+      "passingCases": 40,
+      "log": ".qa-evidence/orders-recovery/final-response-tests.log",
+      "sha256": "39cfde4813fefe49dd1eac1579a3189a82a3f63e9d7e46c5d370b98a460486f5"
+    },
+    {
+      "name": "owner-state",
+      "command": "node scripts/mealscout-owner-orders-state.test.cjs",
+      "observedExitCode": 0,
+      "passingCases": 31,
+      "log": ".qa-evidence/orders-recovery/final-owner-state.log",
+      "sha256": "b064cf239137aeb6499cce5b82e513eb6fa10ebd1773e7acd45e9fc0c63d51be"
+    },
+    {
+      "name": "workspace-contract",
+      "command": "node --import tsx scripts/mealscout-orders-workspace.contract.test.ts",
+      "observedExitCode": 0,
+      "passingCases": null,
+      "log": ".qa-evidence/orders-recovery/final-workspace-contract.log",
+      "sha256": "8872a54f4061548abafba5eec39efa47780122126e13e6085e24a43d73037fc6"
+    },
+    {
+      "name": "full-typecheck",
+      "command": "npm run check",
+      "observedExitCode": 0,
+      "passingCases": null,
+      "log": ".qa-evidence/orders-recovery/final-typecheck.log",
+      "sha256": "a2395182b69c62bc0e1384fe677d9190d3832155c95898ea05f212261795f361"
+    },
+    {
+      "name": "client-build",
+      "command": "npm run build:client",
+      "observedExitCode": 0,
+      "passingCases": null,
+      "log": ".qa-evidence/orders-recovery/final-build-client.log",
+      "sha256": "8379fef2e7bb845a17a383791890a0ea779823693faf95d9587be1d807452620"
+    },
+    {
+      "name": "server-build",
+      "command": "npm run build:server",
+      "observedExitCode": 0,
+      "passingCases": null,
+      "log": ".qa-evidence/orders-recovery/final-build-server.log",
+      "sha256": "02b0a77dd1aa22d22405c54ac8ba35e7df71f009b606a06af57db98cfa38a429"
+    },
+    {
+      "name": "compiled-browser",
+      "command": "node scripts/qa/full-frontend-journeys.cjs",
+      "observedExitCode": 0,
+      "passingCases": 88,
+      "log": ".qa-evidence/orders-recovery/browser-final.log",
+      "sha256": "b43fb38ae9ec90fee44dd7edfe45287aca0c3e1e60433986e013d6198f02fd56"
+    }
+  ],
+  "authorityPreservation": {
+    "base": "070cf0f74807bf95a7c3018a811c681477cd47a9",
+    "preserved": [
+      {
+        "name": "nextOrderStatus",
+        "unchanged": true
+      },
+      {
+        "name": "isBusinessOrderOperator",
+        "unchanged": true
+      },
+      {
+        "name": "describeDisputeFinancialState",
+        "unchanged": true
+      },
+      {
+        "name": "fetchOrders",
+        "unchanged": true
+      },
+      {
+        "name": "mergeOrder",
+        "unchanged": true
+      },
+      {
+        "name": "OwnerOrderCard",
+        "unchanged": true
+      },
+      {
+        "name": "statusMutation",
+        "unchanged": true
+      },
+      {
+        "name": "requestStatusChange",
+        "unchanged": true
+      },
+      {
+        "name": "advanceOrder",
+        "unchanged": true
+      }
+    ],
+    "workspaceSha256": "378f8524f7a0a6dd15cde9d60122ec5b6c81bc4859263a86f034dda5faa5d6a9"
+  },
+  "limitations": [
+    "Browser actors, API and Stripe responses are synthetic; this is not connected-backend or payment-provider acceptance.",
+    "No main merge, production deployment, migration, customer order, refund, provider activation or live email occurred.",
+    "The prior 24-stage hosted preview and 118-case profile suite are older-source evidence, not a rerun for this candidate.",
+    "Only Chromium at the two recorded widths was exercised in this run; no Firefox, WebKit or physical-device claim."
+  ],
+  "retainedInitialFailures": [
+    "Unwired reader import in owner-state harness; repaired by loading the real reader without relaxing its cases.",
+    "Pre-existing status source assertion expected owner payment confirmation; replaced with exact permitted-status, no-confirmation and acknowledgement assertions. Server unchanged.",
+    "First browser attempt stopped for missing synthetic payment build key; Unicode in new test was also corrupted by the initial PowerShell stdin encoding. Original logs retained."
+  ],
+  "browserBuildEnvironment": {
+    "VITE_STRIPE_PUBLIC_KEY": "pk_test_ordering_truth_fixture",
+    "VERCEL_ENV": "",
+    "realProviderCredentialsUsed": false
+  },
+  "artifacts": [
+    {
+      "path": ".qa-evidence/orders-recovery/authority-preserved.json",
+      "bytes": 808,
+      "sha256": "9dca9c3669f2a46c370a3fdb8526f7dd3a31f93f385bfb03f7ce19ec89e67557"
+    },
+    {
+      "path": ".qa-evidence/orders-recovery/baseline-build-client.log",
+      "bytes": 56896,
+      "sha256": "8395fd33253c61babbffe6e933810e3bc77e2de86ac1d9513256e445b16fdaa8"
+    },
+    {
+      "path": ".qa-evidence/orders-recovery/baseline-build-server.log",
+      "bytes": 138,
+      "sha256": "02b0a77dd1aa22d22405c54ac8ba35e7df71f009b606a06af57db98cfa38a429"
+    },
+    {
+      "path": ".qa-evidence/orders-recovery/baseline-owner-state.log",
+      "bytes": 12962,
+      "sha256": "c81ab29899addbd45083fca2f0e4d70c7f2784dc0919e403c97ad6a9a3f9f9e7"
+    },
+    {
+      "path": ".qa-evidence/orders-recovery/baseline-response-tests.log",
+      "bytes": 6678,
+      "sha256": "530ef7b2fddb1cd0faca860439d53297435ab64b3ef370ad559684bfe863cc74"
+    },
+    {
+      "path": ".qa-evidence/orders-recovery/baseline-typecheck.log",
+      "bytes": 74,
+      "sha256": "a2395182b69c62bc0e1384fe677d9190d3832155c95898ea05f212261795f361"
+    },
+    {
+      "path": ".qa-evidence/orders-recovery/baseline-workspace-contract.log",
+      "bytes": 56426,
+      "sha256": "9f44f5bb63748d56c556d5597ce38d9113c724a8867fd4a5e7e7c1c1717aeffc"
+    },
+    {
+      "path": ".qa-evidence/orders-recovery/browser-baseline/1440-20.png",
+      "bytes": 242050,
+      "sha256": "f35d8dc2d1f42d358b8c518ef3b57dc532598ddeea1aadcd75ad832c2b17e83d"
+    },
+    {
+      "path": ".qa-evidence/orders-recovery/browser-baseline/1440-parking-schedule.png",
+      "bytes": 161063,
+      "sha256": "d47e9f424be32dab53470208289e92b6d692e51d4288c57406f8ffad0f815e55"
+    },
+    {
+      "path": ".qa-evidence/orders-recovery/browser-baseline/390-64.png",
+      "bytes": 141722,
+      "sha256": "1033809966190cc010d7a2bc3d0cc44d46bd4fa8bfd44b993f58b7a5f00b5337"
+    },
+    {
+      "path": ".qa-evidence/orders-recovery/browser-baseline/390-parking-schedule.png",
+      "bytes": 87095,
+      "sha256": "cf4241ba15a7d14905e0d46a95ad3373ed7c26e812d0ae57c1e6c86adb0e6507"
+    },
+    {
+      "path": ".qa-evidence/orders-recovery/browser-baseline/full-frontend-journeys.json",
+      "bytes": 34196,
+      "sha256": "40de6ed261a41ebc74e511b6c0d8a6ddbaa0324b6c973521e031d8d848e06843"
+    },
+    {
+      "path": ".qa-evidence/orders-recovery/browser-baseline/kitchen-1440-failed-refresh.png",
+      "bytes": 208688,
+      "sha256": "b578d451ac46d4e91f69f9ef1f30eba5888783d466b76e3865f3c1f5214321d7"
+    },
+    {
+      "path": ".qa-evidence/orders-recovery/browser-baseline/kitchen-1440-pending-retry.png",
+      "bytes": 204666,
+      "sha256": "9f0f4969c05dd5d747ec7513f036ac7fe327a0e06835875dc66090e8b1dcee4b"
+    },
+    {
+      "path": ".qa-evidence/orders-recovery/browser-baseline/kitchen-1440-recovered.png",
+      "bytes": 250777,
+      "sha256": "fb1df7acd871274653be708bef6e7562e236ebd7deb99005a77302fb3e459d20"
+    },
+    {
+      "path": ".qa-evidence/orders-recovery/browser-baseline/kitchen-390-failed-refresh.png",
+      "bytes": 116244,
+      "sha256": "b7f9eca9a3e2b3018212434fb837da2b6bee091692fd2d5e8bf9d302ab224b43"
+    },
+    {
+      "path": ".qa-evidence/orders-recovery/browser-baseline/kitchen-390-pending-retry.png",
+      "bytes": 117058,
+      "sha256": "418ec45c48abf427ced9fada4725d9cfdc213540b49b793c726e80acc5d415f3"
+    },
+    {
+      "path": ".qa-evidence/orders-recovery/browser-baseline/kitchen-390-recovered.png",
+      "bytes": 151235,
+      "sha256": "9a151cf7f90e0a62d6e6ab6200d42f4658b3bade8d1cfcd83e258ea560d92f38"
+    },
+    {
+      "path": ".qa-evidence/orders-recovery/browser-baseline/orders-1440-failed-refresh.png",
+      "bytes": 207777,
+      "sha256": "dd0ed26d7cdb732e4482367cd071c7b247431349573939c65552f9b7ad7127aa"
+    },
+    {
+      "path": ".qa-evidence/orders-recovery/browser-baseline/orders-1440-recovered.png",
+      "bytes": 242050,
+      "sha256": "f35d8dc2d1f42d358b8c518ef3b57dc532598ddeea1aadcd75ad832c2b17e83d"
+    },
+    {
+      "path": ".qa-evidence/orders-recovery/browser-baseline/orders-390-failed-refresh.png",
+      "bytes": 115105,
+      "sha256": "a2c55b1b61abd9b11f4f0fc59f6b409564cfee0794f65578d7d81638a08d7087"
+    },
+    {
+      "path": ".qa-evidence/orders-recovery/browser-baseline/orders-390-recovered.png",
+      "bytes": 141706,
+      "sha256": "6a3666d00b84b5ac295f50aaaa4f21ede71fbc36ade58d5ac11f8ff7979ffab4"
+    },
+    {
+      "path": ".qa-evidence/orders-recovery/browser-baseline.log",
+      "bytes": 50132,
+      "sha256": "da7196cf2e9b078092dee427dc6c8301d17d617f5450c54ec0c4205c2ef41f48"
+    },
+    {
+      "path": ".qa-evidence/orders-recovery/browser-before/1440-0.png",
+      "bytes": 398221,
+      "sha256": "b0458946a6d1c2dfd955342ffd6e95a03b34eb3604ed1ebcd3807dd98b78d023"
+    },
+    {
+      "path": ".qa-evidence/orders-recovery/browser-before/1440-1.png",
+      "bytes": 398174,
+      "sha256": "4f752192283421fda9d6610b497645ed7815f8c6defd83cfb62792d0ecabb752"
+    },
+    {
+      "path": ".qa-evidence/orders-recovery/browser-before/1440-2.png",
+      "bytes": 398181,
+      "sha256": "830ea3242fe4510c045766833cc64a188dd4df61689c9dee9ff6af90cf4b5a40"
+    },
+    {
+      "path": ".qa-evidence/orders-recovery/browser-before/1440-3.png",
+      "bytes": 398379,
+      "sha256": "cb2cad65b351aa9ae5a28c0c296567b3ee5d69caf40f03c2a6ac037d9596ebbc"
+    },
+    {
+      "path": ".qa-evidence/orders-recovery/browser-before.log",
+      "bytes": 25934,
+      "sha256": "61288b3691021c393d25ed3aa80a3d531d2fd5b6c8311391d8fb3c31d67687fb"
+    },
+    {
+      "path": ".qa-evidence/orders-recovery/browser-final/1440-parking-schedule.png",
+      "bytes": 161062,
+      "sha256": "b0371c36bdf0ebf1f79c9d40d1da520fab65271ec6e5186f5d5fbdca7ffb6c69"
+    },
+    {
+      "path": ".qa-evidence/orders-recovery/browser-final/390-parking-schedule.png",
+      "bytes": 86898,
+      "sha256": "e2d3bbb13c332d1d744edd0c757275bebe7b31412d1eb3fa831ae1028d2aebc4"
+    },
+    {
+      "path": ".qa-evidence/orders-recovery/browser-final/full-frontend-journeys.json",
+      "bytes": 30133,
+      "sha256": "da4ed6788b068273ab4f6a44f72fa4cecd17a7a2ddea5ba50fdde1324473a44e"
+    },
+    {
+      "path": ".qa-evidence/orders-recovery/browser-final/kitchen-1440-failed-refresh.png",
+      "bytes": 208480,
+      "sha256": "dc63cab6c66d0155f0db686c9685021772886275073e26f7840d331154911b6c"
+    },
+    {
+      "path": ".qa-evidence/orders-recovery/browser-final/kitchen-1440-pending-retry.png",
+      "bytes": 204519,
+      "sha256": "6f85e99607e990401fc3a4001fc926cf72ef462649272b05df481ebd640d6f78"
+    },
+    {
+      "path": ".qa-evidence/orders-recovery/browser-final/kitchen-1440-recovered.png",
+      "bytes": 250595,
+      "sha256": "ed6d6e24e2ca76622b844de87992476a9d2869b93ddf2ebff09319f265d5827f"
+    },
+    {
+      "path": ".qa-evidence/orders-recovery/browser-final/kitchen-390-failed-refresh.png",
+      "bytes": 117244,
+      "sha256": "1d15c52859c629e30d81be48e6b41f8501aa35713f39337702a3543ac2bcccc9"
+    },
+    {
+      "path": ".qa-evidence/orders-recovery/browser-final/kitchen-390-pending-retry.png",
+      "bytes": 118632,
+      "sha256": "270b878e210da9cd8b42ea67e408f2f4ea93880c54f7981fe1307e440c95a7bd"
+    },
+    {
+      "path": ".qa-evidence/orders-recovery/browser-final/kitchen-390-recovered.png",
+      "bytes": 151804,
+      "sha256": "16b38f2b2bea96408768e9ae6ade0eefb0cc1b2c913bf4dcc8fe6e4df1fad909"
+    },
+    {
+      "path": ".qa-evidence/orders-recovery/browser-final/orders-1440-failed-refresh.png",
+      "bytes": 207597,
+      "sha256": "17d8e2fa31f887d6a4986a35ad0656d3c281fb0eaf8c801e6e1b76c98f4e9329"
+    },
+    {
+      "path": ".qa-evidence/orders-recovery/browser-final/orders-1440-pending-retry.png",
+      "bytes": 205221,
+      "sha256": "4aa73e9cdc6137a9e01ad31732ff83a249f128f5f3d8e4aad98539a00d96c4c8"
+    },
+    {
+      "path": ".qa-evidence/orders-recovery/browser-final/orders-1440-recovered.png",
+      "bytes": 241755,
+      "sha256": "b487b2aa96d91b5dad250a6caf6e413a5a37a82cb1bfd199590243e9b49e5341"
+    },
+    {
+      "path": ".qa-evidence/orders-recovery/browser-final/orders-390-failed-refresh.png",
+      "bytes": 116218,
+      "sha256": "f4c008acc8c1f594323ff8462aa96f7903e020a0a629652b954453f3edebf0b7"
+    },
+    {
+      "path": ".qa-evidence/orders-recovery/browser-final/orders-390-pending-retry.png",
+      "bytes": 118366,
+      "sha256": "41718412a9f3771b5baa42bfb4efcc70bec9ea51ed7b4a1156d6143bedc314a6"
+    },
+    {
+      "path": ".qa-evidence/orders-recovery/browser-final/orders-390-recovered.png",
+      "bytes": 142800,
+      "sha256": "1715abead26d2d9d6eb138eed9f7313790bcfadaf34ae19cb83141cf7b515b84"
+    },
+    {
+      "path": ".qa-evidence/orders-recovery/browser-final.log",
+      "bytes": 43276,
+      "sha256": "b43fb38ae9ec90fee44dd7edfe45287aca0c3e1e60433986e013d6198f02fd56"
+    },
+    {
+      "path": ".qa-evidence/orders-recovery/continuation-state.txt",
+      "bytes": 627,
+      "sha256": "9d94f0ccf83c7c33ab10946919360375fbc8522065b04dd001978e67b740e0d1"
+    },
+    {
+      "path": ".qa-evidence/orders-recovery/final-build-client.log",
+      "bytes": 56900,
+      "sha256": "8379fef2e7bb845a17a383791890a0ea779823693faf95d9587be1d807452620"
+    },
+    {
+      "path": ".qa-evidence/orders-recovery/final-build-server.log",
+      "bytes": 138,
+      "sha256": "02b0a77dd1aa22d22405c54ac8ba35e7df71f009b606a06af57db98cfa38a429"
+    },
+    {
+      "path": ".qa-evidence/orders-recovery/final-owner-state.log",
+      "bytes": 7614,
+      "sha256": "b064cf239137aeb6499cce5b82e513eb6fa10ebd1773e7acd45e9fc0c63d51be"
+    },
+    {
+      "path": ".qa-evidence/orders-recovery/final-response-tests.log",
+      "bytes": 6680,
+      "sha256": "39cfde4813fefe49dd1eac1579a3189a82a3f63e9d7e46c5d370b98a460486f5"
+    },
+    {
+      "path": ".qa-evidence/orders-recovery/final-typecheck.log",
+      "bytes": 74,
+      "sha256": "a2395182b69c62bc0e1384fe677d9190d3832155c95898ea05f212261795f361"
+    },
+    {
+      "path": ".qa-evidence/orders-recovery/final-workspace-contract.log",
+      "bytes": 88,
+      "sha256": "8872a54f4061548abafba5eec39efa47780122126e13e6085e24a43d73037fc6"
+    },
+    {
+      "path": ".qa-evidence/orders-recovery/fixture-client-build.log",
+      "bytes": 56898,
+      "sha256": "edfe5a4cf602da52af0bb9b788e5f9350649e93eb86c5e3846c43eba375ab3c8"
+    },
+    {
+      "path": ".qa-evidence/orders-recovery/owner-state-wired-after.log",
+      "bytes": 7984,
+      "sha256": "5d7a51dfaf691929397ec8be454f6ed554c4bca5267d0442556afaadb94d2b82"
+    },
+    {
+      "path": ".qa-evidence/orders-recovery/owner-state-wired.log",
+      "bytes": 12958,
+      "sha256": "1d25a8eaec63fad60578d7c15f6009eef21a12eb4fdf6d815251df007875f1bd"
+    },
+    {
+      "path": ".qa-evidence/orders-recovery/workspace-contract-after.log",
+      "bytes": 88,
+      "sha256": "8872a54f4061548abafba5eec39efa47780122126e13e6085e24a43d73037fc6"
+    }
+  ]
+}

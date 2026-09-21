@@ -12,7 +12,7 @@ const parkingPassQuality = readFileSync(
   "utf8",
 );
 const parkingPassPage = readFileSync(
-  "client/src/pages/parking-pass.tsx",
+  "client/src/pages/parking-pass-content.tsx",
   "utf8",
 );
 const recoveryMigration = readFileSync(
