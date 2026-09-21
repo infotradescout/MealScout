@@ -1,5 +1,5 @@
-/** Existing hosted entry point. The native route suite is retained byte-for-byte
- * in parking-host-route-core.mjs; release checks add evidence, never waive it. */
+/** Existing hosted entry point. Native, compatibility and read-only production
+ * modes have distinct receipts; a read-only observation is not a native gate. */
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -16,7 +16,10 @@ const source = git('rev-parse', 'HEAD');
 assert.equal(source, process.env.RENDER_GIT_COMMIT);
 assert.equal(process.env.MEALSCOUT_HOST_ROUTE_PROOF, '1');
 assert.equal(git('status', '--porcelain'), '');
-if (process.env.MEALSCOUT_PARKING_COMPATIBILITY_PROOF === '1') {
+if (process.env.MEALSCOUT_PARKING_READONLY_PROBE === '1') {
+  const { runParkingLiveReadonlyProbe } = await import('./parking-live-readonly-probe.mjs');
+  await runParkingLiveReadonlyProbe();
+} else if (process.env.MEALSCOUT_PARKING_COMPATIBILITY_PROOF === '1') {
   const { runCompatibilityCutoverProof } = await import('./parking-compatibility-cutover.mjs');
   await runCompatibilityCutoverProof();
 } else {
