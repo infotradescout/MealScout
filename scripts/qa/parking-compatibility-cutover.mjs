@@ -1,7 +1,6 @@
-/** Compatibility deployment proof; uses the existing owned Render executor.
- * Application bytes are not transformed. A derived TEST harness retains the
- * pre-142 constraint and explicitly expects data-preserving rebooking denial.
- * This is not a migration142 pass, production drain, or live provider receipt.
+/** Compatibility deployment proof using the existing owned Render executor.
+ * Application bytes are never transformed. The derived TEST harness retains
+ * the old schema guard and asserts safe rebooking denial until migration142.
  */
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -31,8 +30,10 @@ export async function runCompatibilityCutoverProof(){
  const receipt={schemaVersion:1,result:'running',executorSource:process.env.RENDER_GIT_COMMIT,source:target,verifiedApplicationSource:verified,productionMigrationSource:productionParent,startedAt:new Date().toISOString(),steps:[],productionChanged:false,liveProviderAcceptance:false,scope:'Actual host-route compatibility with the pre-142 all-history constraint. Auth/storage/provider fixtures remain explicit. Only the test harness changes its schema setup and rebooking expectation; application bytes must match the verified release.'};
  const run=(name,command,args,cwd=clone,env={})=>{const result=spawnSync(command,args,{cwd,env:{...safeEnv,...env},encoding:'utf8',timeout:600000,maxBuffer:20*1024*1024});const text=(result.stdout||'')+(result.stderr||'');const step={name,exitCode:result.status,signal:result.signal,logSha256:hash(text)};receipt.steps.push(step);fs.writeFileSync(path.join(out,'compatibility-'+name+'.log'),text);console.log('PARKING_COMPATIBILITY_STEP '+JSON.stringify(step));if(result.status!==0)throw Error(name+' failed: '+text.slice(-2000));return text;};
  try{
-  for(const ref of [target,verified,productionParent])run('fetch-'+ref.slice(0,8),'git',['fetch','--no-tags','--depth=1','https://github.com/infotradescout/MealScout.git',ref],root);
   run('owned-clone','git',['clone','--no-hardlinks',root,clone],root);
+  // Fetch into the checkout that consumes these objects. Local clone does not
+  // promise to retain unreachable objects fetched into its source repository.
+  for(const ref of [target,verified,productionParent])run('fetch-'+ref.slice(0,8),'git',['fetch','--no-tags','--depth=1','https://github.com/infotradescout/MealScout.git',ref]);
   run('checkout','git',['checkout','--detach',target]);
   assert.equal(git(clone,'diff',verified,target,'--','client','server','shared','package.json','package-lock.json','scripts/buildServer.mjs','scripts/platformBuild.mjs','vercel.json'),'','Application/config must equal verified candidate');
   assert.equal(git(clone,'diff',productionParent,target,'--','migrations'),'','Compatibility deployment must not change production migrations');
@@ -50,7 +51,6 @@ export async function runCompatibilityCutoverProof(){
   const replacementCase="  await test('pre142 rebooking is denied without losing history or issuing payment',async()=>{const a=await actor(),e=await event();const old=await seed(schema.eventBookings,{id:randomUUID(),eventId:e.id,truckId:a.truck.id,hostId:host.id,hostPriceCents:1500,platformFeeCents:1000,totalCents:2500,status:'cancelled',stripePaymentStatus:'cancelled',cancellationReason:'qa retained terminal history',cancelledAt:new Date()});const before=await history(old.id),operations=await effects(),calls=await creates();const r=await request(workers[2],a,e);assert.equal(r.status,409,JSON.stringify(r));assert.deepEqual(await history(old.id),before);assert.equal(await active(e),0);assert.equal(await effects(),operations);assert.equal(await creates(),calls);return{terminalRowPreserved:true,activeBookings:0,providerOperations:0,status:409,temporaryCompatibilityLimitation:true};});";
   replace('assert-safe-pre142-limitation',previousCase,replacementCase);
   const derived=path.join(clone,'scripts/qa/.parking-compatibility-core.mjs');
-  // This is a generated test artifact in an owned clone, never application code.
   fs.appendFileSync(path.join(clone,'.git/info/exclude'),'\n/scripts/qa/.parking-compatibility-core.mjs\n');
   fs.writeFileSync(derived,core);
   receipt.testAdapter={canonicalCoreSha256:coreHash,derivedCoreSha256:hash(core),edits};
