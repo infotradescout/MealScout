@@ -58,7 +58,7 @@ import { registerPublicSeoLandingRoutes } from "./routes/publicSeoLandingRoutes"
 import { registerSeoRoutes } from "./routes/seoRoutes";
 import { registerSubscriptionRoutes } from "./routes/subscriptionRoutes";
 import { registerRuntimeBootstrapRoutes } from "./routes/runtimeBootstrapRoutes";
-import { registerStripeWebhookRoutes } from "./routes/stripeWebhookRoutes";
+import { registerStripeWebhookRoutes } from "./routes/parkingStripeWebhookRoutes";
 import { registerTruckClaimRoutes } from "./routes/truckClaimRoutes";
 import { registerMenuRoutes } from "./routes/menuRoutes";
 import { registerPickupOrderRoutes } from "./routes/pickupOrderRoutes";
