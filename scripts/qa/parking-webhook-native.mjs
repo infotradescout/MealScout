@@ -35,6 +35,7 @@ export async function runParkingWebhookNativeProof() {
   replace('native-migration-transport','  const stubSources={','  const stubSources={\n   nativeNeon:\'export { Pool } from "pg";export const neonConfig={};\',');
   replace('actual-host-earnings-code',"   hostEarningsService:'export const getHostEarningsSummary=()=>{throw Error(\"Unexpected earnings side effect\");};'\n",'');
   replace('native-wire-resolver',"const key=a.path==='stripe'?'stripe':","const key=a.path==='@neondatabase/serverless'?'nativeNeon':a.path==='stripe'?'stripe':");
+  replace('fixture-package-resolution',"contents:stubSources[a.path],loader:'js'","contents:stubSources[a.path],loader:'js',resolveDir:root");
   replace('actual-application-exports','export {registerHostRoutes} from "./server/routes/hostRoutes";export {runMigrationFile} from "./scripts/runSqlMigration";','export {registerHostRoutes} from "./server/routes/hostRoutes";export {registerStripeWebhookRoutes} from "./server/routes/stripeWebhookRoutes";export {runDeployMigrations} from "./scripts/runDeployMigrations";export {runMigrationFile} from "./scripts/runSqlMigration";');
   replace('actual-migration-chain',"  await api.runMigrationFile(path.join(root,'migrations/058_idempotency_keys.sql'),{quiet:true});await api.runMigrationFile(path.join(root,'migrations/142_parking_pass_active_booking_uniqueness.sql'),{quiet:true});",String.raw`  process.env.MIGRATION_DATABASE_URL=url;
   try { await api.runDeployMigrations(); } finally { delete process.env.MIGRATION_DATABASE_URL; }
