@@ -1,5 +1,4 @@
-/** Existing hosted entry point. Native, compatibility and read-only production
- * modes have distinct receipts; a read-only observation is not a native gate. */
+/** Existing hosted entry point. Each mode emits a separately scoped receipt. */
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -17,6 +16,7 @@ assert.equal(source, process.env.RENDER_GIT_COMMIT);
 assert.equal(process.env.MEALSCOUT_HOST_ROUTE_PROOF, '1');
 assert.equal(git('status', '--porcelain'), '');
 if (process.env.MEALSCOUT_PARKING_READONLY_PROBE === '1') {
+  execFileSync(process.execPath, ['--test', 'scripts/qa/parking-provider-readiness.test.mjs'], { cwd: root, stdio: 'inherit' });
   const { runParkingLiveReadonlyProbe } = await import('./parking-live-readonly-probe.mjs');
   await runParkingLiveReadonlyProbe();
 } else if (process.env.MEALSCOUT_PARKING_COMPATIBILITY_PROOF === '1') {
@@ -40,17 +40,13 @@ try {
     const { runReleaseChecks } = await import('./parking-host-release-checks.mjs');
     receipt.releaseChecks = await runReleaseChecks({ root, out, source });
     if (!receipt.releaseChecks.passed) receipt.result = 'fail';
-  } else {
-    receipt.releaseChecks = { result: 'not_run', passed: false, reason: 'Explicit release-check mode was not requested' };
-  }
+  } else receipt.releaseChecks = { result: 'not_run', passed: false, reason: 'Explicit release-check mode was not requested' };
 } catch (error) {
-  receipt.result = 'fail';
-  receipt.releaseCheckFailure = String(error.stack || error);
+  receipt.result = 'fail'; receipt.releaseCheckFailure = String(error.stack || error);
 } finally {
   receipt.finalSourceClean = git('rev-parse', 'HEAD') === source && git('status', '--porcelain') === '';
   if (!receipt.finalSourceClean) receipt.result = 'fail';
-  receipt.productionChanged = false;
-  receipt.liveProviderAcceptance = false;
+  receipt.productionChanged = false; receipt.liveProviderAcceptance = false;
   receipt.releaseFinishedAt = new Date().toISOString();
   fs.writeFileSync(receiptPath, JSON.stringify(receipt, null, 2) + '\n');
   const summary = JSON.parse(JSON.stringify(receipt)); delete summary.tables;
