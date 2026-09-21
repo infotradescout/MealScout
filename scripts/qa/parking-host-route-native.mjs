@@ -63,9 +63,9 @@ async function main() {
  const owned=fs.mkdtempSync(path.join(os.tmpdir(),'mealscout-host-route-'));
  const bin=process.env.MEALSCOUT_NATIVE_PG_BIN;assert.ok(bin&&path.isAbsolute(bin));
  const report={schemaVersion:1,source,tree:git('rev-parse','HEAD^{tree}'),startedAt:new Date().toISOString(),result:'running',scope:'Actual registered POST /api/parking-pass/:passId/book, native PostgreSQL, four independent OS workers. Authentication and exact manageParkingPass grants are database-backed fixtures; external provider transport is a loopback fixture. Model-derived relevant tables, not complete production migration-chain or live Stripe acceptance.',cases:[],workers:[],files:{},cleanup:{}};
- let pool,db,schema,provider,pgStarted=false;const workers=[],providerSockets=new Set();let pauseCreate=false;
+ let pool,db,schema,provider,pgStarted=false;const workers=[],providerSockets=new Set();let pauseCreate=false,createMode='normal',searchMode='normal';
  const log=x=>console.log('HOST_ROUTE_PROOF '+JSON.stringify(x));
- async function test(name,fn){const start=Date.now();try{const evidence=await fn();report.cases.push({name,result:'pass',elapsedMs:Date.now()-start,...(evidence?{evidence}:{})});}catch(e){report.cases.push({name,result:'fail',error:e.stack||String(e),elapsedMs:Date.now()-start});}log(report.cases.at(-1));}
+ async function test(name,fn){const start=Date.now();try{const evidence=await fn();report.cases.push({name,result:'pass',elapsedMs:Date.now()-start,...(evidence?{evidence}:{})});}catch(e){report.cases.push({name,result:'fail',error:e.stack||String(e),elapsedMs:Date.now()-start});}finally{createMode='normal';searchMode='normal';pauseCreate=false;}log(report.cases.at(-1));}
  async function stop(w){if(w.child.exitCode===null&&w.child.signalCode===null){w.child.kill('SIGTERM');await until(()=>w.child.exitCode!==null||w.child.signalCode!==null,'worker stop');}}
  try {
   const port=await freePort(),data=path.join(owned,'data');
@@ -109,9 +109,28 @@ async function main() {
   const api=createRequire(import.meta.url)(bundle);
   await api.runMigrationFile(path.join(root,'migrations/058_idempotency_keys.sql'),{quiet:true});await api.runMigrationFile(path.join(root,'migrations/142_parking_pass_active_booking_uniqueness.sql'),{quiet:true});
   const providerApp=express();providerApp.use(express.json());providerApp.post('/:op',async(req,res)=>{try{const {op}=req.params,{data,key,id,query}=req.body;await pool.query('INSERT INTO qa_provider_calls(operation,request_key) VALUES($1,$2)',[op,key||id||query||null]);let payload;
-   if(op==='create'){assert.ok(key);const pid='pi_qa_'+randomUUID();const intent={...data,id:pid,status:'requires_payment_method',client_secret:pid+'_secret_fixture',amount_received:0,amount_capturable:0};await pool.query('INSERT INTO qa_provider_intents(id,request_key,payload) VALUES($1,$2,$3) ON CONFLICT(request_key) DO NOTHING',[pid,key,JSON.stringify(intent)]);payload=(await pool.query('SELECT payload FROM qa_provider_intents WHERE request_key=$1',[key])).rows[0].payload;if(pauseCreate)return;}
+   if(op==='create'){
+    assert.ok(key);
+    if(createMode==='reject-before-create')return res.status(503).json({error:'Synthetic create unavailable'});
+    const pid='pi_qa_'+randomUUID();const intent={...data,id:pid,status:'requires_payment_method',client_secret:pid+'_secret_fixture',amount_received:0,amount_capturable:0};
+    await pool.query('INSERT INTO qa_provider_intents(id,request_key,payload) VALUES($1,$2,$3) ON CONFLICT(request_key) DO NOTHING',[pid,key,JSON.stringify(intent)]);
+    payload=(await pool.query('SELECT payload FROM qa_provider_intents WHERE request_key=$1',[key])).rows[0].payload;
+    if(pauseCreate)return;
+    if(createMode==='accepted-error')return res.status(503).json({error:'Synthetic response lost after committed create'});
+    if(createMode==='accepted-disconnect'){res.destroy();return;}
+    if(createMode==='paid-error'){
+     payload={...payload,status:'succeeded',amount_received:payload.amount};
+     await pool.query('UPDATE qa_provider_intents SET payload=$2 WHERE id=$1',[payload.id,JSON.stringify(payload)]);
+     await pool.query("UPDATE event_bookings SET status='confirmed',stripe_payment_status='succeeded',stripe_payment_intent_id=$1,paid_at=now(),booking_confirmed_at=now() WHERE truck_id=$2 AND event_id=$3 AND status='pending'",[payload.id,data.metadata.truckId,data.metadata.passId]);
+     return res.status(503).json({error:'Synthetic paid callback committed before create error'});
+    }
+   }
    else if(op==='retrieve')payload=(await pool.query('SELECT payload FROM qa_provider_intents WHERE id=$1',[id])).rows[0]?.payload;
-   else if(op==='search'){const all=(await pool.query('SELECT payload FROM qa_provider_intents')).rows.map(r=>r.payload);payload={data:all.filter(p=>String(query).includes(p.metadata.bookingRequestKey)),has_more:false};}
+   else if(op==='search'){
+    if(searchMode==='unavailable')return res.status(503).json({error:'Synthetic search unavailable'});
+    const all=(await pool.query('SELECT payload FROM qa_provider_intents')).rows.map(r=>r.payload);
+    payload={data:searchMode==='empty'?[]:all.filter(p=>String(query).includes(p.metadata.bookingRequestKey)),has_more:false};
+   }
    else if(op==='cancel'){payload=(await pool.query("UPDATE qa_provider_intents SET payload=jsonb_set(payload,'{status}','\"canceled\"') WHERE id=$1 RETURNING payload",[id])).rows[0]?.payload;}
    else throw Error('Unexpected provider operation');res.json(payload||{});
   }catch(e){console.error(e);res.status(500).json({error:e.message});}});
@@ -127,8 +146,11 @@ async function main() {
   async function request(w,a,e,key=randomUUID(),extra={}){const r=await fetch('http://127.0.0.1:'+w.ready.port+'/api/parking-pass/'+e.id+'/book',{method:'POST',headers:{'Content-Type':'application/json','X-QA-User':a.user.id,'Idempotency-Key':key},body:JSON.stringify({truckId:a.truck.id,slotType:'daily',...extra}),signal:AbortSignal.timeout(25000)});return{status:r.status,body:await r.json()};}
   const count=async(sql,args=[])=>(await pool.query(sql,args)).rows[0].n;
   const effects=()=>count('SELECT count(*)::int n FROM qa_provider_intents');
+  const creates=()=>count("SELECT count(*)::int n FROM qa_provider_calls WHERE operation='create'");
   const active=e=>count("SELECT count(*)::int n FROM event_bookings WHERE event_id=$1 AND status IN ('pending','confirmed')",[e.id]);
   const history=async(id)=>(await pool.query('SELECT row_to_json(b) row FROM event_bookings b WHERE id=$1',[id])).rows[0]?.row;
+  const checkpoint=async(key)=>(await pool.query('SELECT state,response_body,locked_until<=now() AS recoverable FROM idempotency_keys WHERE idem_key=$1',[key])).rows[0];
+  const rowsFor=async(a)=>(await pool.query('SELECT row_to_json(b) row FROM event_bookings b WHERE truck_id=$1 ORDER BY id',[a.truck.id])).rows.map(r=>r.row);
   await test('four distinct OS processes register the actual booking route',async()=>{assert.equal(new Set(report.workers.map(w=>w.pid)).size,4);assert.ok(report.workers.every(w=>w.pid!==process.pid));return{pids:report.workers.map(w=>w.pid)};});
   await test('sixteen distinct trucks contend for one actual-route slot',async()=>{const e=await event(),actors=await Promise.all(Array.from({length:16},()=>actor())),before=await effects();const replies=await Promise.all(actors.map((a,i)=>request(workers[i%4],a,e)));assert.equal(replies.filter(r=>r.status===200).length,1,JSON.stringify(replies));assert.ok(replies.every(r=>[200,400,409].includes(r.status)));assert.equal(await active(e),1);assert.equal(await effects()-before,1);return{requests:16,statuses:replies.map(r=>r.status),activeBookings:1,providerOperations:1};});
   await test('capacity three admits exactly three different trucks',async()=>{const e=await event({maxTrucks:3}),actors=await Promise.all(Array.from({length:12},()=>actor())),before=await effects();const replies=await Promise.all(actors.map((a,i)=>request(workers[i%4],a,e)));assert.equal(replies.filter(r=>r.status===200).length,3,JSON.stringify(replies));assert.equal(await active(e),3);assert.equal(await effects()-before,3);return{requests:12,activeBookings:3,providerOperations:3};});
@@ -138,6 +160,57 @@ async function main() {
   await test('cancelled booking history survives a successful rebooking',async()=>{const a=await actor(),e=await event();const old=await seed(schema.eventBookings,{id:randomUUID(),eventId:e.id,truckId:a.truck.id,hostId:host.id,hostPriceCents:1500,platformFeeCents:1000,totalCents:2500,status:'cancelled',stripePaymentStatus:'cancelled',cancellationReason:'qa retained terminal history',cancelledAt:new Date()});const before=await history(old.id);const r=await request(workers[2],a,e);assert.equal(r.status,200,JSON.stringify(r));assert.deepEqual(await history(old.id),before);assert.equal(await active(e),1);return{terminalRowPreserved:true,activeBookings:1};});
   await test('actual route does not cancel an old paid pending hold on another date',async()=>{const a=await actor(),past=await event(),next=await event();const old=await seed(schema.eventBookings,{id:randomUUID(),eventId:past.id,truckId:a.truck.id,hostId:host.id,hostPriceCents:1500,platformFeeCents:1000,totalCents:2500,status:'pending',stripePaymentStatus:'succeeded',stripePaymentIntentId:'pi_qa_paid_existing',paidAt:new Date(Date.now()-15*60000),createdAt:new Date(Date.now()-20*60000)});const before=await history(old.id);const r=await request(workers[3],a,next);assert.equal(r.status,200,JSON.stringify(r));assert.deepEqual(await history(old.id),before,'Paid booking history/state changed by the actual route');return{paidHoldUnchanged:true};});
   await test('a full second date rolls back all multi-day holds and makes no provider call',async()=>{const a=await actor(),other=await actor(),first=await event(),second=await event();await seed(schema.eventBookings,{id:randomUUID(),eventId:second.id,truckId:other.truck.id,hostId:host.id,hostPriceCents:1500,platformFeeCents:1000,totalCents:2500,status:'confirmed'});const before=await effects();const r=await request(workers[1],a,first,randomUUID(),{slotType:'weekly',selectedDates:[first.date.toISOString().slice(0,10),second.date.toISOString().slice(0,10)]});assert.equal(r.status,400,JSON.stringify(r));assert.equal(await active(first),0);assert.equal(await active(second),1);assert.equal(await effects(),before);return{status:400,firstDateHolds:0,existingSecondDateHolds:1,providerOperations:0};});
+
+  for(const mode of ['accepted-error','accepted-disconnect'])await test(mode+' retains capacity and recovers the same provider intent across processes',async()=>{
+   const a=await actor(),other=await actor(),e=await event(),key=randomUUID(),before=await effects(),calls=await creates();
+   createMode=mode;const first=await request(workers[0],a,e,key);createMode='normal';
+   const reserved=await active(e),saved=await checkpoint(key),original=await rowsFor(a);
+   const competing=await request(workers[1],other,e);
+   const recovered=await request(workers[2],a,e,key);
+   const evidence={firstStatus:first.status,firstCode:first.body.code||null,activeAfterError:reserved,checkpointState:saved.state,checkpointKind:saved.response_body?.kind||null,competitorStatus:competing.status,recoveredStatus:recovered.status,providerOperations:await effects()-before,createCalls:await creates()-calls};
+   log({observation:mode,...evidence});
+   assert.equal(reserved,1,JSON.stringify(evidence));assert.equal(first.status,503);assert.equal(first.body.code,'booking_request_unresolved');assert.equal(first.body.requestId,key);
+   assert.equal(saved.state,'processing');assert.equal(saved.response_body.kind,'parking_booking_holds_v1');assert.equal(saved.recoverable,true);
+   assert.equal(competing.status,400);assert.equal(recovered.status,200);assert.ok(recovered.body.paymentIntentId);assert.ok(recovered.body.clientSecret);
+   assert.equal(await active(e),1);assert.equal(await effects()-before,1);assert.equal(await creates()-calls,1);
+   const after=await rowsFor(a);assert.equal(after.length,1);assert.equal(after[0].id,original[0].id);assert.equal(after[0].status,'pending');assert.equal(after[0].cancelled_at,null);
+   const replay=await request(workers[3],a,e,key);assert.deepEqual(replay,recovered);assert.equal(await creates()-calls,1);return evidence;
+  });
+  await test('empty or unavailable provider search never releases uncertain capacity or retries create',async()=>{
+   const a=await actor(),other=await actor(),e=await event(),key=randomUUID(),before=await effects(),calls=await creates();
+   createMode='accepted-error';const first=await request(workers[0],a,e,key);createMode='normal';
+   searchMode='empty';const empty=await request(workers[1],a,e,key);
+   searchMode='unavailable';const unavailable=await request(workers[2],a,e,key);searchMode='normal';
+   const competing=await request(workers[3],other,e);
+   const evidence={firstStatus:first.status,emptyStatus:empty.status,unavailableStatus:unavailable.status,competitorStatus:competing.status,activeBookings:await active(e),providerOperations:await effects()-before,createCalls:await creates()-calls};log({observation:'search-uncertainty',...evidence});
+   assert.equal(evidence.activeBookings,1,JSON.stringify(evidence));assert.equal(first.status,503);assert.equal(empty.status,409);assert.equal(empty.body.code,'booking_request_unresolved');assert.equal(unavailable.status,503);assert.equal(competing.status,400);assert.equal(evidence.createCalls,1);assert.equal(evidence.providerOperations,1);
+   const recovered=await request(workers[1],a,e,key);assert.equal(recovered.status,200);assert.equal(await creates()-calls,1);return evidence;
+  });
+  await test('error before provider creation also retains the hold and evidence-only request',async()=>{
+   const a=await actor(),other=await actor(),e=await event(),key=randomUUID(),before=await effects(),calls=await creates();
+   createMode='reject-before-create';const first=await request(workers[0],a,e,key);createMode='normal';
+   const replay=await request(workers[1],a,e,key),competing=await request(workers[2],other,e);
+   const evidence={firstStatus:first.status,replayStatus:replay.status,competitorStatus:competing.status,activeBookings:await active(e),providerOperations:await effects()-before,createCalls:await creates()-calls};log({observation:'no-absence-proof',...evidence});
+   assert.equal(evidence.activeBookings,1,JSON.stringify(evidence));assert.equal(first.status,503);assert.equal(replay.status,409);assert.equal(competing.status,400);assert.equal(evidence.providerOperations,0);assert.equal(evidence.createCalls,1);assert.equal((await checkpoint(key)).response_body.kind,'parking_booking_holds_v1');return evidence;
+  });
+  await test('returned provider error preserves every multi-day hold until same-reference recovery',async()=>{
+   const a=await actor(),other=await actor(),firstDay=await event(),secondDay=await event(),key=randomUUID(),before=await effects(),calls=await creates();
+   const details={slotType:'weekly',selectedDates:[firstDay.date.toISOString().slice(0,10),secondDay.date.toISOString().slice(0,10)]};
+   createMode='accepted-error';const first=await request(workers[0],a,firstDay,key,details);createMode='normal';
+   const original=await rowsFor(a),beforeCounts=[await active(firstDay),await active(secondDay)];
+   const competitors=await Promise.all([request(workers[1],other,firstDay),request(workers[2],other,secondDay)]);
+   const recovered=await request(workers[3],a,firstDay,key,details);
+   const evidence={firstStatus:first.status,activeAfterError:beforeCounts,competitorStatuses:competitors.map(r=>r.status),recoveredStatus:recovered.status,providerOperations:await effects()-before,createCalls:await creates()-calls};log({observation:'multi-day-error',...evidence});
+   assert.deepEqual(beforeCounts,[1,1],JSON.stringify(evidence));assert.equal(first.status,503);assert.ok(competitors.every(r=>r.status===400));assert.equal(recovered.status,200);assert.equal(evidence.providerOperations,1);assert.equal(evidence.createCalls,1);
+   const after=await rowsFor(a);assert.equal(after.length,2);assert.deepEqual(after.map(r=>r.id),original.map(r=>r.id));assert.ok(after.every(r=>r.status==='pending'&&r.cancelled_at===null&&r.stripe_payment_intent_id===recovered.body.paymentIntentId));return evidence;
+  });
+  await test('paid state arriving before a create error is not overwritten or made bookable again',async()=>{
+   const a=await actor(),other=await actor(),e=await event(),key=randomUUID(),before=await effects(),calls=await creates();
+   createMode='paid-error';const first=await request(workers[0],a,e,key);createMode='normal';
+   const original=await rowsFor(a),competing=await request(workers[1],other,e),recovered=await request(workers[2],a,e,key);
+   const evidence={firstStatus:first.status,bookingStatus:original[0]?.status,paymentStatus:original[0]?.stripe_payment_status,competitorStatus:competing.status,recoveredStatus:recovered.status,recoveredOutcome:recovered.body.outcome||null,providerOperations:await effects()-before,createCalls:await creates()-calls};log({observation:'paid-callback-before-error',...evidence});
+   assert.equal(original[0]?.status,'confirmed',JSON.stringify(evidence));assert.equal(original[0]?.stripe_payment_status,'succeeded');assert.ok(original[0].paid_at);assert.equal(original[0].cancelled_at,null);assert.equal(first.status,503);assert.equal(competing.status,400);assert.equal(recovered.status,200);assert.equal(recovered.body.outcome,'confirmed');assert.equal(recovered.body.clientSecret,undefined);assert.deepEqual(await rowsFor(a),original);assert.equal(evidence.providerOperations,1);assert.equal(evidence.createCalls,1);return evidence;
+  });
   await test('death after provider operation recovers through another process without another create',async()=>{const a=await actor(),e=await event(),key=randomUUID(),before=await effects();pauseCreate=true;const failed=request(workers[0],a,e,key).catch(()=>null);await until(async()=>await effects()===before+1,'provider operation committed');workers[0].child.kill('SIGKILL');await until(()=>workers[0].child.signalCode!==null,'killed worker');pauseCreate=false;for(const s of providerSockets)s.destroy();await failed;await pool.query("UPDATE idempotency_keys SET locked_until=now()-interval '1 second' WHERE idem_key=$1",[key]);const callsBefore=await count("SELECT count(*)::int n FROM qa_provider_calls WHERE operation='create'");const recovered=await request(workers[2],a,e,key);assert.equal(recovered.status,200,JSON.stringify(recovered));assert.ok(recovered.body.paymentIntentId);assert.equal(await effects()-before,1);assert.equal(await count("SELECT count(*)::int n FROM qa_provider_calls WHERE operation='create'"),callsBefore);assert.equal(await active(e),1);return{status:200,providerOperations:1,additionalCreateCalls:0,activeBookings:1};});
   report.result=report.cases.every(c=>c.result==='pass')?'pass':'fail';
  } catch(e){report.result='fail';report.harnessFailure=e.stack||String(e);} finally {
