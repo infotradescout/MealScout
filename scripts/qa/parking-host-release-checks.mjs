@@ -69,17 +69,22 @@ export async function runReleaseChecks({ root, out, source }) {
     ['preserved-acquisition-routing', process.execPath, ['--test', 'scripts/acquisition-edge-routing.contract.test.mjs']],
     ['production-build', 'npm', ['run', 'build:platform']],
   ];
-  // Independent failures are retained; no failed assertion is waived.
-  for (const [name, command, args] of checks) report.steps.push(await execute(root, out, name, command, args, env));
+  // Resolve the next dependency first. A failed migration is retained, and the
+  // untouched broader checks are explicitly not run rather than called passing.
   report.steps.push(await execute(root, out, 'native-deploy-migrations', process.execPath, [ownFile, '--migrations'], {
     ...env, MEALSCOUT_MIGRATION_REHEARSAL: '1', MEALSCOUT_NATIVE_PG_BIN: process.env.MEALSCOUT_NATIVE_PG_BIN,
     MEALSCOUT_REHEARSAL_SOURCE: source,
   }));
   const migrationReport = path.join(out, 'migration-rehearsal.json');
   if (fs.existsSync(migrationReport)) report.migrations = JSON.parse(fs.readFileSync(migrationReport, 'utf8'));
+  if (report.steps[0].result === 'pass') {
+    for (const [name, command, args] of checks) report.steps.push(await execute(root, out, name, command, args, env));
+  } else {
+    report.notRun = checks.map(([name]) => ({ name, reason: 'Native migration prerequisite failed; prior receipts retain their original source' }));
+  }
   report.sourceAfter = manifest(root);
   report.finalSourceClean = git(root, 'rev-parse', 'HEAD') === source && git(root, 'status', '--porcelain') === '' && report.sourceBefore.sha256 === report.sourceAfter.sha256;
-  report.passed = report.steps.every(s => s.result === 'pass') && report.finalSourceClean && report.migrations?.passed === true;
+  report.passed = report.steps.length === checks.length + 1 && report.steps.every(s => s.result === 'pass') && report.finalSourceClean && report.migrations?.passed === true;
   report.result = report.passed ? 'pass' : 'fail'; report.finishedAt = new Date().toISOString();
   fs.writeFileSync(path.join(out, 'release-checks.json'), JSON.stringify(report, null, 2) + '\n');
   return report;
@@ -115,15 +120,20 @@ async function rehearseMigrations() {
     assert.equal((await pool.query("SELECT count(*)::int n FROM information_schema.tables WHERE table_schema='public'")).rows[0].n, 0);
     report.database = { version: (await pool.query('SELECT version() v')).rows[0].v, port, listen: '127.0.0.1', initialPublicTables: 0 };
     const bundle = path.join(out, 'deploy-migrations.cjs');
-    const buildResult = await build({ entryPoints: [path.join(root, 'scripts/runDeployMigrations.ts')], outfile: bundle, bundle: true, platform: 'node', format: 'cjs', packages: 'external', metafile: true,
+    const buildResult = await build({ stdin: { contents: 'export * from "./scripts/runDeployMigrations"; export {splitSqlStatements} from "./scripts/sqlMigrationStatements";', resolveDir: root, loader: 'ts' }, outfile: bundle, bundle: true, platform: 'node', format: 'cjs', packages: 'external', metafile: true,
       define: { 'import.meta.url': JSON.stringify(pathToFileURL(path.join(root, 'scripts/runDeployMigrations.ts')).href) },
       plugins: [{ name: 'native-postgres-transport-only', setup(b) { b.onResolve({ filter: /^@neondatabase\/serverless$/ }, () => ({ path: 'native-pg', namespace: 'qa' })); b.onLoad({ filter: /.*/, namespace: 'qa' }, () => ({ contents: 'export { Pool } from "pg"; export const neonConfig = {};', loader: 'js', resolveDir: root })); } }],
     });
-    for (const p of Object.keys(buildResult.metafile.inputs)) if (!p.startsWith('qa:')) report.files[p] = digest(fs.readFileSync(path.resolve(root, p)));
+    for (const p of Object.keys(buildResult.metafile.inputs)) if (!p.startsWith('qa:') && p !== '<stdin>') report.files[p] = digest(fs.readFileSync(path.resolve(root, p)));
     for (const p of fs.readdirSync(path.join(root, 'migrations')).filter(p => /^\d.*\.sql$/.test(p)).sort()) report.files['migrations/' + p] = digest(fs.readFileSync(path.join(root, 'migrations', p)));
+    for (const p of ['scripts/qa/parking-migration-legacy-guards.mjs', 'scripts/qa/fixtures/migration142-before-legacy-guard.sql']) report.files[p] = digest(fs.readFileSync(path.join(root, p)));
     assert.ok(report.files['scripts/runDeployMigrations.ts']); assert.ok(report.files['scripts/sqlMigrationStatements.ts']);
     process.env.MIGRATION_DATABASE_URL = url;
     const api = createRequire(import.meta.url)(bundle);
+    const { verifyMigration142LegacyGuards } = await import('./parking-migration-legacy-guards.mjs');
+    report.legacyGuards = await verifyMigration142LegacyGuards({ pool, root, splitSqlStatements: api.splitSqlStatements });
+    assert.equal(report.legacyGuards.passed, true, 'Native historical guard regressions must pass');
+    assert.equal((await pool.query("SELECT count(*)::int n FROM information_schema.tables WHERE table_schema='public'")).rows[0].n, 0);
     await api.runDeployMigrations();
     const bootstrap = api.discoverBootstrapMigrations(), release = api.discoverDeployMigrations();
     const ledger = async () => ({ bootstrap: (await pool.query('SELECT filename,migration_number,sha256 FROM mealscout_schema_bootstrap_migrations ORDER BY filename')).rows, release: (await pool.query('SELECT filename,migration_number,sha256 FROM mealscout_release_migrations ORDER BY filename')).rows });
@@ -132,6 +142,7 @@ async function rehearseMigrations() {
     report.chain = { bootstrap: bootstrap.length, release: release.length, lastMigration: release.at(-1).filename, complete: true };
     report.foreignKeys = (await pool.query("SELECT count(*)::int n FROM pg_constraint WHERE contype='f' AND connamespace='public'::regnamespace")).rows[0].n;
     assert.ok(report.foreignKeys > 0);
+    report.bookingConstraints = (await pool.query("SELECT conname,contype,pg_get_constraintdef(oid) definition FROM pg_constraint WHERE conrelid='event_bookings'::regclass ORDER BY conname")).rows;
     const schema = createRequire(import.meta.url)(path.join(out, 'schema.cjs')), db = drizzle(pool);
     async function seed(table, values) {
       const payload = { ...values }; for (const [k, c] of Object.entries(table)) {
@@ -156,8 +167,11 @@ async function rehearseMigrations() {
     assert.equal(index.indisunique, true); assert.equal(index.indisvalid, true); assert.equal(index.indisready, true);
     report.history = { rowsPreserved: before.length, terminalAndActiveCoexist: true, activeDuplicateRejected: true, rerunLedgerUnchanged: true, activeIndex: index };
     report.passed = true;
-  } catch (error) { report.error = String(error.stack || error); console.error(report.error); }
-  finally {
+  } catch (error) {
+    report.error = String(error.stack || error);
+    report.databaseError = { code: error.code, constraint: error.constraint, cause: error.cause ? { message: error.cause.message, code: error.cause.code, constraint: error.cause.constraint } : undefined };
+    console.error(report.error, report.databaseError);
+  } finally {
     delete process.env.MIGRATION_DATABASE_URL;
     if (pool) await pool.end();
     if (started) { try { execFileSync(path.join(bin, 'pg_ctl'), ['-D', data, '-m', 'immediate', '-w', 'stop'], { stdio: 'pipe' }); report.cleanup.postgresStopped = true; } catch (error) { report.cleanup.stopFailure = String(error); report.passed = false; } }
@@ -165,7 +179,8 @@ async function rehearseMigrations() {
     if (!report.cleanup.stopFailure) { fs.rmSync(owned, { recursive: true, force: true }); report.cleanup.ownedDirectoryRemoved = true; }
     if (started && !report.cleanup.stopFailure) { report.cleanup.port = await closedPort(port); if (!report.cleanup.port.closed) report.passed = false; }
     report.finishedAt = new Date().toISOString(); fs.writeFileSync(path.join(out, 'migration-rehearsal.json'), JSON.stringify(report, null, 2) + '\n');
-    console.log('HOST_MIGRATION_REHEARSAL ' + JSON.stringify(report)); process.exitCode = report.passed ? 0 : 1;
+    const summary = { ...report, files: undefined, filesManifest: { count: Object.keys(report.files).length, sha256: digest(JSON.stringify(report.files)) } };
+    console.log('HOST_MIGRATION_REHEARSAL ' + JSON.stringify(summary)); process.exitCode = report.passed ? 0 : 1;
   }
 }
 if (process.argv.includes('--migrations') && path.resolve(process.argv[1] || '') === ownFile) await rehearseMigrations();

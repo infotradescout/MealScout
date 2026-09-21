@@ -1,0 +1,16 @@
+{
+  "schemaVersion":1,
+  "source":"f0ff21af3840449046b3dc1c018e275436b518ae",
+  "tree":"7a809eb57753231ea69d39fa835c41db036bd882",
+  "renderService":"srv-dao026n40ujc73ddeua0",
+  "renderDeploy":"dep-daolqvtg1s2s738p2bc0",
+  "routeResult":"pass","routePassed":20,"routeFailed":0,
+  "releaseResult":"fail",
+  "passedReleaseSteps":["typecheck","parking-expiry-compatibility","parking-durable-compatibility","parking-recovery-compatibility","parking-client-request-policy","stripe-webhook-safety","migration-deploy-contract","frozen-cleanup-safety","preserved-acquisition-routing","production-build"],
+  "migrationRun":{"startedAt":"2026-09-21T16:40:20.276Z","finishedAt":"2026-09-21T16:40:21.828Z","bootstrapFilesApplied":124,"releaseFilesApplied":24,"lastMigration":"142_parking_pass_active_booking_uniqueness.sql","foreignKeyConstraints":278,"sqlChainComplete":true,"historyAcceptance":false,"failure":"Drizzle rejected pending rebooking after a cancelled row with the same event/truck. The original log captured the wrapper error but not its nested PostgreSQL constraint cause; a native regression must establish that cause rather than assume it.","logSha256":"0041118a8e8cf49987cf292c4c2d1c6d12410187609a772bd11842e8064f987a"},
+  "sourceBeforeAndAfter":{"files":2790,"sha256":"3ce23913ca73d6d5425f25317b84b25c0fd6b50790d16f64de96e614e3537376"},
+  "rawReceiptSha256":"19e09520f99aba57ba499d042aa7b85f22d5cec0e8f8217bf5851cec1d1930d3",
+  "nativeMigrationCleanup":{"postgresStopped":true,"ownedDirectoryRemoved":true,"port":43153,"portClosed":true},
+  "finalSourceClean":true,"productionChanged":false,"liveProviderAcceptance":false,
+  "billingCheck":"Owner-waived; not a wait gate. The actual history assertion remains mandatory."
+}
