@@ -16,6 +16,10 @@ const source = git('rev-parse', 'HEAD');
 assert.equal(source, process.env.RENDER_GIT_COMMIT);
 assert.equal(process.env.MEALSCOUT_HOST_ROUTE_PROOF, '1');
 assert.equal(git('status', '--porcelain'), '');
+if (process.env.MEALSCOUT_PARKING_COMPATIBILITY_PROOF === '1') {
+  const { runCompatibilityCutoverProof } = await import('./parking-compatibility-cutover.mjs');
+  await runCompatibilityCutoverProof();
+} else {
 await import('./parking-host-route-core.mjs');
 const receipt = JSON.parse(fs.readFileSync(receiptPath, 'utf8'));
 receipt.routeResult = receipt.result;
@@ -46,8 +50,6 @@ try {
   receipt.liveProviderAcceptance = false;
   receipt.releaseFinishedAt = new Date().toISOString();
   fs.writeFileSync(receiptPath, JSON.stringify(receipt, null, 2) + '\n');
-  // The complete receipt remains in the artifact. Avoid repeating the entire
-  // migration manifest and nested failure logs in one enormous log message.
   const summary = JSON.parse(JSON.stringify(receipt)); delete summary.tables;
   if (summary.releaseChecks?.migrations?.files) {
     const files = summary.releaseChecks.migrations.files;
@@ -58,4 +60,5 @@ try {
   summary.rawReceiptSha256 = hash(fs.readFileSync(receiptPath));
   console.log('HOST_ROUTE_RELEASE_PROOF ' + JSON.stringify(summary));
   process.exitCode = receipt.result === 'pass' ? 0 : 1;
+}
 }
