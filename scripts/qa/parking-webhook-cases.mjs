@@ -93,4 +93,45 @@ export async function runParkingWebhookCases(c) {
     assert.ok(reply.status>=400,JSON.stringify(reply));assert.deepEqual(await rowsFor(b.a),before);assert.deepEqual(await counts(b.intent.id),ledgerBefore);
     return {status:reply.status,bookingHistoryUnchanged:true,ledgerUnchanged:true};
   });
+  await test('late signed success on a cancelled hold credits once across concurrent deliveries and preserves cancellation history', async () => {
+    const b=await book(), reason='QA retained cancellation '+randomUUID(), eventId='evt_qa_'+randomUUID();
+    // Seed the terminal state, not a replacement booking. Expiry itself has a separate integration suite.
+    await pool.query("UPDATE event_bookings SET status='cancelled', cancelled_at=now(), cancellation_reason=$2 WHERE id=$1",[b.original[0].id,reason]);
+    const cancelled=(await rowsFor(b.a))[0];
+    const replies=await Promise.all(Array.from({length:8},(_,i)=>webhook(workers[i%4],b.intent,{eventId})));
+    assert.ok(replies.every(r=>r.status===200),JSON.stringify(replies));
+    const rows=await rowsFor(b.a), ledger=await counts(b.intent.id);
+    assert.deepEqual(rows.map(r=>r.id).sort(),b.original.map(r=>r.id).sort());
+    assert.ok(rows.every(r=>r.status==='cancelled' && r.refund_status==='credit' && r.stripe_payment_status==='succeeded'));
+    assert.equal(rows[0].cancellation_reason,reason);assert.deepEqual(rows[0].cancelled_at,cancelled.cancelled_at);
+    assert.equal(ledger.credits,1);assert.equal(Math.round(Number(ledger.creditTotal)*100),b.intent.amount);assert.equal(ledger.earnings,0);
+    const replay=await webhook(workers[3],b.intent);assert.equal(replay.status,200);
+    assert.deepEqual(await rowsFor(b.a),rows);assert.deepEqual(await counts(b.intent.id),ledger);
+    return {deliveries:9,credits:1,creditCents:b.intent.amount,earnings:0,originalBookingRetained:true,cancellationHistoryRetained:true,terminalReplayUnchanged:true};
+  });
+  await test('conflicting earnings rolls back booking confirmation and the same payment recovers after reconciliation', async () => {
+    const b=await book(), hold=b.original[0], ledgerId=randomUUID();
+    await pool.query("INSERT INTO host_earnings_ledger (id,host_id,booking_id,stripe_payment_intent_id,entry_type,source_type,amount_cents,description) VALUES ($1,$2,$3,$4,'booking_earned','parking_pass_booking',$5,'QA conflicting evidence')",[ledgerId,hold.host_id,hold.id,b.intent.id,hold.host_price_cents+1]);
+    const before=await rowsFor(b.a), ledgerBefore=await counts(b.intent.id);
+    const eventBefore=(await pool.query('SELECT * FROM events WHERE id=$1',[hold.event_id])).rows;
+    const reply=await webhook(workers[2],b.intent);
+    assert.equal(reply.status,503,JSON.stringify(reply));assert.deepEqual(await rowsFor(b.a),before);assert.deepEqual(await counts(b.intent.id),ledgerBefore);
+    assert.deepEqual((await pool.query('SELECT * FROM events WHERE id=$1',[hold.event_id])).rows,eventBefore);
+    // Reconcile only the isolated fixture's inconsistent ledger evidence, then redeliver the same payment.
+    await pool.query('UPDATE host_earnings_ledger SET amount_cents=$2 WHERE id=$1',[ledgerId,hold.host_price_cents]);
+    const evidence=await assertConfirmed(b,await webhook(workers[1],b.intent));
+    return {...evidence,rejectedStatus:503,bookingAndEventRollback:true,conflictingLedgerPreserved:true,samePaymentRecovered:true};
+  });
+  await test('signed payment cannot settle another actor through modified owner metadata', async () => {
+    const b=await book(),before=await rowsFor(b.a),ledgerBefore=await counts(b.intent.id);
+    const reply=await webhook(workers[2],{...b.intent,metadata:{...b.intent.metadata,userId:randomUUID()}});
+    assert.equal(reply.status,503,JSON.stringify(reply));assert.deepEqual(await rowsFor(b.a),before);assert.deepEqual(await counts(b.intent.id),ledgerBefore);
+    return {status:503,bookingHistoryUnchanged:true,ledgerUnchanged:true};
+  });
+  await test('signed payment cannot substitute the saved payout destination', async () => {
+    const b=await book(),before=await rowsFor(b.a),ledgerBefore=await counts(b.intent.id);
+    const reply=await webhook(workers[2],{...b.intent,transfer_data:{destination:'acct_qa_mismatched_destination'}});
+    assert.equal(reply.status,503,JSON.stringify(reply));assert.deepEqual(await rowsFor(b.a),before);assert.deepEqual(await counts(b.intent.id),ledgerBefore);
+    return {status:503,bookingHistoryUnchanged:true,ledgerUnchanged:true};
+  });
 }
