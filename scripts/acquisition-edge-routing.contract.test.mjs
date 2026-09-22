@@ -74,3 +74,6 @@ for (const [key, source, destination, fallback] of [
     }
   });
 }
+
+// Exercise the actual daily callback with isolated imports and provider responses.
+await import("./indexnow-scheduler.contract.test.mjs");

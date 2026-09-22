@@ -617,6 +617,8 @@ export async function registerSchedulers(app: Express): Promise<void> {
           `${baseUrl}/for-food-trucks`,
           `${baseUrl}/for-bars`,
           `${baseUrl}/for-events`,
+          `${baseUrl}/for-hosts`,
+          `${baseUrl}/host-location-partner`,
         ];
         const result = await submitIndexNowUrls(staticUrls);
         const detail = result.ok || !result.body ? "" : ` body=${result.body.slice(0, 240)}`;
