@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {spawnSync} from 'node:child_process';
-const candidate='c405ad7cb5aaf23b57ca2e0b43a638e335292567';
+const candidate='a5980feb967c1470fd065fda97b6075b94253e10';
 const base='161a161a4dd876630fee487ec0cd88f6aa418e5f';
 const root=process.cwd(),temp=fs.mkdtempSync(path.join(os.tmpdir(),'meal-signup-resilience-')),checkout=path.join(temp,'source');
 const output=path.join(root,'test-results/recovery-isolated-report');fs.mkdirSync(output,{recursive:true});
