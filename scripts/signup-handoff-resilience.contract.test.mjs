@@ -18,8 +18,10 @@ test('host details, validation and save payload are unchanged; pending auth cann
   const marker='  return (\n    <div className="min-h-screen bg-[var(--bg-layered)] relative overflow-hidden">';
   assert(before.includes(marker)&&after.includes(marker));
   assert.equal(after.slice(after.indexOf(marker)).trimEnd(),before.slice(before.indexOf(marker)).trimEnd());
-  const validate=source=>source.slice(source.indexOf('  const validate ='),source.indexOf('  if (isLoading)'));
-  const oldLogic=validate(before).trimEnd();
+  const start=before.indexOf('  const validate =');
+  const end=before.indexOf('\n  if (isLoading) {',start);
+  assert(start>=0 && end>start,'Compare the complete original validation and submit block');
+  const oldLogic=before.slice(start,end).trimEnd();
   const newLogic=after.slice(after.indexOf('  const validate ='),after.indexOf('  if (authState === "loading" && authError)')).replace('    if (!isAuthenticated || authState !== "authenticated") return;\n','').trimEnd();
   assert.equal(newLogic,oldLogic);
   assert.match(after,/if \(authState === "loading"\) return;/);
