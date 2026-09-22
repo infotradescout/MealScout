@@ -81,7 +81,7 @@ test('real SQL excludes quality reports, tainted journeys, repeats and out-of-wi
     const client={query:(text,values)=>db.query(text,values),release:()=>{}};
     const r=await readAcquisitionQuality(client,24,now);
     assert.equal(r.recordedRows,11);assert.equal(r.entryEvents,6);assert.equal(r.actionEvents,3);assert.equal(r.profileQualityReports,2);assert.equal(r.candidateJourneys,2);assert.equal(r.candidateJourneysWithAction,1);
-    const relaxed=ACQUISITION_QUALITY_SQL.replace("AND NOT EXISTS(SELECT 1 FROM rows bad WHERE bad.journey=e.journey AND bad.classification IN ('automation_signal','qa_signal'))",'');
+    const relaxed=ACQUISITION_QUALITY_SQL.replace(/AND NOT EXISTS\(\s*SELECT 1 FROM public\.request_logs bad[\s\S]*?\n    \)/,'');
     assert.notEqual(relaxed,ACQUISITION_QUALITY_SQL);const negative=await db.query(relaxed,[r.from,r.toExclusive]);assert(negative.rows[0].report.candidateJourneys>r.candidateJourneys);
     await db.exec('DELETE FROM request_logs');await row('legacy','profile_view',null,1);await row('error','missing_menu_viewed','qa_signal',2,{discoveryStage:'entry'});
     const historical=await readAcquisitionQuality(client,24,now);assert.equal(historical.classifiedAcquisitionEvents,0);assert.equal(historical.candidateJourneys,null);assert.equal(historical.profileQualityReports,1);
@@ -95,4 +95,66 @@ test('legacy analytics, discovery and evidence UI remain exact source; new route
   assert.equal(readFileSync('server/routes/discoveryObservatoryRoutes.ts','utf8'),original('server/routes/discoveryObservatoryRoutes.ts'));
   assert.equal(readFileSync('client/src/pages/admin-discovery-evidence.tsx','utf8'),original('client/src/pages/admin-discovery-observatory.tsx'));
   const registration=readFileSync('server/routes/analyticsRoutes.ts','utf8');assert(registration.includes('registerAcquisitionQualityRoutes(app, isAdmin, pool)'));assert(registration.includes('registerEvidenceAnalyticsRoutes(app)'));
+});
+
+test('retained-taint admission is independent of reporting window, with scoped identities', async t => {
+  assert(process.env.MEAL_QUALITY_PGLITE_MODULE, 'Explicit disposable SQL fixture tooling is required');
+  const { PGlite } = await import(process.env.MEAL_QUALITY_PGLITE_MODULE);
+  const db = new PGlite();
+  try {
+    await db.exec('CREATE TABLE request_logs(id text primary key,created_at timestamp,metadata jsonb,surface text,event_type text,anonymous_actor_id text,session_id text)');
+    let sequence = 0;
+    const quality = classification => ({ version: 1, basis: 'server_observed_request_signals', classification });
+    async function add(journey, event, offsetHours, metadata = {}, surface = 'public_profile', actor = null, session = null) {
+      await db.query('INSERT INTO request_logs VALUES($1,$2,$3,$4,$5,$6,$7)', [
+        String(++sequence), new Date(now.getTime() + offsetHours * 3600000).toISOString(),
+        JSON.stringify({ anonymousJourneyId: journey, discoverySource: 'google', ...metadata }), surface, event, actor, session,
+      ]);
+    }
+    async function seed() {
+      await db.exec('TRUNCATE request_logs');
+      for (const offset of [-1,-0.9]) await add('fixture-journey', 'profile_view', offset, { trafficQuality: quality('browser_candidate') });
+      await add('fixture-journey', 'profile_action', -0.5, { trafficQuality: quality('browser_candidate') });
+    }
+    const client = { query: (text, values) => db.query(text, values), release: () => {} };
+    const scenarios = [
+      { name: 'pre-window automation still excludes a recent candidate', hours: -26, classification: 'automation_signal', excluded: true },
+      { name: 'retained 47-hour diagnostic excludes even in the 6-hour report', hours: -47, classification: 'qa_signal', excluded: true },
+      { name: 'later retained diagnostic revises the earlier candidate', hours: 1, classification: 'qa_signal', excluded: true },
+      { name: 'quality errors retain exclusion authority without becoming entries', hours: -2, event: 'missing_menu_viewed', classification: 'qa_signal', excluded: true },
+      { name: 'a different journey is not merged', hours: -26, journey: 'different-journey', classification: 'qa_signal', excluded: false },
+      { name: 'unrelated operational surfaces are not joined', hours: -26, surface: 'unrelated_operations', classification: 'qa_signal', excluded: false },
+      { name: 'unsupported version stays unknown', hours: -26, classification: 'qa_signal', override: { version: 999 }, excluded: false },
+      { name: 'client-claimed classification has no server authority', hours: -26, classification: 'qa_signal', override: { basis: 'client_claim' }, excluded: false },
+      { name: 'unclassified events are not invented as known automation', hours: -26, classification: 'unclassified', excluded: false },
+      { name: 'an anonymous diagnostic without identity does not taint everyone', hours: -26, journey: null, classification: 'qa_signal', excluded: false },
+      { name: 'existing anonymous actor fallback is preserved', hours: -26, journey: null, actor: 'fixture-journey', classification: 'qa_signal', excluded: true },
+      { name: 'existing session fallback is preserved', hours: -26, journey: null, session: 'fixture-journey', classification: 'qa_signal', excluded: true },
+      { name: 'explicit journey identity wins over a conflicting actor fallback', hours: -26, journey: 'different-journey', actor: 'fixture-journey', classification: 'qa_signal', excluded: false },
+    ];
+    for (const scenario of scenarios) await t.test(scenario.name, async () => {
+      await seed();
+      await add(Object.hasOwn(scenario, 'journey') ? scenario.journey : 'fixture-journey', scenario.event || 'share_link_copied', scenario.hours,
+        { trafficQuality: { ...quality(scenario.classification), ...scenario.override } }, scenario.surface, scenario.actor, scenario.session);
+      for (const hours of [6,24,48]) {
+        const r = await readAcquisitionQuality(client, hours, now);
+        const countedTaint = scenario.surface !== 'unrelated_operations' && scenario.hours >= -hours && scenario.hours < 0;
+        assert.equal(r.recordedRows, 3 + Number(countedTaint), 'Raw facts remain bounded to the selected window');
+        assert.equal(r.entryEvents, 2);
+        assert.equal(r.actionEvents, 1);
+        assert.equal(r.candidateJourneys, scenario.excluded ? 0 : 1, 'retained-taint admission');
+        assert.equal(r.candidateJourneysWithAction, scenario.excluded ? 0 : 1);
+        assert.equal(r.sources.length, scenario.excluded ? 0 : 1);
+        for (const field of ['verifiedPeople','searchImpressions','searchClicks','verifiedCustomerOutcomes']) assert.equal(r[field], null);
+        assert(!JSON.stringify(r).includes('fixture-journey'), 'No raw identifiers in aggregate output');
+      }
+    });
+    await t.test('retained out-of-window signals cannot establish a missing acquisition baseline', async () => {
+      await db.exec('TRUNCATE request_logs');
+      await add('fixture-journey','share_link_copied',-26,{trafficQuality:quality('qa_signal')});
+      const r = await readAcquisitionQuality(client,24,now);
+      assert.equal(r.recordedRows,0);assert.equal(r.classifiedAcquisitionEvents,0);
+      assert.equal(r.candidateJourneys,null);assert.deepEqual(r.sources,[]);
+    });
+  } finally { await db.close(); }
 });
