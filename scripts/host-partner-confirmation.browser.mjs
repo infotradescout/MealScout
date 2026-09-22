@@ -78,7 +78,7 @@ try {
         assert.equal(await page.locator('form').count(),0);
       } else {
         // This detects the unchanged page's false-positive success without relying on new test IDs.
-        await page.waitForFunction(()=>Boolean(document.querySelector('[role="alert"]'))||document.body.innerText.includes('Request received'));
+        await page.waitForFunction(()=>Boolean(document.querySelector('[role="alert"]'))||document.body.textContent.includes('Request received'));
         assert.equal(await page.getByRole('heading',{name:'Request received',exact:true}).count(),0,'Malformed or failed response must not produce a receipt');
         const message=await page.getByRole('alert').innerText();assert(message.length>10);assert(!message.includes('PRIVATE_INTERNAL_DETAIL'));
         assert.equal(await page.locator('#email').inputValue(),'fixture@example.invalid');assert.equal(await page.locator('#businessName').inputValue(),'  Fixture host  ');
