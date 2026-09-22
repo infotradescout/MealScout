@@ -24,7 +24,9 @@ if (process.env.MEAL_HOST_INDEXNOW_MODE === "observe" && process.env.MEAL_HOST_I
 }
 
 // Explicit modes preserve existing recovery and already completed acquisition work.
-if (process.env.MEAL_HOST_INDEXNOW_MODE) {
+if (process.env.MEAL_HOST_INTAKE_MODE) {
+  await import("./verifyHostIntakeConfirmation.mjs");
+} else if (process.env.MEAL_HOST_INDEXNOW_MODE) {
   await import("./verifyHostIndexNowDelivery.mjs");
 } else if (process.env.MEAL_RETAINED_TAINT_PROOF === "1") {
   await import("./verifyRetainedJourneyTaints.mjs");
