@@ -24,7 +24,9 @@ if (process.env.MEAL_HOST_INDEXNOW_MODE === "observe" && process.env.MEAL_HOST_I
 }
 
 // Explicit modes preserve existing recovery and already completed acquisition work.
-if (process.env.MEAL_HOST_INTAKE_MODE === "comparison") {
+if (process.env.MEAL_SIGNUP_HANDOFF_MODE === "validate") {
+  await import("./verifySignupHandoffResilience.mjs");
+} else if (process.env.MEAL_HOST_INTAKE_MODE === "comparison") {
   await import("./verifyHostIntakeComparison.mjs");
 } else if (process.env.MEAL_HOST_INTAKE_MODE) {
   await import("./verifyHostIntakeConfirmation.mjs");
