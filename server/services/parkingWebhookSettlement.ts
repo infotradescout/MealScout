@@ -104,7 +104,8 @@ export async function settleDurableParkingPayment(intent: Stripe.PaymentIntent):
       requireTruth(existing.length <= 1 && (!existing.length || Math.round(Number(existing[0].amount)*100) === intent.amount),"credit_ledger_conflict");
       if (!existing.length) await tx.insert(creditLedger).values({userId:m.userId,amount:(intent.amount/100).toFixed(2),sourceType:creditReason,sourceId:intent.id});
       const now = new Date();
-      for (const r of rows) await tx.update(eventBookings).set({status:"cancelled",stripePaymentIntentId:intent.id,stripePaymentStatus:"succeeded",paidAt:r.paidAt || now,refundStatus:"credit",refundAmountCents:r.totalCents,refundedAt:now,refundReason:"Credit issued",cancelledAt:r.cancelledAt || now,cancellationReason:r.cancellationReason || "Overbooked - credit issued",updatedAt:now}).where(eq(eventBookings.id,r.id));
+      // Preserve database timestamp precision instead of rewriting retained history through JavaScript Date.
+      for (const r of rows) await tx.update(eventBookings).set({status:"cancelled",stripePaymentIntentId:intent.id,stripePaymentStatus:"succeeded",paidAt:sql`coalesce(${eventBookings.paidAt}, now())`,refundStatus:"credit",refundAmountCents:r.totalCents,refundedAt:now,refundReason:"Credit issued",cancelledAt:sql`coalesce(${eventBookings.cancelledAt}, now())`,cancellationReason:r.cancellationReason || "Overbooked - credit issued",updatedAt:now}).where(eq(eventBookings.id,r.id));
       return result("credited",true);
     }
     requireTruth(pending.length + confirmed.length === rows.length, "group_state_invalid");
