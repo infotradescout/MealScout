@@ -36,7 +36,17 @@ WITH rows AS (
 ), entries AS (
   SELECT DISTINCT ON (e.journey) e.journey,e.source,e.created_at
   FROM rows e WHERE e.kind='entry' AND e.classification='browser_candidate' AND e.journey IS NOT NULL
-    AND NOT EXISTS(SELECT 1 FROM rows bad WHERE bad.journey=e.journey AND bad.classification IN ('automation_signal','qa_signal'))
+    -- Inspect all retained events on the same discovery surfaces, not only this window.
+    -- Identity precedence is unchanged; unrelated operational sessions are not joined.
+    -- Expired history stays unavailable. This query does not extend raw-log retention.
+    AND NOT EXISTS(
+      SELECT 1 FROM public.request_logs bad
+      WHERE bad.surface IN ('public_profile','public_discovery','discovery_observatory')
+        AND coalesce(nullif(bad.metadata->>'anonymousJourneyId',''),nullif(bad.anonymous_actor_id,''),nullif(bad.session_id,''))=e.journey
+        AND bad.metadata#>>'{trafficQuality,version}'='1'
+        AND bad.metadata#>>'{trafficQuality,basis}'='server_observed_request_signals'
+        AND bad.metadata#>>'{trafficQuality,classification}' IN ('automation_signal','qa_signal')
+    )
   ORDER BY e.journey,e.created_at,e.id
 ), candidates AS (
   SELECT e.*,EXISTS(SELECT 1 FROM rows a WHERE a.journey=e.journey AND a.kind='action'
