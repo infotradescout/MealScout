@@ -96,3 +96,33 @@ test('optional referral storage cannot throw into signup or authentication',()=>
   }
   const server=load(undefined);assert.doesNotThrow(()=>server.setAffiliateRef('fixture-tag'));assert.equal(server.getStoredAffiliateRef(),null);
 });
+
+test('telemetry changes only containment of the existing throttle check',()=>{
+  const file='client/src/utils/uxTelemetry.ts',before=original(file),after=readFileSync(file,'utf8');
+  const expected=before.replace('  if (shouldThrottle(throttleKey, 500)) return;\n','').replace('  try {\n    await fetch','  try {\n    if (shouldThrottle(throttleKey, 500)) return;\n    await fetch');
+  assert.notEqual(expected,before);
+  assert.equal(after,expected,'No new event, payload, throttle window, storage or endpoint behavior');
+});
+
+test('optional telemetry storage cannot reject into a completed signup',async()=>{
+  const compiled=ts.transpileModule(readFileSync('client/src/utils/uxTelemetry.ts','utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText;
+  function load(mode='normal'){
+    let time=1000;const requests=[],memory=new Map();
+    const storage={getItem:k=>{if(mode==='read-denied')throw new Error('Storage denied');return memory.get(k)??null;},setItem:(k,v)=>{if(mode==='write-denied')throw new Error('Storage denied');memory.set(k,v);}};
+    const module={exports:{}},context={module,exports:module.exports,window:{},Date:{now:()=>time},fetch:async(url,options)=>{requests.push({url,...options});if(mode==='network-failure')throw new Error('Network unavailable');return {ok:true};}};
+    Object.defineProperty(context,'sessionStorage',{get(){if(mode==='getter-denied')throw new Error('Storage denied');return storage;}});
+    runInNewContext(compiled,context);
+    return {track:module.exports.trackUxEvent,requests,advance:()=>{time+=501;}};
+  }
+  for(const mode of ['getter-denied','read-denied','write-denied']){
+    const fixture=load(mode);
+    await assert.doesNotReject(()=>fixture.track('fixture_signup',{stage:'fixture'}));
+    assert.equal(fixture.requests.length,0,'Unavailable throttling must not introduce extra telemetry requests');
+  }
+  const normal=load();await normal.track('fixture_signup',{stage:'fixture'});await normal.track('fixture_signup',{stage:'fixture'});
+  assert.equal(normal.requests.length,1);normal.advance();await normal.track('fixture_signup',{stage:'fixture'});assert.equal(normal.requests.length,2);
+  assert.equal(normal.requests[0].url,'/api/telemetry/track');assert.equal(normal.requests[0].method,'POST');assert.equal(normal.requests[0].credentials,'include');
+  assert.deepEqual(JSON.parse(normal.requests[0].body),{eventName:'fixture_signup',properties:{stage:'fixture'}});
+  const network=load('network-failure');await assert.doesNotReject(()=>network.track('fixture_signup'));assert.equal(network.requests.length,1);
+  const empty=load();await empty.track('');assert.equal(empty.requests.length,0);
+});
