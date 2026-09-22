@@ -1,0 +1,69 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import {spawnSync} from 'node:child_process';
+const candidate='9a0c6fcee9f74d93391df7e3dfa09dbbf0aaf219';
+const base='161a161a4dd876630fee487ec0cd88f6aa418e5f';
+const root=process.cwd(),temp=fs.mkdtempSync(path.join(os.tmpdir(),'meal-signup-resilience-')),checkout=path.join(temp,'source');
+const output=path.join(root,'test-results/recovery-isolated-report');fs.mkdirSync(output,{recursive:true});
+const env=Object.fromEntries(['PATH','HOME','TMPDIR','LANG','LC_ALL','PLAYWRIGHT_BROWSERS_PATH'].filter(k=>process.env[k]).map(k=>[k,process.env[k]]));Object.assign(env,{CI:'true',TZ:'UTC',NODE_ENV:'development',NODE_OPTIONS:'--max-old-space-size=3072'});
+const report={candidate,base,harness:process.env.RENDER_GIT_COMMIT,startedAt:new Date().toISOString(),result:'fail',steps:[],productionWrites:0,scope:'Frontend signup and session-loading transitions, including optional referral and telemetry storage. Actual pages and hooks with local HTTP fixtures; no real registration, email verification or publication.'};
+function run(label,command,args,cwd=checkout,extra={},expected=0){
+ console.log('SIGNUP_HANDOFF_START '+label);
+ const r=spawnSync(command,args,{cwd,env:{...env,...extra},encoding:'utf8',timeout:900000,maxBuffer:96*1024*1024});
+ const text=(r.stdout||'')+(r.stderr||'');fs.writeFileSync(path.join(output,label+'.log'),text);
+ report.steps.push({label,exit:r.status,expected,at:new Date().toISOString(),error:r.error?.message||null});console.log('SIGNUP_HANDOFF_STEP '+JSON.stringify(report.steps.at(-1)));
+ if(r.status!==expected)console.error(text.slice(-18000));assert.equal(r.status,expected,label);return text;
+}
+try {
+ for(const k of ['DATABASE_URL','TEST_DATABASE_URL','STRIPE_SECRET_KEY','SESSION_SECRET','BREVO_API_KEY','SENDGRID_API_KEY','SMTP_PASS'])assert(!process.env[k],'No production credentials: '+k);
+ run('clone','git',['clone','--no-hardlinks','--no-checkout',root,checkout],temp);
+ run('fetch','git',['fetch','--no-tags','https://github.com/infotradescout/MealScout.git',candidate]);
+ run('checkout','git',['checkout','--detach',candidate]);assert.equal(run('identity','git',['rev-parse','HEAD']).trim(),candidate);
+ assert.equal(run('initial-clean','git',['status','--porcelain']).trim(),'');
+ assert.deepEqual(run('bounded-delta','git',['diff','--name-only',base,candidate]).trim().split('\n').sort(),['client/src/lib/share.ts','client/src/pages/customer-signup.tsx','client/src/pages/host-signup.tsx','client/src/utils/uxTelemetry.ts','scripts/signup-handoff-resilience.browser.mjs','scripts/signup-handoff-resilience.contract.test.mjs']);
+ run('npm-ci','npm',['ci','--include=dev','--no-audit','--no-fund']);
+ run('preservation-and-optional-storage','node',['--test','scripts/signup-handoff-resilience.contract.test.mjs']);
+ for(const [name,file,pattern] of [
+  ['referral','client/src/lib/share.ts','optional referral storage'],
+  ['telemetry','client/src/utils/uxTelemetry.ts','optional telemetry storage'],
+ ]){
+  const full=path.join(checkout,file),fixed=fs.readFileSync(full);
+  try{
+   fs.writeFileSync(full,run('old-'+name+'-source','git',['show',base+':'+file]));
+   const negative=run('old-'+name+'-negative','node',['--test','--test-name-pattern='+pattern,'scripts/signup-handoff-resilience.contract.test.mjs'],checkout,{},1);
+   assert(negative.includes('Storage denied'),'Original '+name+' helper must reproduce the storage exception');
+  }finally{fs.writeFileSync(full,fixed);}
+ }
+ run('restored-helper-source','git',['diff','--exit-code','HEAD','--']);
+ run('platform-build','npm',['run','build:platform']);
+ run('chromium','node',['node_modules/playwright/cli.js','install','chromium']);
+ const positive=run('actual-signup-browser','node',['scripts/signup-handoff-resilience.browser.mjs']);
+ const line=positive.split('\n').find(l=>l.startsWith('SIGNUP_HANDOFF_BROWSER '));assert(line);
+ report.browser=JSON.parse(line.slice('SIGNUP_HANDOFF_BROWSER '.length));assert.equal(report.browser.passed,true);assert.equal(report.browser.cases.length,32);
+ for(const [name,file,suite,expectedMessage] of [
+  ['old-cleanup-negative','client/src/pages/customer-signup.tsx','storage','successful signup must reach verification despite blocked storage'],
+  ['old-guest-redirect-negative','client/src/pages/host-signup.tsx','auth','pending auth must not redirect the host to signup'],
+ ]) {
+  const full=path.join(checkout,file),fixed=fs.readFileSync(full);
+  try {
+   fs.writeFileSync(full,run(name+'-source','git',['show',base+':'+file]));
+   const result=run(name,'node',['scripts/signup-handoff-resilience.browser.mjs'],checkout,{MEAL_HANDOFF_SUITE:suite},1);
+   assert(result.includes(expectedMessage),'Original source must fail the intended assertion');
+  } finally {fs.writeFileSync(full,fixed);}
+ }
+ run('restored-page-source','git',['diff','--exit-code','HEAD','--']);
+ run('typecheck','npm',['run','check']);
+ run('changed-lint','node',['node_modules/eslint/bin/eslint.js','client/src/lib/share.ts','client/src/utils/uxTelemetry.ts','client/src/pages/customer-signup.tsx','client/src/pages/host-signup.tsx']);
+ run('existing-acquisition-contract','node',['--test','scripts/acquisition-edge-routing.contract.test.mjs']);
+ run('existing-clean-affiliate-contract','node',['--import','tsx','scripts/mealscout-final-clean-affiliate-runtime.contract.test.ts']);
+ for(const script of ['test:public-data-boundary','test:public-discovery-contract','test:public-restaurant-indexability','test:profile-action-policy'])run(script.replaceAll(':','-'),'npm',['run',script]);
+ run('restored-source','git',['diff','--exit-code','HEAD','--']);assert.equal(run('final-clean','git',['status','--porcelain']).trim(),'');report.result='pass';
+}catch(error){report.error=String(error.stack||error);process.exitCode=1;}
+finally {
+ fs.rmSync(temp,{recursive:true,force:true});report.ownedCheckoutRemoved=!fs.existsSync(temp);report.finishedAt=new Date().toISOString();
+ fs.writeFileSync(path.join(output,'signup-handoff-evidence.json'),JSON.stringify(report,null,2));
+ fs.writeFileSync(path.join(output,'index.html'),'<meta name="robots" content="noindex,nofollow"><h1>Signup handoff verification</h1><a href="signup-handoff-evidence.json">Executed result</a>');fs.writeFileSync(path.join(output,'robots.txt'),'User-agent: *\nDisallow: /\n');
+ console.log('SIGNUP_HANDOFF_SUMMARY '+JSON.stringify(report));
+}

@@ -120,7 +120,9 @@ export function ParkingScheduleCalendar({
     return days;
   }, [monthAnchor]);
 
-  const activeKey = toDateKey(activeDate);
+  // Calendar selections are browser-local dates, unlike API date-only values.
+  // Converting them to UTC can select another day's stops after UTC midnight.
+  const activeKey = format(activeDate, "yyyy-MM-dd");
   const activeItems = itemsByDate.get(activeKey) ?? [];
   const today = useMemo(() => {
     const value = new Date();
@@ -172,7 +174,7 @@ export function ParkingScheduleCalendar({
 
         <div className="grid grid-cols-7 gap-2 p-4">
           {calendarDays.map((day) => {
-            const key = toDateKey(day);
+            const key = format(day, "yyyy-MM-dd");
             const dayItems = itemsByDate.get(key) ?? [];
             const isCurrentMonth = isSameMonth(day, monthAnchor);
             const isActive = isSameDay(day, activeDate);
