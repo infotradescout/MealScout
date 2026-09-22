@@ -698,6 +698,7 @@ export default function CustomerSignup() {
         page: "customer-signup",
         stage: "redirect_to_email_handoff",
         redirectPath: toSafeFunnelDestinationPath("/supplier/dashboard"),
+        accountType: "supplier",
       });
       goToVerificationHandoff("/supplier/dashboard");
     },
