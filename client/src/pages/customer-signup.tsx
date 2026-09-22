@@ -569,8 +569,12 @@ export default function CustomerSignup() {
       return await res.json();
     },
     onSuccess: async (payload: any) => {
-      if (typeof window !== "undefined") {
-        window.localStorage.removeItem(SIGNUP_DRAFT_KEY);
+      try {
+        if (typeof window !== "undefined") {
+          window.localStorage.removeItem(SIGNUP_DRAFT_KEY);
+        }
+      } catch {
+        // Optional draft cleanup must not interrupt a successful registration.
       }
       const redirectAfterLogin = getCustomerRedirectPath();
       try {
@@ -613,8 +617,12 @@ export default function CustomerSignup() {
       return await res.json();
     },
     onSuccess: async (payload: any) => {
-      if (typeof window !== "undefined") {
-        window.localStorage.removeItem(SIGNUP_DRAFT_KEY);
+      try {
+        if (typeof window !== "undefined") {
+          window.localStorage.removeItem(SIGNUP_DRAFT_KEY);
+        }
+      } catch {
+        // Optional draft cleanup must not interrupt a successful registration.
       }
       try {
         window.sessionStorage.setItem(
@@ -662,8 +670,12 @@ export default function CustomerSignup() {
       return await res.json();
     },
     onSuccess: async (payload: any) => {
-      if (typeof window !== "undefined") {
-        window.localStorage.removeItem(SIGNUP_DRAFT_KEY);
+      try {
+        if (typeof window !== "undefined") {
+          window.localStorage.removeItem(SIGNUP_DRAFT_KEY);
+        }
+      } catch {
+        // Optional draft cleanup must not interrupt a successful registration.
       }
       try {
         window.sessionStorage.setItem(
@@ -686,7 +698,6 @@ export default function CustomerSignup() {
         page: "customer-signup",
         stage: "redirect_to_email_handoff",
         redirectPath: toSafeFunnelDestinationPath("/supplier/dashboard"),
-        accountType: "supplier",
       });
       goToVerificationHandoff("/supplier/dashboard");
     },
