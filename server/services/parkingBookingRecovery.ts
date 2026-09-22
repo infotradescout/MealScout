@@ -127,6 +127,7 @@ export async function reconcileParkingBooking(req: Request, checkpoint: unknown,
       .where(and(inArray(eventBookings.id, ids), eq(eventBookings.truckId, c.truckId)));
     if (!resumable) return { statusCode: 200, body: {
       bookingRecovery: true, paymentIntentId: intent.id, bookingStartDate: c.bookingStartDate,
+      bookingSetup: c.setup,
       outcome: allConfirmed ? "confirmed" : allCredited ? "credited" : "pending",
     } };
     const b = c.setup.breakdown;

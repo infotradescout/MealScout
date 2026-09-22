@@ -15,7 +15,10 @@ const source = git('rev-parse', 'HEAD');
 assert.equal(source, process.env.RENDER_GIT_COMMIT);
 assert.equal(process.env.MEALSCOUT_HOST_ROUTE_PROOF, '1');
 assert.equal(git('status', '--porcelain'), '');
-if (process.env.MEALSCOUT_PARKING_READONLY_PROBE === '1') {
+if (process.env.MEALSCOUT_PARKING_WEBHOOK_PROOF === '1') {
+  const { runParkingWebhookNativeProof } = await import('./parking-webhook-native.mjs');
+  await runParkingWebhookNativeProof();
+} else if (process.env.MEALSCOUT_PARKING_READONLY_PROBE === '1') {
   execFileSync(process.execPath, ['--test', 'scripts/qa/parking-provider-readiness.test.mjs'], { cwd: root, stdio: 'inherit' });
   const { runParkingLiveReadonlyProbe } = await import('./parking-live-readonly-probe.mjs');
   await runParkingLiveReadonlyProbe();
