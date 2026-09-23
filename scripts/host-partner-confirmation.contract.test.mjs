@@ -72,10 +72,11 @@ function loadService(options={}) {
   const calls={saves:0,sends:0,marks:0,queries:0,logs:[]};
   let persisted=null;
   const db={
-    select:()=>({from:table=>({where:()=>({limit:async()=>{
+    select:()=>({from:table=>({where:condition=>({limit:async()=>{
       calls.queries++;
       if(table===leadTable)return options.existing?[{...input,id:'fixture-lead-123'}]:[];
       if(options.readEmailFailure)throw new Error('PRIVATE_LEDGER_READ');
+      if(options.historicalMarker)return JSON.stringify(condition).includes('"name":"gt"')?[]:[{id:'sent-fixture'}];
       return options.recent?[{id:'sent-fixture'}]:[];
     }})})}),
     insert:table=>({values:values=>({
@@ -136,6 +137,10 @@ for(const [label,options,sends,marks] of [
 
 test('recent accepted email is not sent again',async()=>{
   const f=loadService({recent:true});assert.deepEqual(await f.run(),saved);assert.equal(f.calls.sends,0);assert.equal(f.calls.marks,0);
+});
+
+test('a recorded step-one email is not resent after the old cooldown',async()=>{
+  const f=loadService({historicalMarker:true});assert.deepEqual(await f.run(),saved);assert.equal(f.calls.sends,0);assert.equal(f.calls.marks,0);
 });
 
 test('existing lead update still returns its saved identity',async()=>{

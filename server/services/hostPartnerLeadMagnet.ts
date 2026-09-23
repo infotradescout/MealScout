@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { and, eq, gt, ilike } from "drizzle-orm";
+import { and, eq, ilike } from "drizzle-orm";
 import { db } from "../db";
 import { emailService } from "../emailService";
 import {
@@ -124,7 +124,7 @@ async function markSent(leadId: string, step: number, metadata?: any) {
     .onConflictDoNothing();
 }
 
-async function sentRecently(leadId: string, step: number, cutoff: Date) {
+async function wasStepSent(leadId: string, step: number) {
   const rows = await db
     .select({ id: hostPartnerLeadSequenceSends.id })
     .from(hostPartnerLeadSequenceSends)
@@ -133,7 +133,6 @@ async function sentRecently(leadId: string, step: number, cutoff: Date) {
         eq(hostPartnerLeadSequenceSends.leadId, leadId),
         eq(hostPartnerLeadSequenceSends.sequence, SEQUENCE),
         eq(hostPartnerLeadSequenceSends.step, step),
-        gt(hostPartnerLeadSequenceSends.sentAt, cutoff),
       ),
     )
     .limit(1);
@@ -205,14 +204,9 @@ export async function handleHostPartnerLeadRequest(params: {
   }
   const leadId = lead.id;
   try {
-    const cooldownMinutesRaw = Number(
-      process.env.HOST_PARTNER_EMAIL_COOLDOWN_MINUTES ?? 30,
-    );
-    const cooldownMinutes = Number.isFinite(cooldownMinutesRaw)
-      ? Math.max(1, Math.min(Math.floor(cooldownMinutesRaw), 24 * 60))
-      : 30;
-    const cutoff = new Date(Date.now() - cooldownMinutes * 60 * 1000);
-    const shouldSkip = await sentRecently(leadId, 1, cutoff);
+    // Step 1 has one unique send marker per lead. A timestamp cutoff can
+    // disagree with a timestamp-without-time-zone column and resend email.
+    const shouldSkip = await wasStepSent(leadId, 1);
     if (shouldSkip) {
       return { ok: true as const, leadId, emailed: true };
     }
