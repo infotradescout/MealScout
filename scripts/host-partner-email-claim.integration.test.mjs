@@ -111,6 +111,8 @@ try {
       }
       if (to.startsWith("unknown+")) throw new Error("PRIVATE_PROVIDER_AMBIGUITY");
       if (to.startsWith("false+")) return false;
+      if (category === "marketing" && to.startsWith("dripunknown+")) throw new Error("PRIVATE_PROVIDER_AMBIGUITY");
+      if (category === "marketing" && to.startsWith("dripfalse+")) return false;
       return true;
     },
   };
@@ -271,15 +273,40 @@ try {
      VALUES ($1,'host_partner_v1',1,now()-interval '2 days')`,
     [dripLead.rows[0].id],
   );
+  for (const email of ["dripfalse+host@example.invalid", "dripunknown+host@example.invalid"]) {
+    const lead = await pool.query(
+      "INSERT INTO host_partner_leads(email,business_name,location_type) VALUES ($1,'Ambiguous follow-up fixture','office') RETURNING id",
+      [email],
+    );
+    await pool.query(
+      `INSERT INTO host_partner_email_claims(email_normalized,sequence,step,lead_id,status,accepted_at)
+       VALUES ($1,'host_partner_v1',1,$2,'accepted',now()-interval '6 days')`,
+      [email, lead.rows[0].id],
+    );
+    await pool.query(
+      `INSERT INTO host_partner_lead_sequence_sends(lead_id,sequence,step,sent_at)
+       VALUES ($1,'host_partner_v1',1,now()-interval '6 days')`,
+      [lead.rows[0].id],
+    );
+  }
   const firstDrip = await drip.runHostPartnerLeadDripCron();
   assert.equal(firstDrip.sent, 1);
-  assert.equal(emails.filter((entry) => entry.category === "marketing").length, 1);
-  assert.equal(emails.find((entry) => entry.category === "marketing").to, "drip+host@example.invalid");
+  assert.equal(emails.filter((entry) => entry.category === "marketing").length, 3);
+  assert.equal(emails.filter((entry) => entry.to === "drip+host@example.invalid" && entry.category === "marketing").length, 1);
   const secondDrip = await drip.runHostPartnerLeadDripCron();
   assert.equal(secondDrip.sent, 0);
-  assert.equal(emails.filter((entry) => entry.category === "marketing").length, 1);
+  assert.equal(emails.filter((entry) => entry.category === "marketing").length, 3);
   const dripStep2 = await pool.query("SELECT status FROM host_partner_email_claims WHERE email_normalized='drip+host@example.invalid' AND step=2");
   assert.equal(dripStep2.rows[0].status, "accepted");
+  for (const email of ["dripfalse+host@example.invalid", "dripunknown+host@example.invalid"]) {
+    const pendingStep2 = await pool.query(
+      "SELECT status,accepted_at FROM host_partner_email_claims WHERE email_normalized=$1 AND step=2",
+      [email],
+    );
+    assert.equal(pendingStep2.rows[0].status, "pending");
+    assert.equal(pendingStep2.rows[0].accepted_at, null);
+    assert.equal(emails.filter((entry) => entry.to === email && entry.category === "marketing").length, 1);
+  }
 
   const step3Lead = await pool.query(
     "INSERT INTO host_partner_leads(email,business_name,location_type) VALUES ('third+host@example.invalid','Step 3 fixture','office') RETURNING id",
@@ -298,11 +325,11 @@ try {
   );
   const thirdDrip = await drip.runHostPartnerLeadDripCron();
   assert.equal(thirdDrip.sent, 1);
-  assert.equal(emails.filter((entry) => entry.category === "marketing").length, 2);
+  assert.equal(emails.filter((entry) => entry.category === "marketing").length, 4);
   assert.equal(emails.filter((entry) => entry.to === "third+host@example.invalid").length, 1);
   const thirdReplay = await drip.runHostPartnerLeadDripCron();
   assert.equal(thirdReplay.sent, 0);
-  assert.equal(emails.filter((entry) => entry.category === "marketing").length, 2);
+  assert.equal(emails.filter((entry) => entry.category === "marketing").length, 4);
   const step3Claim = await pool.query("SELECT status FROM host_partner_email_claims WHERE email_normalized='third+host@example.invalid' AND step=3");
   assert.equal(step3Claim.rows[0].status, "accepted");
   const duplicateFollowUps = await pool.query(
@@ -310,6 +337,19 @@ try {
   );
   assert.equal(duplicateFollowUps.rows[0].count, 0);
   assert.equal(emails.filter((entry) => entry.to === "duplicate+host@example.invalid" && entry.category === "marketing").length, 0);
+  const historicPendingAfter = await pool.query(
+    "SELECT status FROM host_partner_email_claims WHERE email_normalized='history+host@example.invalid' AND step=2",
+  );
+  assert.equal(historicPendingAfter.rows[0].status, "pending");
+  assert.equal(emails.filter((entry) => entry.to === "history+host@example.invalid" && entry.category === "marketing").length, 0);
+  for (const email of ["dripfalse+host@example.invalid", "dripunknown+host@example.invalid"]) {
+    const followUpClaims = await pool.query(
+      "SELECT step,status FROM host_partner_email_claims WHERE email_normalized=$1 AND step IN (2,3) ORDER BY step",
+      [email],
+    );
+    assert.deepEqual(followUpClaims.rows.map((row) => [row.step, row.status]), [[2, "pending"]]);
+    assert.equal(emails.filter((entry) => entry.to === email && entry.category === "marketing").length, 1);
+  }
   for (const email of ["false+host@example.invalid", "unknown+host@example.invalid", "ledger+host@example.invalid"]) {
     const followUpClaims = await pool.query(
       "SELECT count(*)::int AS count FROM host_partner_email_claims WHERE email_normalized=$1 AND step IN (2,3)",
@@ -335,9 +375,9 @@ try {
       sequentialReplay: "accepted claim returned without another provider call",
       providerFalseAndException: "pending claims retained, no automatic resend or Step 1 marker",
       providerAcceptedLedgerFailure: "transaction rolled back to pending, no replay or Step 1 marker; Steps 2/3 silent",
-      historicalDuplicateBackfill: "two lead rows preserved; Step 1 accepted and Step 2 pending by normalized email",
+      historicalDuplicateBackfill: "two lead rows preserved; Step 1 accepted and Step 2 pending without automatic replay",
       duplicateLeadDrip: "recent duplicate did not inherit old lead's Step 1 acceptance or receive Steps 2/3",
-      drip: "accepted Step 2 and Step 3 each delivered once; pending/ambiguous claims silent",
+      drip: "accepted Step 2 and Step 3 each delivered once; provider-false/exception Step 2 claims stayed pending without replay or Step 3",
     },
     providerOriginEmail: false,
     productionWrites: 0,
