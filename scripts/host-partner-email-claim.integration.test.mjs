@@ -67,6 +67,20 @@ try {
             ($1,'host_partner_v1',2,now()-interval '1 day')`,
     [historicRows.rows[0].id, historicRows.rows[1].id],
   );
+
+  // A recent duplicate must not inherit an older lead's accepted Step 1 time.
+  // Without a lead-ID predicate, the cron would send Step 2 for the recent row.
+  const oldAndRecent = await pool.query(`
+    INSERT INTO host_partner_leads(email,business_name,location_type,created_at)
+    VALUES ('duplicate+host@example.invalid','Old host','office',now()-interval '60 days'),
+           ('DUPLICATE+host@example.invalid','Recent duplicate','office',now())
+    RETURNING id
+  `);
+  await pool.query(
+    `INSERT INTO host_partner_lead_sequence_sends(lead_id,sequence,step,sent_at)
+     VALUES ($1,'host_partner_v1',1,now()-interval '6 days')`,
+    [oldAndRecent.rows[0].id],
+  );
   await pool.query(migration143);
   await pool.query(migration143);
   const historicClaims = await pool.query(
@@ -77,6 +91,11 @@ try {
   assert(historicClaims.rows[0].accepted_at);
   assert.equal(historicClaims.rows[1].status, "pending");
   assert.equal(historicClaims.rows[1].accepted_at, null);
+  const duplicateClaim = await pool.query(
+    "SELECT lead_id,status FROM host_partner_email_claims WHERE email_normalized='duplicate+host@example.invalid' AND step=1",
+  );
+  assert.equal(duplicateClaim.rows[0].lead_id, oldAndRecent.rows[0].id);
+  assert.equal(duplicateClaim.rows[0].status, "accepted");
 
   const db = drizzle({ client: pool, schema: { hostPartnerLeads, hostPartnerLeadSequenceSends, hostPartnerEmailClaims } });
   const emails = [];
@@ -286,6 +305,11 @@ try {
   assert.equal(emails.filter((entry) => entry.category === "marketing").length, 2);
   const step3Claim = await pool.query("SELECT status FROM host_partner_email_claims WHERE email_normalized='third+host@example.invalid' AND step=3");
   assert.equal(step3Claim.rows[0].status, "accepted");
+  const duplicateFollowUps = await pool.query(
+    "SELECT count(*)::int AS count FROM host_partner_email_claims WHERE email_normalized='duplicate+host@example.invalid' AND step IN (2,3)",
+  );
+  assert.equal(duplicateFollowUps.rows[0].count, 0);
+  assert.equal(emails.filter((entry) => entry.to === "duplicate+host@example.invalid" && entry.category === "marketing").length, 0);
   for (const email of ["false+host@example.invalid", "unknown+host@example.invalid", "ledger+host@example.invalid"]) {
     const followUpClaims = await pool.query(
       "SELECT count(*)::int AS count FROM host_partner_email_claims WHERE email_normalized=$1 AND step IN (2,3)",
@@ -312,6 +336,7 @@ try {
       providerFalseAndException: "pending claims retained, no automatic resend or Step 1 marker",
       providerAcceptedLedgerFailure: "transaction rolled back to pending, no replay or Step 1 marker; Steps 2/3 silent",
       historicalDuplicateBackfill: "two lead rows preserved; Step 1 accepted and Step 2 pending by normalized email",
+      duplicateLeadDrip: "recent duplicate did not inherit old lead's Step 1 acceptance or receive Steps 2/3",
       drip: "accepted Step 2 and Step 3 each delivered once; pending/ambiguous claims silent",
     },
     providerOriginEmail: false,

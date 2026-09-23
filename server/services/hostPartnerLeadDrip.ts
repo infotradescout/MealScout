@@ -113,6 +113,7 @@ export async function runHostPartnerLeadDripCron() {
       step1AcceptedAt: sql<Date | null>`(
         select c.accepted_at from host_partner_email_claims c
         where c.email_normalized = lower(btrim(${hostPartnerLeads.email}))
+          and c.lead_id = ${hostPartnerLeads.id}
           and c.sequence = ${SEQUENCE}
           and c.step = 1
           and c.status = 'accepted'
