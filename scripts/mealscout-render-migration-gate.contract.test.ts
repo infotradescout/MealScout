@@ -228,6 +228,23 @@ assert.throws(
 );
 assert.throws(
   () =>
+    useLocalPostgresTransport(
+      `${localMigrationUrl}?host=ep-example.us-east-2.aws.neon.tech`,
+      { MEALSCOUT_LOCAL_POSTGRES_MIGRATION: "true" },
+    ),
+  /connection URL parameters/,
+  "pg connection-string query parameters must not override a loopback hostname",
+);
+assert.throws(
+  () =>
+    useLocalPostgresTransport("postgresql://user@localhost:55494/mealscout_pr394", {
+      MEALSCOUT_LOCAL_POSTGRES_MIGRATION: "true",
+    }),
+  /numeric loopback PostgreSQL address/,
+  "localhost can resolve outside loopback through host configuration",
+);
+assert.throws(
+  () =>
     useLocalPostgresTransport(localMigrationUrl, {
       MEALSCOUT_LOCAL_POSTGRES_MIGRATION: "true",
       RENDER_SERVICE_ID: "srv-example",

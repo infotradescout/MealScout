@@ -233,10 +233,18 @@ export function useLocalPostgresTransport(
   if (environment.MEALSCOUT_LOCAL_POSTGRES_MIGRATION !== "true") {
     return false;
   }
-  const hostname = new URL(databaseUrl).hostname.toLowerCase();
-  if (!["127.0.0.1", "localhost", "[::1]"].includes(hostname)) {
+  const parsed = new URL(databaseUrl);
+  // node-postgres treats URL query parameters such as ?host= as connection
+  // overrides, so checking only URL.hostname can permit a remote target.
+  if (parsed.search || parsed.hash) {
     throw new Error(
-      "Local migration transport requires a loopback PostgreSQL address",
+      "Local migration transport does not permit connection URL parameters or fragments",
+    );
+  }
+  const hostname = parsed.hostname.toLowerCase();
+  if (!["127.0.0.1", "[::1]"].includes(hostname)) {
+    throw new Error(
+      "Local migration transport requires a numeric loopback PostgreSQL address",
     );
   }
   if (environment.RENDER_SERVICE_ID) {
