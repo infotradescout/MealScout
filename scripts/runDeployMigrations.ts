@@ -4,7 +4,8 @@ import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { Pool, neonConfig } from "@neondatabase/serverless";
+import { Pool as NeonPool, neonConfig } from "@neondatabase/serverless";
+import pg from "pg";
 import ws from "ws";
 
 import { splitSqlStatements } from "./sqlMigrationStatements";
@@ -21,6 +22,7 @@ export const DEPLOY_MIGRATION_DDL_LOCK_TIMEOUT_MS = 5_000;
 export const DEPLOY_MIGRATION_STATEMENT_TIMEOUT_MS = 300_000;
 
 neonConfig.webSocketConstructor = ws;
+const { Pool: NodePool } = pg;
 
 export type DeployMigration = {
   filename: string;
@@ -224,6 +226,35 @@ export function resolveMigrationDatabaseUrl(
   return parsed.toString();
 }
 
+export function useLocalPostgresTransport(
+  databaseUrl: string,
+  environment: NodeJS.ProcessEnv = process.env,
+): boolean {
+  if (environment.MEALSCOUT_LOCAL_POSTGRES_MIGRATION !== "true") {
+    return false;
+  }
+  const parsed = new URL(databaseUrl);
+  // node-postgres treats URL query parameters such as ?host= as connection
+  // overrides, so checking only URL.hostname can permit a remote target.
+  if (parsed.search || parsed.hash) {
+    throw new Error(
+      "Local migration transport does not permit connection URL parameters or fragments",
+    );
+  }
+  const hostname = parsed.hostname.toLowerCase();
+  if (!["127.0.0.1", "[::1]"].includes(hostname)) {
+    throw new Error(
+      "Local migration transport requires a numeric loopback PostgreSQL address",
+    );
+  }
+  if (environment.RENDER_SERVICE_ID) {
+    throw new Error(
+      "Local migration transport is unavailable in a Render service",
+    );
+  }
+  return true;
+}
+
 async function countUserTables(client: MigrationClient): Promise<number> {
   const result = await client.query(`
     select count(*)::int as count
@@ -388,10 +419,11 @@ async function runEmptyDatabaseBootstrap(
 export async function runDeployMigrations(
   hooks: DeployMigrationHooks = {},
 ): Promise<void> {
-  const pool = new Pool({
-    connectionString: resolveMigrationDatabaseUrl(),
-    max: 1,
-  });
+  const connectionString = resolveMigrationDatabaseUrl();
+  const poolOptions = { connectionString, max: 1 };
+  const pool = useLocalPostgresTransport(connectionString)
+    ? new NodePool(poolOptions)
+    : new NeonPool(poolOptions);
 
   const client = await pool.connect();
   let lockAcquired = false;
