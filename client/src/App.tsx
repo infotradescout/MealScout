@@ -263,6 +263,8 @@ const publicRoutePrefixes = [
   "/category/",
   "/deals",
   "/restaurant/",
+  "/caterer/",
+  "/private-chef/",
   "/terms-of-service",
   "/moderation-policy",
   "/privacy-policy",
@@ -327,7 +329,7 @@ const shouldRenderShellNotFound = (path: string) => {
   if (segments.length <= 2) return false;
   if (isPublicPath(path)) return false;
   if (
-    /^\/(restaurant|truck|bar|location|supplier)\/[^/]+(?:\/[^/]+)?$/i.test(
+    /^\/(restaurant|truck|bar|caterer|private-chef|location|supplier)\/[^/]+(?:\/[^/]+)?$/i.test(
       path,
     )
   ) {
