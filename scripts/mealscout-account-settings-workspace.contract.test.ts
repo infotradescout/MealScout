@@ -122,9 +122,9 @@ if (/subscription|premium|membership|billing/.test(
   throw new Error("Public identity status must not depend on paid-tier state");
 }
 if (
-  !settingsPage.includes("Public profile status") ||
-  !settingsPage.includes("role-scoped public identity") ||
-  !settingsPage.includes("does not require a paid profile tier")
+  !settings.includes("Public profile status") ||
+  !settings.includes("role-scoped public identity") ||
+  !settings.includes("does not require a paid profile tier")
 ) {
   throw new Error("Settings must explain why account-level public identity is unavailable");
 }
