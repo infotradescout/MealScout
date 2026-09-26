@@ -161,7 +161,7 @@
       "destination": "https://mealscout.onrender.com/api/$1"
     },
     {
-      "source": "/:kind(restaurant|truck|bar|chef|location|event|events|deal|supplier|suppliers|p|video)/:path*",
+      "source": "/:kind(restaurant|truck|bar|caterer|private-chef|chef|location|event|events|deal|supplier|suppliers|p|video)/:path*",
       "destination": "https://mealscout.onrender.com/:kind/:path*"
     },
     {
@@ -349,7 +349,7 @@
       "dest": "https://mealscout.onrender.com/api/$1"
     },
     {
-      "src": "/(restaurant|truck|bar|chef|location|event|events|deal|supplier|suppliers|p|video)/(.*)",
+      "src": "/(restaurant|truck|bar|caterer|private-chef|chef|location|event|events|deal|supplier|suppliers|p|video)/(.*)",
       "dest": "https://mealscout.onrender.com/$1/$2"
     },
     {
