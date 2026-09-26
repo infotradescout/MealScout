@@ -831,7 +831,15 @@ async function hostPage(baseUrl: string, hostId: string) {
     .map((value) => cleanText(value))
     .filter(Boolean)
     .join(", ");
+  const canonicalCity = await resolveCanonicalProfileCity({
+    city: row.city,
+    state: row.state,
+  });
   const canonicalPath = `/location/${encodeURIComponent(`${toSlug(name) || row.id}--${row.id}`)}`;
+  const canonicalProfileUrl = absoluteUrl(baseUrl, canonicalPath);
+  const profileEntityId = `${canonicalProfileUrl}#location`;
+  const profilePageId = `${canonicalProfileUrl}#webpage`;
+  const profileUpdatedAt = isoDate(row.updatedAt);
   const videos = await publicVideosFor("host", row.id);
   const image = videos[0]?.thumbnailUrl || resolveHostImage(baseUrl, row);
   const description = cleanText(
@@ -844,6 +852,65 @@ async function hostPage(baseUrl: string, hostId: string) {
     isActive: true,
   });
 
+  const locationSchema = {
+    "@context": "https://schema.org",
+    "@type": "LocalBusiness",
+    "@id": profileEntityId,
+    name,
+    description,
+    url: canonicalProfileUrl,
+    mainEntityOfPage: { "@id": profilePageId },
+    image,
+    telephone: publicPhone || undefined,
+    sameAs: [
+      publicProfile.websiteUrl,
+      publicProfile.socialLinks.instagramUrl,
+      publicProfile.socialLinks.facebookPageUrl,
+      publicProfile.socialLinks.xUrl,
+    ].filter(Boolean),
+    address: {
+      "@type": "PostalAddress",
+      streetAddress: publicProfile.addressPublicLabel
+        ? row.address || undefined
+        : undefined,
+      addressLocality: row.city || undefined,
+      addressRegion: row.state || undefined,
+      addressCountry: "US",
+    },
+  };
+  const profilePageSchema = {
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    "@id": profilePageId,
+    name: `${name} Food Truck Location${cityState ? ` in ${cityState}` : ""} | MealScout`,
+    description,
+    url: canonicalProfileUrl,
+    dateModified: profileUpdatedAt,
+    mainEntity: { "@id": profileEntityId },
+    isPartOf: { "@type": "WebSite", name: "MealScout", url: baseUrl },
+  };
+  const breadcrumbSchema = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "MealScout", item: baseUrl },
+      ...(canonicalCity
+        ? [{
+            "@type": "ListItem",
+            position: 2,
+            name: `Food in ${canonicalCity.name}`,
+            item: absoluteUrl(baseUrl, `/city/${encodeURIComponent(canonicalCity.slug)}/food`),
+          }]
+        : []),
+      {
+        "@type": "ListItem",
+        position: canonicalCity ? 3 : 2,
+        name,
+        item: canonicalProfileUrl,
+      },
+    ],
+  };
+
   return {
     title: `${name} Food Truck Location${cityState ? ` in ${cityState}` : ""} | MealScout`,
     description,
@@ -853,34 +920,28 @@ async function hostPage(baseUrl: string, hostId: string) {
       ? PUBLIC_RESTAURANT_INDEXABLE_ROBOTS
       : PUBLIC_RESTAURANT_NOINDEX_ROBOTS,
     schema: [
-      {
-        "@context": "https://schema.org",
-        "@type": "LocalBusiness",
-        name,
-        description,
-        url: absoluteUrl(baseUrl, canonicalPath),
-        image,
-        telephone: publicPhone || undefined,
-        address: {
-          "@type": "PostalAddress",
-          streetAddress: publicProfile.addressPublicLabel
-            ? row.address || undefined
-            : undefined,
-          addressLocality: row.city || undefined,
-          addressRegion: row.state || undefined,
-          addressCountry: "US",
-        },
-      },
+      profilePageSchema,
+      locationSchema,
+      breadcrumbSchema,
       ...videoSchemas(baseUrl, videos, name),
     ],
     links: [
       { label: "Open location", href: canonicalPath },
+      ...(canonicalCity
+        ? [{
+            label: `Food in ${canonicalCity.name}`,
+            href: `/city/${encodeURIComponent(canonicalCity.slug)}/food`,
+          }]
+        : []),
       { label: "Host food trucks", href: "/parking-pass" },
       { label: "Explore nearby food", href: "/scout" },
     ],
     body: [
       locationTypeLabel ? `Location type: ${locationTypeLabel}` : "",
       cityState ? `Area: ${cityState}` : "",
+      profileUpdatedAt
+        ? `Public profile updated: ${profileUpdatedAt.slice(0, 10)}`
+        : "",
       videos.length
         ? `${videos.length} public video${videos.length === 1 ? "" : "s"} available for this location.`
         : "",
@@ -1201,39 +1262,79 @@ async function supplierPage(baseUrl: string, supplierId: string) {
     .map((value) => cleanText(value))
     .filter(Boolean)
     .join(", ");
+  const canonicalCity = await resolveCanonicalProfileCity({
+    city: row.city,
+    state: row.state,
+  });
   const canonicalPath = `/supplier/${encodeURIComponent(`${toSlug(name) || row.id}--${row.id}`)}`;
+  const canonicalProfileUrl = absoluteUrl(baseUrl, canonicalPath);
+  const profileEntityId = `${canonicalProfileUrl}#supplier`;
+  const profilePageId = `${canonicalProfileUrl}#webpage`;
+  const profileUpdatedAt = isoDate(row.updatedAt);
   const description = `${name}${cityState ? ` in ${cityState}` : ""} is listed on MealScout Supply Scout for food businesses and operators.`;
+  const supplierSchema = {
+    "@context": "https://schema.org",
+    "@type": "LocalBusiness",
+    "@id": profileEntityId,
+    name,
+    description,
+    url: canonicalProfileUrl,
+    mainEntityOfPage: { "@id": profilePageId },
+    telephone: publicProfile.phonePublic || undefined,
+    sameAs: [publicProfile.websiteUrl].filter(Boolean),
+    address: {
+      "@type": "PostalAddress",
+      streetAddress: publicProfile.addressPublicLabel
+        ? row.address || undefined
+        : undefined,
+      addressLocality: row.city || undefined,
+      addressRegion: row.state || undefined,
+      addressCountry: "US",
+    },
+  };
+  const profilePageSchema = {
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    "@id": profilePageId,
+    name: `${name}${cityState ? ` in ${cityState}` : ""} | MealScout Supplier`,
+    description,
+    url: canonicalProfileUrl,
+    dateModified: profileUpdatedAt,
+    mainEntity: { "@id": profileEntityId },
+    isPartOf: { "@type": "WebSite", name: "MealScout", url: baseUrl },
+  };
+  const breadcrumbSchema = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "MealScout", item: baseUrl },
+      { "@type": "ListItem", position: 2, name: "Suppliers", item: absoluteUrl(baseUrl, "/suppliers") },
+      { "@type": "ListItem", position: 3, name, item: canonicalProfileUrl },
+    ],
+  };
 
   return {
     title: `${name}${cityState ? ` in ${cityState}` : ""} | MealScout Supplier`,
     description,
     canonicalPath,
-    imageUrl: defaultSocialImagePath,
+    imageUrl: publicProfile.logoUrl || defaultSocialImagePath,
     robots: isSyntheticTestEntity ? noindexRobots : indexableRobots,
-    schema: {
-      "@context": "https://schema.org",
-      "@type": "LocalBusiness",
-      name,
-      description,
-      url: absoluteUrl(baseUrl, canonicalPath),
-      telephone: publicProfile.phonePublic || undefined,
-      address: {
-        "@type": "PostalAddress",
-        streetAddress: publicProfile.addressPublicLabel
-          ? row.address || undefined
-          : undefined,
-        addressLocality: row.city || undefined,
-        addressRegion: row.state || undefined,
-        addressCountry: "US",
-      },
-    },
+    schema: [profilePageSchema, supplierSchema, breadcrumbSchema],
     links: [
       { label: "Open supplier", href: canonicalPath },
       { label: "Browse suppliers", href: "/suppliers" },
-      { label: "Supply Scout", href: "/suppliers" },
+      ...(canonicalCity
+        ? [{
+            label: `Food in ${canonicalCity.name}`,
+            href: `/city/${encodeURIComponent(canonicalCity.slug)}/food`,
+          }]
+        : []),
     ],
     body: [
       cityState ? `Area: ${cityState}` : "",
+      profileUpdatedAt
+        ? `Public profile updated: ${profileUpdatedAt.slice(0, 10)}`
+        : "",
       row.offersDelivery ? "Delivery available" : "",
     ].filter(Boolean),
   } satisfies PrerenderPage;
