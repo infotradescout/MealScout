@@ -2346,6 +2346,35 @@ async function run() {
         html.text.includes(`"url":"${canonicalUrl}"`),
         `JSON-LD must use the same canonical identity for ${profile.id}`,
       );
+      const profileJsonLd = JSON.stringify(parseJsonLd(html.text));
+      assert.equal(
+        profileJsonLd.includes('"@type":"WebPage"'),
+        true,
+        `profile page graph missing for ${profile.id}`,
+      );
+      assert.equal(
+        profileJsonLd.includes('"@type":"BreadcrumbList"'),
+        true,
+        `profile breadcrumb graph missing for ${profile.id}`,
+      );
+      assert.equal(
+        profileJsonLd.includes(`${canonicalUrl}#business`),
+        true,
+        `business entity id missing for ${profile.id}`,
+      );
+      assert.equal(
+        profileJsonLd.includes(`${canonicalUrl}#webpage`),
+        true,
+        `profile page entity id missing for ${profile.id}`,
+      );
+      assert.match(html.text, /Public profile updated: \d{4}-\d{2}-\d{2}/);
+      if (String(profile.path).startsWith("/truck/")) {
+        assert.match(html.text, /href="\/food-trucks\/pensacola"/);
+        assert.match(html.text, /href="\/food-truck-catering\/pensacola"/);
+        assert.match(html.text, /href="\/book-food-truck\/pensacola"/);
+      } else {
+        assert.match(html.text, /href="\/city\/pensacola\/food"/);
+      }
     }
 
     const typedRestaurantProfileCases = [
@@ -2714,6 +2743,17 @@ async function run() {
       `/api/public/profiles/supplier/${ids.visibleSupplier}`,
     );
     const visibleSupplierHtml = await get(`/supplier/${ids.visibleSupplier}`);
+    const visibleSupplierJsonLd = JSON.stringify(parseJsonLd(visibleSupplierHtml.text));
+    assert.equal(visibleSupplierJsonLd.includes('"@type":"WebPage"'), true);
+    assert.equal(visibleSupplierJsonLd.includes('"@type":"BreadcrumbList"'), true);
+    assert.equal(
+      visibleSupplierJsonLd.includes(
+        `https://www.mealscout.us/supplier/visible-supply-co--${ids.visibleSupplier}#supplier`,
+      ),
+      true,
+    );
+    assert.match(visibleSupplierHtml.text, /Public profile updated: \d{4}-\d{2}-\d{2}/);
+    assert.match(visibleSupplierHtml.text, /href="\/suppliers"/);
     for (const allowed of [
       "822 Visible Supplier Street",
       "+1-850-555-0822",
@@ -2728,6 +2768,12 @@ async function run() {
       `/api/public/profiles/location/${ids.tomorrowHost}`,
     );
     const visibleHostHtml = await get(`/location/${ids.tomorrowHost}`);
+    const visibleHostJsonLd = JSON.stringify(parseJsonLd(visibleHostHtml.text));
+    assert.equal(visibleHostJsonLd.includes('"@type":"WebPage"'), true);
+    assert.equal(visibleHostJsonLd.includes('"@type":"BreadcrumbList"'), true);
+    assert.equal(visibleHostJsonLd.includes('#location'), true);
+    assert.match(visibleHostHtml.text, /Public profile updated: \d{4}-\d{2}-\d{2}/);
+    assert.match(visibleHostHtml.text, /href="\/city\/tomorrowville\/food"/);
     assert.equal(
       visibleHostApi.body.cta.some(
         (cta: any) =>
