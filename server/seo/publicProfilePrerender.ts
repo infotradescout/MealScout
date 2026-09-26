@@ -1551,9 +1551,22 @@ export function registerPublicProfilePrerenderRoutes(
       ),
     ),
   );
-  app.get("/chef/:slug", (req: Request, res: Response) => {
-    const slug = encodeURIComponent(String(req.params.slug || ""));
-    return res.redirect(308, `/private-chef/${slug}`);
+  app.get("/chef/:slug", async (req: Request, res: Response) => {
+    try {
+      const page = await loadRestaurantPage(
+        canonicalBaseUrl,
+        extractId(req.params.slug),
+        "private_chef",
+      );
+      if (!page) {
+        return renderPage(canonicalBaseUrl, res, null);
+      }
+      res.setHeader("Cache-Control", "public, max-age=300");
+      return res.redirect(308, page.canonicalPath);
+    } catch (error) {
+      console.error("[seo-prerender] legacy chef redirect failed", error);
+      return sendPrerenderUnavailable(res);
+    }
   });
   app.get(
     "/location/:slug",
