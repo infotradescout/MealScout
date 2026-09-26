@@ -1538,6 +1538,14 @@ async function run() {
       const result = await get(path);
       return { ...result, body: JSON.parse(result.text) };
     };
+    const getManual = async (path: string) => {
+      const response = await fetch(`${baseUrl}${path}`, {
+        headers: { "user-agent": "Googlebot/2.1" },
+        redirect: "manual",
+      });
+      const text = await response.text();
+      return { response, text };
+    };
     const parseJsonLd = (html: string) =>
       Array.from(
         html.matchAll(
@@ -2489,10 +2497,23 @@ async function run() {
       }
       assert.equal(city.text.includes(unsupportedId), false);
     }
+    const catererProfile = await get(`/caterer/${ids.caterer}`);
+    assert.equal(catererProfile.response.status, 200);
+    assert.match(
+      catererProfile.text,
+      new RegExp(`rel="canonical" href="https://www\\.mealscout\\.us/caterer/bay-catering-company--${ids.caterer}"`),
+    );
+    const privateChefProfile = await get(`/private-chef/${ids.privateChef}`);
+    assert.equal(privateChefProfile.response.status, 200);
+    assert.match(
+      privateChefProfile.text,
+      new RegExp(`rel="canonical" href="https://www\\.mealscout\\.us/private-chef/bay-private-chef--${ids.privateChef}"`),
+    );
+    const legacyChef = await getManual(`/chef/${ids.privateChef}`);
+    assert.equal(legacyChef.response.status, 308);
     assert.equal(
-      (await get(`/chef/${ids.privateChef}`)).response.status,
-      200,
-      "the legacy chef route must retain canonical private-chef profiles",
+      legacyChef.response.headers.get("location"),
+      `/private-chef/bay-private-chef--${ids.privateChef}`,
     );
     for (const mismatchedChefId of [
       ids.restaurantOnly,
@@ -2502,7 +2523,7 @@ async function run() {
       ids.combinedService,
       ids.unknownBusiness,
     ]) {
-      const mismatch = await get(`/chef/${mismatchedChefId}`);
+      const mismatch = await getManual(`/chef/${mismatchedChefId}`);
       assert.equal(mismatch.response.status, 404);
       assert.match(mismatch.text, /name="robots" content="noindex,follow"/);
     }
@@ -3366,7 +3387,7 @@ async function run() {
     assert.equal(citiesSitemap.response.status, 200);
     assert.equal(
       citiesSitemap.response.headers.get("x-mealscout-sitemap-membership"),
-      "pd-v1-indexability-2",
+      "pd-v1-indexability-4",
     );
     const citiesSitemapEtag = citiesSitemap.response.headers.get("etag");
     assert.ok(citiesSitemapEtag, "Express must derive an ETag from the XML body");
@@ -3405,7 +3426,7 @@ async function run() {
     );
     assert.equal(
       rootSitemap.response.headers.get("x-mealscout-sitemap-membership"),
-      "pd-v1-indexability-2",
+      "pd-v1-indexability-4",
     );
     const rootSitemapEtag = rootSitemap.response.headers.get("etag");
     assert.ok(rootSitemapEtag, "Express must derive an ETag from the XML body");
@@ -3553,12 +3574,41 @@ async function run() {
       false,
       "a truck/bar collision must have exactly one canonical truck identity",
     );
-    for (const serviceId of [ids.caterer, ids.privateChef]) {
-      assert.equal(rootSitemap.text.includes(serviceId), false);
-    }
+    assert.equal(
+      rootSitemap.text.includes(
+        `/caterer/bay-catering-company--${ids.caterer}`,
+      ),
+      true,
+    );
+    assert.equal(
+      rootSitemap.text.includes(
+        `/private-chef/bay-private-chef--${ids.privateChef}`,
+      ),
+      true,
+    );
+    const serviceSitemap = await get("/sitemap-services.xml");
+    assert.equal(serviceSitemap.response.status, 200);
+    assert.equal(
+      serviceSitemap.response.headers.get("x-mealscout-sitemap-membership"),
+      "pd-v1-indexability-4",
+    );
+    assert.equal(
+      serviceSitemap.text.includes(
+        `/caterer/bay-catering-company--${ids.caterer}`,
+      ),
+      true,
+    );
+    assert.equal(
+      serviceSitemap.text.includes(
+        `/private-chef/bay-private-chef--${ids.privateChef}`,
+      ),
+      true,
+    );
+    assert.equal(serviceSitemap.text.includes(ids.combinedService), false);
+    assert.equal(serviceSitemap.text.includes(ids.unknownBusiness), false);
     assert.equal(
       truckSitemap.response.headers.get("x-mealscout-sitemap-membership"),
-      "pd-v1-indexability-2",
+      "pd-v1-indexability-4",
     );
     const eventSitemap = await get("/sitemap-events.xml");
     assert.equal(eventSitemap.response.status, 200);
@@ -3595,6 +3645,11 @@ async function run() {
     assert.equal(timeSitemap.text, "Gone");
     const robots = await get("/robots.txt");
     const llms = await get("/llms.txt");
+    assert.match(robots.text, /Allow: \/caterer\//);
+    assert.match(robots.text, /Allow: \/private-chef\//);
+    assert.match(robots.text, /sitemap-services\.xml/);
+    assert.match(llms.text, /Pattern: \/caterer\/\{slug\}--\{id\}/);
+    assert.match(llms.text, /Pattern: \/private-chef\/\{slug\}--\{id\}/);
     for (const retired of [
       "sitemap-time-pages.xml",
       "food-trucks-now",
