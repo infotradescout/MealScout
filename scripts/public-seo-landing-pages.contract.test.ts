@@ -264,6 +264,19 @@ if (/`\$\{baseUrl\}\/deals\/\$\{encodeURIComponent\(slug\)\}`/.test(seoRoutes)) 
     "The root sitemap must not advertise the legacy JS-only city deals route",
   );
 }
+for (const snippet of [
+  "Pattern: /food-truck-catering/{city-slug}",
+  "Pattern: /book-food-truck/{city-slug}",
+  "Pattern: /truck/{slug}--{id}",
+  "Pattern: /bar/{slug}--{id}",
+  "Eligible profile pages are canonical public entity pages.",
+  "Private account fields are never discovery facts.",
+]) {
+  if (!seoRoutes.includes(snippet)) {
+    throw new Error(`AI public profile guidance missing: ${snippet}`);
+  }
+}
+
 if (
   seoRoutes.includes("/food-trucks/pensacola-fl") ||
   seoRoutes.includes("/food-trucks/pensacola-fl/bbq") ||
