@@ -3410,6 +3410,18 @@ async function run() {
       false,
     );
     assert.match(rootSitemap.text, /\/food-trucks-today\/pensacola/);
+    assert.match(rootSitemap.text, /\\/food-truck-catering\\/pensacola/);
+    assert.match(rootSitemap.text, /\\/book-food-truck\\/pensacola/);
+    assert.equal(
+      rootSitemap.text.includes("/food-truck-catering/emptyville"),
+      false,
+      "commercial-intent pages must not be published for cities without eligible trucks",
+    );
+    assert.equal(
+      rootSitemap.text.includes("/book-food-truck/emptyville"),
+      false,
+      "booking-intent pages must not be published for cities without eligible trucks",
+    );
     assert.equal(
       (rootSitemap.text.match(/\/food-trucks-today\/visitville/g) || []).length,
       1,
