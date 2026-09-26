@@ -893,6 +893,39 @@ export function registerSeoRoutes(
     }
   });
 
+  app.get("/sitemap-services.xml", async (_req, res) => {
+    try {
+      const baseUrl = resolveSitemapSiteUrl();
+      const rows = await db
+        .select(restaurantSitemapSelect)
+        .from(restaurants)
+        .innerJoin(users, eq(restaurants.ownerId, users.id))
+        .where(eq(restaurants.isActive, true))
+        .orderBy(desc(restaurants.updatedAt))
+        .limit(50000);
+
+      const entries = rows
+        .filter((row: any) => isIndexableServiceProfileRow(row))
+        .flatMap((row: any) => {
+          const profileType = publicServiceProfileType(row);
+          if (!profileType) return [];
+          return [{
+            loc: `${baseUrl}${buildPublicProfilePath({
+              profileType,
+              id: String(row.id),
+              name: String(row.name || ""),
+            })}`,
+            lastmod: row.updatedAt,
+          }];
+        });
+
+      sendUrlsetXml(res, { entries });
+    } catch (e) {
+      console.error("sitemap-services failed", e);
+      res.status(500).send("<error>failed</error>");
+    }
+  });
+
   app.get("/sitemap-locations.xml", async (_req, res) => {
     try {
       const baseUrl = resolveSitemapSiteUrl();
@@ -1525,6 +1558,8 @@ export function registerSeoRoutes(
         "Allow: /cuisine/",
         "Allow: /deal/",
         "Allow: /bar/",
+        "Allow: /caterer/",
+        "Allow: /private-chef/",
         "Allow: /supplier/",
         "Allow: /video/",
         "Allow: /food-trucks/",
@@ -1542,6 +1577,7 @@ export function registerSeoRoutes(
         `Sitemap: ${baseUrl}/sitemap.xml`,
         `Sitemap: ${baseUrl}/sitemap-trucks.xml`,
         `Sitemap: ${baseUrl}/sitemap-bars.xml`,
+        `Sitemap: ${baseUrl}/sitemap-services.xml`,
         `Sitemap: ${baseUrl}/sitemap-locations.xml`,
         `Sitemap: ${baseUrl}/sitemap-cities.xml`,
         `Sitemap: ${baseUrl}/sitemap-cuisines.xml`,
