@@ -636,6 +636,11 @@ for (const snippet of [
   "dateModified: profileUpdatedAt",
   "/food-truck-catering/",
   "/book-food-truck/",
+  "const locationSchema = {",
+  "const supplierSchema = {",
+  "#location",
+  "#supplier",
+  'sameAs: [publicProfile.websiteUrl].filter(Boolean)',
 ]) {
   if (!prerender.includes(snippet)) {
     throw new Error(`Profile discoverability graph missing: ${snippet}`);
