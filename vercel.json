@@ -113,6 +113,14 @@
       "destination": "https://mealscout.onrender.com/food-trucks-today/:city"
     },
     {
+      "source": "/food-truck-catering/:city",
+      "destination": "https://mealscout.onrender.com/food-truck-catering/:city"
+    },
+    {
+      "source": "/book-food-truck/:city",
+      "destination": "https://mealscout.onrender.com/book-food-truck/:city"
+    },
+    {
       "source": "/city/:city/food",
       "destination": "https://mealscout.onrender.com/city/:city/food"
     },

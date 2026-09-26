@@ -290,6 +290,8 @@ const publicRoutePrefixes = [
   "/city/",
   "/food-trucks/",
   "/food-trucks-today/",
+  "/food-truck-catering/",
+  "/book-food-truck/",
   "/deals-today/",
   "/events-today/",
   "/locations-with-trucks/",
@@ -424,6 +426,8 @@ function SharedPublicRoutes() {
       <Route path="/city/:city" component={CityLanding} />
       <Route path="/city/:city/:mode" component={CityDiscoveryPage} />
       <Route path="/food-trucks-today/:city" component={PublicSeoLandingPage} />
+      <Route path="/food-truck-catering/:city" component={PublicSeoLandingPage} />
+      <Route path="/book-food-truck/:city" component={PublicSeoLandingPage} />
       <Route path="/deals-today/:city" component={PublicSeoLandingPage} />
       <Route path="/events-today/:city" component={PublicSeoLandingPage} />
       <Route path="/cuisine/:cuisine/:city" component={PublicSeoLandingPage} />

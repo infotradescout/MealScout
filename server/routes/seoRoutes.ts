@@ -413,6 +413,14 @@ export function registerSeoRoutes(
             `${baseUrl}/food-trucks/${encodeURIComponent(city.slug)}`,
             city.updatedAt || city.createdAt,
           );
+          mergeUrl(
+            `${baseUrl}/food-truck-catering/${encodeURIComponent(city.slug)}`,
+            city.updatedAt || city.createdAt,
+          );
+          mergeUrl(
+            `${baseUrl}/book-food-truck/${encodeURIComponent(city.slug)}`,
+            city.updatedAt || city.createdAt,
+          );
         }
         if (
           indexableTruckRows.some((row: any) =>

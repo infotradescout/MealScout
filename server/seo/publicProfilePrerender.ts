@@ -1462,6 +1462,58 @@ export function registerPublicProfilePrerenderRoutes(
     ),
   );
   app.get(
+    "/food-truck-catering/:city",
+    landingGate((req) =>
+      seoLandingPage(
+        canonicalBaseUrl,
+        {
+          ...publicSeoCityRequest("food-truck-catering", req.params.city),
+          links: [
+            {
+              label: "Book a food truck",
+              href: `/book-food-truck/${encodeURIComponent(String(req.params.city || ""))}`,
+            },
+            {
+              label: "Browse food trucks in this city",
+              href: `/food-trucks/${encodeURIComponent(String(req.params.city || ""))}`,
+            },
+            {
+              label: "List or claim your food truck",
+              href: "/for-food-trucks",
+            },
+          ],
+        },
+        loadLanding,
+      ),
+    ),
+  );
+  app.get(
+    "/book-food-truck/:city",
+    landingGate((req) =>
+      seoLandingPage(
+        canonicalBaseUrl,
+        {
+          ...publicSeoCityRequest("book-food-truck", req.params.city),
+          links: [
+            {
+              label: "Food truck catering",
+              href: `/food-truck-catering/${encodeURIComponent(String(req.params.city || ""))}`,
+            },
+            {
+              label: "Browse food trucks in this city",
+              href: `/food-trucks/${encodeURIComponent(String(req.params.city || ""))}`,
+            },
+            {
+              label: "List or claim your food truck",
+              href: "/for-food-trucks",
+            },
+          ],
+        },
+        loadLanding,
+      ),
+    ),
+  );
+  app.get(
     "/deals-today/:city",
     landingGate((req) =>
       seoLandingPage(
