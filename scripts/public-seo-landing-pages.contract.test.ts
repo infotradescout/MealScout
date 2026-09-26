@@ -371,6 +371,7 @@ if (
 }
 
 for (const snippet of [
+  '"caterer|private-chef|chef"',
   '"/food-trucks/:city/:cuisine"',
   '"/food-trucks/:city"',
   '"/food-trucks-today/:city"',
@@ -403,6 +404,30 @@ if (
   throw new Error(
     "Optional city segments must preserve presence and fail closed before listing queries",
   );
+}
+
+for (const snippet of [
+  '"/caterer/:slug"',
+  '"/private-chef/:slug"',
+  '"/chef/:slug"',
+  '"caterer"',
+  '"private_chef"',
+]) {
+  if (!prerender.includes(snippet)) {
+    throw new Error(`Canonical service profile prerender contract missing: ${snippet}`);
+  }
+}
+for (const snippet of [
+  'app.get("/sitemap-services.xml"',
+  "isIndexableServiceProfileRow",
+  "serviceProfileRows.forEach",
+  '"Allow: /caterer/"',
+  '"Allow: /private-chef/"',
+  "sitemap-services.xml",
+]) {
+  if (!seoRoutes.includes(snippet)) {
+    throw new Error(`Service profile sitemap/crawler contract missing: ${snippet}`);
+  }
 }
 
 const requiredPrerenderRoutes = [
@@ -560,7 +585,7 @@ if (
 }
 if (
   !publicRestaurantIndexability.includes(
-    'SITEMAP_MEMBERSHIP_VERSION = "pd-v1-indexability-3"',
+    'SITEMAP_MEMBERSHIP_VERSION = "pd-v1-indexability-4"',
   ) ||
   !publicRestaurantIndexability.includes(
     'res.setHeader("X-MealScout-Sitemap-Membership", SITEMAP_MEMBERSHIP_VERSION)',
