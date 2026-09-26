@@ -2743,6 +2743,17 @@ async function run() {
       `/api/public/profiles/supplier/${ids.visibleSupplier}`,
     );
     const visibleSupplierHtml = await get(`/supplier/${ids.visibleSupplier}`);
+    const visibleSupplierJsonLd = JSON.stringify(parseJsonLd(visibleSupplierHtml.text));
+    assert.equal(visibleSupplierJsonLd.includes('"@type":"WebPage"'), true);
+    assert.equal(visibleSupplierJsonLd.includes('"@type":"BreadcrumbList"'), true);
+    assert.equal(
+      visibleSupplierJsonLd.includes(
+        `https://www.mealscout.us/supplier/visible-supplier--${ids.visibleSupplier}#supplier`,
+      ),
+      true,
+    );
+    assert.match(visibleSupplierHtml.text, /Public profile updated: \d{4}-\d{2}-\d{2}/);
+    assert.match(visibleSupplierHtml.text, /href="\/suppliers"/);
     for (const allowed of [
       "822 Visible Supplier Street",
       "+1-850-555-0822",
@@ -2757,6 +2768,12 @@ async function run() {
       `/api/public/profiles/location/${ids.tomorrowHost}`,
     );
     const visibleHostHtml = await get(`/location/${ids.tomorrowHost}`);
+    const visibleHostJsonLd = JSON.stringify(parseJsonLd(visibleHostHtml.text));
+    assert.equal(visibleHostJsonLd.includes('"@type":"WebPage"'), true);
+    assert.equal(visibleHostJsonLd.includes('"@type":"BreadcrumbList"'), true);
+    assert.equal(visibleHostJsonLd.includes('#location'), true);
+    assert.match(visibleHostHtml.text, /Public profile updated: \d{4}-\d{2}-\d{2}/);
+    assert.match(visibleHostHtml.text, /href="\/city\/tomorrowville\/food"/);
     assert.equal(
       visibleHostApi.body.cta.some(
         (cta: any) =>
