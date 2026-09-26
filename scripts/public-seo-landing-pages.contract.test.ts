@@ -22,6 +22,29 @@ const publicRestaurantIndexability = readFileSync(
   "server/seo/publicRestaurantIndexability.ts",
   "utf8",
 );
+const publicIndexabilityStart = publicRestaurantIndexability.indexOf(
+  "export function evaluatePublicRestaurantIndexability",
+);
+const publicIndexabilityEnd = publicRestaurantIndexability.indexOf(
+  "export function isPublicRestaurantIndexable",
+  publicIndexabilityStart,
+);
+const publicIndexabilityPolicy = publicRestaurantIndexability.slice(
+  publicIndexabilityStart,
+  publicIndexabilityEnd,
+);
+if (
+  publicIndexabilityStart < 0 ||
+  publicIndexabilityEnd <= publicIndexabilityStart ||
+  /subscription|premium|membership|billing|stripe|payment/i.test(
+    publicIndexabilityPolicy,
+  )
+) {
+  throw new Error(
+    "Public profile indexability must remain tier-neutral and independent of payment state",
+  );
+}
+
 const publicSeoImplementation = `${publicSeoRoutes}\n${publicSeoData}\n${publicSeoModel}`;
 const routerRegistry = readFileSync("server/routes.ts", "utf8");
 const seoRoutes = readFileSync("server/routes/seoRoutes.ts", "utf8");
