@@ -488,7 +488,7 @@ const buildHtml = (baseUrl: string, page: PrerenderPage) => {
 async function restaurantPage(
   baseUrl: string,
   restaurantId: string,
-  expectedProfileType?: "restaurant" | "truck" | "bar" | "private_chef",
+  expectedProfileType?: "restaurant" | "truck" | "bar" | "caterer" | "private_chef",
 ) {
   const [row] = await db
     .select()
@@ -500,7 +500,10 @@ async function restaurantPage(
   const canonicalBusinessType = toCanonicalFoodBusinessType(row.businessType);
   const strictRouteProfileType =
     publicProfileType ||
-    (canonicalBusinessType === "private_chef" ? "private_chef" : null);
+    (canonicalBusinessType === "caterer" ||
+    canonicalBusinessType === "private_chef"
+      ? canonicalBusinessType
+      : null);
   if (expectedProfileType && strictRouteProfileType !== expectedProfileType) {
     return null;
   }
@@ -532,7 +535,9 @@ async function restaurantPage(
   });
   const isTruck = publicProfileType === "truck";
   const isBar = publicProfileType === "bar";
+  const isCaterer = canonicalBusinessType === "caterer";
   const isPrivateChef = canonicalBusinessType === "private_chef";
+  const isServiceProfile = isCaterer || isPrivateChef;
   const projectedProfileType =
     publicProfileType ||
     (canonicalBusinessType === "private_chef" ||
@@ -572,11 +577,13 @@ async function restaurantPage(
     ? buildPublicProfilePath({ entityType: "truck", name, id: row.id })
     : isBar
       ? buildPublicProfilePath({ entityType: "bar", name, id: row.id })
-      : isPrivateChef
-        ? `/chef/${encodeURIComponent(`${toSlug(name) || row.id}--${row.id}`)}`
-        : publicProfileType === "restaurant"
-          ? buildPublicProfilePath({ entityType: "restaurant", name, id: row.id })
-          : `/restaurant/${encodeURIComponent(row.id)}/${encodeURIComponent(toSlug(name) || row.id)}`;
+      : isCaterer
+        ? buildPublicProfilePath({ entityType: "caterer", name, id: row.id })
+        : isPrivateChef
+          ? buildPublicProfilePath({ entityType: "private_chef", name, id: row.id })
+          : publicProfileType === "restaurant"
+            ? buildPublicProfilePath({ entityType: "restaurant", name, id: row.id })
+            : `/restaurant/${encodeURIComponent(row.id)}/${encodeURIComponent(toSlug(name) || row.id)}`;
   const canonicalProfileUrl = absoluteUrl(baseUrl, canonicalPath);
   const profileEntityId = `${canonicalProfileUrl}#business`;
   const profilePageId = `${canonicalProfileUrl}#webpage`;
@@ -611,7 +618,7 @@ async function restaurantPage(
       ? "FoodTruck"
       : isBar
         ? "BarOrPub"
-        : isPrivateChef
+        : isServiceProfile
           ? "FoodEstablishment"
           : "Restaurant",
     name,
@@ -665,7 +672,7 @@ async function restaurantPage(
     "@context": "https://schema.org",
     "@type": "WebPage",
     "@id": profilePageId,
-    name: `${name}${cityState ? ` in ${cityState}` : ""} | MealScout`,
+    name: `${name}${cityState ? ` in ${cityState}` : ""}${isPrivateChef ? " | MealScout Private Chef" : isCaterer ? " | MealScout Caterer" : " | MealScout"}`,
     description,
     url: canonicalProfileUrl,
     dateModified: profileUpdatedAt,
@@ -684,7 +691,7 @@ async function restaurantPage(
       name: "MealScout",
       item: baseUrl,
     },
-    ...(canonicalCity
+    ...(canonicalCity && !isServiceProfile
       ? [{
           "@type": "ListItem",
           position: 2,
@@ -701,7 +708,7 @@ async function restaurantPage(
       : []),
     {
       "@type": "ListItem",
-      position: canonicalCity ? 3 : 2,
+      position: canonicalCity && !isServiceProfile ? 3 : 2,
       name,
       item: canonicalProfileUrl,
     },
@@ -718,7 +725,7 @@ async function restaurantPage(
     ...(offersCatering
       ? [{ label: "Catering", href: `${canonicalPath}?service=catering` }]
       : []),
-    ...(canonicalCity
+    ...(canonicalCity && !isServiceProfile
       ? [
           {
             label: isTruck
@@ -750,12 +757,15 @@ async function restaurantPage(
             : []),
         ]
       : []),
+    ...(isServiceProfile
+      ? [{ label: "Plan food for an event", href: "/for-events" }]
+      : []),
     { label: "Find food nearby", href: "/search" },
     { label: "Scout", href: "/scout" },
   ];
 
   return {
-    title: `${name}${cityState ? ` in ${cityState}` : ""} | MealScout`,
+    title: `${name}${cityState ? ` in ${cityState}` : ""}${isPrivateChef ? " | MealScout Private Chef" : isCaterer ? " | MealScout Caterer" : " | MealScout"}`,
     description,
     canonicalPath,
     imageUrl: image,
@@ -1522,7 +1532,17 @@ export function registerPublicProfilePrerenderRoutes(
     ),
   );
   app.get(
-    "/chef/:slug",
+    "/caterer/:slug",
+    gate((req) =>
+      loadRestaurantPage(
+        canonicalBaseUrl,
+        extractId(req.params.slug),
+        "caterer",
+      ),
+    ),
+  );
+  app.get(
+    "/private-chef/:slug",
     gate((req) =>
       loadRestaurantPage(
         canonicalBaseUrl,
@@ -1531,6 +1551,10 @@ export function registerPublicProfilePrerenderRoutes(
       ),
     ),
   );
+  app.get("/chef/:slug", (req: Request, res: Response) => {
+    const slug = encodeURIComponent(String(req.params.slug || ""));
+    return res.redirect(308, `/private-chef/${slug}`);
+  });
   app.get(
     "/location/:slug",
     gate((req) => hostPage(canonicalBaseUrl, extractId(req.params.slug))),
@@ -1610,6 +1634,12 @@ export function registerPublicProfilePrerenderRoutes(
       }
       if (type === "bar") {
         return loadRestaurantPage(canonicalBaseUrl, id, "bar");
+      }
+      if (type === "caterer") {
+        return loadRestaurantPage(canonicalBaseUrl, id, "caterer");
+      }
+      if (type === "private_chef" || type === "private-chef" || type === "chef") {
+        return loadRestaurantPage(canonicalBaseUrl, id, "private_chef");
       }
       if (type === "host" || type === "location") {
         return hostPage(canonicalBaseUrl, id);
