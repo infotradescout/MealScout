@@ -43,6 +43,7 @@ import {
 import { buildPublicProfilePath as buildCanonicalPublicProfilePath } from "../publicProfiles/publicProfileUtils";
 import { scanPublicSeoRowsInBatches } from "../services/publicSeoBatchTraversal";
 import { isPublicDiscoveryEligibleEntity } from "@shared/publicDiscoveryIntegrity";
+import { toCanonicalFoodBusinessType } from "@shared/businessTypes";
 import { canExposeAnonymousEventDetail } from "../publicProfiles/publicEventDetailAccess";
 import { publicTruckClassificationWhere } from "../seo/publicTruckClassification";
 import {
@@ -101,7 +102,7 @@ const sitemapCityIdentityWhere = (
 const toSlug = toPublicSeoSlug;
 
 const buildPublicProfilePath = (input: {
-  profileType: "restaurant" | "truck" | "bar" | "location" | "supplier";
+  profileType: "restaurant" | "truck" | "bar" | "caterer" | "private_chef" | "location" | "supplier";
   id: string;
   name: string;
 }) => buildCanonicalPublicProfilePath({
@@ -155,6 +156,53 @@ const isIndexableRestaurantRow = (row: {
     ownerId: row.ownerId,
     ownerEmail: row.ownerEmail,
     address: row.address,
+    cuisineType: row.cuisineType,
+    description: row.description,
+    city: row.city,
+    state: row.state,
+    rawData: row.rawData,
+    phone: row.phone,
+    websiteUrl: row.websiteUrl,
+  });
+
+type PublicServiceProfileType = "caterer" | "private_chef";
+
+const publicServiceProfileType = (row: {
+  businessType?: unknown;
+  isFoodTruck?: unknown;
+}): PublicServiceProfileType | null => {
+  if (row.isFoodTruck === true) return null;
+  const canonical = toCanonicalFoodBusinessType(row.businessType);
+  return canonical === "caterer" || canonical === "private_chef"
+    ? canonical
+    : null;
+};
+
+const isIndexableServiceProfileRow = (row: {
+  name?: unknown;
+  isActive?: unknown;
+  ownerId?: unknown;
+  ownerEmail?: unknown;
+  ownerDisabled?: unknown;
+  cuisineType?: unknown;
+  description?: unknown;
+  city?: unknown;
+  state?: unknown;
+  rawData?: unknown;
+  phone?: unknown;
+  websiteUrl?: unknown;
+  isFoodTruck?: boolean | null;
+  businessType?: string | null;
+}) =>
+  row.ownerDisabled === false &&
+  publicServiceProfileType(row) !== null &&
+  isPublicRestaurantIndexable({
+    name: row.name,
+    isActive: row.isActive !== false,
+    ownerId: row.ownerId,
+    ownerEmail: row.ownerEmail,
+    // Service-area businesses do not need a public street address to qualify.
+    address: null,
     cuisineType: row.cuisineType,
     description: row.description,
     city: row.city,
@@ -320,6 +368,9 @@ export function registerSeoRoutes(
       const restaurantRows = allRestaurantRows.filter((row: any) =>
         isIndexableRestaurantRow(row),
       );
+      const serviceProfileRows = allRestaurantRows.filter((row: any) =>
+        isIndexableServiceProfileRow(row),
+      );
       const hostRows = allHostRows.filter((row: any) =>
         row.ownerDisabled === false && isPublicDiscoveryEligibleEntity({
           name: row.name,
@@ -447,11 +498,24 @@ export function registerSeoRoutes(
 
       restaurantRows.forEach((row: any) => {
         const profileType = publicSeoBusinessProfileType(row);
-        // Trucks/bars have dedicated sitemaps; service types are deferred.
+        // Trucks/bars have dedicated sitemaps.
         if (profileType !== "restaurant") return;
         mergeUrl(
           `${baseUrl}${buildPublicProfilePath({
             profileType: "restaurant",
+            id: String(row.id),
+            name: String(row.name || ""),
+          })}`,
+          row.updatedAt,
+        );
+      });
+
+      serviceProfileRows.forEach((row: any) => {
+        const profileType = publicServiceProfileType(row);
+        if (!profileType) return;
+        mergeUrl(
+          `${baseUrl}${buildPublicProfilePath({
+            profileType,
             id: String(row.id),
             name: String(row.name || ""),
           })}`,
@@ -1400,6 +1464,8 @@ export function registerSeoRoutes(
         "Pattern: /restaurant/{slug}--{id}",
         "Pattern: /truck/{slug}--{id}",
         "Pattern: /bar/{slug}--{id}",
+        "Pattern: /caterer/{slug}--{id}",
+        "Pattern: /private-chef/{slug}--{id}",
         "Pattern: /location/{slug}--{id}",
         "Pattern: /supplier/{slug}--{id}",
         "Eligible profile pages are canonical public entity pages. Use the canonical URL in the first HTML response and sitemap.",
