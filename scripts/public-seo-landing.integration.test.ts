@@ -2748,7 +2748,7 @@ async function run() {
     assert.equal(visibleSupplierJsonLd.includes('"@type":"BreadcrumbList"'), true);
     assert.equal(
       visibleSupplierJsonLd.includes(
-        `https://www.mealscout.us/supplier/visible-supplier--${ids.visibleSupplier}#supplier`,
+        `https://www.mealscout.us/supplier/visible-supply-co--${ids.visibleSupplier}#supplier`,
       ),
       true,
     );
