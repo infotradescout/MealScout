@@ -376,6 +376,8 @@ const DISCOVERY_ANALYTICS_EVENT_TYPES = new Set([
 const DISCOVERY_SOURCE_PAGE_TYPES = new Set([
   "food_trucks_city",
   "food_trucks_today",
+  "food_truck_catering",
+  "book_food_truck",
   "deals_today",
   "events_today",
   "city_food",
