@@ -2346,6 +2346,35 @@ async function run() {
         html.text.includes(`"url":"${canonicalUrl}"`),
         `JSON-LD must use the same canonical identity for ${profile.id}`,
       );
+      const profileJsonLd = JSON.stringify(parseJsonLd(html.text));
+      assert.equal(
+        profileJsonLd.includes('"@type":"WebPage"'),
+        true,
+        `profile page graph missing for ${profile.id}`,
+      );
+      assert.equal(
+        profileJsonLd.includes('"@type":"BreadcrumbList"'),
+        true,
+        `profile breadcrumb graph missing for ${profile.id}`,
+      );
+      assert.equal(
+        profileJsonLd.includes(`${canonicalUrl}#business`),
+        true,
+        `business entity id missing for ${profile.id}`,
+      );
+      assert.equal(
+        profileJsonLd.includes(`${canonicalUrl}#webpage`),
+        true,
+        `profile page entity id missing for ${profile.id}`,
+      );
+      assert.match(html.text, /Public profile updated: \d{4}-\d{2}-\d{2}/);
+      if (String(profile.path).startsWith("/truck/")) {
+        assert.match(html.text, /href="\/food-trucks\/pensacola"/);
+        assert.match(html.text, /href="\/food-truck-catering\/pensacola"/);
+        assert.match(html.text, /href="\/book-food-truck\/pensacola"/);
+      } else {
+        assert.match(html.text, /href="\/city\/pensacola\/food"/);
+      }
     }
 
     const typedRestaurantProfileCases = [
