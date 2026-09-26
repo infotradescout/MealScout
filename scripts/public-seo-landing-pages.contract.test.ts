@@ -95,6 +95,8 @@ const requiredClientRoutes = [
   '"/food-trucks/:citySlug"',
   '"/food-trucks/:citySlug/:cuisineSlug"',
   '"/food-trucks-today/:city"',
+  '"/food-truck-catering/:city"',
+  '"/book-food-truck/:city"',
   '"/deals-today/:city"',
   '"/events-today/:city"',
   '"/city/:city/food"',
@@ -116,6 +118,8 @@ const requiredApiRoutes = [
   "/api/public/seo/food-trucks/:city/:cuisine",
   "/api/public/seo/food-trucks/:city",
   "/api/public/seo/food-trucks-today/:city",
+  "/api/public/seo/food-truck-catering/:city",
+  "/api/public/seo/book-food-truck/:city",
   "/api/public/seo/deals-today/:city",
   "/api/public/seo/events-today/:city",
   "/api/public/seo/city/:city/food",
@@ -134,6 +138,8 @@ for (const snippet of requiredApiRoutes) {
 
 const requiredSitemapSnippets = [
   "/food-trucks-today/",
+  "/food-truck-catering/",
+  "/book-food-truck/",
   "/deals-today/",
   "/events-today/",
   "/city/",
@@ -355,6 +361,8 @@ for (const snippet of [
   '"/food-trucks/:city/:cuisine"',
   '"/food-trucks/:city"',
   '"/food-trucks-today/:city"',
+  '"/food-truck-catering/:city"',
+  '"/book-food-truck/:city"',
   '"/city/:city/food"',
   '"/deals-today/:city"',
   '"/events-today/:city"',
@@ -388,6 +396,8 @@ const requiredPrerenderRoutes = [
   "/food-trucks/:city/:cuisine",
   "/food-trucks/:city",
   "/food-trucks-today/:city",
+  "/food-truck-catering/:city",
+  "/book-food-truck/:city",
   "/deals-today/:city",
   "/events-today/:city",
   "/city/:city/food",
@@ -412,10 +422,12 @@ if (!publicSeoPage.includes("canonicalUrl")) {
   throw new Error("Public SEO page is missing canonical metadata wiring");
 }
 if (
-  (prerender.match(/label: "List or claim your food truck"/g) || []).length !== 3 ||
+  (prerender.match(/label: "List or claim your food truck"/g) || []).length < 5 ||
   (prerender.match(/href: "\/for-food-trucks"/g) || []).length < 3 ||
   !publicSeoPage.includes('"food-trucks-cuisine"') ||
   !publicSeoPage.includes('"food-trucks-today"') ||
+  !publicSeoPage.includes('"food-truck-catering"') ||
+  !publicSeoPage.includes('"book-food-truck"') ||
   !publicSeoPage.includes('href="/for-food-trucks"') ||
   !publicSeoPage.includes("List or claim your food truck") ||
   !publicSeoPage.includes('eventType: "discovery_cta_click"') ||
