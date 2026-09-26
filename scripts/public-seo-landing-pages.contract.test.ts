@@ -628,6 +628,21 @@ for (const snippet of [
   }
 }
 for (const snippet of [
+  "resolveCanonicalProfileCity",
+  '"@type": "WebPage"',
+  '"@type": "BreadcrumbList"',
+  '"@id": profileEntityId',
+  'mainEntityOfPage: { "@id": profilePageId }',
+  "dateModified: profileUpdatedAt",
+  "/food-truck-catering/",
+  "/book-food-truck/",
+]) {
+  if (!prerender.includes(snippet)) {
+    throw new Error(`Profile discoverability graph missing: ${snippet}`);
+  }
+}
+
+for (const snippet of [
   "resolveOwnerPublicProfile",
   "users.publicProfileSettings",
   "toPublicRestaurantProfile",
